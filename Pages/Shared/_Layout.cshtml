@@ -1,0 +1,100 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>AdminLTE | SmartSam</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link rel="stylesheet" href="~/adminlte/plugins/fontawesome-free/css/all.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/adminlte/plugins/select2/css/select2.min.css" />
+    <link rel="stylesheet" href="~/adminlte/dist/css/adminlte.min.css" asp-append-version="true" />
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
+
+    @RenderSection("Styles", required: false)
+</head>
+
+<body class="hold-transition sidebar-mini layout-fixed">
+    <div class="wrapper">
+
+        <nav class="main-header navbar navbar-expand navbar-white navbar-light">
+            <ul class="navbar-nav">
+                <li class="nav-item">
+                    <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="fas fa-bars"></i></a>
+                </li>
+                <li class="nav-item d-none d-sm-inline-block">
+                    <a href="/Index" class="nav-link">Home</a>
+                </li>
+            </ul>
+
+            <ul class="navbar-nav ml-3">
+                <li class="nav-item d-none d-sm-inline-block">
+                    <span class="nav-link font-weight-bold">
+                        <i class="fas fa-angle-right mr-1"></i> @ViewData["Title"]
+                    </span>
+                </li>
+            </ul>
+
+            <ul class="navbar-nav ml-auto">
+                <li class="nav-item d-none d-sm-inline-block">
+                    <a href="#" class="nav-link">
+                        <i class="fas fa-user mr-1"></i> @User.Identity.Name
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link text-danger" asp-page="/Logout" role="button">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span class="d-none d-md-inline ml-1">Logout</span>
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link" data-widget="fullscreen" href="#" role="button">
+                        <i class="fas fa-expand-arrows-alt"></i>
+                    </a>
+                </li>
+            </ul>
+
+        </nav>
+
+        <aside class="main-sidebar sidebar-dark-primary elevation-4">
+            <a href="/Index" class="brand-link">
+                <span class="brand-text font-weight-light">SmartSam System</span>
+            </a>
+
+            <div class="sidebar">
+                <nav class="mt-2">
+                    @* GỌI VIEW COMPONENT TẠI ĐÂY *@
+                    @await Component.InvokeAsync("Menu")
+                </nav>
+            </div>
+        </aside>
+
+        <div class="content-wrapper">
+            <section class="content-header"></section>
+            <section class="content">
+                <div class="container-fluid">
+                    @RenderBody()
+                </div>
+            </section>
+        </div>
+
+        <footer class="main-footer text-sm">
+            <strong>© 2025</strong> SmartSam Project
+            <div class="float-right d-none d-sm-inline-block">AdminLTE 3.2</div>
+        </footer>
+    </div>
+
+    <script src="~/adminlte/plugins/jquery/jquery.min.js"></script>
+    <script src="~/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="~/adminlte/plugins/select2/js/select2.full.min.js"></script>
+    <script src="~/adminlte/dist/js/adminlte.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+    <script src="~/js/common/common.js"></script>
+
+    @RenderSection("Scripts", required: false)
+</body>
+</html>

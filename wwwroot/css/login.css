@@ -1,0 +1,68 @@
+﻿/* Đặt nền toàn trang */
+body {
+    background-color: #e0f0ff; /* xanh da trời nhạt */
+    font-family: Arial, sans-serif;
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Khung chứa form */
+.login-container {
+    background-color: #0024b1; /* màu xanh panel */
+    padding: 30px;
+    width: 25%; /* chiếm 1/4 chiều rộng màn hình */
+    border-radius: 10px;
+    box-shadow: 0 0 15px rgba(0,0,0,0.2);
+}
+
+    /* Tiêu đề form */
+    .login-container h2 {
+        text-align: center;
+        color: white;
+        margin-bottom: 20px;
+    }
+
+
+/* Label và input nằm cùng dòng */
+.form-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+    .form-row label {
+        color: white;
+        font-weight: bold;
+        width: 100px;
+    }
+
+    /* Ô input */
+    .form-row input {
+        flex: 1;
+        padding: 8px;
+        border: none;
+        border-radius: 5px;
+        box-sizing: border-box;
+    }
+
+/* Nút login */
+.login-container button {
+    margin-top: 20px;
+    width: 100%;
+    padding: 10px;
+    background-color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+/* Thông báo lỗi */
+.login-container p {
+    color: yellow;
+    text-align: center;
+    margin-top: 10px;
+}

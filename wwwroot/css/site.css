@@ -1,0 +1,63 @@
+﻿html {
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+}
+
+html {
+  position: relative;
+  min-height: 100%;
+}
+
+body {
+  margin-bottom: 60px;
+}
+
+/* === Bổ sung cho MeterUpload === */
+#monthInput, #yearInput {
+    max-width: 120px;
+    margin: 0 auto;
+}
+
+label.form-label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: 600;
+    color: #333;
+}
+
+#previewArea img {
+    max-width: 200px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+}
+/* === Bổ sung cho MeterUpload === */
+#monthInput, #yearInput {
+    max-width: 120px;
+    margin: 0 auto;
+}
+
+label.form-label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: 600;
+    color: #333;
+}
+
+#previewArea img {
+    max-width: 200px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+}
+
+.select2-container {
+    z-index: 2000 !important;
+}
