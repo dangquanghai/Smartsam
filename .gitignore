@@ -1,18 +1,6 @@
-# --- Build folders ---
+**/Pages/Sales/
+**/Pages/Infor/
 bin/
 obj/
-publish/
-
-# --- Visual Studio ---
-.vs/
-*.user
-*.sln.docstates
-
-# --- Cấu hình nhạy cảm ---
 appsettings.json
-appsettings.Development.json
-*.db
-
-# --- Khác ---
-.env
-node_modules/
+*.json
