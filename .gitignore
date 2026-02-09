@@ -1,12 +1,23 @@
 **/Pages/Infor/
+
+# Build artifacts
 bin/
 obj/
-appsettings.json
-*.json
-.env.local
-docker-compose.local.yml
-Dockerfile.local
+
+# User/machine-specific files
+.vs/
+*.user
+*.suo
+*.cache
+.DS_Store
+
+# Local runtime secrets/config
+appsettings*.json
+.env
+.env.*
+!.env.example
+
+# Local Docker-only files
 Dockerfile*
 docker-compose*.yml
 .dockerignore
-.env.docker*
