@@ -10,7 +10,3 @@ Dockerfile*
 docker-compose*.yml
 .dockerignore
 .env.docker*
-.vs/
-wwwroot/uploads/
-*.user
-*.suo
