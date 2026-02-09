@@ -129,6 +129,30 @@ namespace SmartSam.Helpers
                 text = x.Text
             });
         }
+        public static DataTable ExecuteQuery(string query, string connectionString)
+        {
+            DataTable dataTable = new DataTable();
+            try
+            {
+                using (SqlConnection connection = new SqlConnection(connectionString))
+                {
+                    connection.Open();
+                    using (SqlCommand command = new SqlCommand(query, connection))
+                    {
+                        using (SqlDataAdapter adapter = new SqlDataAdapter(command))
+                        {
+                            adapter.Fill(dataTable);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log lỗi tại đây
+                Console.WriteLine("Lỗi SQL: " + ex.Message);
+            }
+            return dataTable;
+        }
 
         /// <summary>
         /// Dùng cho các danh sách tĩnh load ngay khi vào trang (OnGet)

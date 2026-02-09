@@ -3,6 +3,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Data.SqlClient;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 namespace SmartSam.Helpers
 {
@@ -66,7 +67,27 @@ namespace SmartSam.Helpers
 
             // 4. KIỂM TRA QUYỀN USER THƯỜNG (Chỉ áp dụng cho các trang .cshtml)
             string employeeCode = context.User.Identity.Name;
-            if (!HasAccess(employeeCode, path))
+
+            // Danh sách các trang mới áp dụng cơ chế Detail gộp (Add/Edit/View)
+            // Sau này có trang nào mới bạn chỉ cần thêm vào mảng này
+            var newMechanismPages = new[] { "STContractDetail" };
+
+            bool useNewAccessLogic = newMechanismPages.Any(p => path.Contains(p, StringComparison.OrdinalIgnoreCase));
+
+            bool accessGranted = false;
+
+            if (useNewAccessLogic)
+            {
+                // Gọi hàm kiểm tra theo Module (chỉ cần có quyền trong folder là được vào)
+                accessGranted = HasAccessNew(employeeCode, path);
+            }
+            else
+            {
+                // Gọi hàm kiểm tra cũ (khớp URL tuyệt đối)
+                accessGranted = HasAccess(employeeCode, path);
+            }
+
+            if (!accessGranted)
             {
                 context.Response.Redirect("/AccessDenied");
                 return;
@@ -97,6 +118,25 @@ namespace SmartSam.Helpers
             // Kiểm tra xem URL hiện tại (Ví dụ: /sales/longtermcontract/add) 
             // có khớp với bất kỳ URL nào được phân quyền trong DB không
             return allowedUrls.Any(u => u == cleanUrl);
+        }
+
+       // Hàm kiểm tra mới: Chỉ cần User có quyền bất kỳ trong Module cha
+    private bool HasAccessNew(string empCode, string url)
+        {
+            var cleanUrl = url.Split('?')[0].ToLower().TrimEnd('/');
+            string cacheKey = $"Perm_{empCode}";
+
+            if (!_cache.TryGetValue(cacheKey, out List<string> allowedUrls))
+            {
+                allowedUrls = GetPermissionsFromDb(empCode).Select(u => u.ToLower().TrimEnd('/')).ToList();
+                _cache.Set(cacheKey, allowedUrls, TimeSpan.FromMinutes(20));
+            }
+
+            // Xác định folder cha (Ví dụ: từ /Sales/STContract/STContractDetail lấy ra /sales/stcontract)
+            // Logic: Nếu danh sách quyền của User chứa bất kỳ URL nào thuộc folder này -> Cho phép vào Detail
+            string folderPath = "/sales/stcontract";
+
+            return allowedUrls.Any(u => u.Contains(folderPath, StringComparison.OrdinalIgnoreCase));
         }
 
         private List<string> GetPermissionsFromDb(string empCode)

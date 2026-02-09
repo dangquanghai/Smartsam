@@ -230,10 +230,8 @@ namespace SmartSam.Pages.Sales.STContract
             while (rd.Read())
             {
                 list.Add((
-                    //rd.GetInt32(0),
                     Convert.ToInt32(rd[0]),  // 👈 CHỐT Ở ĐÂY
                     Convert.ToString(rd[1])!
-                    //rd.GetString(1)
                 ));
             }
 

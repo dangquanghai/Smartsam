@@ -28,4 +28,11 @@
     <Folder Include="wwwroot\uploads\2025-12\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Update="wwwroot\js\Sales\STContract\STContractDetail.js">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

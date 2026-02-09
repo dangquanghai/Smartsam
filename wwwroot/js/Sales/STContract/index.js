@@ -181,9 +181,9 @@
         window.initSelect2('#AgentCompanyId', 'company');
 
         // 2. Đăng ký sự kiện nút bấm
-        $('#btnAdd').off('click').on('click', () => window.location.href = '/Sales/STContract/Add');
-        $('#btnEdit').off('click').on('click', () => window.location.href = `/Sales/STContract/Detail?id=${selectedContractId}&mode=edit`);
-        $('#btnView').off('click').on('click', () => window.location.href = `/Sales/STContract/Detail?id=${selectedContractId}`);
+        $('#btnAdd').off('click').on('click', () => window.location.href = '/Sales/STContract/STContractDetail');
+        $('#btnEdit').off('click').on('click', () => window.location.href = `/Sales/STContract/STContractDetail?id=${selectedContractId}&mode=edit`);
+        $('#btnView').off('click').on('click', () => window.location.href = `/Sales/STContract/STContractDetail?id=${selectedContractId}`);
         $('#btnCopy').off('click').on('click', () => window.location.href = `/Sales/STContract/Create?copyFromId=${selectedContractId}`);
 
         // 3. Xử lý Form Search

@@ -173,36 +173,27 @@
     window.initSelect2 = function (elementId, type) {
         $(elementId).select2({
             width: '100%',
-            minimumInputLength: 1,
-            placeholder: 'Type to search...',
+            // AdminLTE 3 đi kèm với CSS cho select2 nhưng thường cần định nghĩa rõ
+            placeholder: 'Chọn dữ liệu...',
             allowClear: true,
+            minimumResultsForSearch: 0, // Luôn hiện ô search
             ajax: {
-                // Gọi đến API Controller mới thay vì truyền tên bảng trực tiếp
                 url: '/api/Lookup/' + type,
                 dataType: 'json',
-                delay: 300,
+                delay: 250,
                 data: function (params) {
-                    return {
-                        term: params.term
-                    };
+                    return { term: params.term || "" };
                 },
                 processResults: function (data) {
-                    // Đảm bảo data trả về đúng định dạng [{id:..., text:...}]
                     return { results: data };
                 },
                 cache: true
-            },
-            language: {
-                inputTooShort: function () {
-                    return "Please enter 1 or more characters";
-                },
-                noResults: function () {
-                    return "No results found";
-                },
-                searching: function () {
-                    return "Searching...";
-                }
             }
+        });
+
+        // Fix lỗi focus ô search trên mobile/AdminLTE
+        $(elementId).on('select2:open', function () {
+            document.querySelector('.select2-search__field').focus();
         });
     };
 

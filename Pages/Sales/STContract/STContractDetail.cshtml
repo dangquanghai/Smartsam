@@ -1,0 +1,334 @@
+﻿@page
+@model SmartSam.Pages.Sales.STContract.STContractDetailModel
+@{
+    ViewData["Title"] = "Add Short Term Contract";
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <form method="post">
+            <div class="row d-flex align-items-stretch">
+                <div class="col-md-5">
+                    <div class="card card-primary card-outline card-outline-tabs h-100 mb-0">
+                        <div class="card-header p-0 border-bottom-0">
+                            <ul class="nav nav-tabs" id="custom-tabs-four-tab" role="tablist">
+                                <li class="nav-item">
+                                    <a class="nav-link active" id="tabs-general-tab" data-toggle="pill" href="#tabs-general" role="tab" aria-controls="tabs-general" aria-selected="true">General Information</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" id="tabs-other-tab" data-toggle="pill" href="#tabs-other" role="tab" aria-controls="tabs-other" aria-selected="false">Other Details</a>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="card-body p-2">
+                            <div class="tab-content" id="custom-tabs-four-tabContent">
+                                <div class="tab-pane fade show active" id="tabs-general" role="tabpanel" aria-labelledby="tabs-general-tab">
+                                    <div class="row no-gutters align-items-center mb-2">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">ContractNo(*)</label></div>
+                                        <div class="col-3">
+                                            <input type="text" asp-for="Contract.ContractNo" id="ContractNo" class="form-control form-control-sm" readonly tabindex="-1">
+                                        </div>
+                                        <div class="col-3 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Status(*)</label></div>
+                                        <div class="col-4">
+                                            <select asp-for="Contract.ContractStatus" id="ContractStatus" asp-items="Model.StatusList" class="form-control form-control-sm" tabindex="5">
+                                                <option value="">-- Status --</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="row no-gutters align-items-center mb-2">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">C.Date(*)</label></div>
+                                        <div class="col-3">
+                                            <input type="date" asp-for="Contract.ContractDate" id="ContractDate" class="form-control form-control-sm" tabindex="1">
+                                        </div>
+                                        <div class="col-3 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Company</label></div>
+                                        <div class="col-4">
+                                            <select asp-for="Contract.CompanyID"
+                                                    id="CompanyId"
+                                                    class="form-control select2-ajax" tabindex="6"
+                                                    style="width: 100%;">
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="row no-gutters align-items-center mb-2">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Apartment(*)</label></div>
+                                        <div class="col-3">
+                                            <select asp-for="Contract.ApmtID" id="ApmtId" asp-items="Model.ApmtList" class="form-control form-control-sm" tabindex="2">
+                                            </select>
+                                        </div>
+                                        <div class="col-3 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Representator</label></div>
+                                        <div class="col-4">
+                                            <select asp-for="Contract.Representator" id="Representator" asp-items="Model.RepresentatorList" class="form-control form-control-sm" tabindex="7">
+                                            </select>
+
+                                        </div>
+                                    </div>
+
+                                    <div class="row no-gutters align-items-center mb-2">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">RentIncVAT(*)</label></div>
+                                        <div class="col-3">
+                                            <input type="text" asp-for="Contract.CurrentRentRateVND" id="CurrentRentRate" asp-items="Model.ApmtList" class="form-control form-control-sm" tabindex="3">
+                                        </div>
+                                        <div class="col-3 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Period(*)</label></div>
+                                        <div class="col-4">
+                                            <div class="input-group">
+                                                <input type="text" class="form-control form-control-sm" id="contractDuration" tabindex="8">
+                                                <input type="hidden" asp-for="Contract.ContractFromDate" id="ContractFromDate">
+                                                <input type="hidden" asp-for="Contract.ContractToDate" id="ContractToDate">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="row no-gutters align-items-center mb-2">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">%VAT</label></div>
+                                        <div class="col-3">
+                                            <input type="text" asp-for="Contract.PerVAT" id="PerVAT" class="form-control form-control-sm text-right" tabindex="-1">
+                                        </div>
+                                        <div class="col-3 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Is Repeater</label></div>
+                                        <div class="col-4">
+                                            <div class="custom-control custom-checkbox">
+                                                <input type="checkbox" class="custom-control-input" id="IsRepeater" asp-for="Contract.IsRepeater" tabindex="9">
+                                                <label class="custom-control-label" for="IsRepeater"></label>
+                                            </div>
+                                        </div>
+                                    </div>
+    
+                                    <div class="row no-gutters align-items-center mb-2">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Exl.VAT</label></div>
+                                        <div class="col-3">
+                                            <input type="text" asp-for="Contract.TotalPriceExcVATVND" id="TotalPriceExcVAT" class="form-control form-control-sm text-right" readonly tabindex="-1">
+                                        </div>
+
+
+                                        <div class="col-3 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Source(*)</label></div>
+                                        <div class="col-4">
+                                            <select asp-for="Contract.ContractSourceID" id="ContractSourceID" asp-items="Model.SourceList" class="form-control form-control-sm" tabindex="10">
+                                                <option value="">--Select--</option>
+                                            </select>
+                                        </div>
+
+                                    </div>
+
+                                     <div class="row no-gutters align-items-center mb-2">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Display VAT</label></div>
+                                        <div class="col-3">
+                                            <select asp-for="Contract.DisPlayVATFromID" id="DisPlayVATFromID" asp-items="Model.VATFromList" class="form-control form-control-sm" tabindex="4">
+                                                <option value="">--Select--</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-3 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Received By(*)</label></div>
+                                        <div class="col-4">
+                                            <select asp-for="Contract.ReceivedByID" id="ContractSourceID" asp-items="Model.ReceiverList" class="form-control form-control-sm" tabindex="11">
+                                                <option value="">--Select--</option>
+                                            </select>
+                                        </div>
+
+                                    </div>
+                                    <div class="row no-gutters align-items-start mb-0">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">Remark</label></div>
+                                        <div class="col-10">
+                                            <textarea asp-for="Contract.Remarks" id="Remarks" class="form-control form-control-sm" rows="2" tabindex="13"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="tab-pane fade" id="tabs-other" role="tabpanel" aria-labelledby="tabs-other-tab">
+                                    <div class="row no-gutters align-items-center mb-2">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">AgentCompany</label></div>
+                                        <div class="col-3">
+                                            <select asp-for="STInfor.AgentCompany"
+                                                    id="AgentCompanyId"
+                                                    class="form-control select2-ajax" tabindex="14"
+                                                    style="width: 100%;">
+                                            </select>
+                                        </div>
+                                        <div class="col-3 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Payment By</label></div>
+                                        <div class="col-4">
+                                            <select asp-for="STInfor.PaidBy" id="ContractStatus" asp-items="Model.PaymnetByList" class="form-control form-control-sm" tabindex="15">
+                                                <option value="">-- Status --</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="row no-gutters align-items-center mb-2">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Agent Person </label></div>
+                                        <div class="col-3">
+                                                <select id="AgentPersonId"
+                                                        name="STInfor.AgentPersonId"
+                                                        class="form-control"
+                                                        style="width: 100%;">
+                                                </select>
+                                        </div>
+                                        <div class="col-3 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Apmt Note</label></div>
+                                        <div class="col-4">
+                                            <input type="text" asp-for="STInfor.ApmtNote" id="ApmtNote" class="form-control form-control-sm" tabindex="17">
+                                        </div>
+                                    </div>
+
+                                    <div class="row no-gutters align-items-start mb-0">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">PaymentInfor</label></div>
+                                        <div class="col-10">
+                                            <input type="text" asp-for="STInfor.PaymentInfor" id="PaymentInfor" class="form-control form-control-sm" tabindex="18">
+                                        </div>
+                                    </div>
+
+                                    <div class="row no-gutters align-items-start mb-0">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">Rental Charge</label></div>
+                                        <div class="col-10">
+                                            <input type="text" asp-for="STInfor.RentalCharge" id="RentalCharge" class="form-control form-control-sm" tabindex="19">
+                                        </div>
+                                    </div>
+                                    <div class="row no-gutters align-items-start mb-0">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">DepositInfor</label></div>
+                                        <div class="col-10">
+                                            <input type="text" asp-for="STInfor.DepositInfor" id="DepositInfor" class="form-control form-control-sm" tabindex="20">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row no-gutters align-items-start mb-0">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">CancelCharge</label></div>
+                                        <div class="col-10">
+                                            <input asp-for="STInfor.CancellationCharge"
+                                                   list="dtlCancellationCharge" 
+                                                   class="form-control form-control-sm" 
+                                                   autocomplete="off" />
+                                            <datalist id="dtlCancellationCharge" tabindex="21">
+                                                <option value="24 hours prior to 14:00 of the check-in date. Later than this time, one night room rental will be levied."></option>
+                                                <option value="24 hours prior to 14:00 of the check-in date. Later than this time, one night room rental will be levied."></option>
+                                                <option value="three days prior to the check-in date. Later than this time, 10% of total room rental of the reserved stay will be levied."></option>
+                                                <option value="three days prior to the check-in date. Later than this time, 10% of total room rental of the reserved stay will be levied."></option>
+                                                <option value="two weeks prior to the check-in date. Later than this time,15% of total room rental of the reserved stay will be levied."></option>
+                                                <option value="No cancellation is accepted prior to the check-in date. If cancel, 15% of total room rental of the reserved stay will be levied."></option>
+                                                <option value="A cancellation should be informed to SSG 07 days prior to the check-in date. Later than this time, full charge of room rental will be applied."></option>
+                                            </datalist>
+                                        </div>
+                                    </div>
+
+                                    <div class="row no-gutters align-items-start mb-0">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">OutSuddenly</label></div>
+                                        <div class="col-10">
+                                            <input asp-for="STInfor.CheckoutSuddenly"
+                                                   list="dtlCheckoutSuddenly"
+                                                   class="form-control form-control-sm" 
+                                                   autocomplete="off" />
+                                            <datalist id="dtlCheckoutSuddenly" tabindex="22">
+                                                <option value="24 hours prior to 12:00 of the actual checkout date. Later than this time, one night room rental will be levied."></option>
+                                                <option value="three days prior to the actual checkout date. Later than this time, 10% room rental of the remainder of reserved stay will be levied."></option>
+                                                <option value="15% room rental of the remainder of reserved stay."></option>
+                                            </datalist>
+                                        </div>
+                                    </div>
+
+
+
+                                    <div class="row no-gutters align-items-start mb-0">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">DepositRP DRP</label></div>
+                                        <div class="col-10">
+                                            <input asp-for="STInfor.DRP"
+                                                   list="dtlDRP"
+                                                   class="form-control form-control-sm"
+                                                   autocomplete="off" />
+                                            <datalist id="dtlDRP" tabindex="23">
+                                                <option value="Deposit is not refunded in case of (late cancellation) or (no-show) "></option>
+                                                <option value="10% of total room rental of the reserved stay is not refunded in case of (late cancellation) or (no-show)."></option>
+                                                <option value="15% of total room rental of the reserved stay is not refunded in case of (late cancellation) or (no-show)."></option>
+                                            </datalist>
+                                        </div>
+                                    </div>
+                                    <div class="row no-gutters align-items-start mb-0">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">SpecialReq</label></div>
+                                        <div class="col-10">
+                                            <textarea asp-for="STInfor.SpecialReq" id="SpecialReq" class="form-control form-control-sm" rows="1" tabindex="24"></textarea>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer py-2">
+                            <div class="float-left">
+                                <button type="button" class="btn btn-info btn-sm px-4"><i class="fas fa-history"></i> History</button>
+                                <button type="submit" class="btn btn-primary btn-sm px-4"><i class="fas fa-save"></i> Save Contract</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-7">
+                    <div class="card card-success card-outline h-100 mb-0 d-flex flex-column">
+                        <div class="card-header p-2">
+                            <h3 class="card-title">Contract Services</h3>
+                        </div>
+
+                        <div class="card-body p-0 flex-grow-1" style="min-height: 400px; overflow-y: auto;">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered table-striped m-0" id="tableServices">
+                                    <thead class="bg-light sticky-top">
+                                        <tr>
+                                            <th>Service Name</th>
+                                            <th>From Date</th>
+                                            <th>To Date</th>
+                                            <th class="text-center">Interval</th>
+                                            <th class="text-right">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="card-footer py-2">
+                            <button type="button" class="btn btn-success btn-sm px-4">
+                                <i class="fas fa-plus"></i> Add Service
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-12">
+                    <div class="card card-secondary card-outline">
+                        <div class="card-header p-2">
+                            <h3 class="card-title">Tenants Information</h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="min-height: 200px;">
+                                <table class="table table-sm table-bordered table-hover mb-0" id="tableTenants">
+                                    <thead class="bg-gray-light">
+                                        <tr>
+                                            <th>Full Name</th>
+                                            <th>Birthday</th>
+                                            <th>Nationality</th>
+                                            <th>Passport/ID</th>
+                                            <th>Position</th>
+                                            <th>Move-in</th>
+                                            <th>Exp. Date</th>
+                                            <th>Visa No</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="card-footer py-2">
+                            <button type="button" class="btn btn-primary btn-sm px-3"><i class="fas fa-user-plus"></i> Add From List</button>
+                            <button type="button" class="btn btn-primary btn-sm px-3">View</button>
+                            <button type="button" class="btn btn-primary btn-sm px-3">Add New</button>
+                            <button type="button" class="btn btn-primary btn-sm px-3">Edit</button>
+                            <button type="button" class="btn btn-danger btn-sm px-3">Remove</button>
+                            <a asp-page="./Index" class="btn btn-default btn-sm float-right">Back to List</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+
+
+@section Scripts {
+    <script src="~/js/Sales/STContract/STContractDetail.js" asp-append-version="true"></script>
+}
+
