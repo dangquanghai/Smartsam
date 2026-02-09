@@ -3,3 +3,14 @@ bin/
 obj/
 appsettings.json
 *.json
+.env.local
+docker-compose.local.yml
+Dockerfile.local
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+.env.docker*
+.vs/
+wwwroot/uploads/
+*.user
+*.suo
