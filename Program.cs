@@ -3,6 +3,8 @@ using SmartSam.Pages;
 using SmartSam.Services; // Kiểm tra namespace này cho chuẩn
 using Microsoft.AspNetCore.Http.Features;
 using SmartSam.Helpers;
+using SmartSam.Services.Purchasing.Supplier.Abstractions;
+using SmartSam.Services.Purchasing.Supplier.Implementations;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,6 +25,8 @@ builder.Services.AddMemoryCache();
 
 builder.Services.AddScoped<MenuService>();
 builder.Services.AddScoped<PermissionService>();
+builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
+builder.Services.AddScoped<ISupplierService, SupplierService>();
 
 builder.Services.Configure<FormOptions>(options =>
 {

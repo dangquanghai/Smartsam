@@ -21,3 +21,6 @@ appsettings*.json
 Dockerfile*
 docker-compose*.yml
 .dockerignore
+.vscode/
+Documents/
+db/
