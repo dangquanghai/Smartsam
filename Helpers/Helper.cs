@@ -5,6 +5,8 @@ using System.Data;
 using System.Linq;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SmartSam.Helpers
 {
@@ -152,6 +154,94 @@ namespace SmartSam.Helpers
                 Console.WriteLine("Lỗi SQL: " + ex.Message);
             }
             return dataTable;
+        }
+
+        public static void AddParameter(SqlCommand cmd, string name, object? value, SqlDbType? dbType = null, int? size = null)
+        {
+            SqlParameter p;
+            if (dbType.HasValue)
+            {
+                p = size.HasValue
+                    ? cmd.Parameters.Add(name, dbType.Value, size.Value)
+                    : cmd.Parameters.Add(name, dbType.Value);
+            }
+            else
+            {
+                p = cmd.Parameters.AddWithValue(name, value ?? DBNull.Value);
+            }
+
+            p.Value = value ?? DBNull.Value;
+        }
+
+        public static async Task<List<T>> QueryAsync<T>(
+            string connectionString,
+            string sql,
+            Func<SqlDataReader, T> map,
+            Action<SqlCommand>? setup = null,
+            CancellationToken cancellationToken = default)
+        {
+            var result = new List<T>();
+            await using var conn = new SqlConnection(connectionString);
+            await using var cmd = new SqlCommand(sql, conn);
+            setup?.Invoke(cmd);
+
+            await conn.OpenAsync(cancellationToken);
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+            while (await rd.ReadAsync(cancellationToken))
+            {
+                result.Add(map(rd));
+            }
+
+            return result;
+        }
+
+        public static async Task<T?> QuerySingleOrDefaultAsync<T>(
+            string connectionString,
+            string sql,
+            Func<SqlDataReader, T> map,
+            Action<SqlCommand>? setup = null,
+            CancellationToken cancellationToken = default)
+        {
+            await using var conn = new SqlConnection(connectionString);
+            await using var cmd = new SqlCommand(sql, conn);
+            setup?.Invoke(cmd);
+
+            await conn.OpenAsync(cancellationToken);
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+            if (!await rd.ReadAsync(cancellationToken))
+            {
+                return default;
+            }
+
+            return map(rd);
+        }
+
+        public static async Task<int> ExecuteNonQueryAsync(
+            string connectionString,
+            string sql,
+            Action<SqlCommand>? setup = null,
+            CancellationToken cancellationToken = default)
+        {
+            await using var conn = new SqlConnection(connectionString);
+            await using var cmd = new SqlCommand(sql, conn);
+            setup?.Invoke(cmd);
+
+            await conn.OpenAsync(cancellationToken);
+            return await cmd.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        public static async Task<object?> ExecuteScalarAsync(
+            string connectionString,
+            string sql,
+            Action<SqlCommand>? setup = null,
+            CancellationToken cancellationToken = default)
+        {
+            await using var conn = new SqlConnection(connectionString);
+            await using var cmd = new SqlCommand(sql, conn);
+            setup?.Invoke(cmd);
+
+            await conn.OpenAsync(cancellationToken);
+            return await cmd.ExecuteScalarAsync(cancellationToken);
         }
 
         /// <summary>

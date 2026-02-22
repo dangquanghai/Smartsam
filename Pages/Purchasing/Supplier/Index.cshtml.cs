@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using SmartSam.Models.Purchasing.Supplier;
+using SmartSam.Services;
 using SmartSam.Services.Purchasing.Supplier.Abstractions;
 
 namespace SmartSam.Pages.Purchasing.Supplier;
@@ -9,10 +10,13 @@ namespace SmartSam.Pages.Purchasing.Supplier;
 public class IndexModel : PageModel
 {
     private readonly ISupplierService _supplierService;
+    private readonly PermissionService _permissionService;
+    private const int SupplierFunctionId = 71;
 
-    public IndexModel(ISupplierService supplierService)
+    public IndexModel(ISupplierService supplierService, PermissionService permissionService)
     {
         _supplierService = supplierService;
+        _permissionService = permissionService;
     }
 
     [BindProperty(SupportsGet = true)]
@@ -48,20 +52,38 @@ public class IndexModel : PageModel
     [BindProperty]
     public bool ConfirmCopy { get; set; }
 
+    [BindProperty]
+    public int SelectedSupplierId { get; set; }
+
     public string? Message { get; set; }
+
+    public PagePermissions PagePerm { get; private set; } = new();
 
     public List<SelectListItem> Departments { get; set; } = [];
     public List<SelectListItem> Statuses { get; set; } = [];
     public List<SupplierListRowDto> Rows { get; set; } = [];
 
-    public async Task OnGetAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
+        LoadPagePermissions();
+        if (!HasPermission(1))
+        {
+            return Forbid();
+        }
+
         await LoadFiltersAsync(cancellationToken);
         Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
+        return Page();
     }
 
     public async Task<IActionResult> OnPostCopyYearAsync(CancellationToken cancellationToken)
     {
+        LoadPagePermissions();
+        if (!HasPermission(5))
+        {
+            return Forbid();
+        }
+
         await LoadFiltersAsync(cancellationToken);
 
         if (!ConfirmCopy || CopyYear < 2000 || CopyYear > 2100)
@@ -87,6 +109,12 @@ public class IndexModel : PageModel
 
     public async Task<IActionResult> OnGetExportCsvAsync(CancellationToken cancellationToken)
     {
+        LoadPagePermissions();
+        if (!HasPermission(1))
+        {
+            return Forbid();
+        }
+
         var rows = await _supplierService.SearchAsync(BuildCriteria(), cancellationToken);
         var lines = new List<string>
         {
@@ -104,6 +132,45 @@ public class IndexModel : PageModel
 
         var bytes = System.Text.Encoding.UTF8.GetBytes(string.Join("\n", lines));
         return File(bytes, "text/csv", "suppliers.csv");
+    }
+
+    public async Task<IActionResult> OnPostSubmitAsync(CancellationToken cancellationToken)
+    {
+        LoadPagePermissions();
+        if (!HasPermission(4))
+        {
+            return Forbid();
+        }
+
+        await LoadFiltersAsync(cancellationToken);
+
+        if (SelectedSupplierId <= 0)
+        {
+            Message = "Vui lòng chọn nhà cung cấp trước khi submit.";
+            Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
+            return Page();
+        }
+
+        var supplier = await _supplierService.GetDetailAsync(SelectedSupplierId, cancellationToken);
+        if (supplier is null)
+        {
+            Message = "Không tìm thấy nhà cung cấp đã chọn.";
+            Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
+            return Page();
+        }
+
+        if (supplier.Status == 1)
+        {
+            Message = "Nhà cung cấp này đã submit trước đó.";
+            Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
+            return Page();
+        }
+
+        var operatorCode = User.Identity?.Name ?? "SYSTEM";
+        await _supplierService.SubmitApprovalAsync(SelectedSupplierId, operatorCode, cancellationToken);
+        Message = "Submit thành công.";
+        Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
+        return Page();
     }
 
     private async Task LoadFiltersAsync(CancellationToken cancellationToken)
@@ -149,4 +216,23 @@ public class IndexModel : PageModel
 
     private static string? NullIfEmpty(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private void LoadPagePermissions()
+    {
+        var isAdmin = string.Equals(User.FindFirst("IsAdminRole")?.Value, "True", StringComparison.OrdinalIgnoreCase);
+        if (isAdmin)
+        {
+            PagePerm.AllowedNos = Enumerable.Range(1, 10).ToList();
+            return;
+        }
+
+        if (!int.TryParse(User.FindFirst("RoleID")?.Value, out var roleId))
+        {
+            roleId = 0;
+        }
+
+        PagePerm.AllowedNos = _permissionService.GetPermissionsForPage(roleId, SupplierFunctionId);
+    }
+
+    private bool HasPermission(int permissionNo) => PagePerm.HasPermission(permissionNo);
 }

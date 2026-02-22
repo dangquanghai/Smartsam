@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using SmartSam.Models.Purchasing.Supplier;
+using SmartSam.Services;
 using SmartSam.Services.Purchasing.Supplier.Abstractions;
 
 namespace SmartSam.Pages.Purchasing.Supplier;
@@ -9,10 +10,13 @@ namespace SmartSam.Pages.Purchasing.Supplier;
 public class DetailModel : PageModel
 {
     private readonly ISupplierService _supplierService;
+    private readonly PermissionService _permissionService;
+    private const int SupplierFunctionId = 71;
 
-    public DetailModel(ISupplierService supplierService)
+    public DetailModel(ISupplierService supplierService, PermissionService permissionService)
     {
         _supplierService = supplierService;
+        _permissionService = permissionService;
     }
 
     [BindProperty(SupportsGet = true)]
@@ -29,22 +33,44 @@ public class DetailModel : PageModel
     public string? Message { get; set; }
 
     public bool IsEdit => Id.HasValue && Id.Value > 0;
+    public PagePermissions PagePerm { get; private set; } = new();
+    public bool CanSave => IsEdit ? HasPermission(3) : HasPermission(2);
+    public bool IsSubmitted => (Input.Status ?? 0) == 1;
+    public bool CanSubmit => IsEdit && HasPermission(4) && !IsSubmitted;
 
-    public async Task OnGetAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
+        LoadPagePermissions();
+        if (IsEdit && !HasPermission(1))
+        {
+            return Forbid();
+        }
+
+        if (!IsEdit && !HasPermission(2))
+        {
+            return Forbid();
+        }
+
         await LoadDropdownsAsync(cancellationToken);
 
         if (!IsEdit)
         {
-            return;
+            return Page();
         }
 
         Input = await _supplierService.GetDetailAsync(Id!.Value, cancellationToken) ?? new SupplierDetailDto();
         Histories = (await _supplierService.GetApprovalHistoryAsync(Id.Value, cancellationToken)).ToList();
+        return Page();
     }
 
     public async Task<IActionResult> OnPostSaveAsync(CancellationToken cancellationToken)
     {
+        LoadPagePermissions();
+        if ((IsEdit && !HasPermission(3)) || (!IsEdit && !HasPermission(2)))
+        {
+            return Forbid();
+        }
+
         await LoadDropdownsAsync(cancellationToken);
 
         if (!ModelState.IsValid)
@@ -73,9 +99,26 @@ public class DetailModel : PageModel
 
     public async Task<IActionResult> OnPostSubmitApprovalAsync(CancellationToken cancellationToken)
     {
+        LoadPagePermissions();
+        if (!HasPermission(4))
+        {
+            return Forbid();
+        }
+
         if (!IsEdit)
         {
             return RedirectToPage("./Index");
+        }
+
+        await LoadDropdownsAsync(cancellationToken);
+
+        // Re-check current status from DB to prevent re-submitting via forged request.
+        Input = await _supplierService.GetDetailAsync(Id!.Value, cancellationToken) ?? new SupplierDetailDto();
+        if (IsSubmitted)
+        {
+            Histories = (await _supplierService.GetApprovalHistoryAsync(Id.Value, cancellationToken)).ToList();
+            Message = "Supplier has already been submitted.";
+            return Page();
         }
 
         var operatorCode = User.Identity?.Name ?? "SYSTEM";
@@ -101,4 +144,23 @@ public class DetailModel : PageModel
             Text = x.CodeOrName
         }).ToList();
     }
+
+    private void LoadPagePermissions()
+    {
+        var isAdmin = string.Equals(User.FindFirst("IsAdminRole")?.Value, "True", StringComparison.OrdinalIgnoreCase);
+        if (isAdmin)
+        {
+            PagePerm.AllowedNos = Enumerable.Range(1, 10).ToList();
+            return;
+        }
+
+        if (!int.TryParse(User.FindFirst("RoleID")?.Value, out var roleId))
+        {
+            roleId = 0;
+        }
+
+        PagePerm.AllowedNos = _permissionService.GetPermissionsForPage(roleId, SupplierFunctionId);
+    }
+
+    private bool HasPermission(int permissionNo) => PagePerm.HasPermission(permissionNo);
 }

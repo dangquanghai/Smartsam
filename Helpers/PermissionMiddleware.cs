@@ -27,7 +27,8 @@ namespace SmartSam.Helpers
             // 1. Bỏ qua các trang công khai và tài nguyên tĩnh
             if (path.StartsWith("/Login") || path.StartsWith("/Logout") ||
                 path.StartsWith("/dist") || path.StartsWith("/plugins") ||
-                path == "/" || path == "/AccessDenied")
+                path == "/" || path.Equals("/Index", StringComparison.OrdinalIgnoreCase) ||
+                path == "/AccessDenied")
             {
                 await _next(context);
                 return;
@@ -115,9 +116,33 @@ namespace SmartSam.Helpers
                 _cache.Set(cacheKey, allowedUrls, cacheOptions);
             }
 
-            // Kiểm tra xem URL hiện tại (Ví dụ: /sales/longtermcontract/add) 
-            // có khớp với bất kỳ URL nào được phân quyền trong DB không
-            return allowedUrls.Any(u => u == cleanUrl);
+            // Khớp tuyệt đối hoặc khớp cùng module path (ví dụ có quyền /purchasing/supplier/index
+            // thì được vào /purchasing/supplier/detail/1)
+            return allowedUrls.Any(u => IsUrlMatch(cleanUrl, u));
+        }
+
+        private static bool IsUrlMatch(string requestUrl, string allowedUrl)
+        {
+            if (requestUrl == allowedUrl)
+            {
+                return true;
+            }
+
+            if (allowedUrl.EndsWith("/index", StringComparison.OrdinalIgnoreCase))
+            {
+                var basePath = allowedUrl[..^"/index".Length];
+                if (requestUrl == basePath)
+                {
+                    return true;
+                }
+
+                if (requestUrl.StartsWith(basePath + "/", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
        // Hàm kiểm tra mới: Chỉ cần User có quyền bất kỳ trong Module cha

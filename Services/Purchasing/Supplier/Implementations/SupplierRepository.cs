@@ -1,5 +1,6 @@
 using System.Data;
 using Microsoft.Data.SqlClient;
+using SmartSam.Helpers;
 using SmartSam.Models.Purchasing.Supplier;
 using SmartSam.Services.Purchasing.Supplier.Abstractions;
 
@@ -18,45 +19,29 @@ public class SupplierRepository : ISupplierRepository
     public async Task<IReadOnlyList<SupplierLookupOptionDto>> GetDepartmentsAsync(CancellationToken cancellationToken = default)
     {
         const string sql = "SELECT DeptID, DeptCode FROM dbo.MS_Department ORDER BY DeptCode";
-        var list = new List<SupplierLookupOptionDto>();
-
-        await using var conn = new SqlConnection(_connectionString);
-        await using var cmd = new SqlCommand(sql, conn);
-        await conn.OpenAsync(cancellationToken);
-
-        await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-        while (await rd.ReadAsync(cancellationToken))
-        {
-            list.Add(new SupplierLookupOptionDto
+        return await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd => new SupplierLookupOptionDto
             {
                 Id = rd.IsDBNull(0) ? 0 : rd.GetInt32(0),
                 CodeOrName = rd[1]?.ToString() ?? string.Empty
-            });
-        }
-
-        return list;
+            },
+            cancellationToken: cancellationToken);
     }
 
     public async Task<IReadOnlyList<SupplierLookupOptionDto>> GetStatusesAsync(CancellationToken cancellationToken = default)
     {
         const string sql = "SELECT SupplierStatusID, SupplierStatusName FROM dbo.PC_SupplierStatus ORDER BY SupplierStatusID";
-        var list = new List<SupplierLookupOptionDto>();
-
-        await using var conn = new SqlConnection(_connectionString);
-        await using var cmd = new SqlCommand(sql, conn);
-        await conn.OpenAsync(cancellationToken);
-
-        await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-        while (await rd.ReadAsync(cancellationToken))
-        {
-            list.Add(new SupplierLookupOptionDto
+        return await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd => new SupplierLookupOptionDto
             {
                 Id = rd.IsDBNull(0) ? 0 : rd.GetInt32(0),
                 CodeOrName = rd[1]?.ToString() ?? string.Empty
-            });
-        }
-
-        return list;
+            },
+            cancellationToken: cancellationToken);
     }
 
     public async Task<IReadOnlyList<SupplierListRowDto>> SearchAsync(SupplierFilterCriteria criteria, CancellationToken cancellationToken = default)
@@ -101,23 +86,10 @@ WHERE
     AND (@IsNew = 0 OR s.IsNew = 1)
 ORDER BY s.SupplierCode";
 
-        var rows = new List<SupplierListRowDto>();
-        await using var conn = new SqlConnection(_connectionString);
-        await using var cmd = new SqlCommand(sql, conn);
-
-        AddNullable(cmd, "@SupplierCode", NullIfEmpty(criteria.SupplierCode));
-        AddNullable(cmd, "@SupplierName", NullIfEmpty(criteria.SupplierName));
-        AddNullable(cmd, "@Business", NullIfEmpty(criteria.Business));
-        AddNullable(cmd, "@Contact", NullIfEmpty(criteria.Contact));
-        AddNullable(cmd, "@DeptID", criteria.DeptId);
-        AddNullable(cmd, "@StatusID", criteria.StatusId);
-        cmd.Parameters.AddWithValue("@IsNew", criteria.IsNew ? 1 : 0);
-
-        await conn.OpenAsync(cancellationToken);
-        await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-        while (await rd.ReadAsync(cancellationToken))
-        {
-            rows.Add(new SupplierListRowDto
+        return await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd => new SupplierListRowDto
             {
                 SupplierID = rd.GetInt32(0),
                 SupplierCode = rd[1]?.ToString() ?? string.Empty,
@@ -140,10 +112,18 @@ ORDER BY s.SupplierCode";
                 DeptCode = rd[18]?.ToString() ?? string.Empty,
                 SupplierStatusName = rd[19]?.ToString() ?? string.Empty,
                 Status = rd.IsDBNull(20) ? null : Convert.ToInt32(rd[20])
-            });
-        }
-
-        return rows;
+            },
+            cmd =>
+            {
+                Helper.AddParameter(cmd, "@SupplierCode", NullIfEmpty(criteria.SupplierCode), SqlDbType.NVarChar, 255);
+                Helper.AddParameter(cmd, "@SupplierName", NullIfEmpty(criteria.SupplierName), SqlDbType.NVarChar, 255);
+                Helper.AddParameter(cmd, "@Business", NullIfEmpty(criteria.Business), SqlDbType.NVarChar, 255);
+                Helper.AddParameter(cmd, "@Contact", NullIfEmpty(criteria.Contact), SqlDbType.NVarChar, 255);
+                Helper.AddParameter(cmd, "@DeptID", criteria.DeptId, SqlDbType.Int);
+                Helper.AddParameter(cmd, "@StatusID", criteria.StatusId, SqlDbType.Int);
+                Helper.AddParameter(cmd, "@IsNew", criteria.IsNew ? 1 : 0, SqlDbType.Int);
+            },
+            cancellationToken);
     }
 
     public async Task CopyCurrentSuppliersToYearAsync(int copyYear, CancellationToken cancellationToken = default)
@@ -217,38 +197,32 @@ SELECT SupplierCode,SupplierName,Address,Phone,Mobile,Fax,Contact,[Position],Bus
 FROM dbo.PC_Suppliers
 WHERE SupplierID=@ID";
 
-        await using var conn = new SqlConnection(_connectionString);
-        await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@ID", supplierId);
-
-        await conn.OpenAsync(cancellationToken);
-        await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-        if (!await rd.ReadAsync(cancellationToken))
-        {
-            return null;
-        }
-
-        return new SupplierDetailDto
-        {
-            SupplierCode = rd[0]?.ToString(),
-            SupplierName = rd[1]?.ToString(),
-            Address = rd[2]?.ToString(),
-            Phone = rd[3]?.ToString(),
-            Mobile = rd[4]?.ToString(),
-            Fax = rd[5]?.ToString(),
-            Contact = rd[6]?.ToString(),
-            Position = rd[7]?.ToString(),
-            Business = rd[8]?.ToString(),
-            ApprovedDate = rd.IsDBNull(9) ? null : rd.GetDateTime(9),
-            Document = rd[10]?.ToString(),
-            Certificate = rd[11]?.ToString(),
-            Service = rd[12]?.ToString(),
-            Comment = rd[13]?.ToString(),
-            IsNew = !rd.IsDBNull(14) && Convert.ToBoolean(rd[14]),
-            CodeOfAcc = rd[15]?.ToString(),
-            DeptID = rd.IsDBNull(16) ? null : Convert.ToInt32(rd[16]),
-            Status = rd.IsDBNull(17) ? null : Convert.ToInt32(rd[17])
-        };
+        return await Helper.QuerySingleOrDefaultAsync(
+            _connectionString,
+            sql,
+            rd => new SupplierDetailDto
+            {
+                SupplierCode = rd[0]?.ToString(),
+                SupplierName = rd[1]?.ToString(),
+                Address = rd[2]?.ToString(),
+                Phone = rd[3]?.ToString(),
+                Mobile = rd[4]?.ToString(),
+                Fax = rd[5]?.ToString(),
+                Contact = rd[6]?.ToString(),
+                Position = rd[7]?.ToString(),
+                Business = rd[8]?.ToString(),
+                ApprovedDate = rd.IsDBNull(9) ? null : rd.GetDateTime(9),
+                Document = rd[10]?.ToString(),
+                Certificate = rd[11]?.ToString(),
+                Service = rd[12]?.ToString(),
+                Comment = rd[13]?.ToString(),
+                IsNew = !rd.IsDBNull(14) && Convert.ToBoolean(rd[14]),
+                CodeOfAcc = rd[15]?.ToString(),
+                DeptID = rd.IsDBNull(16) ? null : Convert.ToInt32(rd[16]),
+                Status = rd.IsDBNull(17) ? null : Convert.ToInt32(rd[17])
+            },
+            cmd => Helper.AddParameter(cmd, "@ID", supplierId, SqlDbType.Int),
+            cancellationToken);
     }
 
     public async Task<IReadOnlyList<SupplierApprovalHistoryDto>> GetApprovalHistoryAsync(int supplierId, CancellationToken cancellationToken = default)
@@ -263,25 +237,17 @@ SELECT 'Head Financial approved/dis', FinancialCode, FinancialApproveDate FROM d
 UNION ALL
 SELECT 'BOD approved/dis', BODCode, BODApproveDate FROM dbo.PC_Suppliers WHERE SupplierID=@ID";
 
-        var rows = new List<SupplierApprovalHistoryDto>();
-
-        await using var conn = new SqlConnection(_connectionString);
-        await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@ID", supplierId);
-
-        await conn.OpenAsync(cancellationToken);
-        await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-        while (await rd.ReadAsync(cancellationToken))
-        {
-            rows.Add(new SupplierApprovalHistoryDto
+        return await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd => new SupplierApprovalHistoryDto
             {
                 Action = rd[0]?.ToString() ?? string.Empty,
                 UserCode = rd[1]?.ToString() ?? string.Empty,
                 ActionDate = rd.IsDBNull(2) ? null : rd.GetDateTime(2)
-            });
-        }
-
-        return rows;
+            },
+            cmd => Helper.AddParameter(cmd, "@ID", supplierId, SqlDbType.Int),
+            cancellationToken);
     }
 
     public async Task<int> CreateAsync(SupplierDetailDto detail, string operatorCode, CancellationToken cancellationToken = default)
@@ -301,13 +267,15 @@ VALUES
 );
 SELECT CAST(SCOPE_IDENTITY() as int);";
 
-        await using var conn = new SqlConnection(_connectionString);
-        await using var cmd = new SqlCommand(sql, conn);
-        BindDetailParams(cmd, detail);
-        cmd.Parameters.AddWithValue("@OperatorCode", operatorCode);
-
-        await conn.OpenAsync(cancellationToken);
-        var result = await cmd.ExecuteScalarAsync(cancellationToken);
+        var result = await Helper.ExecuteScalarAsync(
+            _connectionString,
+            sql,
+            cmd =>
+            {
+                BindDetailParams(cmd, detail);
+                Helper.AddParameter(cmd, "@OperatorCode", operatorCode, SqlDbType.NVarChar, 50);
+            },
+            cancellationToken);
         return Convert.ToInt32(result);
     }
 
@@ -335,13 +303,15 @@ SET SupplierCode=@SupplierCode,
     [Status]=@Status
 WHERE SupplierID=@SupplierID";
 
-        await using var conn = new SqlConnection(_connectionString);
-        await using var cmd = new SqlCommand(sql, conn);
-        BindDetailParams(cmd, detail);
-        cmd.Parameters.AddWithValue("@SupplierID", supplierId);
-
-        await conn.OpenAsync(cancellationToken);
-        await cmd.ExecuteNonQueryAsync(cancellationToken);
+        await Helper.ExecuteNonQueryAsync(
+            _connectionString,
+            sql,
+            cmd =>
+            {
+                BindDetailParams(cmd, detail);
+                Helper.AddParameter(cmd, "@SupplierID", supplierId, SqlDbType.Int);
+            },
+            cancellationToken);
     }
 
     public async Task SubmitApprovalAsync(int supplierId, string operatorCode, CancellationToken cancellationToken = default)
@@ -353,13 +323,15 @@ SET [Status]=1,
     PurchaserPreparedDate=GETDATE()
 WHERE SupplierID=@SupplierID";
 
-        await using var conn = new SqlConnection(_connectionString);
-        await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@SupplierID", supplierId);
-        cmd.Parameters.AddWithValue("@OperatorCode", operatorCode);
-
-        await conn.OpenAsync(cancellationToken);
-        await cmd.ExecuteNonQueryAsync(cancellationToken);
+        await Helper.ExecuteNonQueryAsync(
+            _connectionString,
+            sql,
+            cmd =>
+            {
+                Helper.AddParameter(cmd, "@SupplierID", supplierId, SqlDbType.Int);
+                Helper.AddParameter(cmd, "@OperatorCode", operatorCode, SqlDbType.NVarChar, 50);
+            },
+            cancellationToken);
     }
 
     private static void BindDetailParams(SqlCommand cmd, SupplierDetailDto detail)
@@ -378,7 +350,7 @@ WHERE SupplierID=@SupplierID";
         AddNullable(cmd, "@Certificate", detail.Certificate);
         AddNullable(cmd, "@Service", detail.Service);
         AddNullable(cmd, "@Comment", detail.Comment);
-        cmd.Parameters.AddWithValue("@IsNew", detail.IsNew);
+        Helper.AddParameter(cmd, "@IsNew", detail.IsNew, SqlDbType.Bit);
         AddNullable(cmd, "@CodeOfAcc", detail.CodeOfAcc);
         AddNullable(cmd, "@DeptID", detail.DeptID);
         AddNullable(cmd, "@Status", detail.Status);
@@ -386,7 +358,7 @@ WHERE SupplierID=@SupplierID";
 
     private static void AddNullable(SqlCommand cmd, string name, object? value)
     {
-        cmd.Parameters.AddWithValue(name, value ?? DBNull.Value);
+        Helper.AddParameter(cmd, name, value);
     }
 
     private static string? NullIfEmpty(string? value)
