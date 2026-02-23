@@ -72,3 +72,12 @@ public class SupplierApprovalHistoryDto
     public string UserCode { get; set; } = string.Empty;
     public DateTime? ActionDate { get; set; }
 }
+
+public class SupplierDeleteResultDto
+{
+    public bool Success { get; set; }
+    public bool IsHardDelete { get; set; }
+    public bool IsSoftDelete { get; set; }
+    public bool NotFound { get; set; }
+    public string? Reason { get; set; }
+}

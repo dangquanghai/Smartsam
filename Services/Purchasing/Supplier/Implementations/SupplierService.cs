@@ -43,4 +43,7 @@ public class SupplierService : ISupplierService
 
     public Task SubmitApprovalAsync(int supplierId, string operatorCode, CancellationToken cancellationToken = default)
         => _repository.SubmitApprovalAsync(supplierId, operatorCode, cancellationToken);
+
+    public Task<SupplierDeleteResultDto> DeleteAsync(int supplierId, string operatorCode, CancellationToken cancellationToken = default)
+        => _repository.DeleteAsync(supplierId, operatorCode, cancellationToken);
 }

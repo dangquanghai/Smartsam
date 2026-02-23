@@ -22,6 +22,9 @@ public class DetailModel : PageModel
     [BindProperty(SupportsGet = true)]
     public int? Id { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public string? Msg { get; set; }
+
     [BindProperty]
     public SupplierDetailDto Input { get; set; } = new();
 
@@ -31,12 +34,14 @@ public class DetailModel : PageModel
     public List<SupplierApprovalHistoryDto> Histories { get; set; } = [];
 
     public string? Message { get; set; }
+    public string MessageType { get; set; } = "info";
 
     public bool IsEdit => Id.HasValue && Id.Value > 0;
     public PagePermissions PagePerm { get; private set; } = new();
     public bool CanSave => IsEdit ? HasPermission(3) : HasPermission(2);
     public bool IsSubmitted => (Input.Status ?? 0) == 1;
     public bool CanSubmit => IsEdit && HasPermission(4) && !IsSubmitted;
+    private static readonly HashSet<int> CreateAllowedStatuses = [0, 1];
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -60,6 +65,10 @@ public class DetailModel : PageModel
 
         Input = await _supplierService.GetDetailAsync(Id!.Value, cancellationToken) ?? new SupplierDetailDto();
         Histories = (await _supplierService.GetApprovalHistoryAsync(Id.Value, cancellationToken)).ToList();
+        if (string.Equals(Msg, "submitted", StringComparison.OrdinalIgnoreCase))
+        {
+            SetMessage("Supplier submitted successfully.", "success");
+        }
         return Page();
     }
 
@@ -73,6 +82,11 @@ public class DetailModel : PageModel
 
         await LoadDropdownsAsync(cancellationToken);
 
+        if (!IsEdit)
+        {
+            Input.Status ??= 0;
+        }
+
         if (!ModelState.IsValid)
         {
             if (IsEdit)
@@ -80,6 +94,12 @@ public class DetailModel : PageModel
                 Histories = (await _supplierService.GetApprovalHistoryAsync(Id!.Value, cancellationToken)).ToList();
             }
 
+            return Page();
+        }
+
+        if (!IsEdit && Input.Status.HasValue && !CreateAllowedStatuses.Contains(Input.Status.Value))
+        {
+            ModelState.AddModelError("Input.Status", "New supplier only allows Draft or Purchaser Submitted status.");
             return Page();
         }
 
@@ -91,7 +111,7 @@ public class DetailModel : PageModel
             return RedirectToPage("./Detail", new { id = savedId });
         }
 
-        Message = "Saved.";
+        SetMessage("Saved successfully.", "success");
         Input = await _supplierService.GetDetailAsync(savedId, cancellationToken) ?? new SupplierDetailDto();
         Histories = (await _supplierService.GetApprovalHistoryAsync(savedId, cancellationToken)).ToList();
         return Page();
@@ -117,7 +137,7 @@ public class DetailModel : PageModel
         if (IsSubmitted)
         {
             Histories = (await _supplierService.GetApprovalHistoryAsync(Id.Value, cancellationToken)).ToList();
-            Message = "Supplier has already been submitted.";
+            SetMessage("Supplier has already been submitted.", "warning");
             return Page();
         }
 
@@ -143,6 +163,11 @@ public class DetailModel : PageModel
             Value = x.Id.ToString(),
             Text = x.CodeOrName
         }).ToList();
+
+        if (!IsEdit)
+        {
+            Statuses = Statuses.Where(x => int.TryParse(x.Value, out var id) && CreateAllowedStatuses.Contains(id)).ToList();
+        }
     }
 
     private void LoadPagePermissions()
@@ -163,4 +188,10 @@ public class DetailModel : PageModel
     }
 
     private bool HasPermission(int permissionNo) => PagePerm.HasPermission(permissionNo);
+
+    private void SetMessage(string message, string type = "info")
+    {
+        Message = message;
+        MessageType = type;
+    }
 }

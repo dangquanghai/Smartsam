@@ -55,7 +55,11 @@ public class IndexModel : PageModel
     [BindProperty]
     public int SelectedSupplierId { get; set; }
 
+    [BindProperty]
+    public string? SelectedSupplierIdsCsv { get; set; }
+
     public string? Message { get; set; }
+    public string MessageType { get; set; } = "info";
 
     public PagePermissions PagePerm { get; private set; } = new();
 
@@ -88,7 +92,7 @@ public class IndexModel : PageModel
 
         if (!ConfirmCopy || CopyYear < 2000 || CopyYear > 2100)
         {
-            Message = "Xác nhận copy và nhập năm hợp lệ (2000-2100).";
+            SetMessage("Xác nhận copy và nhập năm hợp lệ (2000-2100).", "warning");
             Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
             return Page();
         }
@@ -96,11 +100,11 @@ public class IndexModel : PageModel
         try
         {
             await _supplierService.CopyCurrentSuppliersToYearAsync(CopyYear, cancellationToken);
-            Message = $"Đã copy danh sách nhà cung cấp sang dữ liệu năm {CopyYear}.";
+            SetMessage($"Đã copy danh sách nhà cung cấp sang dữ liệu năm {CopyYear}.", "success");
         }
         catch (Exception ex)
         {
-            Message = "Copy failed: " + ex.Message;
+            SetMessage("Copy failed: " + ex.Message, "error");
         }
 
         Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
@@ -144,31 +148,87 @@ public class IndexModel : PageModel
 
         await LoadFiltersAsync(cancellationToken);
 
-        if (SelectedSupplierId <= 0)
+        var selectedIds = ParseSelectedSupplierIds();
+        if (selectedIds.Count == 0)
         {
-            Message = "Vui lòng chọn nhà cung cấp trước khi submit.";
-            Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
-            return Page();
-        }
-
-        var supplier = await _supplierService.GetDetailAsync(SelectedSupplierId, cancellationToken);
-        if (supplier is null)
-        {
-            Message = "Không tìm thấy nhà cung cấp đã chọn.";
-            Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
-            return Page();
-        }
-
-        if (supplier.Status == 1)
-        {
-            Message = "Nhà cung cấp này đã submit trước đó.";
+            SetMessage("Vui lòng chọn nhà cung cấp trước khi submit.", "warning");
             Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
             return Page();
         }
 
         var operatorCode = User.Identity?.Name ?? "SYSTEM";
-        await _supplierService.SubmitApprovalAsync(SelectedSupplierId, operatorCode, cancellationToken);
-        Message = "Submit thành công.";
+        var successCount = 0;
+        var alreadySubmittedCount = 0;
+        var notFoundCount = 0;
+
+        foreach (var supplierId in selectedIds)
+        {
+            var supplier = await _supplierService.GetDetailAsync(supplierId, cancellationToken);
+            if (supplier is null)
+            {
+                notFoundCount++;
+                continue;
+            }
+
+            if (supplier.Status == 1)
+            {
+                alreadySubmittedCount++;
+                continue;
+            }
+
+            await _supplierService.SubmitApprovalAsync(supplierId, operatorCode, cancellationToken);
+            successCount++;
+        }
+
+        SetMessage(
+            BuildSubmitMessage(successCount, alreadySubmittedCount, notFoundCount, selectedIds.Count),
+            successCount > 0 ? "success" : (alreadySubmittedCount > 0 ? "warning" : "info"));
+        Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostDeleteAsync(CancellationToken cancellationToken)
+    {
+        LoadPagePermissions();
+        if (!HasPermission(6))
+        {
+            return Forbid();
+        }
+
+        await LoadFiltersAsync(cancellationToken);
+
+        var selectedIds = ParseSelectedSupplierIds();
+        if (selectedIds.Count != 1)
+        {
+            SetMessage("Please select exactly one supplier to delete.", "warning");
+            Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
+            return Page();
+        }
+
+        var operatorCode = User.Identity?.Name ?? "SYSTEM";
+        var result = await _supplierService.DeleteAsync(selectedIds[0], operatorCode, cancellationToken);
+
+        if (result.NotFound)
+        {
+            SetMessage("Supplier not found or already deleted.", "error");
+        }
+        else if (!result.Success)
+        {
+            SetMessage(result.Reason ?? "Delete failed.", "error");
+        }
+        else if (result.IsHardDelete)
+        {
+            SetMessage("Supplier deleted successfully.", "success");
+        }
+        else if (result.IsSoftDelete)
+        {
+            SetMessage("Supplier deleted (soft delete).", "info");
+        }
+        else
+        {
+            SetMessage("Supplier delete processed.", "info");
+        }
+
         Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
         return Page();
     }
@@ -217,6 +277,48 @@ public class IndexModel : PageModel
     private static string? NullIfEmpty(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    private List<int> ParseSelectedSupplierIds()
+    {
+        var ids = new HashSet<int>();
+
+        if (SelectedSupplierId > 0)
+        {
+            ids.Add(SelectedSupplierId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(SelectedSupplierIdsCsv))
+        {
+            foreach (var part in SelectedSupplierIdsCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (int.TryParse(part, out var id) && id > 0)
+                {
+                    ids.Add(id);
+                }
+            }
+        }
+
+        return ids.ToList();
+    }
+
+    private static string BuildSubmitMessage(int successCount, int alreadySubmittedCount, int notFoundCount, int totalSelected)
+    {
+        if (totalSelected == 1)
+        {
+            if (successCount == 1) return "Submit thành công.";
+            if (alreadySubmittedCount == 1) return "Nhà cung cấp này đã submit trước đó.";
+            if (notFoundCount == 1) return "Không tìm thấy nhà cung cấp đã chọn.";
+        }
+
+        var parts = new List<string>();
+        if (successCount > 0) parts.Add($"thành công {successCount}");
+        if (alreadySubmittedCount > 0) parts.Add($"đã submit trước {alreadySubmittedCount}");
+        if (notFoundCount > 0) parts.Add($"không tìm thấy {notFoundCount}");
+
+        return parts.Count == 0
+            ? "Không có bản ghi nào được submit."
+            : $"Kết quả submit: {string.Join(", ", parts)}.";
+    }
+
     private void LoadPagePermissions()
     {
         var isAdmin = string.Equals(User.FindFirst("IsAdminRole")?.Value, "True", StringComparison.OrdinalIgnoreCase);
@@ -235,4 +337,10 @@ public class IndexModel : PageModel
     }
 
     private bool HasPermission(int permissionNo) => PagePerm.HasPermission(permissionNo);
+
+    private void SetMessage(string message, string type = "info")
+    {
+        Message = message;
+        MessageType = type;
+    }
 }

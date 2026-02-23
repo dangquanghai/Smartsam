@@ -12,4 +12,5 @@ public interface ISupplierService
     Task<IReadOnlyList<SupplierApprovalHistoryDto>> GetApprovalHistoryAsync(int supplierId, CancellationToken cancellationToken = default);
     Task<int> SaveAsync(int? supplierId, SupplierDetailDto detail, string operatorCode, CancellationToken cancellationToken = default);
     Task SubmitApprovalAsync(int supplierId, string operatorCode, CancellationToken cancellationToken = default);
+    Task<SupplierDeleteResultDto> DeleteAsync(int supplierId, string operatorCode, CancellationToken cancellationToken = default);
 }

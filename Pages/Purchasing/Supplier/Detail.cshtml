@@ -15,11 +15,6 @@
                         </div>
 
                         <div class="card-body p-2">
-                            @if (!string.IsNullOrWhiteSpace(Model.Message))
-                            {
-                                <div class="alert alert-info py-2 mb-2">@Model.Message</div>
-                            }
-
                             <div class="row no-gutters align-items-center mb-2">
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Supplier Code</label></div>
                                 <div class="col-4"><input asp-for="Input.SupplierCode" class="form-control form-control-sm" /></div>
@@ -145,3 +140,41 @@
         </form>
     </div>
 </section>
+
+@if (!string.IsNullOrWhiteSpace(Model.Message))
+{
+    <div id="supplierDetailFlash" data-message="@Model.Message" data-type="@Model.MessageType" class="d-none"></div>
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Purchasing/Supplier/index.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script>
+        (() => {
+            const flashMessageEl = document.getElementById("supplierDetailFlash");
+            if (!flashMessageEl || !window.jQuery || !$.fn.Toasts) return;
+
+            const message = flashMessageEl.getAttribute("data-message");
+            const type = (flashMessageEl.getAttribute("data-type") || "info").toLowerCase();
+            if (!message) return;
+            const toastClass = type === "success"
+                ? "bg-success"
+                : type === "warning"
+                    ? "bg-warning"
+                    : type === "error"
+                        ? "bg-danger"
+                        : "bg-info";
+
+            $(document).Toasts('create', {
+                class: toastClass,
+                title: 'Supplier',
+                position: 'topRight',
+                autohide: true,
+                delay: 3200,
+                body: message
+            });
+        })();
+    </script>
+}
