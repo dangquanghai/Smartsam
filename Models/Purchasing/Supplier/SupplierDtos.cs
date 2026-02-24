@@ -17,6 +17,7 @@ public class SupplierFilterCriteria
     public string? Contact { get; set; }
     public int? StatusId { get; set; }
     public bool IsNew { get; set; }
+    public bool IncludeDeleted { get; set; }
     public int? PageIndex { get; set; }
     public int? PageSize { get; set; }
 }
@@ -73,6 +74,7 @@ public class SupplierDetailDto
     public string? CodeOfAcc { get; set; }
     public int? DeptID { get; set; }
     public int? Status { get; set; }
+    public bool IsDeleted { get; set; }
 }
 
 public class SupplierApprovalHistoryDto

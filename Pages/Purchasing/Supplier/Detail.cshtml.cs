@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Data.SqlClient;
 using SmartSam.Models.Purchasing.Supplier;
 using SmartSam.Services;
 using SmartSam.Services.Purchasing.Supplier.Abstractions;
@@ -39,9 +40,9 @@ public class DetailModel : PageModel
 
     public bool IsEdit => Id.HasValue && Id.Value > 0;
     public PagePermissions PagePerm { get; private set; } = new();
-    public bool CanSave => IsEdit ? HasPermission(3) : HasPermission(2);
+    public bool CanSave => !Input.IsDeleted && (IsEdit ? HasPermission(3) : HasPermission(2));
     public bool IsSubmitted => (Input.Status ?? 0) == 1;
-    public bool CanSubmit => IsEdit && HasPermission(4) && !IsSubmitted;
+    public bool CanSubmit => IsEdit && !Input.IsDeleted && HasPermission(4) && !IsSubmitted;
     private static readonly HashSet<int> CreateAllowedStatuses = [0, 1];
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
@@ -66,6 +67,10 @@ public class DetailModel : PageModel
 
         Input = await _supplierService.GetDetailAsync(Id!.Value, cancellationToken) ?? new SupplierDetailDto();
         Histories = (await _supplierService.GetApprovalHistoryAsync(Id.Value, cancellationToken)).ToList();
+        if (Input.IsDeleted)
+        {
+            SetMessage("This supplier has been deleted. View only mode is applied.", "warning");
+        }
         if (string.Equals(Msg, "submitted", StringComparison.OrdinalIgnoreCase))
         {
             SetMessage("Supplier submitted successfully.", "success");
@@ -118,6 +123,24 @@ public class DetailModel : PageModel
 
         await LoadDropdownsAsync(cancellationToken);
 
+        if (IsEdit)
+        {
+            var current = await _supplierService.GetDetailAsync(Id!.Value, cancellationToken);
+            if (current is null)
+            {
+                SetMessage("Supplier not found.", "error");
+                return Page();
+            }
+
+            if (current.IsDeleted)
+            {
+                Input = current;
+                Histories = (await _supplierService.GetApprovalHistoryAsync(Id.Value, cancellationToken)).ToList();
+                SetMessage("Cannot save a deleted supplier.", "warning");
+                return Page();
+            }
+        }
+
         if (!IsEdit)
         {
             Input.Status ??= 0;
@@ -160,6 +183,30 @@ public class DetailModel : PageModel
             SetMessage(ex.Message, "error");
             return Page();
         }
+        catch (SqlException ex)
+        {
+            if (IsEdit)
+            {
+                Histories = (await _supplierService.GetApprovalHistoryAsync(Id!.Value, cancellationToken)).ToList();
+            }
+
+            var friendlyMessage = ex.Number == 515 && ex.Message.Contains("SupplierName", StringComparison.OrdinalIgnoreCase)
+                ? "Cannot save this supplier. Supplier Name is required. The current record may be incomplete (for example, a deleted test record)."
+                : "Cannot save supplier due to database validation rules. Please review the form data and try again.";
+
+            SetMessage(friendlyMessage, "error");
+            return Page();
+        }
+        catch (Exception)
+        {
+            if (IsEdit)
+            {
+                Histories = (await _supplierService.GetApprovalHistoryAsync(Id!.Value, cancellationToken)).ToList();
+            }
+
+            SetMessage("An unexpected error occurred while saving supplier. Please try again.", "error");
+            return Page();
+        }
 
         if (!IsEdit)
         {
@@ -189,6 +236,12 @@ public class DetailModel : PageModel
 
         // Re-check current status from DB to prevent re-submitting via forged request.
         Input = await _supplierService.GetDetailAsync(Id!.Value, cancellationToken) ?? new SupplierDetailDto();
+        if (Input.IsDeleted)
+        {
+            Histories = (await _supplierService.GetApprovalHistoryAsync(Id.Value, cancellationToken)).ToList();
+            SetMessage("Cannot submit a deleted supplier.", "warning");
+            return Page();
+        }
         if (IsSubmitted)
         {
             Histories = (await _supplierService.GetApprovalHistoryAsync(Id.Value, cancellationToken)).ToList();

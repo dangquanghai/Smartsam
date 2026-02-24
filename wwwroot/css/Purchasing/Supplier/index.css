@@ -33,6 +33,15 @@
     background-color: #d8dee6 !important;
 }
 
+#showDeletedToggle:checked ~ .custom-control-label::before {
+    background-color: #fd7e14;
+    border-color: #fd7e14;
+}
+
+#showDeletedToggle:focus ~ .custom-control-label::before {
+    box-shadow: 0 0 0 0.2rem rgba(253, 126, 20, 0.25);
+}
+
 .selector-cell {
     width: 32px;
     min-width: 32px;

@@ -79,6 +79,9 @@ public class SupplierRepository : ISupplierRepository
         var isDeletedSelectSql = !isByYear && hasDeleteColumns
             ? "ISNULL(s.IsDeleted, 0)"
             : "0";
+        var deleteFilterSql = !isByYear && hasDeleteColumns && !criteria.IncludeDeleted
+            ? "\n    AND ISNULL(s.IsDeleted, 0) = 0"
+            : string.Empty;
         var fromWhereSql = $@"
 FROM {sourceTable} s
 LEFT JOIN dbo.PC_SupplierStatus st ON s.[Status] = st.SupplierStatusID
@@ -90,7 +93,7 @@ WHERE
     AND (@Contact IS NULL OR s.Contact LIKE '%' + @Contact + '%')
     AND (@DeptID IS NULL OR s.DeptID = @DeptID)
     AND (@StatusID IS NULL OR s.[Status] = @StatusID)
-    AND (@IsNew = 0 OR s.IsNew = 1){yearFilterSql}";
+    AND (@IsNew = 0 OR s.IsNew = 1){yearFilterSql}{deleteFilterSql}";
 
         var countSql = "SELECT COUNT(1) " + fromWhereSql;
         var totalObj = await Helper.ExecuteScalarAsync(
@@ -245,10 +248,10 @@ SET [Status] = 0;";
     {
         const string sql = @"
 SELECT SupplierCode,SupplierName,Address,Phone,Mobile,Fax,Contact,[Position],Business,
-       ApprovedDate,[Document],Certificate,Service,Comment,IsNew,CodeOfAcc,DeptID,[Status]
+       ApprovedDate,[Document],Certificate,Service,Comment,IsNew,CodeOfAcc,DeptID,[Status],
+       CASE WHEN COL_LENGTH('dbo.PC_Suppliers', 'IsDeleted') IS NULL THEN 0 ELSE ISNULL(IsDeleted, 0) END AS IsDeleted
 FROM dbo.PC_Suppliers
-WHERE SupplierID=@ID
-  AND (COL_LENGTH('dbo.PC_Suppliers', 'IsDeleted') IS NULL OR ISNULL(IsDeleted, 0) = 0)";
+WHERE SupplierID=@ID";
 
         return await Helper.QuerySingleOrDefaultAsync(
             _connectionString,
@@ -272,7 +275,8 @@ WHERE SupplierID=@ID
                 IsNew = !rd.IsDBNull(14) && Convert.ToBoolean(rd[14]),
                 CodeOfAcc = rd[15]?.ToString(),
                 DeptID = rd.IsDBNull(16) ? null : Convert.ToInt32(rd[16]),
-                Status = rd.IsDBNull(17) ? null : Convert.ToInt32(rd[17])
+                Status = rd.IsDBNull(17) ? null : Convert.ToInt32(rd[17]),
+                IsDeleted = !rd.IsDBNull(18) && Convert.ToInt32(rd[18]) == 1
             },
             cmd => Helper.AddParameter(cmd, "@ID", supplierId, SqlDbType.Int),
             cancellationToken);

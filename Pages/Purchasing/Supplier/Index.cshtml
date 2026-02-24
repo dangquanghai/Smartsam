@@ -2,6 +2,8 @@
 @model SmartSam.Pages.Purchasing.Supplier.IndexModel
 @{
     ViewData["Title"] = "Suppliers";
+    var messageType = (Model.MessageType ?? "info").ToLowerInvariant();
+    var useInlineAlert = !string.IsNullOrWhiteSpace(Model.Message) && (messageType == "warning" || messageType == "error");
     var currentPage = Model.PageIndex <= 0 ? 1 : Model.PageIndex;
     var totalPages = Model.TotalPages <= 0 ? 1 : Model.TotalPages;
     var pageStart = Model.TotalRecords == 0 ? 0 : ((currentPage - 1) * Model.PageSize) + 1;
@@ -19,6 +21,7 @@
         Contact = Model.Contact,
         StatusId = Model.StatusId,
         IsNew = Model.IsNew,
+        IncludeDeleted = Model.IncludeDeleted,
         PageIndex = page,
         PageSize = Model.PageSize
     }) ?? "#";
@@ -35,7 +38,19 @@
                     </div>
 
                     <div class="card-body">
-                        <form method="get">
+                        @if (useInlineAlert)
+                        {
+                            var alertClass = messageType == "error" ? "alert-danger" : "alert-warning";
+                            var alertIcon = messageType == "error" ? "fas fa-ban" : "fas fa-exclamation-triangle";
+                            <div class="alert @alertClass alert-dismissible mb-3">
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                <h5><i class="icon @alertIcon"></i> Alert</h5>
+                                @Model.Message
+                            </div>
+                        }
+                        <form method="get" id="supplierSearchForm">
                             <input type="hidden" name="PageIndex" value="1" />
                             <input type="hidden" name="PageSize" value="@Model.PageSize" />
                             <div class="form-group mb-2">
@@ -108,13 +123,22 @@
             </div>
 
             <!-- RESULT + ACTION (RIGHT) -->
-            <div class="col-md-9">
+            <div class="col-md-9" id="supplierResultPanelContainer">
                 <div class="card card-primary">
                     <div class="card-header">
                         <h3 class="card-title">Suppliers</h3>
                         <span class="badge badge-light ml-2 supplier-record-badge" id="total-records-badge">@Model.TotalRecords records</span>
-                        <div class="card-tools">
-                            <small class="text-white">Double click a row to open</small>
+                        <div class="card-tools d-flex align-items-center">
+                            <div class="custom-control custom-checkbox mb-0">
+                                <input type="checkbox"
+                                       class="custom-control-input"
+                                       id="showDeletedToggle"
+                                       name="IncludeDeleted"
+                                       value="true"
+                                       form="supplierSearchForm"
+                                       @(Model.IncludeDeleted ? "checked" : "") />
+                                <label class="custom-control-label text-white font-weight-normal" for="showDeletedToggle">Show all suppliers (including deleted)</label>
+                            </div>
                         </div>
                     </div>
 
@@ -194,16 +218,16 @@
                         </div>
                         <ul class="pagination pagination-sm m-0 float-right">
                             <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
-                                <a class="page-link" href="@(Model.HasPreviousPage ? supplierPageUrl(currentPage - 1) : "#")" tabindex="@(Model.HasPreviousPage ? "0" : "-1")">Prev</a>
+                                        <a class="page-link supplier-pager-link" href="@(Model.HasPreviousPage ? supplierPageUrl(currentPage - 1) : "#")" tabindex="@(Model.HasPreviousPage ? "0" : "-1")">Prev</a>
                             </li>
                             @for (var p = pagerFrom; p <= pagerTo; p++)
                             {
                                 <li class="page-item @(p == currentPage ? "active" : "")">
-                                    <a class="page-link" href="@supplierPageUrl(p)">@p</a>
+                                    <a class="page-link supplier-pager-link" href="@supplierPageUrl(p)">@p</a>
                                 </li>
                             }
                             <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
-                                <a class="page-link" href="@(Model.HasNextPage ? supplierPageUrl(currentPage + 1) : "#")" tabindex="@(Model.HasNextPage ? "0" : "-1")">Next</a>
+                                <a class="page-link supplier-pager-link" href="@(Model.HasNextPage ? supplierPageUrl(currentPage + 1) : "#")" tabindex="@(Model.HasNextPage ? "0" : "-1")">Next</a>
                             </li>
                         </ul>
                     </div>
@@ -255,9 +279,10 @@
                                asp-route-Contact="@Model.Contact"
                                asp-route-StatusId="@Model.StatusId"
                                asp-route-IsNew="@Model.IsNew"
+                               asp-route-IncludeDeleted="@Model.IncludeDeleted"
                                class="btn btn-primary btn-sm mx-1 my-1"><i class="fas fa-file-export"></i> Excel</a>
                         }
-                        <a href="/Index" class="btn btn-default btn-sm mx-1 my-1">Close</a>
+                        <a href="/Index" class="btn btn-default btn-sm mx-1 my-1"><i class="fas fa-times"></i> Close</a>
                     </div>
                 </div>
             </div>
@@ -265,7 +290,7 @@
     </div>
 </section>
 
-@if (!string.IsNullOrWhiteSpace(Model.Message))
+@if (!string.IsNullOrWhiteSpace(Model.Message) && !useInlineAlert)
 {
     <div id="supplierIndexFlash" data-message="@Model.Message" data-type="@Model.MessageType" class="d-none"></div>
 }
@@ -336,28 +361,51 @@
 @section Scripts {
     <script>
         (() => {
-            const rows = Array.from(document.querySelectorAll(".supplier-row"));
-            const viewBtn = document.getElementById("viewSupplierBtn");
-            const editBtn = document.getElementById("editSupplierBtn");
-            const submitBtn = document.getElementById("submitSupplierBtn");
-            const deleteBtn = document.getElementById("deleteSupplierBtn");
-            const selectedSupplierIdInput = document.getElementById("selectedSupplierIdInput");
-            const selectedSupplierIdsCsvInput = document.getElementById("selectedSupplierIdsCsvInput");
-            const deleteSelectedSupplierIdInput = document.getElementById("deleteSelectedSupplierIdInput");
-            const deleteSelectedSupplierIdsCsvInput = document.getElementById("deleteSelectedSupplierIdsCsvInput");
-            const addBtn = document.getElementById("addSupplierBtn");
-            const copyBtn = document.getElementById("copySupplierBtn");
             const yearInput = document.querySelector(".year-input");
+            const supplierSearchForm = document.getElementById("supplierSearchForm");
             const currentList = document.getElementById("viewCurrent");
             const byYear = document.getElementById("viewByYear");
             const yearGroup = document.getElementById("yearGroup");
             const copyYearModal = document.getElementById("copyYearModal");
             const copyYearInput = document.getElementById("copyYearInput");
-            const deleteForm = document.getElementById("deleteSupplierForm");
             const flashMessageEl = document.getElementById("supplierIndexFlash");
-            const detailBaseUrl = (viewBtn?.getAttribute("data-base-url")
-                || editBtn?.getAttribute("data-base-url")
-                || '@Url.Page("/Purchasing/Supplier/Detail")');
+
+            async function reloadSupplierResultPanel(url) {
+                const panel = document.getElementById("supplierResultPanelContainer");
+                if (!panel) {
+                    window.location.href = url;
+                    return;
+                }
+
+                try {
+                    const response = await fetch(url, {
+                        method: "GET",
+                        headers: { "X-Requested-With": "XMLHttpRequest" }
+                    });
+                    if (!response.ok) {
+                        window.location.href = url;
+                        return;
+                    }
+
+                    const html = await response.text();
+                    const doc = new DOMParser().parseFromString(html, "text/html");
+                    const newPanel = doc.getElementById("supplierResultPanelContainer");
+                    if (!newPanel) {
+                        window.location.href = url;
+                        return;
+                    }
+
+                    panel.replaceWith(newPanel);
+                    if (window.history?.replaceState) {
+                        window.history.replaceState({}, "", url);
+                    }
+                    if (typeof window.initSupplierResultPanel === "function") {
+                        window.initSupplierResultPanel();
+                    }
+                } catch {
+                    window.location.href = url;
+                }
+            }
 
             function setActionButtonState(btn, supplierId) {
                 if (!btn) return;
@@ -407,39 +455,59 @@
                 return row.getAttribute("data-is-deleted") === "1";
             }
 
-            function setSubmitButtonState(disabled) {
-                if (!submitBtn) return;
-                submitBtn.disabled = disabled;
+            function setSubmitButtonState(btn, disabled) {
+                if (!btn) return;
+                btn.disabled = disabled;
                 if (disabled) {
-                    submitBtn.setAttribute("disabled", "disabled");
-                    submitBtn.setAttribute("aria-disabled", "true");
+                    btn.setAttribute("disabled", "disabled");
+                    btn.setAttribute("aria-disabled", "true");
                 } else {
-                    submitBtn.removeAttribute("disabled");
-                    submitBtn.setAttribute("aria-disabled", "false");
+                    btn.removeAttribute("disabled");
+                    btn.setAttribute("aria-disabled", "false");
                 }
             }
 
-            function setDeleteButtonState(disabled) {
-                if (!deleteBtn) return;
-                deleteBtn.disabled = disabled;
+            function setDeleteButtonState(btn, disabled) {
+                if (!btn) return;
+                btn.disabled = disabled;
                 if (disabled) {
-                    deleteBtn.setAttribute("disabled", "disabled");
-                    deleteBtn.setAttribute("aria-disabled", "true");
+                    btn.setAttribute("disabled", "disabled");
+                    btn.setAttribute("aria-disabled", "true");
                 } else {
-                    deleteBtn.removeAttribute("disabled");
-                    deleteBtn.setAttribute("aria-disabled", "false");
+                    btn.removeAttribute("disabled");
+                    btn.setAttribute("aria-disabled", "false");
                 }
             }
 
-            function getSelectedRows() {
+            function getSelectedRows(rows) {
                 return rows.filter((row) => {
                     const checkbox = row.querySelector(".supplier-selector");
                     return !!checkbox && checkbox.checked;
                 });
             }
 
-            function syncSelectionState() {
-                const selectedRows = getSelectedRows();
+            window.initSupplierResultPanel = function () {
+                const panel = document.getElementById("supplierResultPanelContainer");
+                if (!panel) return;
+
+                const rows = Array.from(panel.querySelectorAll(".supplier-row"));
+                const viewBtn = panel.querySelector("#viewSupplierBtn");
+                const editBtn = panel.querySelector("#editSupplierBtn");
+                const submitBtn = panel.querySelector("#submitSupplierBtn");
+                const deleteBtn = panel.querySelector("#deleteSupplierBtn");
+                const selectedSupplierIdInput = panel.querySelector("#selectedSupplierIdInput");
+                const selectedSupplierIdsCsvInput = panel.querySelector("#selectedSupplierIdsCsvInput");
+                const deleteSelectedSupplierIdInput = panel.querySelector("#deleteSelectedSupplierIdInput");
+                const deleteSelectedSupplierIdsCsvInput = panel.querySelector("#deleteSelectedSupplierIdsCsvInput");
+                const addBtn = panel.querySelector("#addSupplierBtn");
+                const copyBtn = panel.querySelector("#copySupplierBtn");
+                const showDeletedToggle = panel.querySelector("#showDeletedToggle");
+                const detailBaseUrl = (viewBtn?.getAttribute("data-base-url")
+                    || editBtn?.getAttribute("data-base-url")
+                    || '@Url.Page("/Purchasing/Supplier/Detail")');
+
+                function syncSelectionState() {
+                    const selectedRows = getSelectedRows(rows);
                 rows.forEach((row) => row.classList.toggle("selected", selectedRows.includes(row)));
 
                 const count = selectedRows.length;
@@ -461,13 +529,71 @@
                 const hasAnySelected = count > 0;
                 const hasSubmittedSelected = selectedRows.some((row) => isSubmitted(row));
                 const hasDeletedSelected = selectedRows.some((row) => isDeleted(row));
-                setSubmitButtonState(!hasAnySelected || hasSubmittedSelected || hasDeletedSelected);
-                setDeleteButtonState(count !== 1 || hasDeletedSelected);
+                setSubmitButtonState(submitBtn, !hasAnySelected || hasSubmittedSelected || hasDeletedSelected);
+                setDeleteButtonState(deleteBtn, count !== 1 || hasDeletedSelected);
 
                 const isMultiSelectMode = count > 1;
                 setUiDisabled(addBtn, isMultiSelectMode);
                 setUiDisabled(copyBtn, isMultiSelectMode);
-            }
+                }
+
+                window.syncSupplierSelection = syncSelectionState;
+                window.toggleSupplierRowSelection = (ev, row) => {
+                    if (!row) return;
+                    if (ev?.target?.closest?.(".supplier-selector")) {
+                        syncSelectionState();
+                        return;
+                    }
+
+                    const checkbox = row.querySelector(".supplier-selector");
+                    if (!checkbox) return;
+                    checkbox.checked = !checkbox.checked;
+                    syncSelectionState();
+                };
+
+                rows.forEach((row) => {
+                    row.addEventListener("dblclick", () => {
+                        const supplierId = row.getAttribute("data-supplier-id");
+                        if (supplierId) {
+                            window.location.href = `${detailBaseUrl}/${supplierId}`;
+                        }
+                    });
+                });
+
+                panel.querySelectorAll(".supplier-pager-link").forEach((link) => {
+                    link.addEventListener("click", (e) => {
+                        const href = link.getAttribute("href");
+                        if (!href || href === "#" || link.closest(".page-item.disabled")) {
+                            e.preventDefault();
+                            return;
+                        }
+                        e.preventDefault();
+                        void reloadSupplierResultPanel(href);
+                    });
+                });
+
+                showDeletedToggle?.addEventListener("change", (e) => {
+                    const toggle = e.currentTarget;
+                    if (!toggle || !supplierSearchForm) return;
+                    const formData = new FormData(supplierSearchForm);
+                    formData.set("PageIndex", "1");
+                    if (toggle.checked) {
+                        formData.set("IncludeDeleted", "true");
+                    } else {
+                        formData.delete("IncludeDeleted");
+                    }
+                    const params = new URLSearchParams();
+                    for (const [k, v] of formData.entries()) {
+                        if (v != null && `${v}` !== "") params.append(k, `${v}`);
+                    }
+                    const url = `${supplierSearchForm.getAttribute("action") || window.location.pathname}?${params.toString()}`;
+                    void reloadSupplierResultPanel(url);
+                });
+
+                setActionButtonState(viewBtn, null);
+                setActionButtonState(editBtn, null);
+                syncSelectionState();
+            };
 
             function syncYearInputState() {
                 if (!yearInput || !currentList || !byYear) return;
@@ -479,36 +605,11 @@
                 if (!showYear) yearInput.value = "";
             }
 
-            window.syncSupplierSelection = syncSelectionState;
-            window.toggleSupplierRowSelection = (ev, row) => {
-                if (!row) return;
-                if (ev?.target?.closest?.(".supplier-selector")) {
-                    syncSelectionState();
-                    return;
-                }
-
-                const checkbox = row.querySelector(".supplier-selector");
-                if (!checkbox) return;
-                checkbox.checked = !checkbox.checked;
-                syncSelectionState();
-            };
-
-            rows.forEach((row) => {
-                row.addEventListener("dblclick", () => {
-                    const supplierId = row.getAttribute("data-supplier-id");
-                    if (supplierId) {
-                        window.location.href = `${detailBaseUrl}/${supplierId}`;
-                    }
-                });
-            });
-
             currentList?.addEventListener("change", syncYearInputState);
             byYear?.addEventListener("change", syncYearInputState);
 
             syncYearInputState();
-            setActionButtonState(viewBtn, null);
-            setActionButtonState(editBtn, null);
-            syncSelectionState();
+            window.initSupplierResultPanel();
 
             if (copyYearModal && copyYearInput) {
                 $(copyYearModal).on("shown.bs.modal", function () {
@@ -529,14 +630,15 @@
                         : type === "error"
                             ? "bg-danger"
                             : "bg-info";
+                const shouldKeepOpen = type === "warning" || type === "error";
 
                 if (message) {
                     $(document).Toasts('create', {
                         class: toastClass,
                         title: 'Supplier',
                         position: 'topRight',
-                        autohide: true,
-                        delay: 3200,
+                        autohide: !shouldKeepOpen,
+                        delay: shouldKeepOpen ? 0 : 3200,
                         body: message
                     });
                 }

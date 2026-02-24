@@ -47,6 +47,9 @@ public class IndexModel : PageModel
     public bool IsNew { get; set; }
 
     [BindProperty(SupportsGet = true)]
+    public bool IncludeDeleted { get; set; }
+
+    [BindProperty(SupportsGet = true)]
     public int PageIndex { get; set; } = 1;
 
     [BindProperty(SupportsGet = true)]
@@ -288,6 +291,7 @@ public class IndexModel : PageModel
             Contact = NullIfEmpty(Contact),
             StatusId = StatusId,
             IsNew = IsNew,
+            IncludeDeleted = IncludeDeleted,
             PageIndex = includePaging ? PageIndex : null,
             PageSize = includePaging ? PageSize : null
         };

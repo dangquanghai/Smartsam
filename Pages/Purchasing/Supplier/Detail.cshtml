@@ -2,6 +2,8 @@
 @model SmartSam.Pages.Purchasing.Supplier.DetailModel
 @{
     ViewData["Title"] = "Supplier Detail";
+    var messageType = (Model.MessageType ?? "info").ToLowerInvariant();
+    var useInlineAlert = !string.IsNullOrWhiteSpace(Model.Message) && (messageType == "warning" || messageType == "error");
 }
 
 <section class="content">
@@ -15,6 +17,18 @@
                         </div>
 
                         <div class="card-body p-2">
+                            @if (useInlineAlert)
+                            {
+                                var alertClass = messageType == "error" ? "alert-danger" : "alert-warning";
+                                var alertIcon = messageType == "error" ? "fas fa-ban" : "fas fa-exclamation-triangle";
+                                <div class="alert @alertClass alert-dismissible mb-2">
+                                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                        <span aria-hidden="true">&times;</span>
+                                    </button>
+                                    <h5 class="mb-1"><i class="icon @alertIcon"></i> Alert</h5>
+                                    @Model.Message
+                                </div>
+                            }
                             <div class="row no-gutters align-items-center mb-2">
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Supplier Code</label></div>
                                 <div class="col-4">
@@ -94,7 +108,7 @@
                             {
                                 <button type="button" class="btn btn-warning btn-sm px-4 mr-2 mb-1" disabled title="Already submitted"><i class="fas fa-paper-plane"></i> Submit</button>
                             }
-                            <a asp-page="./Index" class="btn btn-default btn-sm px-4 mb-1">Close</a>
+                            <a asp-page="./Index" class="btn btn-default btn-sm px-4 mb-1"><i class="fas fa-arrow-left"></i> Back to List</a>
                         </div>
                     </div>
                 </div>
@@ -134,9 +148,6 @@
                                 </table>
                             </div>
                         </div>
-                        <div class="card-footer py-2 text-right">
-                            <a asp-page="./Index" class="btn btn-default btn-sm">Back to List</a>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -144,7 +155,7 @@
     </div>
 </section>
 
-@if (!string.IsNullOrWhiteSpace(Model.Message))
+@if (!string.IsNullOrWhiteSpace(Model.Message) && !useInlineAlert)
 {
     <div id="supplierDetailFlash" data-message="@Model.Message" data-type="@Model.MessageType" class="d-none"></div>
 }
@@ -277,13 +288,14 @@
                     : type === "error"
                         ? "bg-danger"
                         : "bg-info";
+            const shouldKeepOpen = type === "warning" || type === "error";
 
             $(document).Toasts('create', {
                 class: toastClass,
                 title: 'Supplier',
                 position: 'topRight',
-                autohide: true,
-                delay: 3200,
+                autohide: !shouldKeepOpen,
+                delay: shouldKeepOpen ? 0 : 3200,
                 body: message
             });
         })();
