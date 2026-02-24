@@ -17,6 +17,14 @@ public class SupplierFilterCriteria
     public string? Contact { get; set; }
     public int? StatusId { get; set; }
     public bool IsNew { get; set; }
+    public int? PageIndex { get; set; }
+    public int? PageSize { get; set; }
+}
+
+public class SupplierSearchResultDto
+{
+    public List<SupplierListRowDto> Rows { get; set; } = [];
+    public int TotalCount { get; set; }
 }
 
 public class SupplierListRowDto
@@ -42,6 +50,7 @@ public class SupplierListRowDto
     public string DeptCode { get; set; } = string.Empty;
     public string SupplierStatusName { get; set; } = string.Empty;
     public int? Status { get; set; }
+    public bool IsDeleted { get; set; }
 }
 
 public class SupplierDetailDto

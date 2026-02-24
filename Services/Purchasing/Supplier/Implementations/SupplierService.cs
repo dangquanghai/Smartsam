@@ -21,6 +21,9 @@ public class SupplierService : ISupplierService
     public Task<IReadOnlyList<SupplierListRowDto>> SearchAsync(SupplierFilterCriteria criteria, CancellationToken cancellationToken = default)
         => _repository.SearchAsync(criteria, cancellationToken);
 
+    public Task<SupplierSearchResultDto> SearchPagedAsync(SupplierFilterCriteria criteria, CancellationToken cancellationToken = default)
+        => _repository.SearchPagedAsync(criteria, cancellationToken);
+
     public Task CopyCurrentSuppliersToYearAsync(int copyYear, CancellationToken cancellationToken = default)
         => _repository.CopyCurrentSuppliersToYearAsync(copyYear, cancellationToken);
 
@@ -30,8 +33,32 @@ public class SupplierService : ISupplierService
     public Task<IReadOnlyList<SupplierApprovalHistoryDto>> GetApprovalHistoryAsync(int supplierId, CancellationToken cancellationToken = default)
         => _repository.GetApprovalHistoryAsync(supplierId, cancellationToken);
 
+    public Task<bool> SupplierCodeExistsAsync(string supplierCode, int? excludeSupplierId = null, CancellationToken cancellationToken = default)
+        => _repository.SupplierCodeExistsAsync(supplierCode, excludeSupplierId, cancellationToken);
+
+    public Task<string> GetSuggestedSupplierCodeAsync(CancellationToken cancellationToken = default)
+        => _repository.GetSuggestedSupplierCodeAsync(cancellationToken);
+
     public async Task<int> SaveAsync(int? supplierId, SupplierDetailDto detail, string operatorCode, CancellationToken cancellationToken = default)
     {
+        var supplierCode = (detail.SupplierCode ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(supplierCode))
+        {
+            throw new InvalidOperationException("Supplier code is required.");
+        }
+
+        var exists = await _repository.SupplierCodeExistsAsync(
+            supplierCode,
+            supplierId.HasValue && supplierId.Value > 0 ? supplierId.Value : null,
+            cancellationToken);
+
+        if (exists)
+        {
+            throw new InvalidOperationException("Supplier code already exists.");
+        }
+
+        detail.SupplierCode = supplierCode;
+
         if (supplierId.HasValue && supplierId.Value > 0)
         {
             await _repository.UpdateAsync(supplierId.Value, detail, cancellationToken);

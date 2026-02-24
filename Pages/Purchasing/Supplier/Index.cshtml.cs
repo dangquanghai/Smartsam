@@ -46,6 +46,12 @@ public class IndexModel : PageModel
     [BindProperty(SupportsGet = true)]
     public bool IsNew { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public int PageIndex { get; set; } = 1;
+
+    [BindProperty(SupportsGet = true)]
+    public int PageSize { get; set; } = 25;
+
     [BindProperty]
     public int CopyYear { get; set; }
 
@@ -66,6 +72,10 @@ public class IndexModel : PageModel
     public List<SelectListItem> Departments { get; set; } = [];
     public List<SelectListItem> Statuses { get; set; } = [];
     public List<SupplierListRowDto> Rows { get; set; } = [];
+    public int TotalRecords { get; set; }
+    public int TotalPages => PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
+    public bool HasPreviousPage => PageIndex > 1;
+    public bool HasNextPage => PageIndex < TotalPages;
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -76,7 +86,7 @@ public class IndexModel : PageModel
         }
 
         await LoadFiltersAsync(cancellationToken);
-        Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
+        await LoadRowsAsync(cancellationToken);
         return Page();
     }
 
@@ -93,7 +103,7 @@ public class IndexModel : PageModel
         if (!ConfirmCopy || CopyYear < 2000 || CopyYear > 2100)
         {
             SetMessage("Xác nhận copy và nhập năm hợp lệ (2000-2100).", "warning");
-            Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
+            await LoadRowsAsync(cancellationToken);
             return Page();
         }
 
@@ -107,7 +117,7 @@ public class IndexModel : PageModel
             SetMessage("Copy failed: " + ex.Message, "error");
         }
 
-        Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
+        await LoadRowsAsync(cancellationToken);
         return Page();
     }
 
@@ -119,7 +129,7 @@ public class IndexModel : PageModel
             return Forbid();
         }
 
-        var rows = await _supplierService.SearchAsync(BuildCriteria(), cancellationToken);
+        var rows = await _supplierService.SearchAsync(BuildCriteria(includePaging: false), cancellationToken);
         var lines = new List<string>
         {
             "SupplierCode,SupplierName,Address,Phone,Mobile,Fax,Contact,Position,Business,Status,DeptCode"
@@ -152,7 +162,7 @@ public class IndexModel : PageModel
         if (selectedIds.Count == 0)
         {
             SetMessage("Vui lòng chọn nhà cung cấp trước khi submit.", "warning");
-            Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
+            await LoadRowsAsync(cancellationToken);
             return Page();
         }
 
@@ -183,7 +193,7 @@ public class IndexModel : PageModel
         SetMessage(
             BuildSubmitMessage(successCount, alreadySubmittedCount, notFoundCount, selectedIds.Count),
             successCount > 0 ? "success" : (alreadySubmittedCount > 0 ? "warning" : "info"));
-        Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
+        await LoadRowsAsync(cancellationToken);
         return Page();
     }
 
@@ -201,7 +211,7 @@ public class IndexModel : PageModel
         if (selectedIds.Count != 1)
         {
             SetMessage("Please select exactly one supplier to delete.", "warning");
-            Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
+            await LoadRowsAsync(cancellationToken);
             return Page();
         }
 
@@ -229,7 +239,7 @@ public class IndexModel : PageModel
             SetMessage("Supplier delete processed.", "info");
         }
 
-        Rows = (await _supplierService.SearchAsync(BuildCriteria(), cancellationToken)).ToList();
+        await LoadRowsAsync(cancellationToken);
         return Page();
     }
 
@@ -249,7 +259,24 @@ public class IndexModel : PageModel
         ];
     }
 
-    private SupplierFilterCriteria BuildCriteria()
+    private async Task LoadRowsAsync(CancellationToken cancellationToken)
+    {
+        if (PageSize <= 0) PageSize = 25;
+        if (PageSize > 200) PageSize = 200;
+        if (PageIndex <= 0) PageIndex = 1;
+
+        var result = await _supplierService.SearchPagedAsync(BuildCriteria(includePaging: true), cancellationToken);
+        TotalRecords = result.TotalCount;
+        if (TotalRecords > 0 && PageIndex > TotalPages)
+        {
+            PageIndex = TotalPages;
+            result = await _supplierService.SearchPagedAsync(BuildCriteria(includePaging: true), cancellationToken);
+            TotalRecords = result.TotalCount;
+        }
+        Rows = result.Rows;
+    }
+
+    private SupplierFilterCriteria BuildCriteria(bool includePaging = true)
         => new()
         {
             ViewMode = string.IsNullOrWhiteSpace(ViewMode) ? "current" : ViewMode.Trim(),
@@ -260,7 +287,9 @@ public class IndexModel : PageModel
             Business = NullIfEmpty(Business),
             Contact = NullIfEmpty(Contact),
             StatusId = StatusId,
-            IsNew = IsNew
+            IsNew = IsNew,
+            PageIndex = includePaging ? PageIndex : null,
+            PageSize = includePaging ? PageSize : null
         };
 
     private static string Csv(string? value)

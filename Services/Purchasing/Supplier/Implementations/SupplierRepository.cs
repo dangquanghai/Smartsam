@@ -46,18 +46,61 @@ public class SupplierRepository : ISupplierRepository
 
     public async Task<IReadOnlyList<SupplierListRowDto>> SearchAsync(SupplierFilterCriteria criteria, CancellationToken cancellationToken = default)
     {
+        var noPagingCriteria = new SupplierFilterCriteria
+        {
+            ViewMode = criteria.ViewMode,
+            Year = criteria.Year,
+            DeptId = criteria.DeptId,
+            SupplierCode = criteria.SupplierCode,
+            SupplierName = criteria.SupplierName,
+            Business = criteria.Business,
+            Contact = criteria.Contact,
+            StatusId = criteria.StatusId,
+            IsNew = criteria.IsNew,
+            PageIndex = null,
+            PageSize = null
+        };
+        var result = await SearchPagedAsync(noPagingCriteria, cancellationToken);
+        return result.Rows;
+    }
+
+    public async Task<SupplierSearchResultDto> SearchPagedAsync(SupplierFilterCriteria criteria, CancellationToken cancellationToken = default)
+    {
         var isByYear = string.Equals(criteria.ViewMode, "byyear", StringComparison.OrdinalIgnoreCase);
         var sourceTable = isByYear ? "dbo.PC_SupplierAnualy" : "dbo.PC_Suppliers";
         var annualYearColumn = isByYear ? await GetSupplierAnnualYearColumnAsync(cancellationToken) : null;
         var hasDeleteColumns = isByYear ? false : await HasSupplierDeleteColumnsAsync(cancellationToken);
+        var pageIndex = criteria.PageIndex.GetValueOrDefault() <= 0 ? 1 : criteria.PageIndex!.Value;
+        var pageSize = criteria.PageSize.GetValueOrDefault() <= 0 ? 25 : criteria.PageSize!.Value;
+        var applyPaging = criteria.PageIndex.HasValue && criteria.PageSize.HasValue;
         var yearFilterSql = isByYear && !string.IsNullOrWhiteSpace(annualYearColumn)
             ? $"\n    AND (@Year IS NULL OR s.{QuoteIdentifier(annualYearColumn)} = @Year)"
             : string.Empty;
-        var deleteFilterSql = !isByYear && hasDeleteColumns
-            ? "\n    AND ISNULL(s.IsDeleted, 0) = 0"
-            : string.Empty;
+        var isDeletedSelectSql = !isByYear && hasDeleteColumns
+            ? "ISNULL(s.IsDeleted, 0)"
+            : "0";
+        var fromWhereSql = $@"
+FROM {sourceTable} s
+LEFT JOIN dbo.PC_SupplierStatus st ON s.[Status] = st.SupplierStatusID
+LEFT JOIN dbo.MS_Department d ON s.DeptID = d.DeptID
+WHERE
+    (@SupplierCode IS NULL OR s.SupplierCode LIKE '%' + @SupplierCode + '%')
+    AND (@SupplierName IS NULL OR s.SupplierName LIKE '%' + @SupplierName + '%')
+    AND (@Business IS NULL OR s.Business LIKE '%' + @Business + '%')
+    AND (@Contact IS NULL OR s.Contact LIKE '%' + @Contact + '%')
+    AND (@DeptID IS NULL OR s.DeptID = @DeptID)
+    AND (@StatusID IS NULL OR s.[Status] = @StatusID)
+    AND (@IsNew = 0 OR s.IsNew = 1){yearFilterSql}";
 
-        var sql = $@"
+        var countSql = "SELECT COUNT(1) " + fromWhereSql;
+        var totalObj = await Helper.ExecuteScalarAsync(
+            _connectionString,
+            countSql,
+            cmd => BindSearchParams(cmd, criteria, isByYear, annualYearColumn),
+            cancellationToken);
+        var totalCount = Convert.ToInt32(totalObj);
+
+        var selectSql = $@"
 SELECT
     s.SupplierID,
     s.SupplierCode,
@@ -79,23 +122,19 @@ SELECT
     s.DeptID,
     d.DeptCode,
     st.SupplierStatusName,
-    s.[Status]
-FROM {sourceTable} s
-LEFT JOIN dbo.PC_SupplierStatus st ON s.[Status] = st.SupplierStatusID
-LEFT JOIN dbo.MS_Department d ON s.DeptID = d.DeptID
-WHERE
-    (@SupplierCode IS NULL OR s.SupplierCode LIKE '%' + @SupplierCode + '%')
-    AND (@SupplierName IS NULL OR s.SupplierName LIKE '%' + @SupplierName + '%')
-    AND (@Business IS NULL OR s.Business LIKE '%' + @Business + '%')
-    AND (@Contact IS NULL OR s.Contact LIKE '%' + @Contact + '%')
-    AND (@DeptID IS NULL OR s.DeptID = @DeptID)
-    AND (@StatusID IS NULL OR s.[Status] = @StatusID)
-    AND (@IsNew = 0 OR s.IsNew = 1){yearFilterSql}{deleteFilterSql}
-ORDER BY s.SupplierCode";
+    s.[Status],
+    {isDeletedSelectSql} AS IsDeleted
+{fromWhereSql}
+ORDER BY s.SupplierCode, s.SupplierID";
 
-        return await Helper.QueryAsync(
+        if (applyPaging)
+        {
+            selectSql += "\nOFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY";
+        }
+
+        var rows = await Helper.QueryAsync(
             _connectionString,
-            sql,
+            selectSql,
             rd => new SupplierListRowDto
             {
                 SupplierID = rd.GetInt32(0),
@@ -118,23 +157,25 @@ ORDER BY s.SupplierCode";
                 DeptID = rd.IsDBNull(17) ? null : rd.GetInt32(17),
                 DeptCode = rd[18]?.ToString() ?? string.Empty,
                 SupplierStatusName = rd[19]?.ToString() ?? string.Empty,
-                Status = rd.IsDBNull(20) ? null : Convert.ToInt32(rd[20])
+                Status = rd.IsDBNull(20) ? null : Convert.ToInt32(rd[20]),
+                IsDeleted = !rd.IsDBNull(21) && Convert.ToInt32(rd[21]) == 1
             },
             cmd =>
             {
-                Helper.AddParameter(cmd, "@SupplierCode", NullIfEmpty(criteria.SupplierCode), SqlDbType.NVarChar, 255);
-                Helper.AddParameter(cmd, "@SupplierName", NullIfEmpty(criteria.SupplierName), SqlDbType.NVarChar, 255);
-                Helper.AddParameter(cmd, "@Business", NullIfEmpty(criteria.Business), SqlDbType.NVarChar, 255);
-                Helper.AddParameter(cmd, "@Contact", NullIfEmpty(criteria.Contact), SqlDbType.NVarChar, 255);
-                Helper.AddParameter(cmd, "@DeptID", criteria.DeptId, SqlDbType.Int);
-                Helper.AddParameter(cmd, "@StatusID", criteria.StatusId, SqlDbType.Int);
-                Helper.AddParameter(cmd, "@IsNew", criteria.IsNew ? 1 : 0, SqlDbType.Int);
-                if (isByYear && !string.IsNullOrWhiteSpace(annualYearColumn))
+                BindSearchParams(cmd, criteria, isByYear, annualYearColumn);
+                if (applyPaging)
                 {
-                    Helper.AddParameter(cmd, "@Year", criteria.Year, SqlDbType.Int);
+                    Helper.AddParameter(cmd, "@Offset", (pageIndex - 1) * pageSize, SqlDbType.Int);
+                    Helper.AddParameter(cmd, "@PageSize", pageSize, SqlDbType.Int);
                 }
             },
             cancellationToken);
+
+        return new SupplierSearchResultDto
+        {
+            Rows = rows.ToList(),
+            TotalCount = totalCount
+        };
     }
 
     public async Task CopyCurrentSuppliersToYearAsync(int copyYear, CancellationToken cancellationToken = default)
@@ -260,6 +301,53 @@ SELECT 'BOD approved/dis', BODCode, BODApproveDate FROM dbo.PC_Suppliers WHERE S
             },
             cmd => Helper.AddParameter(cmd, "@ID", supplierId, SqlDbType.Int),
             cancellationToken);
+    }
+
+    public async Task<bool> SupplierCodeExistsAsync(string supplierCode, int? excludeSupplierId = null, CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+SELECT COUNT(1)
+FROM dbo.PC_Suppliers
+WHERE LTRIM(RTRIM(ISNULL(SupplierCode, ''))) = LTRIM(RTRIM(@SupplierCode))
+  AND (@ExcludeSupplierId IS NULL OR SupplierID <> @ExcludeSupplierId);";
+
+        var result = await Helper.ExecuteScalarAsync(
+            _connectionString,
+            sql,
+            cmd =>
+            {
+                Helper.AddParameter(cmd, "@SupplierCode", supplierCode.Trim(), SqlDbType.NVarChar, 255);
+                Helper.AddParameter(cmd, "@ExcludeSupplierId", excludeSupplierId, SqlDbType.Int);
+            },
+            cancellationToken);
+
+        return Convert.ToInt32(result) > 0;
+    }
+
+    public async Task<string> GetSuggestedSupplierCodeAsync(CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+SELECT
+    ISNULL(MAX(TRY_CONVERT(int, SUBSTRING(LTRIM(RTRIM(SupplierCode)), 3, 50))), 0) AS MaxNo,
+    ISNULL(MAX(LEN(LTRIM(RTRIM(SupplierCode))) - 2), 3) AS NumWidth
+FROM dbo.PC_Suppliers
+WHERE LEFT(UPPER(LTRIM(RTRIM(SupplierCode))), 2) = 'SP'
+  AND TRY_CONVERT(int, SUBSTRING(LTRIM(RTRIM(SupplierCode)), 3, 50)) IS NOT NULL;";
+
+        var seed = await Helper.QuerySingleOrDefaultAsync(
+            _connectionString,
+            sql,
+            rd => new
+            {
+                MaxNo = rd.IsDBNull(0) ? 0 : Convert.ToInt32(rd[0]),
+                NumWidth = rd.IsDBNull(1) ? 3 : Convert.ToInt32(rd[1])
+            },
+            null,
+            cancellationToken);
+
+        var nextNo = (seed?.MaxNo ?? 0) + 1;
+        var width = Math.Max(3, seed?.NumWidth ?? 3);
+        return $"SP{nextNo.ToString().PadLeft(width, '0')}";
     }
 
     public async Task<int> CreateAsync(SupplierDetailDto detail, string operatorCode, CancellationToken cancellationToken = default)
@@ -454,6 +542,21 @@ WHERE SupplierID = @SupplierID
         AddNullable(cmd, "@CodeOfAcc", detail.CodeOfAcc);
         AddNullable(cmd, "@DeptID", detail.DeptID);
         AddNullable(cmd, "@Status", detail.Status);
+    }
+
+    private static void BindSearchParams(SqlCommand cmd, SupplierFilterCriteria criteria, bool isByYear, string? annualYearColumn)
+    {
+        Helper.AddParameter(cmd, "@SupplierCode", NullIfEmpty(criteria.SupplierCode), SqlDbType.NVarChar, 255);
+        Helper.AddParameter(cmd, "@SupplierName", NullIfEmpty(criteria.SupplierName), SqlDbType.NVarChar, 255);
+        Helper.AddParameter(cmd, "@Business", NullIfEmpty(criteria.Business), SqlDbType.NVarChar, 255);
+        Helper.AddParameter(cmd, "@Contact", NullIfEmpty(criteria.Contact), SqlDbType.NVarChar, 255);
+        Helper.AddParameter(cmd, "@DeptID", criteria.DeptId, SqlDbType.Int);
+        Helper.AddParameter(cmd, "@StatusID", criteria.StatusId, SqlDbType.Int);
+        Helper.AddParameter(cmd, "@IsNew", criteria.IsNew ? 1 : 0, SqlDbType.Int);
+        if (isByYear && !string.IsNullOrWhiteSpace(annualYearColumn))
+        {
+            Helper.AddParameter(cmd, "@Year", criteria.Year, SqlDbType.Int);
+        }
     }
 
     private static void AddNullable(SqlCommand cmd, string name, object? value)
