@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.Http;
 using SmartSam.Models.Purchasing.Supplier;
 using SmartSam.Services;
 using SmartSam.Services.Purchasing.Supplier.Abstractions;
@@ -69,7 +70,42 @@ public class DetailModel : PageModel
         {
             SetMessage("Supplier submitted successfully.", "success");
         }
+        else if (string.Equals(Msg, "created", StringComparison.OrdinalIgnoreCase))
+        {
+            SetMessage("Supplier created successfully.", "success");
+        }
         return Page();
+    }
+
+    public async Task<IActionResult> OnGetCheckSupplierCodeAsync(string? supplierCode, int? id, CancellationToken cancellationToken)
+    {
+        LoadPagePermissions();
+        var canAccess = (id.HasValue && id.Value > 0) ? HasPermission(1) : HasPermission(2);
+        if (!canAccess)
+        {
+            return new JsonResult(new { ok = false, message = "Forbidden" }) { StatusCode = StatusCodes.Status403Forbidden };
+        }
+
+        var normalized = (supplierCode ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return new JsonResult(new { ok = true, exists = false });
+        }
+
+        var exists = await _supplierService.SupplierCodeExistsAsync(normalized, id, cancellationToken);
+        return new JsonResult(new { ok = true, exists });
+    }
+
+    public async Task<IActionResult> OnGetSuggestSupplierCodeAsync(CancellationToken cancellationToken)
+    {
+        LoadPagePermissions();
+        if (!HasPermission(2))
+        {
+            return new JsonResult(new { ok = false, message = "Forbidden" }) { StatusCode = StatusCodes.Status403Forbidden };
+        }
+
+        var suggestion = await _supplierService.GetSuggestedSupplierCodeAsync(cancellationToken);
+        return new JsonResult(new { ok = true, supplierCode = suggestion });
     }
 
     public async Task<IActionResult> OnPostSaveAsync(CancellationToken cancellationToken)
@@ -104,11 +140,30 @@ public class DetailModel : PageModel
         }
 
         var operatorCode = User.Identity?.Name ?? "SYSTEM";
-        var savedId = await _supplierService.SaveAsync(Id, Input, operatorCode, cancellationToken);
+        int savedId;
+        try
+        {
+            savedId = await _supplierService.SaveAsync(Id, Input, operatorCode, cancellationToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            if (string.Equals(ex.Message, "Supplier code already exists.", StringComparison.OrdinalIgnoreCase))
+            {
+                ModelState.AddModelError("Input.SupplierCode", ex.Message);
+            }
+
+            if (IsEdit)
+            {
+                Histories = (await _supplierService.GetApprovalHistoryAsync(Id!.Value, cancellationToken)).ToList();
+            }
+
+            SetMessage(ex.Message, "error");
+            return Page();
+        }
 
         if (!IsEdit)
         {
-            return RedirectToPage("./Detail", new { id = savedId });
+            return RedirectToPage("./Detail", new { id = savedId, msg = "created" });
         }
 
         SetMessage("Saved successfully.", "success");

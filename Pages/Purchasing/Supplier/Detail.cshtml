@@ -17,7 +17,10 @@
                         <div class="card-body p-2">
                             <div class="row no-gutters align-items-center mb-2">
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Supplier Code</label></div>
-                                <div class="col-4"><input asp-for="Input.SupplierCode" class="form-control form-control-sm" /></div>
+                                <div class="col-4">
+                                    <input asp-for="Input.SupplierCode" class="form-control form-control-sm" />
+                                    <span asp-validation-for="Input.SupplierCode" class="text-danger small"></span>
+                                </div>
                                 <div class="col-2 text-left pl-3 pr-2"><label class="col-form-label-sm mb-0">Status</label></div>
                                 <div class="col-4"><select asp-for="Input.Status" asp-items="Model.Statuses" class="form-control form-control-sm"></select></div>
                             </div>
@@ -153,6 +156,114 @@
 @section Scripts {
     <script>
         (() => {
+            const supplierCodeInput = document.getElementById("Input_SupplierCode");
+            const supplierCodeValidationEl = document.querySelector('[data-valmsg-for="Input.SupplierCode"]');
+            const saveForm = document.querySelector('form[asp-page-handler="Save"]') || document.querySelector("form[method='post']");
+            const isEditMode = @Model.IsEdit.ToString().ToLowerInvariant();
+            let supplierCodeCheckToken = 0;
+
+            const setSupplierCodeValidation = (message) => {
+                if (!supplierCodeInput) return;
+                supplierCodeInput.classList.toggle("is-invalid", !!message);
+                if (supplierCodeValidationEl) {
+                    supplierCodeValidationEl.textContent = message || "";
+                    supplierCodeValidationEl.classList.toggle("field-validation-error", !!message);
+                    supplierCodeValidationEl.classList.toggle("field-validation-valid", !message);
+                }
+            };
+
+            const checkSupplierCodeDuplicate = async () => {
+                if (!supplierCodeInput) return true;
+
+                const raw = (supplierCodeInput.value || "").trim();
+                if (!raw) {
+                    setSupplierCodeValidation("");
+                    return true;
+                }
+
+                const requestToken = ++supplierCodeCheckToken;
+                const currentId = "@(Model.Id?.ToString() ?? "")";
+                const url = new URL(window.location.href);
+                url.searchParams.set("handler", "CheckSupplierCode");
+                url.searchParams.set("supplierCode", raw);
+                if (currentId) {
+                    url.searchParams.set("id", currentId);
+                } else {
+                    url.searchParams.delete("id");
+                }
+
+                try {
+                    const response = await fetch(url.toString(), {
+                        method: "GET",
+                        headers: { "X-Requested-With": "XMLHttpRequest" }
+                    });
+
+                    if (requestToken !== supplierCodeCheckToken) return true;
+                    if (!response.ok) return true;
+
+                    const data = await response.json();
+                    if (data && data.exists === true) {
+                        setSupplierCodeValidation("Supplier code already exists.");
+                        return false;
+                    }
+
+                    setSupplierCodeValidation("");
+                    return true;
+                } catch {
+                    return true;
+                }
+            };
+
+            if (supplierCodeInput) {
+                supplierCodeInput.addEventListener("blur", () => {
+                    void checkSupplierCodeDuplicate();
+                });
+
+                supplierCodeInput.addEventListener("input", () => {
+                    setSupplierCodeValidation("");
+                });
+            }
+
+            if (saveForm) {
+                saveForm.addEventListener("submit", async (e) => {
+                    const submitter = e.submitter;
+                    if (submitter && submitter.getAttribute("formaction")?.includes("SubmitApproval")) {
+                        return;
+                    }
+
+                    const ok = await checkSupplierCodeDuplicate();
+                    if (!ok) {
+                        e.preventDefault();
+                        supplierCodeInput?.focus();
+                    }
+                });
+            }
+
+            const loadSuggestedSupplierCode = async () => {
+                if (!supplierCodeInput || isEditMode) return;
+                if ((supplierCodeInput.value || "").trim()) return;
+
+                try {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set("handler", "SuggestSupplierCode");
+                    const response = await fetch(url.toString(), {
+                        method: "GET",
+                        headers: { "X-Requested-With": "XMLHttpRequest" }
+                    });
+
+                    if (!response.ok) return;
+                    const data = await response.json();
+                    const suggested = (data?.supplierCode || "").trim();
+                    if (!suggested) return;
+                    if ((supplierCodeInput.value || "").trim()) return;
+                    supplierCodeInput.value = suggested;
+                } catch {
+                    // ignore suggestion errors; backend save validation still protects uniqueness
+                }
+            };
+
+            void loadSuggestedSupplierCode();
+
             const flashMessageEl = document.getElementById("supplierDetailFlash");
             if (!flashMessageEl || !window.jQuery || !$.fn.Toasts) return;
 

@@ -20,6 +20,19 @@
     background-color: #dff0ff !important;
 }
 
+.supplier-row.supplier-row-deleted {
+    color: #6c757d;
+    background-color: #f3f4f6;
+}
+
+.supplier-row.supplier-row-deleted td {
+    opacity: 0.9;
+}
+
+.supplier-row.supplier-row-deleted.selected {
+    background-color: #d8dee6 !important;
+}
+
 .selector-cell {
     width: 32px;
     min-width: 32px;
@@ -37,6 +50,29 @@
 .supplier-record-badge {
     font-weight: 500;
     line-height: 1.2;
+}
+
+.supplier-inline-badge {
+    font-size: 0.58rem;
+    padding: 0.12rem 0.28rem;
+    vertical-align: middle;
+    letter-spacing: 0.02em;
+}
+
+.supplier-code-cell {
+    position: relative;
+    min-height: 1.6rem;
+    padding-right: 3.2rem;
+}
+
+.supplier-code-text {
+    line-height: 1.1;
+}
+
+.supplier-inline-badge-corner {
+    position: absolute;
+    right: 0;
+    bottom: 0;
 }
 
 @media (max-width: 767.98px) {
