@@ -24,8 +24,8 @@ public class SupplierService : ISupplierService
     public Task<SupplierSearchResultDto> SearchPagedAsync(SupplierFilterCriteria criteria, CancellationToken cancellationToken = default)
         => _repository.SearchPagedAsync(criteria, cancellationToken);
 
-    public Task CopyCurrentSuppliersToYearAsync(int copyYear, CancellationToken cancellationToken = default)
-        => _repository.CopyCurrentSuppliersToYearAsync(copyYear, cancellationToken);
+    public Task CopyCurrentSuppliersToYearAsync(int copyYear, IReadOnlyCollection<int> supplierIds, CancellationToken cancellationToken = default)
+        => _repository.CopyCurrentSuppliersToYearAsync(copyYear, supplierIds, cancellationToken);
 
     public Task<SupplierDetailDto?> GetDetailAsync(int supplierId, CancellationToken cancellationToken = default)
         => _repository.GetDetailAsync(supplierId, cancellationToken);

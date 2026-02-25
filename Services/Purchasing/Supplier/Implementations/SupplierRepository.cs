@@ -120,7 +120,7 @@ SELECT
     st.SupplierStatusName,
     s.[Status]
 {fromWhereSql}
-ORDER BY s.SupplierCode, s.SupplierID";
+ORDER BY s.SupplierID DESC";
 
         if (applyPaging)
         {
@@ -172,9 +172,28 @@ ORDER BY s.SupplierCode, s.SupplierID";
         };
     }
 
-    public async Task CopyCurrentSuppliersToYearAsync(int copyYear, CancellationToken cancellationToken = default)
+    public async Task CopyCurrentSuppliersToYearAsync(int copyYear, IReadOnlyCollection<int> supplierIds, CancellationToken cancellationToken = default)
     {
-        var sql = @"
+        if (supplierIds is null || supplierIds.Count == 0)
+        {
+            throw new InvalidOperationException("No supplier selected for copy.");
+        }
+
+        var normalizedIds = supplierIds
+            .Distinct()
+            .Where(x => x > 0)
+            .ToList();
+
+        if (normalizedIds.Count == 0)
+        {
+            throw new InvalidOperationException("No valid supplier selected for copy.");
+        }
+
+        var inClause = string.Join(", ", normalizedIds);
+
+        var sql = $@"
+CREATE TABLE #CopyIds (SupplierID int NOT NULL PRIMARY KEY);
+
 DECLARE @YearCol sysname = (
     SELECT TOP 1 c.name
     FROM sys.columns c
@@ -184,38 +203,94 @@ DECLARE @YearCol sysname = (
 
 IF @YearCol IS NULL
 BEGIN
+    INSERT INTO #CopyIds (SupplierID)
+    SELECT s.SupplierID
+    FROM dbo.PC_Suppliers s
+    WHERE s.SupplierID IN ({inClause})
+      AND NOT EXISTS (
+          SELECT 1
+          FROM dbo.PC_SupplierAnualy a
+          WHERE a.SupplierID = s.SupplierID
+      );
+
     INSERT INTO dbo.PC_SupplierAnualy
     (
         SupplierID, SupplierCode, SupplierName, Address, Phone, Mobile, Fax,
         Contact, [Position], Business, ApprovedDate, [Document], Certificate,
-        Service, Comment, IsNew, CodeOfAcc, DeptID, [Status]
+        Service, Comment, Appcept, IsApproved, DeptID, IsNew, CodeOfAcc, IsLinen, [Status],
+        PurchaserCode, PurchaserPreparedDate, PurchaserCPT,
+        DepartmentCode, DepartmentApproveDate, DepartmentCPT,
+        FinancialCode, FinancialApproveDate, FinancialCPT,
+        BODCode, BODApproveDate, BODCPT
     )
     SELECT
         SupplierID, SupplierCode, SupplierName, Address, Phone, Mobile, Fax,
         Contact, [Position], Business, ApprovedDate, [Document], Certificate,
-        Service, Comment, IsNew, CodeOfAcc, DeptID, [Status]
-    FROM dbo.PC_Suppliers;
+        Service, Comment, Appcept, IsApproved, DeptID, IsNew, CodeOfAcc, IsLinen, [Status],
+        PurchaserCode, PurchaserPreparedDate, PurchaserCPT,
+        DepartmentCode, DepartmentApproveDate, DepartmentCPT,
+        FinancialCode, FinancialApproveDate, FinancialCPT,
+        BODCode, BODApproveDate, BODCPT
+    FROM dbo.PC_Suppliers
+    WHERE SupplierID IN (SELECT SupplierID FROM #CopyIds);
 END
 ELSE
 BEGIN
     DECLARE @Sql nvarchar(max) = N'
+        INSERT INTO #CopyIds (SupplierID)
+        SELECT s.SupplierID
+        FROM dbo.PC_Suppliers s
+        WHERE s.SupplierID IN ({inClause})
+          AND NOT EXISTS (
+              SELECT 1
+              FROM dbo.PC_SupplierAnualy a
+              WHERE a.SupplierID = s.SupplierID
+                AND a.' + QUOTENAME(@YearCol) + N' = @Y
+          );
+
         INSERT INTO dbo.PC_SupplierAnualy
         (
             SupplierID, SupplierCode, SupplierName, Address, Phone, Mobile, Fax,
             Contact, [Position], Business, ApprovedDate, [Document], Certificate,
-            Service, Comment, IsNew, CodeOfAcc, DeptID, [Status], ' + QUOTENAME(@YearCol) + N'
+            Service, Comment, Appcept, IsApproved, DeptID, IsNew, CodeOfAcc, IsLinen, [Status],
+            PurchaserCode, PurchaserPreparedDate, PurchaserCPT,
+            DepartmentCode, DepartmentApproveDate, DepartmentCPT,
+            FinancialCode, FinancialApproveDate, FinancialCPT,
+            BODCode, BODApproveDate, BODCPT,
+            ' + QUOTENAME(@YearCol) + N'
         )
         SELECT
             SupplierID, SupplierCode, SupplierName, Address, Phone, Mobile, Fax,
             Contact, [Position], Business, ApprovedDate, [Document], Certificate,
-            Service, Comment, IsNew, CodeOfAcc, DeptID, [Status], @Y
-        FROM dbo.PC_Suppliers;';
+            Service, Comment, Appcept, IsApproved, DeptID, IsNew, CodeOfAcc, IsLinen, [Status],
+            PurchaserCode, PurchaserPreparedDate, PurchaserCPT,
+            DepartmentCode, DepartmentApproveDate, DepartmentCPT,
+            FinancialCode, FinancialApproveDate, FinancialCPT,
+            BODCode, BODApproveDate, BODCPT,
+            @Y
+        FROM dbo.PC_Suppliers
+        WHERE SupplierID IN (SELECT SupplierID FROM #CopyIds);';
 
     EXEC sp_executesql @Sql, N'@Y int', @Y = @CopyYear;
 END
 
 UPDATE dbo.PC_Suppliers
-SET [Status] = 0;";
+SET [Status] = 0,
+    PurchaserCode = NULL,
+    PurchaserPreparedDate = NULL,
+    PurchaserCPT = NULL,
+    DepartmentCode = NULL,
+    DepartmentApproveDate = NULL,
+    DepartmentCPT = NULL,
+    FinancialCode = NULL,
+    FinancialApproveDate = NULL,
+    FinancialCPT = NULL,
+    BODCode = NULL,
+    BODApproveDate = NULL,
+    BODCPT = NULL,
+    IsApproved = NULL,
+    Appcept = NULL
+WHERE SupplierID IN (SELECT SupplierID FROM #CopyIds);";
 
         await using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync(cancellationToken);

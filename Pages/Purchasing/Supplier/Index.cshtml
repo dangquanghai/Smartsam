@@ -2,8 +2,6 @@
 @model SmartSam.Pages.Purchasing.Supplier.IndexModel
 @{
     ViewData["Title"] = "Suppliers";
-    var messageType = (Model.MessageType ?? "info").ToLowerInvariant();
-    var useInlineAlert = !string.IsNullOrWhiteSpace(Model.Message) && (messageType == "warning" || messageType == "error");
     var currentPage = Model.PageIndex <= 0 ? 1 : Model.PageIndex;
     var totalPages = Model.TotalPages <= 0 ? 1 : Model.TotalPages;
     var pageStart = Model.TotalRecords == 0 ? 0 : ((currentPage - 1) * Model.PageSize) + 1;
@@ -37,18 +35,6 @@
                     </div>
 
                     <div class="card-body">
-                        @if (useInlineAlert)
-                        {
-                            var alertClass = messageType == "error" ? "alert-danger" : "alert-warning";
-                            var alertIcon = messageType == "error" ? "fas fa-ban" : "fas fa-exclamation-triangle";
-                            <div class="alert @alertClass alert-dismissible mb-3">
-                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                                    <span aria-hidden="true">&times;</span>
-                                </button>
-                                <h5><i class="icon @alertIcon"></i> Alert</h5>
-                                @Model.Message
-                            </div>
-                        }
                         <form method="get" id="supplierSearchForm">
                             <input type="hidden" name="PageIndex" value="1" />
                             <input type="hidden" name="PageSize" value="@Model.PageSize" />
@@ -225,7 +211,7 @@
                         }
                         @if (Model.PagePerm.HasPermission(5))
                         {
-                            <button id="copySupplierBtn" type="button" class="btn btn-secondary btn-sm mx-1 my-1" data-toggle="modal" data-target="#copyYearModal"><i class="fas fa-copy"></i> Copy</button>
+                            <button id="copySupplierBtn" type="button" class="btn btn-secondary btn-sm mx-1 my-1" disabled data-toggle="modal" data-target="#copyYearModal"><i class="fas fa-copy"></i> Copy</button>
                         }
                         @if (Model.PagePerm.HasPermission(4))
                         {
@@ -257,7 +243,7 @@
     </div>
 </section>
 
-@if (!string.IsNullOrWhiteSpace(Model.Message) && !useInlineAlert)
+@if (!string.IsNullOrWhiteSpace(Model.Message))
 {
     <div id="supplierIndexFlash" data-message="@Model.Message" data-type="@Model.MessageType" class="d-none"></div>
 }
@@ -265,7 +251,7 @@
 @if (Model.PagePerm.HasPermission(5))
 {
     <div class="modal fade" id="copyYearModal" tabindex="-1" role="dialog" aria-labelledby="copyYearModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-dialog modal-dialog-centered" role="document" style="max-width: 460px;">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="copyYearModalLabel">Copy Supplier List</h5>
@@ -273,21 +259,29 @@
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body py-3">
                     <form id="copyYearForm" method="post" asp-page-handler="CopyYear">
-                        <div class="form-group mb-2">
-                            <label>Copy Year</label>
-                            <input id="copyYearInput" asp-for="CopyYear" type="number" min="2000" max="2100" class="form-control" />
+                        <input type="hidden" asp-for="SelectedSupplierIdsCsv" id="copySelectedSupplierIdsCsvInput" />
+                        <div class="form-group mb-3">
+                            <div class="d-flex align-items-center">
+                                <label class="mb-0 mr-3" style="min-width: 84px;">Copy Year</label>
+                                <div>
+                                    <input id="copyYearInput" asp-for="CopyYear" type="number" min="2000" max="@(DateTime.Today.Year - 1)" class="form-control form-control-sm" style="width: 110px;" />
+                                    <div id="copyYearValidation" class="invalid-feedback d-none">Enter a valid year.</div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="custom-control custom-checkbox">
-                            <input asp-for="ConfirmCopy" class="custom-control-input" />
-                            <label asp-for="ConfirmCopy" class="custom-control-label">Are you sure to copy</label>
+                        <div class="d-flex align-items-center justify-content-between flex-wrap">
+                            <div class="custom-control custom-checkbox mb-2 mb-sm-0 mr-3">
+                                <input asp-for="ConfirmCopy" class="custom-control-input" />
+                                <label asp-for="ConfirmCopy" class="custom-control-label font-weight-normal">Copy selected suppliers to this year?</label>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <button type="button" class="btn btn-default btn-sm mr-2" data-dismiss="modal">Cancel</button>
+                                <button id="copyYearSubmitBtn" type="submit" form="copyYearForm" class="btn btn-warning btn-sm" disabled>Copy</button>
+                            </div>
                         </div>
                     </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-                    <button type="submit" form="copyYearForm" class="btn btn-warning">Copy</button>
                 </div>
             </div>
         </div>
@@ -308,7 +302,44 @@
             const yearGroup = document.getElementById("yearGroup");
             const copyYearModal = document.getElementById("copyYearModal");
             const copyYearInput = document.getElementById("copyYearInput");
+            const copyConfirmCheckbox = document.getElementById("ConfirmCopy");
+            const copyYearSubmitBtn = document.getElementById("copyYearSubmitBtn");
+            const copyYearValidation = document.getElementById("copyYearValidation");
             const flashMessageEl = document.getElementById("supplierIndexFlash");
+
+            function validateCopyYearInput(showError) {
+                if (!copyYearInput) return false;
+
+                const raw = (copyYearInput.value || "").trim();
+                const min = Number(copyYearInput.getAttribute("min") || "2000");
+                const max = Number(copyYearInput.getAttribute("max") || "2099");
+                const year = Number(raw);
+                const isValid = raw.length > 0
+                    && Number.isInteger(year)
+                    && raw.length === 4
+                    && year >= min
+                    && year <= max;
+
+                copyYearInput.classList.toggle("is-invalid", !!showError && !isValid);
+                if (copyYearValidation) {
+                    if (showError && !isValid) {
+                        copyYearValidation.textContent = `Enter a year from ${min} to ${max}.`;
+                        copyYearValidation.classList.remove("d-none");
+                        copyYearValidation.style.display = "block";
+                    } else {
+                        copyYearValidation.classList.add("d-none");
+                        copyYearValidation.style.display = "";
+                    }
+                }
+
+                return isValid;
+            }
+
+            function syncCopyModalButtonState(showYearError = false) {
+                if (!copyYearSubmitBtn || !copyConfirmCheckbox) return;
+                const isYearValid = validateCopyYearInput(showYearError);
+                copyYearSubmitBtn.disabled = !copyConfirmCheckbox.checked || !isYearValid;
+            }
 
             async function reloadSupplierResultPanel(url) {
                 const panel = document.getElementById("supplierResultPanelContainer");
@@ -417,6 +448,7 @@
                 const submitBtn = panel.querySelector("#submitSupplierBtn");
                 const selectedSupplierIdInput = panel.querySelector("#selectedSupplierIdInput");
                 const selectedSupplierIdsCsvInput = panel.querySelector("#selectedSupplierIdsCsvInput");
+                const copySelectedSupplierIdsCsvInput = document.getElementById("copySelectedSupplierIdsCsvInput");
                 const addBtn = panel.querySelector("#addSupplierBtn");
                 const copyBtn = panel.querySelector("#copySupplierBtn");
                 const detailBaseUrl = '@Url.Page("/Purchasing/Supplier/Detail")';
@@ -434,6 +466,7 @@
 
                 if (selectedSupplierIdInput) selectedSupplierIdInput.value = singleId || "";
                 if (selectedSupplierIdsCsvInput) selectedSupplierIdsCsvInput.value = selectedIds.join(",");
+                if (copySelectedSupplierIdsCsvInput) copySelectedSupplierIdsCsvInput.value = selectedIds.join(",");
 
                 const hasAnySelected = count > 0;
                 const hasSubmittedSelected = selectedRows.some((row) => isSubmitted(row));
@@ -441,7 +474,7 @@
 
                 const isMultiSelectMode = count > 1;
                 setUiDisabled(addBtn, isMultiSelectMode);
-                setUiDisabled(copyBtn, isMultiSelectMode);
+                setUiDisabled(copyBtn, !hasAnySelected);
                 }
 
                 window.syncSupplierSelection = syncSelectionState;
@@ -503,9 +536,39 @@
                     if (copyYearInput.value === "0") {
                         copyYearInput.value = "";
                     }
+                    if (copyConfirmCheckbox) {
+                        copyConfirmCheckbox.checked = false;
+                    }
+                    if (copyYearInput) {
+                        copyYearInput.classList.remove("is-invalid");
+                    }
+                    if (copyYearValidation) {
+                        copyYearValidation.classList.add("d-none");
+                        copyYearValidation.style.display = "";
+                    }
+                    syncCopyModalButtonState(false);
                     copyYearInput.focus();
                 });
+
+                $(copyYearModal).on("hidden.bs.modal", function () {
+                    if (copyConfirmCheckbox) {
+                        copyConfirmCheckbox.checked = false;
+                    }
+                    if (copyYearInput) {
+                        copyYearInput.classList.remove("is-invalid");
+                    }
+                    if (copyYearValidation) {
+                        copyYearValidation.classList.add("d-none");
+                        copyYearValidation.style.display = "";
+                    }
+                    syncCopyModalButtonState(false);
+                });
             }
+
+            copyConfirmCheckbox?.addEventListener("change", () => syncCopyModalButtonState(false));
+            copyYearInput?.addEventListener("input", () => syncCopyModalButtonState(false));
+            copyYearInput?.addEventListener("blur", () => syncCopyModalButtonState(true));
+            syncCopyModalButtonState(false);
 
             if (flashMessageEl && window.jQuery && $.fn.Toasts) {
                 const message = flashMessageEl.getAttribute("data-message");

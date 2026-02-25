@@ -64,6 +64,12 @@ public class IndexModel : PageModel
     [BindProperty]
     public string? SelectedSupplierIdsCsv { get; set; }
 
+    [TempData]
+    public string? FlashMessage { get; set; }
+
+    [TempData]
+    public string? FlashMessageType { get; set; }
+
     public string? Message { get; set; }
     public string MessageType { get; set; } = "info";
 
@@ -85,6 +91,12 @@ public class IndexModel : PageModel
             return Forbid();
         }
 
+        if (string.IsNullOrWhiteSpace(Message) && !string.IsNullOrWhiteSpace(FlashMessage))
+        {
+            Message = FlashMessage;
+            MessageType = string.IsNullOrWhiteSpace(FlashMessageType) ? "info" : FlashMessageType!;
+        }
+
         await LoadFiltersAsync(cancellationToken);
         await LoadRowsAsync(cancellationToken);
         return Page();
@@ -100,25 +112,30 @@ public class IndexModel : PageModel
 
         await LoadFiltersAsync(cancellationToken);
 
-        if (!ConfirmCopy || CopyYear < 2000 || CopyYear > 2100)
+        var selectedIds = ParseSelectedSupplierIds();
+        if (selectedIds.Count == 0)
         {
-            SetMessage("Xác nhận copy và nhập năm hợp lệ (2000-2100).", "warning");
-            await LoadRowsAsync(cancellationToken);
-            return Page();
+            SetFlashMessage("Select at least one supplier.", "warning");
+            return RedirectToCurrentList();
+        }
+
+        var currentYear = DateTime.Today.Year;
+        if (!ConfirmCopy || CopyYear < 2000 || CopyYear >= currentYear)
+        {
+            SetFlashMessage($"Enter a valid year before {currentYear} and confirm the copy.", "warning");
+            return RedirectToCurrentList();
         }
 
         try
         {
-            await _supplierService.CopyCurrentSuppliersToYearAsync(CopyYear, cancellationToken);
-            SetMessage($"Đã copy danh sách nhà cung cấp sang dữ liệu năm {CopyYear}.", "success");
+            await _supplierService.CopyCurrentSuppliersToYearAsync(CopyYear, selectedIds, cancellationToken);
+            SetFlashMessage("Copy completed.", "success");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            SetMessage("Copy failed: " + ex.Message, "error");
+            SetFlashMessage("Copy failed.", "error");
         }
-
-        await LoadRowsAsync(cancellationToken);
-        return Page();
+        return RedirectToCurrentList();
     }
 
     public async Task<IActionResult> OnGetExportCsvAsync(CancellationToken cancellationToken)
@@ -161,9 +178,8 @@ public class IndexModel : PageModel
         var selectedIds = ParseSelectedSupplierIds();
         if (selectedIds.Count == 0)
         {
-            SetMessage("Vui lòng chọn nhà cung cấp trước khi submit.", "warning");
-            await LoadRowsAsync(cancellationToken);
-            return Page();
+            SetFlashMessage("Select at least one supplier.", "warning");
+            return RedirectToCurrentList();
         }
 
         var operatorCode = User.Identity?.Name ?? "SYSTEM";
@@ -190,11 +206,10 @@ public class IndexModel : PageModel
             successCount++;
         }
 
-        SetMessage(
+        SetFlashMessage(
             BuildSubmitMessage(successCount, alreadySubmittedCount, notFoundCount, selectedIds.Count),
             successCount > 0 ? "success" : (alreadySubmittedCount > 0 ? "warning" : "info"));
-        await LoadRowsAsync(cancellationToken);
-        return Page();
+        return RedirectToCurrentList();
     }
 
     private async Task LoadFiltersAsync(CancellationToken cancellationToken)
@@ -287,19 +302,19 @@ public class IndexModel : PageModel
     {
         if (totalSelected == 1)
         {
-            if (successCount == 1) return "Submit thành công.";
-            if (alreadySubmittedCount == 1) return "Nhà cung cấp này đã submit trước đó.";
-            if (notFoundCount == 1) return "Không tìm thấy nhà cung cấp đã chọn.";
+            if (successCount == 1) return "Submitted successfully.";
+            if (alreadySubmittedCount == 1) return "Supplier already submitted.";
+            if (notFoundCount == 1) return "Supplier not found.";
         }
 
         var parts = new List<string>();
-        if (successCount > 0) parts.Add($"thành công {successCount}");
-        if (alreadySubmittedCount > 0) parts.Add($"đã submit trước {alreadySubmittedCount}");
-        if (notFoundCount > 0) parts.Add($"không tìm thấy {notFoundCount}");
+        if (successCount > 0) parts.Add($"submitted: {successCount}");
+        if (alreadySubmittedCount > 0) parts.Add($"already submitted: {alreadySubmittedCount}");
+        if (notFoundCount > 0) parts.Add($"not found: {notFoundCount}");
 
         return parts.Count == 0
-            ? "Không có bản ghi nào được submit."
-            : $"Kết quả submit: {string.Join(", ", parts)}.";
+            ? "No suppliers submitted."
+            : $"Submit completed. {string.Join(", ", parts)}.";
     }
 
     private void LoadPagePermissions()
@@ -321,9 +336,31 @@ public class IndexModel : PageModel
 
     private bool HasPermission(int permissionNo) => PagePerm.HasPermission(permissionNo);
 
+    private void SetFlashMessage(string message, string type = "info")
+    {
+        FlashMessage = message;
+        FlashMessageType = type;
+    }
+
     private void SetMessage(string message, string type = "info")
     {
         Message = message;
         MessageType = type;
     }
+
+    private IActionResult RedirectToCurrentList()
+        => RedirectToPage("./Index", new
+        {
+            ViewMode,
+            Year,
+            DeptId,
+            SupplierCode,
+            SupplierName,
+            Business,
+            Contact,
+            StatusId,
+            IsNew,
+            PageIndex,
+            PageSize
+        });
 }
