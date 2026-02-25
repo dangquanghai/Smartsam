@@ -15,5 +15,4 @@ public interface ISupplierService
     Task<string> GetSuggestedSupplierCodeAsync(CancellationToken cancellationToken = default);
     Task<int> SaveAsync(int? supplierId, SupplierDetailDto detail, string operatorCode, CancellationToken cancellationToken = default);
     Task SubmitApprovalAsync(int supplierId, string operatorCode, CancellationToken cancellationToken = default);
-    Task<SupplierDeleteResultDto> DeleteAsync(int supplierId, string operatorCode, CancellationToken cancellationToken = default);
 }

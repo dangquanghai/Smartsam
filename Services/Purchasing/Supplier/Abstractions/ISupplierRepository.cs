@@ -16,5 +16,4 @@ public interface ISupplierRepository
     Task<int> CreateAsync(SupplierDetailDto detail, string operatorCode, CancellationToken cancellationToken = default);
     Task UpdateAsync(int supplierId, SupplierDetailDto detail, CancellationToken cancellationToken = default);
     Task SubmitApprovalAsync(int supplierId, string operatorCode, CancellationToken cancellationToken = default);
-    Task<SupplierDeleteResultDto> DeleteAsync(int supplierId, string operatorCode, CancellationToken cancellationToken = default);
 }

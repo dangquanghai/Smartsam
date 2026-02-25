@@ -17,7 +17,6 @@ public class SupplierFilterCriteria
     public string? Contact { get; set; }
     public int? StatusId { get; set; }
     public bool IsNew { get; set; }
-    public bool IncludeDeleted { get; set; }
     public int? PageIndex { get; set; }
     public int? PageSize { get; set; }
 }
@@ -51,7 +50,6 @@ public class SupplierListRowDto
     public string DeptCode { get; set; } = string.Empty;
     public string SupplierStatusName { get; set; } = string.Empty;
     public int? Status { get; set; }
-    public bool IsDeleted { get; set; }
 }
 
 public class SupplierDetailDto
@@ -74,7 +72,6 @@ public class SupplierDetailDto
     public string? CodeOfAcc { get; set; }
     public int? DeptID { get; set; }
     public int? Status { get; set; }
-    public bool IsDeleted { get; set; }
 }
 
 public class SupplierApprovalHistoryDto
@@ -82,13 +79,4 @@ public class SupplierApprovalHistoryDto
     public string Action { get; set; } = string.Empty;
     public string UserCode { get; set; } = string.Empty;
     public DateTime? ActionDate { get; set; }
-}
-
-public class SupplierDeleteResultDto
-{
-    public bool Success { get; set; }
-    public bool IsHardDelete { get; set; }
-    public bool IsSoftDelete { get; set; }
-    public bool NotFound { get; set; }
-    public string? Reason { get; set; }
 }

@@ -47,9 +47,6 @@ public class IndexModel : PageModel
     public bool IsNew { get; set; }
 
     [BindProperty(SupportsGet = true)]
-    public bool IncludeDeleted { get; set; }
-
-    [BindProperty(SupportsGet = true)]
     public int PageIndex { get; set; } = 1;
 
     [BindProperty(SupportsGet = true)]
@@ -200,52 +197,6 @@ public class IndexModel : PageModel
         return Page();
     }
 
-    public async Task<IActionResult> OnPostDeleteAsync(CancellationToken cancellationToken)
-    {
-        LoadPagePermissions();
-        if (!HasPermission(6))
-        {
-            return Forbid();
-        }
-
-        await LoadFiltersAsync(cancellationToken);
-
-        var selectedIds = ParseSelectedSupplierIds();
-        if (selectedIds.Count != 1)
-        {
-            SetMessage("Please select exactly one supplier to delete.", "warning");
-            await LoadRowsAsync(cancellationToken);
-            return Page();
-        }
-
-        var operatorCode = User.Identity?.Name ?? "SYSTEM";
-        var result = await _supplierService.DeleteAsync(selectedIds[0], operatorCode, cancellationToken);
-
-        if (result.NotFound)
-        {
-            SetMessage("Supplier not found or already deleted.", "error");
-        }
-        else if (!result.Success)
-        {
-            SetMessage(result.Reason ?? "Delete failed.", "error");
-        }
-        else if (result.IsHardDelete)
-        {
-            SetMessage("Supplier deleted successfully.", "success");
-        }
-        else if (result.IsSoftDelete)
-        {
-            SetMessage("Supplier deleted (soft delete).", "info");
-        }
-        else
-        {
-            SetMessage("Supplier delete processed.", "info");
-        }
-
-        await LoadRowsAsync(cancellationToken);
-        return Page();
-    }
-
     private async Task LoadFiltersAsync(CancellationToken cancellationToken)
     {
         var departments = await _supplierService.GetDepartmentsAsync(cancellationToken);
@@ -291,7 +242,6 @@ public class IndexModel : PageModel
             Contact = NullIfEmpty(Contact),
             StatusId = StatusId,
             IsNew = IsNew,
-            IncludeDeleted = IncludeDeleted,
             PageIndex = includePaging ? PageIndex : null,
             PageSize = includePaging ? PageSize : null
         };

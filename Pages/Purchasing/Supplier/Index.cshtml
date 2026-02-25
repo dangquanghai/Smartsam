@@ -21,7 +21,6 @@
         Contact = Model.Contact,
         StatusId = Model.StatusId,
         IsNew = Model.IsNew,
-        IncludeDeleted = Model.IncludeDeleted,
         PageIndex = page,
         PageSize = Model.PageSize
     }) ?? "#";
@@ -31,7 +30,7 @@
     <div class="container-fluid">
         <div class="row">
             <!-- SEARCH PANEL (LEFT) -->
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <div class="card card-info">
                     <div class="card-header p-2">
                         <h3 class="card-title"><i class="fas fa-search"></i> Search</h3>
@@ -123,23 +122,11 @@
             </div>
 
             <!-- RESULT + ACTION (RIGHT) -->
-            <div class="col-md-9" id="supplierResultPanelContainer">
+            <div class="col-md-10" id="supplierResultPanelContainer">
                 <div class="card card-primary">
                     <div class="card-header">
                         <h3 class="card-title">Suppliers</h3>
                         <span class="badge badge-light ml-2 supplier-record-badge" id="total-records-badge">@Model.TotalRecords records</span>
-                        <div class="card-tools d-flex align-items-center">
-                            <div class="custom-control custom-checkbox mb-0">
-                                <input type="checkbox"
-                                       class="custom-control-input"
-                                       id="showDeletedToggle"
-                                       name="IncludeDeleted"
-                                       value="true"
-                                       form="supplierSearchForm"
-                                       @(Model.IncludeDeleted ? "checked" : "") />
-                                <label class="custom-control-label text-white font-weight-normal" for="showDeletedToggle">Show all suppliers (including deleted)</label>
-                            </div>
-                        </div>
                     </div>
 
                     <div class="card-body p-0">
@@ -170,21 +157,18 @@
                                     {
                                         foreach (var r in Model.Rows)
                                         {
-                                            <tr class="supplier-row @(r.IsDeleted ? "supplier-row-deleted" : "")"
+                                            <tr class="supplier-row"
                                                 data-supplier-id="@r.SupplierID"
                                                 data-status="@r.Status"
-                                                data-is-deleted="@(r.IsDeleted ? "1" : "0")"
                                                 data-is-submitted="@(r.Status == 1 ? "1" : "0")"
                                                 onclick="window.toggleSupplierRowSelection && window.toggleSupplierRowSelection(event, this)">
                                                 <td class="selector-cell"><input type="checkbox" class="supplier-selector" aria-label="Select supplier" onchange="window.syncSupplierSelection && window.syncSupplierSelection()" /></td>
                                                 <td>
-                                                    <div class="supplier-code-cell">
-                                                        <div class="supplier-code-text">@r.SupplierCode</div>
-                                                        @if (r.IsDeleted)
-                                                        {
-                                                            <span class="badge badge-secondary supplier-inline-badge supplier-inline-badge-corner">Deleted</span>
-                                                        }
-                                                    </div>
+                                                    <a href="@Url.Page("/Purchasing/Supplier/Detail", new { id = r.SupplierID })"
+                                                       class="text-primary font-weight-600 supplier-open-link"
+                                                       onclick="event.stopPropagation();">
+                                                        @r.SupplierCode
+                                                    </a>
                                                 </td>
                                                 <td>@r.SupplierName</td>
                                                 <td>@r.Address</td>
@@ -239,14 +223,6 @@
                         {
                             <a id="addSupplierBtn" asp-page="/Purchasing/Supplier/Detail" class="btn btn-success btn-sm mx-1 my-1"><i class="fas fa-plus"></i> Add</a>
                         }
-                        @if (Model.PagePerm.HasPermission(1))
-                        {
-                            <a id="viewSupplierBtn" href="@Url.Page("/Purchasing/Supplier/Detail")" data-base-url="@Url.Page("/Purchasing/Supplier/Detail")" class="btn btn-info btn-sm mx-1 my-1 disabled" aria-disabled="true"><i class="fas fa-eye"></i> View</a>
-                        }
-                        @if (Model.PagePerm.HasPermission(3))
-                        {
-                            <a id="editSupplierBtn" href="@Url.Page("/Purchasing/Supplier/Detail")" data-base-url="@Url.Page("/Purchasing/Supplier/Detail")" class="btn btn-warning btn-sm mx-1 my-1 disabled" aria-disabled="true"><i class="fas fa-edit"></i> Edit</a>
-                        }
                         @if (Model.PagePerm.HasPermission(5))
                         {
                             <button id="copySupplierBtn" type="button" class="btn btn-secondary btn-sm mx-1 my-1" data-toggle="modal" data-target="#copyYearModal"><i class="fas fa-copy"></i> Copy</button>
@@ -257,14 +233,6 @@
                                 <input type="hidden" asp-for="SelectedSupplierId" id="selectedSupplierIdInput" />
                                 <input type="hidden" asp-for="SelectedSupplierIdsCsv" id="selectedSupplierIdsCsvInput" />
                                 <button id="submitSupplierBtn" type="submit" class="btn btn-dark btn-sm mx-1 my-1" disabled><i class="fas fa-paper-plane"></i> Submit</button>
-                            </form>
-                        }
-                        @if (Model.PagePerm.HasPermission(6))
-                        {
-                            <form id="deleteSupplierForm" method="post" asp-page-handler="Delete" class="d-inline">
-                                <input type="hidden" name="SelectedSupplierId" id="deleteSelectedSupplierIdInput" />
-                                <input type="hidden" name="SelectedSupplierIdsCsv" id="deleteSelectedSupplierIdsCsvInput" />
-                                <button id="deleteSupplierBtn" type="button" class="btn btn-danger btn-sm mx-1 my-1" disabled data-toggle="modal" data-target="#deleteSupplierConfirmModal"><i class="fas fa-trash"></i> Delete</button>
                             </form>
                         }
                         @if (Model.PagePerm.HasPermission(1))
@@ -279,7 +247,6 @@
                                asp-route-Contact="@Model.Contact"
                                asp-route-StatusId="@Model.StatusId"
                                asp-route-IsNew="@Model.IsNew"
-                               asp-route-IncludeDeleted="@Model.IncludeDeleted"
                                class="btn btn-primary btn-sm mx-1 my-1"><i class="fas fa-file-export"></i> Excel</a>
                         }
                         <a href="/Index" class="btn btn-default btn-sm mx-1 my-1"><i class="fas fa-times"></i> Close</a>
@@ -321,33 +288,6 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
                     <button type="submit" form="copyYearForm" class="btn btn-warning">Copy</button>
-                </div>
-            </div>
-        </div>
-    </div>
-}
-
-@if (Model.PagePerm.HasPermission(6))
-{
-    <div class="modal fade" id="deleteSupplierConfirmModal" tabindex="-1" role="dialog" aria-labelledby="deleteSupplierConfirmModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered" role="document">
-            <div class="modal-content">
-                <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title" id="deleteSupplierConfirmModalLabel">
-                        <i class="fas fa-exclamation-triangle mr-1"></i> Confirm Delete
-                    </h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true" class="text-white">&times;</span>
-                    </button>
-                </div>
-                <div class="modal-body">
-                    <p class="mb-0">Are you sure you want to delete this supplier?</p>
-                </div>
-                <div class="modal-footer justify-content-between">
-                    <button type="submit" form="deleteSupplierForm" class="btn btn-danger">
-                        <i class="fas fa-check mr-1"></i> OK
-                    </button>
-                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
                 </div>
             </div>
         </div>
@@ -450,24 +390,7 @@
                 return false;
             }
 
-            function isDeleted(row) {
-                if (!row) return false;
-                return row.getAttribute("data-is-deleted") === "1";
-            }
-
             function setSubmitButtonState(btn, disabled) {
-                if (!btn) return;
-                btn.disabled = disabled;
-                if (disabled) {
-                    btn.setAttribute("disabled", "disabled");
-                    btn.setAttribute("aria-disabled", "true");
-                } else {
-                    btn.removeAttribute("disabled");
-                    btn.setAttribute("aria-disabled", "false");
-                }
-            }
-
-            function setDeleteButtonState(btn, disabled) {
                 if (!btn) return;
                 btn.disabled = disabled;
                 if (disabled) {
@@ -491,20 +414,12 @@
                 if (!panel) return;
 
                 const rows = Array.from(panel.querySelectorAll(".supplier-row"));
-                const viewBtn = panel.querySelector("#viewSupplierBtn");
-                const editBtn = panel.querySelector("#editSupplierBtn");
                 const submitBtn = panel.querySelector("#submitSupplierBtn");
-                const deleteBtn = panel.querySelector("#deleteSupplierBtn");
                 const selectedSupplierIdInput = panel.querySelector("#selectedSupplierIdInput");
                 const selectedSupplierIdsCsvInput = panel.querySelector("#selectedSupplierIdsCsvInput");
-                const deleteSelectedSupplierIdInput = panel.querySelector("#deleteSelectedSupplierIdInput");
-                const deleteSelectedSupplierIdsCsvInput = panel.querySelector("#deleteSelectedSupplierIdsCsvInput");
                 const addBtn = panel.querySelector("#addSupplierBtn");
                 const copyBtn = panel.querySelector("#copySupplierBtn");
-                const showDeletedToggle = panel.querySelector("#showDeletedToggle");
-                const detailBaseUrl = (viewBtn?.getAttribute("data-base-url")
-                    || editBtn?.getAttribute("data-base-url")
-                    || '@Url.Page("/Purchasing/Supplier/Detail")');
+                const detailBaseUrl = '@Url.Page("/Purchasing/Supplier/Detail")';
 
                 function syncSelectionState() {
                     const selectedRows = getSelectedRows(rows);
@@ -512,25 +427,17 @@
 
                 const count = selectedRows.length;
                 const singleRow = count === 1 ? selectedRows[0] : null;
-                const singleRowDeleted = !!singleRow && isDeleted(singleRow);
                 const singleId = singleRow?.getAttribute("data-supplier-id") || null;
                 const selectedIds = selectedRows
                     .map((row) => row.getAttribute("data-supplier-id"))
                     .filter((id) => !!id);
 
-                setActionButtonState(viewBtn, singleId);
-                setActionButtonState(editBtn, singleRowDeleted ? null : singleId);
-
                 if (selectedSupplierIdInput) selectedSupplierIdInput.value = singleId || "";
                 if (selectedSupplierIdsCsvInput) selectedSupplierIdsCsvInput.value = selectedIds.join(",");
-                if (deleteSelectedSupplierIdInput) deleteSelectedSupplierIdInput.value = singleId || "";
-                if (deleteSelectedSupplierIdsCsvInput) deleteSelectedSupplierIdsCsvInput.value = selectedIds.join(",");
 
                 const hasAnySelected = count > 0;
                 const hasSubmittedSelected = selectedRows.some((row) => isSubmitted(row));
-                const hasDeletedSelected = selectedRows.some((row) => isDeleted(row));
-                setSubmitButtonState(submitBtn, !hasAnySelected || hasSubmittedSelected || hasDeletedSelected);
-                setDeleteButtonState(deleteBtn, count !== 1 || hasDeletedSelected);
+                setSubmitButtonState(submitBtn, !hasAnySelected || hasSubmittedSelected);
 
                 const isMultiSelectMode = count > 1;
                 setUiDisabled(addBtn, isMultiSelectMode);
@@ -572,26 +479,6 @@
                     });
                 });
 
-                showDeletedToggle?.addEventListener("change", (e) => {
-                    const toggle = e.currentTarget;
-                    if (!toggle || !supplierSearchForm) return;
-                    const formData = new FormData(supplierSearchForm);
-                    formData.set("PageIndex", "1");
-                    if (toggle.checked) {
-                        formData.set("IncludeDeleted", "true");
-                    } else {
-                        formData.delete("IncludeDeleted");
-                    }
-                    const params = new URLSearchParams();
-                    for (const [k, v] of formData.entries()) {
-                        if (v != null && `${v}` !== "") params.append(k, `${v}`);
-                    }
-                    const url = `${supplierSearchForm.getAttribute("action") || window.location.pathname}?${params.toString()}`;
-                    void reloadSupplierResultPanel(url);
-                });
-
-                setActionButtonState(viewBtn, null);
-                setActionButtonState(editBtn, null);
                 syncSelectionState();
             };
 

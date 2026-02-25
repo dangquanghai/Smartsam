@@ -69,18 +69,11 @@ public class SupplierRepository : ISupplierRepository
         var isByYear = string.Equals(criteria.ViewMode, "byyear", StringComparison.OrdinalIgnoreCase);
         var sourceTable = isByYear ? "dbo.PC_SupplierAnualy" : "dbo.PC_Suppliers";
         var annualYearColumn = isByYear ? await GetSupplierAnnualYearColumnAsync(cancellationToken) : null;
-        var hasDeleteColumns = isByYear ? false : await HasSupplierDeleteColumnsAsync(cancellationToken);
         var pageIndex = criteria.PageIndex.GetValueOrDefault() <= 0 ? 1 : criteria.PageIndex!.Value;
         var pageSize = criteria.PageSize.GetValueOrDefault() <= 0 ? 25 : criteria.PageSize!.Value;
         var applyPaging = criteria.PageIndex.HasValue && criteria.PageSize.HasValue;
         var yearFilterSql = isByYear && !string.IsNullOrWhiteSpace(annualYearColumn)
             ? $"\n    AND (@Year IS NULL OR s.{QuoteIdentifier(annualYearColumn)} = @Year)"
-            : string.Empty;
-        var isDeletedSelectSql = !isByYear && hasDeleteColumns
-            ? "ISNULL(s.IsDeleted, 0)"
-            : "0";
-        var deleteFilterSql = !isByYear && hasDeleteColumns && !criteria.IncludeDeleted
-            ? "\n    AND ISNULL(s.IsDeleted, 0) = 0"
             : string.Empty;
         var fromWhereSql = $@"
 FROM {sourceTable} s
@@ -93,7 +86,7 @@ WHERE
     AND (@Contact IS NULL OR s.Contact LIKE '%' + @Contact + '%')
     AND (@DeptID IS NULL OR s.DeptID = @DeptID)
     AND (@StatusID IS NULL OR s.[Status] = @StatusID)
-    AND (@IsNew = 0 OR s.IsNew = 1){yearFilterSql}{deleteFilterSql}";
+    AND (@IsNew = 0 OR s.IsNew = 1){yearFilterSql}";
 
         var countSql = "SELECT COUNT(1) " + fromWhereSql;
         var totalObj = await Helper.ExecuteScalarAsync(
@@ -125,8 +118,7 @@ SELECT
     s.DeptID,
     d.DeptCode,
     st.SupplierStatusName,
-    s.[Status],
-    {isDeletedSelectSql} AS IsDeleted
+    s.[Status]
 {fromWhereSql}
 ORDER BY s.SupplierCode, s.SupplierID";
 
@@ -160,8 +152,7 @@ ORDER BY s.SupplierCode, s.SupplierID";
                 DeptID = rd.IsDBNull(17) ? null : rd.GetInt32(17),
                 DeptCode = rd[18]?.ToString() ?? string.Empty,
                 SupplierStatusName = rd[19]?.ToString() ?? string.Empty,
-                Status = rd.IsDBNull(20) ? null : Convert.ToInt32(rd[20]),
-                IsDeleted = !rd.IsDBNull(21) && Convert.ToInt32(rd[21]) == 1
+                Status = rd.IsDBNull(20) ? null : Convert.ToInt32(rd[20])
             },
             cmd =>
             {
@@ -248,8 +239,7 @@ SET [Status] = 0;";
     {
         const string sql = @"
 SELECT SupplierCode,SupplierName,Address,Phone,Mobile,Fax,Contact,[Position],Business,
-       ApprovedDate,[Document],Certificate,Service,Comment,IsNew,CodeOfAcc,DeptID,[Status],
-       CASE WHEN COL_LENGTH('dbo.PC_Suppliers', 'IsDeleted') IS NULL THEN 0 ELSE ISNULL(IsDeleted, 0) END AS IsDeleted
+       ApprovedDate,[Document],Certificate,Service,Comment,IsNew,CodeOfAcc,DeptID,[Status]
 FROM dbo.PC_Suppliers
 WHERE SupplierID=@ID";
 
@@ -275,8 +265,7 @@ WHERE SupplierID=@ID";
                 IsNew = !rd.IsDBNull(14) && Convert.ToBoolean(rd[14]),
                 CodeOfAcc = rd[15]?.ToString(),
                 DeptID = rd.IsDBNull(16) ? null : Convert.ToInt32(rd[16]),
-                Status = rd.IsDBNull(17) ? null : Convert.ToInt32(rd[17]),
-                IsDeleted = !rd.IsDBNull(18) && Convert.ToInt32(rd[18]) == 1
+                Status = rd.IsDBNull(17) ? null : Convert.ToInt32(rd[17])
             },
             cmd => Helper.AddParameter(cmd, "@ID", supplierId, SqlDbType.Int),
             cancellationToken);
@@ -366,9 +355,8 @@ INSERT INTO dbo.PC_Suppliers
 VALUES
 (
     @SupplierCode,@SupplierName,@Address,@Phone,@Mobile,@Fax,@Contact,@Position,@Business,
-    @ApprovedDate,@Document,@Certificate,@Service,@Comment,@IsNew,@CodeOfAcc,@DeptID,@Status,
-    CASE WHEN ISNULL(@Status, 0) = 1 THEN @OperatorCode ELSE NULL END,
-    CASE WHEN ISNULL(@Status, 0) = 1 THEN GETDATE() ELSE NULL END
+    @ApprovedDate,@Document,@Certificate,@Service,@Comment,@IsNew,@CodeOfAcc,@DeptID,0,
+    NULL,NULL
 );
 SELECT CAST(SCOPE_IDENTITY() as int);";
 
@@ -404,8 +392,7 @@ SET SupplierCode=@SupplierCode,
     Comment=@Comment,
     IsNew=@IsNew,
     CodeOfAcc=@CodeOfAcc,
-    DeptID=@DeptID,
-    [Status]=@Status
+    DeptID=@DeptID
 WHERE SupplierID=@SupplierID";
 
         await Helper.ExecuteNonQueryAsync(
@@ -439,93 +426,6 @@ WHERE SupplierID=@SupplierID";
             cancellationToken);
     }
 
-    public async Task<SupplierDeleteResultDto> DeleteAsync(int supplierId, string operatorCode, CancellationToken cancellationToken = default)
-    {
-        const string inspectSql = @"
-SELECT
-    SupplierID,
-    ISNULL([Status], 0) AS [Status],
-    CASE WHEN PurchaserCode IS NOT NULL OR PurchaserPreparedDate IS NOT NULL
-           OR DepartmentCode IS NOT NULL OR DepartmentApproveDate IS NOT NULL
-           OR FinancialCode IS NOT NULL OR FinancialApproveDate IS NOT NULL
-           OR BODCode IS NOT NULL OR BODApproveDate IS NOT NULL
-         THEN 1 ELSE 0 END AS HasApprovalTrace,
-    CASE WHEN EXISTS (SELECT 1 FROM dbo.PC_SupplierAnualy a WHERE a.SupplierID = s.SupplierID) THEN 1 ELSE 0 END AS HasAnnualRef,
-    CASE WHEN COL_LENGTH('dbo.PC_Suppliers', 'IsDeleted') IS NULL THEN 0 ELSE ISNULL(IsDeleted, 0) END AS IsDeleted
-FROM dbo.PC_Suppliers s
-WHERE SupplierID = @SupplierID;";
-
-        var inspected = await Helper.QuerySingleOrDefaultAsync(
-            _connectionString,
-            inspectSql,
-            rd => new
-            {
-                Status = rd.IsDBNull(1) ? 0 : Convert.ToInt32(rd[1]),
-                HasApprovalTrace = !rd.IsDBNull(2) && Convert.ToInt32(rd[2]) == 1,
-                HasAnnualRef = !rd.IsDBNull(3) && Convert.ToInt32(rd[3]) == 1,
-                IsDeleted = !rd.IsDBNull(4) && Convert.ToInt32(rd[4]) == 1
-            },
-            cmd => Helper.AddParameter(cmd, "@SupplierID", supplierId, SqlDbType.Int),
-            cancellationToken);
-
-        if (inspected is null || inspected.IsDeleted)
-        {
-            return new SupplierDeleteResultDto { NotFound = true, Reason = "Không tìm thấy nhà cung cấp." };
-        }
-
-        var canHardDelete = inspected.Status == 0 && !inspected.HasApprovalTrace && !inspected.HasAnnualRef;
-        if (canHardDelete)
-        {
-            const string hardDeleteSql = "DELETE FROM dbo.PC_Suppliers WHERE SupplierID=@SupplierID;";
-            await Helper.ExecuteNonQueryAsync(
-                _connectionString,
-                hardDeleteSql,
-                cmd => Helper.AddParameter(cmd, "@SupplierID", supplierId, SqlDbType.Int),
-                cancellationToken);
-
-            return new SupplierDeleteResultDto
-            {
-                Success = true,
-                IsHardDelete = true
-            };
-        }
-
-        var hasDeleteColumns = await HasSupplierDeleteColumnsAsync(cancellationToken);
-        if (!hasDeleteColumns)
-        {
-            return new SupplierDeleteResultDto
-            {
-                Success = false,
-                Reason = "Thiếu cột soft delete (IsDeleted/DeletedBy/DeletedDate). Hãy chạy migration DB."
-            };
-        }
-
-        const string softDeleteSql = @"
-UPDATE dbo.PC_Suppliers
-SET IsDeleted = 1,
-    DeletedBy = @OperatorCode,
-    DeletedDate = GETDATE()
-WHERE SupplierID = @SupplierID
-  AND ISNULL(IsDeleted, 0) = 0;";
-
-        var affected = await Helper.ExecuteNonQueryAsync(
-            _connectionString,
-            softDeleteSql,
-            cmd =>
-            {
-                Helper.AddParameter(cmd, "@SupplierID", supplierId, SqlDbType.Int);
-                Helper.AddParameter(cmd, "@OperatorCode", operatorCode, SqlDbType.NVarChar, 50);
-            },
-            cancellationToken);
-
-        return new SupplierDeleteResultDto
-        {
-            Success = affected > 0,
-            IsSoftDelete = affected > 0,
-            Reason = affected > 0 ? null : "Không thể soft delete nhà cung cấp."
-        };
-    }
-
     private static void BindDetailParams(SqlCommand cmd, SupplierDetailDto detail)
     {
         AddNullable(cmd, "@SupplierCode", detail.SupplierCode);
@@ -545,7 +445,6 @@ WHERE SupplierID = @SupplierID
         Helper.AddParameter(cmd, "@IsNew", detail.IsNew, SqlDbType.Bit);
         AddNullable(cmd, "@CodeOfAcc", detail.CodeOfAcc);
         AddNullable(cmd, "@DeptID", detail.DeptID);
-        AddNullable(cmd, "@Status", detail.Status);
     }
 
     private static void BindSearchParams(SqlCommand cmd, SupplierFilterCriteria criteria, bool isByYear, string? annualYearColumn)
@@ -594,15 +493,4 @@ END;";
     private static string QuoteIdentifier(string identifier)
         => $"[{identifier.Replace("]", "]]")}]";
 
-    private async Task<bool> HasSupplierDeleteColumnsAsync(CancellationToken cancellationToken)
-    {
-        const string sql = @"
-SELECT COUNT(*)
-FROM sys.columns
-WHERE object_id = OBJECT_ID('dbo.PC_Suppliers')
-  AND name IN ('IsDeleted', 'DeletedBy', 'DeletedDate');";
-
-        var result = await Helper.ExecuteScalarAsync(_connectionString, sql, null, cancellationToken);
-        return Convert.ToInt32(result) >= 3;
-    }
 }
