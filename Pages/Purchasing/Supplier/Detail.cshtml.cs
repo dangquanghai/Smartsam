@@ -27,6 +27,12 @@ public class DetailModel : PageModel
     [BindProperty(SupportsGet = true)]
     public string? Msg { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public string? ViewMode { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public int? Year { get; set; }
+
     [BindProperty]
     public SupplierDetailDto Input { get; set; } = new();
 
@@ -39,10 +45,11 @@ public class DetailModel : PageModel
     public string MessageType { get; set; } = "info";
 
     public bool IsEdit => Id.HasValue && Id.Value > 0;
+    public bool IsAnnualView => string.Equals(ViewMode, "byyear", StringComparison.OrdinalIgnoreCase) && Year.HasValue;
     public PagePermissions PagePerm { get; private set; } = new();
-    public bool CanSave => IsEdit ? HasPermission(3) : HasPermission(2);
+    public bool CanSave => !IsAnnualView && (IsEdit ? HasPermission(3) : HasPermission(2));
     public bool IsSubmitted => (Input.Status ?? 0) == 1;
-    public bool CanSubmit => IsEdit && HasPermission(4) && !IsSubmitted;
+    public bool CanSubmit => !IsAnnualView && IsEdit && HasPermission(4) && !IsSubmitted;
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -65,8 +72,16 @@ public class DetailModel : PageModel
             return Page();
         }
 
-        Input = await _supplierService.GetDetailAsync(Id!.Value, cancellationToken) ?? new SupplierDetailDto();
-        Histories = (await _supplierService.GetApprovalHistoryAsync(Id.Value, cancellationToken)).ToList();
+        if (IsAnnualView)
+        {
+            Input = await _supplierService.GetAnnualDetailAsync(Id!.Value, Year!.Value, cancellationToken) ?? new SupplierDetailDto();
+            Histories = (await _supplierService.GetAnnualApprovalHistoryAsync(Id.Value, Year.Value, cancellationToken)).ToList();
+        }
+        else
+        {
+            Input = await _supplierService.GetDetailAsync(Id!.Value, cancellationToken) ?? new SupplierDetailDto();
+            Histories = (await _supplierService.GetApprovalHistoryAsync(Id.Value, cancellationToken)).ToList();
+        }
         if (string.Equals(Msg, "submitted", StringComparison.OrdinalIgnoreCase))
         {
             SetMessage("Supplier submitted successfully.", "success");
@@ -112,6 +127,10 @@ public class DetailModel : PageModel
     public async Task<IActionResult> OnPostSaveAsync(CancellationToken cancellationToken)
     {
         LoadPagePermissions();
+        if (IsAnnualView)
+        {
+            return Forbid();
+        }
         if ((IsEdit && !HasPermission(3)) || (!IsEdit && !HasPermission(2)))
         {
             return Forbid();
@@ -211,6 +230,10 @@ public class DetailModel : PageModel
     public async Task<IActionResult> OnPostSubmitApprovalAsync(CancellationToken cancellationToken)
     {
         LoadPagePermissions();
+        if (IsAnnualView)
+        {
+            return Forbid();
+        }
         if (!HasPermission(4))
         {
             return Forbid();

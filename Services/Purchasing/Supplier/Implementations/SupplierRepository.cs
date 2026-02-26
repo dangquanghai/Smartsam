@@ -371,6 +371,87 @@ SELECT 'BOD approved/dis', BODCode, BODApproveDate FROM dbo.PC_Suppliers WHERE S
             cancellationToken);
     }
 
+    public async Task<SupplierDetailDto?> GetAnnualDetailAsync(int supplierId, int year, CancellationToken cancellationToken = default)
+    {
+        var annualYearColumn = await GetSupplierAnnualYearColumnAsync(cancellationToken);
+        var yearFilter = string.IsNullOrWhiteSpace(annualYearColumn) ? string.Empty : $" AND {QuoteIdentifier(annualYearColumn)}=@Year";
+
+        var sql = $@"
+SELECT SupplierCode,SupplierName,Address,Phone,Mobile,Fax,Contact,[Position],Business,
+       ApprovedDate,[Document],Certificate,Service,Comment,IsNew,CodeOfAcc,DeptID,[Status]
+FROM dbo.PC_SupplierAnualy
+WHERE SupplierID=@ID{yearFilter}";
+
+        return await Helper.QuerySingleOrDefaultAsync(
+            _connectionString,
+            sql,
+            rd => new SupplierDetailDto
+            {
+                SupplierCode = rd[0]?.ToString(),
+                SupplierName = rd[1]?.ToString(),
+                Address = rd[2]?.ToString(),
+                Phone = rd[3]?.ToString(),
+                Mobile = rd[4]?.ToString(),
+                Fax = rd[5]?.ToString(),
+                Contact = rd[6]?.ToString(),
+                Position = rd[7]?.ToString(),
+                Business = rd[8]?.ToString(),
+                ApprovedDate = rd.IsDBNull(9) ? null : rd.GetDateTime(9),
+                Document = rd[10]?.ToString(),
+                Certificate = rd[11]?.ToString(),
+                Service = rd[12]?.ToString(),
+                Comment = rd[13]?.ToString(),
+                IsNew = !rd.IsDBNull(14) && Convert.ToBoolean(rd[14]),
+                CodeOfAcc = rd[15]?.ToString(),
+                DeptID = rd.IsDBNull(16) ? null : Convert.ToInt32(rd[16]),
+                Status = rd.IsDBNull(17) ? null : Convert.ToInt32(rd[17])
+            },
+            cmd =>
+            {
+                Helper.AddParameter(cmd, "@ID", supplierId, SqlDbType.Int);
+                if (!string.IsNullOrWhiteSpace(annualYearColumn))
+                {
+                    Helper.AddParameter(cmd, "@Year", year, SqlDbType.Int);
+                }
+            },
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<SupplierApprovalHistoryDto>> GetAnnualApprovalHistoryAsync(int supplierId, int year, CancellationToken cancellationToken = default)
+    {
+        var annualYearColumn = await GetSupplierAnnualYearColumnAsync(cancellationToken);
+        var yearFilter = string.IsNullOrWhiteSpace(annualYearColumn) ? string.Empty : $" AND {QuoteIdentifier(annualYearColumn)}=@Year";
+
+        var sql = $@"
+SELECT 'Purchasing Officer submitted' AS [Action], PurchaserCode AS [UserCode], PurchaserPreparedDate AS [ActionDate]
+FROM dbo.PC_SupplierAnualy WHERE SupplierID=@ID{yearFilter}
+UNION ALL
+SELECT 'Head Department approved/dis', DepartmentCode, DepartmentApproveDate FROM dbo.PC_SupplierAnualy WHERE SupplierID=@ID{yearFilter}
+UNION ALL
+SELECT 'Head Financial approved/dis', FinancialCode, FinancialApproveDate FROM dbo.PC_SupplierAnualy WHERE SupplierID=@ID{yearFilter}
+UNION ALL
+SELECT 'BOD approved/dis', BODCode, BODApproveDate FROM dbo.PC_SupplierAnualy WHERE SupplierID=@ID{yearFilter}";
+
+        return await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd => new SupplierApprovalHistoryDto
+            {
+                Action = rd[0]?.ToString() ?? string.Empty,
+                UserCode = rd[1]?.ToString() ?? string.Empty,
+                ActionDate = rd.IsDBNull(2) ? null : rd.GetDateTime(2)
+            },
+            cmd =>
+            {
+                Helper.AddParameter(cmd, "@ID", supplierId, SqlDbType.Int);
+                if (!string.IsNullOrWhiteSpace(annualYearColumn))
+                {
+                    Helper.AddParameter(cmd, "@Year", year, SqlDbType.Int);
+                }
+            },
+            cancellationToken);
+    }
+
     public async Task<bool> SupplierCodeExistsAsync(string supplierCode, int? excludeSupplierId = null, CancellationToken cancellationToken = default)
     {
         const string sql = @"

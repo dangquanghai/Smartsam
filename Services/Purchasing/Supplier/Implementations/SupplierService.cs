@@ -33,6 +33,12 @@ public class SupplierService : ISupplierService
     public Task<IReadOnlyList<SupplierApprovalHistoryDto>> GetApprovalHistoryAsync(int supplierId, CancellationToken cancellationToken = default)
         => _repository.GetApprovalHistoryAsync(supplierId, cancellationToken);
 
+    public Task<SupplierDetailDto?> GetAnnualDetailAsync(int supplierId, int year, CancellationToken cancellationToken = default)
+        => _repository.GetAnnualDetailAsync(supplierId, year, cancellationToken);
+
+    public Task<IReadOnlyList<SupplierApprovalHistoryDto>> GetAnnualApprovalHistoryAsync(int supplierId, int year, CancellationToken cancellationToken = default)
+        => _repository.GetAnnualApprovalHistoryAsync(supplierId, year, cancellationToken);
+
     public Task<bool> SupplierCodeExistsAsync(string supplierCode, int? excludeSupplierId = null, CancellationToken cancellationToken = default)
         => _repository.SupplierCodeExistsAsync(supplierCode, excludeSupplierId, cancellationToken);
 

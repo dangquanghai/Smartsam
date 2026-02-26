@@ -115,7 +115,7 @@
                             {
                                 <button type="button" class="btn btn-warning btn-sm px-4 mr-2 mb-1" disabled title="Already submitted"><i class="fas fa-paper-plane"></i> Submit</button>
                             }
-                            <a asp-page="./Index" class="btn btn-default btn-sm px-4 mb-1"><i class="fas fa-arrow-left"></i> Back to List</a>
+                            <a asp-page="./Index" asp-route-ViewMode="@Model.ViewMode" asp-route-Year="@Model.Year" class="btn btn-default btn-sm px-4 mb-1"><i class="fas fa-arrow-left"></i> Back to List</a>
                         </div>
                     </div>
                 </div>

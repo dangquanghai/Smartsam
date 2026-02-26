@@ -11,6 +11,8 @@ public interface ISupplierService
     Task CopyCurrentSuppliersToYearAsync(int copyYear, IReadOnlyCollection<int> supplierIds, CancellationToken cancellationToken = default);
     Task<SupplierDetailDto?> GetDetailAsync(int supplierId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<SupplierApprovalHistoryDto>> GetApprovalHistoryAsync(int supplierId, CancellationToken cancellationToken = default);
+    Task<SupplierDetailDto?> GetAnnualDetailAsync(int supplierId, int year, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<SupplierApprovalHistoryDto>> GetAnnualApprovalHistoryAsync(int supplierId, int year, CancellationToken cancellationToken = default);
     Task<bool> SupplierCodeExistsAsync(string supplierCode, int? excludeSupplierId = null, CancellationToken cancellationToken = default);
     Task<string> GetSuggestedSupplierCodeAsync(CancellationToken cancellationToken = default);
     Task<int> SaveAsync(int? supplierId, SupplierDetailDto detail, string operatorCode, CancellationToken cancellationToken = default);
