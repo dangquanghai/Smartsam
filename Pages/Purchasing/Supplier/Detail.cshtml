@@ -4,6 +4,7 @@
     ViewData["Title"] = "Supplier Detail";
     var messageType = (Model.MessageType ?? "info").ToLowerInvariant();
     var useInlineAlert = !string.IsNullOrWhiteSpace(Model.Message) && (messageType == "warning" || messageType == "error");
+    var lockGeneralInfo = !Model.CanSave;
 }
 
 <section class="content">
@@ -29,34 +30,20 @@
                                     @Model.Message
                                 </div>
                             }
+                            @{
+                                var currentStatusId = Model.Input.Status ?? 0;
+                                var statusText = Model.Statuses.FirstOrDefault(x => x.Value == currentStatusId.ToString())?.Text
+                                                 ?? (currentStatusId == 0 ? "Draft" : currentStatusId.ToString());
+                            }
+                            <fieldset disabled="@(lockGeneralInfo ? "disabled" : null)">
                             <div class="row no-gutters align-items-center mb-2">
-                                <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Supplier Code</label></div>
-                                <div class="col-4">
+                                <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Supplier Code*</label></div>
+                                <div class="col-3">
                                     <input asp-for="Input.SupplierCode" class="form-control form-control-sm" />
                                     <span asp-validation-for="Input.SupplierCode" class="text-danger small"></span>
                                 </div>
-                                <div class="col-2 text-left pl-3 pr-2"><label class="col-form-label-sm mb-0">Status</label></div>
-                                <div class="col-4">
-                                    @{
-                                        var currentStatusId = Model.Input.Status ?? 0;
-                                        var statusText = Model.Statuses.FirstOrDefault(x => x.Value == currentStatusId.ToString())?.Text
-                                                         ?? (currentStatusId == 0 ? "Draft" : currentStatusId.ToString());
-                                    }
-                                    <input type="text" class="form-control form-control-sm" value="@statusText" readonly />
-                                </div>
-                            </div>
-
-                            <div class="row no-gutters align-items-center mb-2">
-                                <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Supplier Name</label></div>
-                                <div class="col-8"><input asp-for="Input.SupplierName" class="form-control form-control-sm" /></div>
-                                <div class="col-2 pl-3"><div class="custom-control custom-checkbox"><input asp-for="Input.IsNew" class="custom-control-input" /><label asp-for="Input.IsNew" class="custom-control-label">Is New</label></div></div>
-                            </div>
-
-                            <div class="row no-gutters align-items-center mb-2">
-                                <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Department</label></div>
-                                <div class="col-4"><select asp-for="Input.DeptID" asp-items="Model.Departments" class="form-control form-control-sm"></select></div>
-                                <div class="col-2 text-left pl-3 pr-2"><label class="col-form-label-sm mb-0">Approved Date</label></div>
-                                <div class="col-4"><input asp-for="Input.ApprovedDate" class="form-control form-control-sm" type="date" /></div>
+                                <div class="col-2 text-left pl-3 pr-2"><label class="col-form-label-sm mb-0">Supplier Name*</label></div>
+                                <div class="col-5"><input asp-for="Input.SupplierName" class="form-control form-control-sm" /></div>
                             </div>
 
                             <div class="row no-gutters align-items-start mb-2">
@@ -66,40 +53,64 @@
 
                             <div class="row no-gutters align-items-center mb-2">
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Phone</label></div>
-                                <div class="col-2"><input asp-for="Input.Phone" class="form-control form-control-sm" /></div>
-                                <div class="col-2 text-left pl-3 pr-2"><label class="col-form-label-sm mb-0">Mobile</label></div>
-                                <div class="col-2"><input asp-for="Input.Mobile" class="form-control form-control-sm" /></div>
-                                <div class="col-1 text-left pl-3 pr-2"><label class="col-form-label-sm mb-0">Fax</label></div>
+                                <div class="col-3"><input asp-for="Input.Phone" class="form-control form-control-sm" /></div>
+                                <div class="col-1 text-left px-1"><label class="col-form-label-sm mb-0">Fax</label></div>
                                 <div class="col-3"><input asp-for="Input.Fax" class="form-control form-control-sm" /></div>
+                                <div class="col-3"></div>
                             </div>
 
                             <div class="row no-gutters align-items-center mb-2">
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Contact Person</label></div>
-                                <div class="col-4"><input asp-for="Input.Contact" class="form-control form-control-sm" /></div>
-                                <div class="col-2 text-left pl-3 pr-2"><label class="col-form-label-sm mb-0">Position</label></div>
-                                <div class="col-4"><input asp-for="Input.Position" class="form-control form-control-sm" /></div>
+                                <div class="col-3"><input asp-for="Input.Contact" class="form-control form-control-sm" /></div>
+                                <div class="col-1 text-left px-1"><label class="col-form-label-sm mb-0">Position</label></div>
+                                <div class="col-3"><input asp-for="Input.Position" class="form-control form-control-sm" /></div>
+                                <div class="col-1 text-left px-1"><label class="col-form-label-sm mb-0">Mobile</label></div>
+                                <div class="col-2"><input asp-for="Input.Mobile" class="form-control form-control-sm" /></div>
                             </div>
 
                             <div class="row no-gutters align-items-center mb-2">
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Business</label></div>
-                                <div class="col-4"><input asp-for="Input.Business" class="form-control form-control-sm" /></div>
-                                <div class="col-2 text-left pl-3 pr-2"><label class="col-form-label-sm mb-0">Service</label></div>
-                                <div class="col-4"><input asp-for="Input.Service" class="form-control form-control-sm" /></div>
+                                <div class="col-10"><input asp-for="Input.Business" class="form-control form-control-sm" /></div>
                             </div>
 
                             <div class="row no-gutters align-items-center mb-2">
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Document</label></div>
-                                <div class="col-4"><input asp-for="Input.Document" class="form-control form-control-sm" /></div>
+                                <div class="col-1">
+                                    <div class="pt-1">
+                                        <input asp-for="Input.Document" type="checkbox" class="align-middle" style="width:16px;height:16px;@(Model.CanSave ? "cursor:pointer;" : "")" />
+                                    </div>
+                                </div>
                                 <div class="col-2 text-left pl-3 pr-2"><label class="col-form-label-sm mb-0">Certificate</label></div>
-                                <div class="col-4"><input asp-for="Input.Certificate" class="form-control form-control-sm" /></div>
+                                <div class="col-3"><input asp-for="Input.Certificate" class="form-control form-control-sm" /></div>
+                                <div class="col-1 text-left pl-3 pr-2"><label class="col-form-label-sm mb-0">Dept*</label></div>
+                                <div class="col-3"><select asp-for="Input.DeptID" asp-items="Model.Departments" class="form-control form-control-sm"></select></div>
+                            </div>
+
+                            <div class="row no-gutters align-items-center mb-2">
+                                <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Service</label></div>
+                                <div class="col-10"><input asp-for="Input.Service" class="form-control form-control-sm" /></div>
+                            </div>
+
+                            <div class="row no-gutters align-items-center mb-2">
+                                <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Comment</label></div>
+                                <div class="col-10"><input asp-for="Input.Comment" class="form-control form-control-sm" /></div>
                             </div>
 
                             <div class="row no-gutters align-items-center mb-0">
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">CodeOfAcc</label></div>
-                                <div class="col-4"><input asp-for="Input.CodeOfAcc" class="form-control form-control-sm" /></div>
-                                <div class="col-2 text-left pl-3 pr-2"><label class="col-form-label-sm mb-0">Comment</label></div>
-                                <div class="col-4"><input asp-for="Input.Comment" class="form-control form-control-sm" /></div>
+                                <div class="col-3"><input asp-for="Input.CodeOfAcc" class="form-control form-control-sm" /></div>
+                                <div class="col-2 text-left pl-3 pr-2"><label class="col-form-label-sm mb-0">IsNew</label></div>
+                                <div class="col-1">
+                                    <div class="pt-1">
+                                        <input asp-for="Input.IsNew" type="checkbox" class="align-middle" style="width:16px;height:16px;@(Model.CanSave ? "cursor:pointer;" : "")" />
+                                    </div>
+                                </div>
+                                <div class="col-1 text-left pl-3 pr-2"><label class="col-form-label-sm mb-0">Status</label></div>
+                                <div class="col-3">
+                                    <input type="text" class="form-control form-control-sm" value="@statusText" readonly />
+                                </div>
                             </div>
+                            </fieldset>
                         </div>
 
                         <div class="card-footer py-2">

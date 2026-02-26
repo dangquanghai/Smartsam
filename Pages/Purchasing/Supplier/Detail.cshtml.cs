@@ -44,6 +44,12 @@ public class DetailModel : PageModel
     public string? Message { get; set; }
     public string MessageType { get; set; } = "info";
 
+    [TempData]
+    public string? FlashMessage { get; set; }
+
+    [TempData]
+    public string? FlashMessageType { get; set; }
+
     public bool IsEdit => Id.HasValue && Id.Value > 0;
     public bool IsAnnualView => string.Equals(ViewMode, "byyear", StringComparison.OrdinalIgnoreCase) && Year.HasValue;
     public PagePermissions PagePerm { get; private set; } = new();
@@ -65,6 +71,12 @@ public class DetailModel : PageModel
         }
 
         await LoadDropdownsAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(Message) && !string.IsNullOrWhiteSpace(FlashMessage))
+        {
+            Message = FlashMessage;
+            MessageType = string.IsNullOrWhiteSpace(FlashMessageType) ? "info" : FlashMessageType!;
+        }
 
         if (!IsEdit)
         {
@@ -89,6 +101,10 @@ public class DetailModel : PageModel
         else if (string.Equals(Msg, "created", StringComparison.OrdinalIgnoreCase))
         {
             SetMessage("Supplier created successfully.", "success");
+        }
+        else if (string.Equals(Msg, "saved", StringComparison.OrdinalIgnoreCase))
+        {
+            SetMessage("Saved successfully.", "success");
         }
         return Page();
     }
@@ -168,6 +184,7 @@ public class DetailModel : PageModel
         {
             // Preserve current workflow status. Save action must not change status directly.
             Input.Status = currentDetail?.Status;
+            Input.ApprovedDate = currentDetail?.ApprovedDate;
         }
 
         var operatorCode = User.Identity?.Name ?? "SYSTEM";
@@ -221,10 +238,8 @@ public class DetailModel : PageModel
             return RedirectToPage("./Detail", new { id = savedId, msg = "created" });
         }
 
-        SetMessage("Saved successfully.", "success");
-        Input = await _supplierService.GetDetailAsync(savedId, cancellationToken) ?? new SupplierDetailDto();
-        Histories = (await _supplierService.GetApprovalHistoryAsync(savedId, cancellationToken)).ToList();
-        return Page();
+        SetFlashMessage("Saved successfully.", "success");
+        return RedirectToPage("./Detail", new { id = savedId, msg = "saved", viewMode = ViewMode, year = Year });
     }
 
     public async Task<IActionResult> OnPostSubmitApprovalAsync(CancellationToken cancellationToken)
@@ -298,6 +313,12 @@ public class DetailModel : PageModel
     }
 
     private bool HasPermission(int permissionNo) => PagePerm.HasPermission(permissionNo);
+
+    private void SetFlashMessage(string message, string type = "info")
+    {
+        FlashMessage = message;
+        FlashMessageType = type;
+    }
 
     private void SetMessage(string message, string type = "info")
     {

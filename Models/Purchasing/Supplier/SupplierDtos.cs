@@ -64,7 +64,7 @@ public class SupplierDetailDto
     public string? Position { get; set; }
     public string? Business { get; set; }
     public DateTime? ApprovedDate { get; set; }
-    public string? Document { get; set; }
+    public bool Document { get; set; }
     public string? Certificate { get; set; }
     public string? Service { get; set; }
     public string? Comment { get; set; }
