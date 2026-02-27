@@ -39,6 +39,46 @@
     line-height: 1.2;
 }
 
+.module-action-bar .btn {
+    min-width: 110px;
+}
+
+.module-action-bar .btn-action-add {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: #fff;
+}
+
+.module-action-bar .btn-action-copy {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: #fff;
+}
+
+.module-action-bar .btn-action-submit {
+    background-color: #343a40;
+    border-color: #343a40;
+    color: #fff;
+}
+
+.module-action-bar .btn-action-export,
+.module-action-bar .btn-action-save {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: #fff;
+}
+
+.module-action-bar .btn-action-close {
+    background-color: #f8f9fa;
+    border-color: #ced4da;
+    color: #495057;
+}
+
+.module-action-bar .btn:hover,
+.module-action-bar .btn:focus {
+    color: inherit;
+}
+
 .supplier-table-header {
     display: flex;
     align-items: center;

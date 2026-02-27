@@ -205,21 +205,21 @@
                 </div>
 
                 <div class="card card-outline card-primary">
-                    <div class="card-footer p-2 text-center">
+                    <div class="card-footer p-2 text-center module-action-bar">
                         @if (Model.PagePerm.HasPermission(2))
                         {
-                            <a id="addSupplierBtn" asp-page="/Purchasing/Supplier/Detail" class="btn btn-success btn-sm mx-1 my-1"><i class="fas fa-plus"></i> Add</a>
+                            <a id="addSupplierBtn" asp-page="/Purchasing/Supplier/Detail" class="btn btn-sm btn-action-add mx-1 my-1"><i class="fas fa-plus"></i> Add</a>
                         }
                         @if (Model.PagePerm.HasPermission(5))
                         {
-                            <button id="copySupplierBtn" type="button" class="btn btn-secondary btn-sm mx-1 my-1" disabled data-toggle="modal" data-target="#copyYearModal"><i class="fas fa-copy"></i> Copy</button>
+                            <button id="copySupplierBtn" type="button" class="btn btn-sm btn-action-copy mx-1 my-1" disabled data-toggle="modal" data-target="#copyYearModal"><i class="fas fa-copy"></i> Copy</button>
                         }
                         @if (Model.PagePerm.HasPermission(4))
                         {
                             <form id="submitSupplierForm" method="post" asp-page-handler="Submit" class="d-inline">
                                 <input type="hidden" asp-for="SelectedSupplierId" id="selectedSupplierIdInput" />
                                 <input type="hidden" asp-for="SelectedSupplierIdsCsv" id="selectedSupplierIdsCsvInput" />
-                                <button id="submitSupplierBtn" type="submit" class="btn btn-dark btn-sm mx-1 my-1" disabled><i class="fas fa-paper-plane"></i> Submit</button>
+                                <button id="submitSupplierBtn" type="submit" class="btn btn-sm btn-action-submit mx-1 my-1" disabled><i class="fas fa-paper-plane"></i> Submit</button>
                             </form>
                         }
                         @if (Model.PagePerm.HasPermission(1))
@@ -234,9 +234,9 @@
                                asp-route-Contact="@Model.Contact"
                                asp-route-StatusId="@Model.StatusId"
                                asp-route-IsNew="@Model.IsNew"
-                               class="btn btn-primary btn-sm mx-1 my-1"><i class="fas fa-file-export"></i> Excel</a>
+                               class="btn btn-sm btn-action-export mx-1 my-1"><i class="fas fa-file-export"></i> Excel</a>
                         }
-                        <a href="/Index" class="btn btn-default btn-sm mx-1 my-1"><i class="fas fa-times"></i> Close</a>
+                        <a href="/Index" class="btn btn-sm btn-action-close mx-1 my-1"><i class="fas fa-times"></i> Close</a>
                     </div>
                 </div>
             </div>
@@ -468,8 +468,7 @@
                 if (copySelectedSupplierIdsCsvInput) copySelectedSupplierIdsCsvInput.value = selectedIds.join(",");
 
                 const hasAnySelected = count > 0;
-                const hasSubmittedSelected = selectedRows.some((row) => isSubmitted(row));
-                setSubmitButtonState(submitBtn, !hasAnySelected || hasSubmittedSelected);
+                setSubmitButtonState(submitBtn, !hasAnySelected);
 
                 const isMultiSelectMode = count > 1;
                 setUiDisabled(addBtn, isMultiSelectMode);

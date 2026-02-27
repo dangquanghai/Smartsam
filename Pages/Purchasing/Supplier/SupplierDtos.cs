@@ -1,3 +1,6 @@
+using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+
 namespace SmartSam.Pages.Purchasing.Supplier;
 
 public class SupplierLookupOptionDto
@@ -54,23 +57,58 @@ public class SupplierListRowDto
 
 public class SupplierDetailDto
 {
+    [Required(ErrorMessage = "Supplier code is required.")]
+    [StringLength(10, ErrorMessage = "Supplier code must be at most 10 characters.")]
     public string? SupplierCode { get; set; }
+
+    [Required(ErrorMessage = "Supplier name is required.")]
+    [StringLength(254, ErrorMessage = "Supplier name must be at most 254 characters.")]
     public string? SupplierName { get; set; }
+
+    [StringLength(254, ErrorMessage = "Address must be at most 254 characters.")]
     public string? Address { get; set; }
+
+    [StringLength(20, ErrorMessage = "Phone must be at most 20 characters.")]
     public string? Phone { get; set; }
+
+    [StringLength(20, ErrorMessage = "Mobile must be at most 20 characters.")]
     public string? Mobile { get; set; }
+
+    [StringLength(20, ErrorMessage = "Fax must be at most 20 characters.")]
     public string? Fax { get; set; }
+
+    [StringLength(40, ErrorMessage = "Contact person must be at most 40 characters.")]
     public string? Contact { get; set; }
+
+    [StringLength(40, ErrorMessage = "Position must be at most 40 characters.")]
     public string? Position { get; set; }
+
+    [StringLength(1000, ErrorMessage = "Business must be at most 1000 characters.")]
     public string? Business { get; set; }
+
+    [BindNever]
     public DateTime? ApprovedDate { get; set; }
+
     public bool Document { get; set; }
+
+    [StringLength(100, ErrorMessage = "Certificate must be at most 100 characters.")]
     public string? Certificate { get; set; }
+
+    [StringLength(1000, ErrorMessage = "Service must be at most 1000 characters.")]
     public string? Service { get; set; }
+
+    [StringLength(1000, ErrorMessage = "Comment must be at most 1000 characters.")]
     public string? Comment { get; set; }
+
     public bool IsNew { get; set; }
+
+    [StringLength(20, ErrorMessage = "CodeOfAcc must be at most 20 characters.")]
     public string? CodeOfAcc { get; set; }
+
+    [Required(ErrorMessage = "Department is required.")]
     public int? DeptID { get; set; }
+
+    [BindNever]
     public int? Status { get; set; }
 }
 

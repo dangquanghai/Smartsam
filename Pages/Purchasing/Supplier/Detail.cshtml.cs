@@ -182,7 +182,6 @@ public class DetailModel : PageModel
         {
             // Preserve current workflow status. Save action must not change status directly.
             Input.Status = currentDetail?.Status;
-            Input.ApprovedDate = currentDetail?.ApprovedDate;
         }
 
         var operatorCode = User.Identity?.Name ?? "SYSTEM";
