@@ -110,9 +110,37 @@
             <!-- RESULT + ACTION (RIGHT) -->
             <div class="col-md-10" id="supplierResultPanelContainer">
                 <div class="card card-primary">
-                    <div class="card-header">
-                        <h3 class="card-title">Suppliers</h3>
-                        <span class="badge badge-light ml-2 supplier-record-badge" id="total-records-badge">@Model.TotalRecords records</span>
+                    <div class="card-header supplier-table-header">
+                        <div class="supplier-table-header-left">
+                            <h3 class="card-title">Suppliers</h3>
+                            <span class="badge badge-light ml-2 supplier-record-badge" id="total-records-badge">@Model.TotalRecords records</span>
+                        </div>
+                        <div class="supplier-table-header-right app-paging-white">
+                            <small class="supplier-table-paging-info">
+                                @if (Model.TotalRecords == 0)
+                                {
+                                    <text>Showing 0 to 0 of 0 entries</text>
+                                }
+                                else
+                                {
+                                    <text>Showing @pageStart to @pageEnd of @Model.TotalRecords entries</text>
+                                }
+                            </small>
+                            <ul class="pagination pagination-sm m-0">
+                                <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+                                    <a class="page-link supplier-pager-link" href="@(Model.HasPreviousPage ? supplierPageUrl(currentPage - 1) : "#")" tabindex="@(Model.HasPreviousPage ? "0" : "-1")">Prev</a>
+                                </li>
+                                @for (var p = pagerFrom; p <= pagerTo; p++)
+                                {
+                                    <li class="page-item @(p == currentPage ? "active" : "")">
+                                        <a class="page-link supplier-pager-link" href="@supplierPageUrl(p)">@p</a>
+                                    </li>
+                                }
+                                <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+                                    <a class="page-link supplier-pager-link" href="@(Model.HasNextPage ? supplierPageUrl(currentPage + 1) : "#")" tabindex="@(Model.HasNextPage ? "0" : "-1")">Next</a>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
 
                     <div class="card-body p-0">
@@ -173,34 +201,6 @@
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-                    <div class="card-footer clearfix py-2">
-                        <div class="float-left">
-                            <small class="text-muted">
-                                @if (Model.TotalRecords == 0)
-                                {
-                                    <text>Showing 0 to 0 of 0 entries</text>
-                                }
-                                else
-                                {
-                                    <text>Showing @pageStart to @pageEnd of @Model.TotalRecords entries</text>
-                                }
-                            </small>
-                        </div>
-                        <ul class="pagination pagination-sm m-0 float-right">
-                            <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
-                                        <a class="page-link supplier-pager-link" href="@(Model.HasPreviousPage ? supplierPageUrl(currentPage - 1) : "#")" tabindex="@(Model.HasPreviousPage ? "0" : "-1")">Prev</a>
-                            </li>
-                            @for (var p = pagerFrom; p <= pagerTo; p++)
-                            {
-                                <li class="page-item @(p == currentPage ? "active" : "")">
-                                    <a class="page-link supplier-pager-link" href="@supplierPageUrl(p)">@p</a>
-                                </li>
-                            }
-                            <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
-                                <a class="page-link supplier-pager-link" href="@(Model.HasNextPage ? supplierPageUrl(currentPage + 1) : "#")" tabindex="@(Model.HasNextPage ? "0" : "-1")">Next</a>
-                            </li>
-                        </ul>
                     </div>
                 </div>
 

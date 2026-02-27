@@ -1,4 +1,4 @@
-namespace SmartSam.Models.Purchasing.Supplier;
+namespace SmartSam.Pages.Purchasing.Supplier;
 
 public class SupplierLookupOptionDto
 {
@@ -77,6 +77,6 @@ public class SupplierDetailDto
 public class SupplierApprovalHistoryDto
 {
     public string Action { get; set; } = string.Empty;
-    public string UserCode { get; set; } = string.Empty;
+    public string UserName { get; set; } = string.Empty;
     public DateTime? ActionDate { get; set; }
 }

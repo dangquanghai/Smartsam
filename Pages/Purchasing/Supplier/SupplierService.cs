@@ -1,47 +1,61 @@
 using System.Data;
 using Microsoft.Data.SqlClient;
 using SmartSam.Helpers;
-using SmartSam.Models.Purchasing.Supplier;
-using SmartSam.Services.Purchasing.Supplier.Abstractions;
 
-namespace SmartSam.Services.Purchasing.Supplier.Implementations;
+namespace SmartSam.Pages.Purchasing.Supplier;
 
-public class SupplierRepository : ISupplierRepository
+public class SupplierService
 {
+    private readonly IConfiguration _configuration;
     private readonly string _connectionString;
 
-    public SupplierRepository(IConfiguration configuration)
+    public SupplierService(IConfiguration configuration)
     {
+        _configuration = configuration;
         _connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Missing connection string: DefaultConnection");
     }
 
-    public async Task<IReadOnlyList<SupplierLookupOptionDto>> GetDepartmentsAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<SupplierLookupOptionDto>> GetDepartmentsAsync(CancellationToken cancellationToken = default)
     {
-        const string sql = "SELECT DeptID, DeptCode FROM dbo.MS_Department ORDER BY DeptCode";
-        return await Helper.QueryAsync(
-            _connectionString,
-            sql,
-            rd => new SupplierLookupOptionDto
-            {
-                Id = rd.IsDBNull(0) ? 0 : rd.GetInt32(0),
-                CodeOrName = rd[1]?.ToString() ?? string.Empty
-            },
-            cancellationToken: cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var data = Helper.LoadLookup(
+            _configuration,
+            "MS_Department",
+            "DeptID",
+            "DeptCode",
+            keyword: null,
+            top: 1000);
+
+        var result = data.Select(x => new SupplierLookupOptionDto
+        {
+            Id = Convert.ToInt32(x.Id),
+            CodeOrName = x.Text
+        }).ToList();
+
+        return Task.FromResult<IReadOnlyList<SupplierLookupOptionDto>>(result);
     }
 
-    public async Task<IReadOnlyList<SupplierLookupOptionDto>> GetStatusesAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<SupplierLookupOptionDto>> GetStatusesAsync(CancellationToken cancellationToken = default)
     {
-        const string sql = "SELECT SupplierStatusID, SupplierStatusName FROM dbo.PC_SupplierStatus ORDER BY SupplierStatusID";
-        return await Helper.QueryAsync(
-            _connectionString,
-            sql,
-            rd => new SupplierLookupOptionDto
-            {
-                Id = rd.IsDBNull(0) ? 0 : rd.GetInt32(0),
-                CodeOrName = rd[1]?.ToString() ?? string.Empty
-            },
-            cancellationToken: cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var data = Helper.LoadLookup(
+            _configuration,
+            "PC_SupplierStatus",
+            "SupplierStatusID",
+            "SupplierStatusName",
+            keyword: null,
+            top: 100);
+
+        var result = data.Select(x => new SupplierLookupOptionDto
+        {
+            Id = Convert.ToInt32(x.Id),
+            CodeOrName = x.Text
+        }).ToList();
+
+        return Task.FromResult<IReadOnlyList<SupplierLookupOptionDto>>(result);
     }
 
     public async Task<IReadOnlyList<SupplierListRowDto>> SearchAsync(SupplierFilterCriteria criteria, CancellationToken cancellationToken = default)
@@ -349,14 +363,23 @@ WHERE SupplierID=@ID";
     public async Task<IReadOnlyList<SupplierApprovalHistoryDto>> GetApprovalHistoryAsync(int supplierId, CancellationToken cancellationToken = default)
     {
         const string sql = @"
-SELECT 'Purchasing Officer submitted' AS [Action], PurchaserCode AS [UserCode], PurchaserPreparedDate AS [ActionDate]
-FROM dbo.PC_Suppliers WHERE SupplierID=@ID
-UNION ALL
-SELECT 'Head Department approved/dis', DepartmentCode, DepartmentApproveDate FROM dbo.PC_Suppliers WHERE SupplierID=@ID
-UNION ALL
-SELECT 'Head Financial approved/dis', FinancialCode, FinancialApproveDate FROM dbo.PC_Suppliers WHERE SupplierID=@ID
-UNION ALL
-SELECT 'BOD approved/dis', BODCode, BODApproveDate FROM dbo.PC_Suppliers WHERE SupplierID=@ID";
+                            WITH ApprovalHistory AS
+                            (
+                                SELECT 'Purchasing Officer submitted' AS [Action], PurchaserCode AS [UserCode], PurchaserPreparedDate AS [ActionDate]
+                                FROM dbo.PC_Suppliers WHERE SupplierID=@ID
+                                UNION ALL
+                                SELECT 'Head Department approved/dis', DepartmentCode, DepartmentApproveDate FROM dbo.PC_Suppliers WHERE SupplierID=@ID
+                                UNION ALL
+                                SELECT 'Head Financial approved/dis', FinancialCode, FinancialApproveDate FROM dbo.PC_Suppliers WHERE SupplierID=@ID
+                                UNION ALL
+                                SELECT 'BOD approved/dis', BODCode, BODApproveDate FROM dbo.PC_Suppliers WHERE SupplierID=@ID
+                            )
+                            SELECT
+                                h.[Action],
+                                COALESCE(NULLIF(e.EmployeeName, ''), h.[UserCode], '') AS [UserName],
+                                h.[ActionDate]
+                            FROM ApprovalHistory h
+                            LEFT JOIN dbo.MS_Employee e ON e.EmployeeCode = h.[UserCode]";
 
         return await Helper.QueryAsync(
             _connectionString,
@@ -364,7 +387,7 @@ SELECT 'BOD approved/dis', BODCode, BODApproveDate FROM dbo.PC_Suppliers WHERE S
             rd => new SupplierApprovalHistoryDto
             {
                 Action = rd[0]?.ToString() ?? string.Empty,
-                UserCode = rd[1]?.ToString() ?? string.Empty,
+                UserName = rd[1]?.ToString() ?? string.Empty,
                 ActionDate = rd.IsDBNull(2) ? null : rd.GetDateTime(2)
             },
             cmd => Helper.AddParameter(cmd, "@ID", supplierId, SqlDbType.Int),
@@ -423,14 +446,23 @@ WHERE SupplierID=@ID{yearFilter}";
         var yearFilter = string.IsNullOrWhiteSpace(annualYearColumn) ? string.Empty : $" AND {QuoteIdentifier(annualYearColumn)}=@Year";
 
         var sql = $@"
-SELECT 'Purchasing Officer submitted' AS [Action], PurchaserCode AS [UserCode], PurchaserPreparedDate AS [ActionDate]
-FROM dbo.PC_SupplierAnualy WHERE SupplierID=@ID{yearFilter}
-UNION ALL
-SELECT 'Head Department approved/dis', DepartmentCode, DepartmentApproveDate FROM dbo.PC_SupplierAnualy WHERE SupplierID=@ID{yearFilter}
-UNION ALL
-SELECT 'Head Financial approved/dis', FinancialCode, FinancialApproveDate FROM dbo.PC_SupplierAnualy WHERE SupplierID=@ID{yearFilter}
-UNION ALL
-SELECT 'BOD approved/dis', BODCode, BODApproveDate FROM dbo.PC_SupplierAnualy WHERE SupplierID=@ID{yearFilter}";
+WITH ApprovalHistory AS
+(
+    SELECT 'Purchasing Officer submitted' AS [Action], PurchaserCode AS [UserCode], PurchaserPreparedDate AS [ActionDate]
+    FROM dbo.PC_SupplierAnualy WHERE SupplierID=@ID{yearFilter}
+    UNION ALL
+    SELECT 'Head Department approved/dis', DepartmentCode, DepartmentApproveDate FROM dbo.PC_SupplierAnualy WHERE SupplierID=@ID{yearFilter}
+    UNION ALL
+    SELECT 'Head Financial approved/dis', FinancialCode, FinancialApproveDate FROM dbo.PC_SupplierAnualy WHERE SupplierID=@ID{yearFilter}
+    UNION ALL
+    SELECT 'BOD approved/dis', BODCode, BODApproveDate FROM dbo.PC_SupplierAnualy WHERE SupplierID=@ID{yearFilter}
+)
+SELECT
+    h.[Action],
+    COALESCE(NULLIF(e.EmployeeName, ''), h.[UserCode], '') AS [UserName],
+    h.[ActionDate]
+FROM ApprovalHistory h
+LEFT JOIN dbo.MS_Employee e ON e.EmployeeCode = h.[UserCode]";
 
         return await Helper.QueryAsync(
             _connectionString,
@@ -438,7 +470,7 @@ SELECT 'BOD approved/dis', BODCode, BODApproveDate FROM dbo.PC_SupplierAnualy WH
             rd => new SupplierApprovalHistoryDto
             {
                 Action = rd[0]?.ToString() ?? string.Empty,
-                UserCode = rd[1]?.ToString() ?? string.Empty,
+                UserName = rd[1]?.ToString() ?? string.Empty,
                 ActionDate = rd.IsDBNull(2) ? null : rd.GetDateTime(2)
             },
             cmd =>
@@ -499,7 +531,56 @@ WHERE LEFT(UPPER(LTRIM(RTRIM(SupplierCode))), 2) = 'SP'
         return $"SP{nextNo.ToString().PadLeft(width, '0')}";
     }
 
-    public async Task<int> CreateAsync(SupplierDetailDto detail, string operatorCode, CancellationToken cancellationToken = default)
+    public async Task<int> SaveAsync(int? supplierId, SupplierDetailDto detail, string operatorCode, CancellationToken cancellationToken = default)
+    {
+        var supplierCode = (detail.SupplierCode ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(supplierCode))
+        {
+            throw new InvalidOperationException("Supplier code is required.");
+        }
+
+        var exists = await SupplierCodeExistsAsync(
+            supplierCode,
+            supplierId.HasValue && supplierId.Value > 0 ? supplierId.Value : null,
+            cancellationToken);
+
+        if (exists)
+        {
+            throw new InvalidOperationException("Supplier code already exists.");
+        }
+
+        detail.SupplierCode = supplierCode;
+
+        if (supplierId.HasValue && supplierId.Value > 0)
+        {
+            await UpdateAsync(supplierId.Value, detail, cancellationToken);
+            return supplierId.Value;
+        }
+
+        return await CreateAsync(detail, operatorCode, cancellationToken);
+    }
+
+    public async Task SubmitApprovalAsync(int supplierId, string operatorCode, CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+UPDATE dbo.PC_Suppliers
+SET [Status]=1,
+    PurchaserCode=@OperatorCode,
+    PurchaserPreparedDate=GETDATE()
+WHERE SupplierID=@SupplierID";
+
+        await Helper.ExecuteNonQueryAsync(
+            _connectionString,
+            sql,
+            cmd =>
+            {
+                Helper.AddParameter(cmd, "@SupplierID", supplierId, SqlDbType.Int);
+                Helper.AddParameter(cmd, "@OperatorCode", operatorCode, SqlDbType.NVarChar, 50);
+            },
+            cancellationToken);
+    }
+
+    private async Task<int> CreateAsync(SupplierDetailDto detail, string operatorCode, CancellationToken cancellationToken = default)
     {
         const string sql = @"
 INSERT INTO dbo.PC_Suppliers
@@ -528,7 +609,7 @@ SELECT CAST(SCOPE_IDENTITY() as int);";
         return Convert.ToInt32(result);
     }
 
-    public async Task UpdateAsync(int supplierId, SupplierDetailDto detail, CancellationToken cancellationToken = default)
+    private async Task UpdateAsync(int supplierId, SupplierDetailDto detail, CancellationToken cancellationToken = default)
     {
         const string sql = @"
 UPDATE dbo.PC_Suppliers
@@ -558,26 +639,6 @@ WHERE SupplierID=@SupplierID";
             {
                 BindDetailParams(cmd, detail);
                 Helper.AddParameter(cmd, "@SupplierID", supplierId, SqlDbType.Int);
-            },
-            cancellationToken);
-    }
-
-    public async Task SubmitApprovalAsync(int supplierId, string operatorCode, CancellationToken cancellationToken = default)
-    {
-        const string sql = @"
-UPDATE dbo.PC_Suppliers
-SET [Status]=1,
-    PurchaserCode=@OperatorCode,
-    PurchaserPreparedDate=GETDATE()
-WHERE SupplierID=@SupplierID";
-
-        await Helper.ExecuteNonQueryAsync(
-            _connectionString,
-            sql,
-            cmd =>
-            {
-                Helper.AddParameter(cmd, "@SupplierID", supplierId, SqlDbType.Int);
-                Helper.AddParameter(cmd, "@OperatorCode", operatorCode, SqlDbType.NVarChar, 50);
             },
             cancellationToken);
     }
@@ -648,5 +709,4 @@ END;";
 
     private static string QuoteIdentifier(string identifier)
         => $"[{identifier.Replace("]", "]]")}]";
-
 }

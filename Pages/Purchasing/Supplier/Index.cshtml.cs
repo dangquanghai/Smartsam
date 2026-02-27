@@ -1,21 +1,19 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using SmartSam.Models.Purchasing.Supplier;
 using SmartSam.Services;
-using SmartSam.Services.Purchasing.Supplier.Abstractions;
 
 namespace SmartSam.Pages.Purchasing.Supplier;
 
 public class IndexModel : PageModel
 {
-    private readonly ISupplierService _supplierService;
+    private readonly SupplierService _supplierService;
     private readonly PermissionService _permissionService;
     private const int SupplierFunctionId = 71;
 
-    public IndexModel(ISupplierService supplierService, PermissionService permissionService)
+    public IndexModel(IConfiguration configuration, PermissionService permissionService)
     {
-        _supplierService = supplierService;
+        _supplierService = new SupplierService(configuration);
         _permissionService = permissionService;
     }
 

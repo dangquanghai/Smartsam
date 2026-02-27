@@ -61,3 +61,60 @@ label.form-label {
 .select2-container {
     z-index: 2000 !important;
 }
+
+/* Shared white paging style for card headers (Supplier, STContract, LongTermContract, ...) */
+.app-paging-white,
+.app-paging-white small,
+.app-paging-white #pagination-info,
+.app-paging-white .page-link,
+.app-paging-white .page-item .page-link {
+    color: #fff !important;
+}
+
+.app-paging-white #pagination-info,
+.app-paging-white .supplier-table-paging-info {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.55rem;
+    border-radius: 0.25rem;
+    background: transparent;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.app-paging-white .pagination .page-link {
+    background: rgba(0, 0, 0, 0.26) !important;
+    border-color: rgba(255, 255, 255, 0.8) !important;
+    font-weight: 600;
+    color: #fff !important;
+    min-width: 2.1rem;
+    text-align: center;
+}
+
+.app-paging-white .pagination .page-link:visited,
+.app-paging-white .pagination .page-link:hover,
+.app-paging-white .pagination .page-link:focus,
+.app-paging-white .pagination .page-link:active {
+    color: #fff !important;
+}
+
+.app-paging-white .pagination .page-link:hover,
+.app-paging-white .pagination .page-link:focus {
+    background: rgba(0, 0, 0, 0.38) !important;
+    border-color: #fff !important;
+    color: #fff !important;
+}
+
+.app-paging-white .pagination .page-item.active .page-link {
+    background: rgba(0, 0, 0, 0.5) !important;
+    border-color: #fff !important;
+    color: #fff !important;
+    box-shadow: none !important;
+}
+
+.app-paging-white .pagination .page-item.disabled .page-link {
+    background: rgba(0, 0, 0, 0.16) !important;
+    border-color: rgba(255, 255, 255, 0.45) !important;
+    color: #fff !important;
+    opacity: 0.75;
+}

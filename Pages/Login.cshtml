@@ -23,6 +23,10 @@
                     {
                         <div class="alert alert-danger text-center">@TempData["Error"]</div>
                     }
+                    @if (!string.IsNullOrWhiteSpace(Model.Message))
+                    {
+                        <div class="alert alert-danger text-center">@Model.Message</div>
+                    }
 
                     <form method="post">
                         <div class="mb-3">
