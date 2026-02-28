@@ -65,6 +65,7 @@ public class SupplierDetailDto
     [StringLength(254, ErrorMessage = "Supplier name must be at most 254 characters.")]
     public string? SupplierName { get; set; }
 
+    [Required(ErrorMessage = "Address is required.")]
     [StringLength(254, ErrorMessage = "Address must be at most 254 characters.")]
     public string? Address { get; set; }
 
@@ -117,4 +118,10 @@ public class SupplierApprovalHistoryDto
     public string Action { get; set; } = string.Empty;
     public string UserName { get; set; } = string.Empty;
     public DateTime? ActionDate { get; set; }
+}
+
+public class EmployeeDataScopeDto
+{
+    public int? DeptID { get; set; }
+    public bool SeeDataAllDept { get; set; }
 }

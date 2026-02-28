@@ -199,8 +199,19 @@
     padding-right: 0.35rem;
 }
 
+.supplier-detail-label .required-mark {
+    color: #dc3545;
+    margin-left: 2px;
+}
+
 .supplier-detail-control {
     min-width: 0;
+}
+
+.supplier-detail-control .text-danger {
+    display: block;
+    margin-top: 0.2rem;
+    line-height: 1.1;
 }
 
 .supplier-detail-check {

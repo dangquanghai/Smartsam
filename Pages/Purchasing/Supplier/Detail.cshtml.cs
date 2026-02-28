@@ -12,6 +12,12 @@ public class DetailModel : PageModel
     private readonly SupplierService _supplierService;
     private readonly PermissionService _permissionService;
     private const int SupplierFunctionId = 71;
+    private const int PermissionAdd = 2;
+    private const int PermissionEdit = 3;
+    private const int PermissionSubmit = 4;
+    private const int PermissionViewDetail = 6;
+    private EmployeeDataScopeDto _dataScope = new();
+    private bool _isAdminRole;
 
     public DetailModel(IConfiguration configuration, PermissionService permissionService)
     {
@@ -51,19 +57,20 @@ public class DetailModel : PageModel
     public bool IsEdit => Id.HasValue && Id.Value > 0;
     public bool IsAnnualView => string.Equals(ViewMode, "byyear", StringComparison.OrdinalIgnoreCase) && Year.HasValue;
     public PagePermissions PagePerm { get; private set; } = new();
-    public bool CanSave => !IsAnnualView && (IsEdit ? HasPermission(3) : HasPermission(2));
+    public bool CanSave => !IsAnnualView && (IsEdit ? HasPermission(PermissionEdit) : HasPermission(PermissionAdd));
     public bool IsSubmitted => (Input.Status ?? 0) == 1;
-    public bool CanSubmit => !IsAnnualView && IsEdit && HasPermission(4) && !IsSubmitted;
+    public bool CanSubmit => !IsAnnualView && IsEdit && HasPermission(PermissionSubmit) && !IsSubmitted;
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         LoadPagePermissions();
-        if (IsEdit && !HasPermission(1))
+        await LoadUserDataScopeAsync(cancellationToken);
+        if (IsEdit && !HasPermission(PermissionViewDetail))
         {
             return Forbid();
         }
 
-        if (!IsEdit && !HasPermission(2))
+        if (!IsEdit && !HasPermission(PermissionAdd))
         {
             return Forbid();
         }
@@ -79,17 +86,34 @@ public class DetailModel : PageModel
         if (!IsEdit)
         {
             Input.Status = 0;
+            if (!_isAdminRole && !_dataScope.SeeDataAllDept)
+            {
+                if (!_dataScope.DeptID.HasValue)
+                {
+                    return Forbid();
+                }
+
+                Input.DeptID = _dataScope.DeptID.Value;
+            }
             return Page();
         }
 
         if (IsAnnualView)
         {
             Input = await _supplierService.GetAnnualDetailAsync(Id!.Value, Year!.Value, cancellationToken) ?? new SupplierDetailDto();
+            if (!CanAccessDepartment(Input.DeptID))
+            {
+                return Forbid();
+            }
             Histories = (await _supplierService.GetAnnualApprovalHistoryAsync(Id.Value, Year.Value, cancellationToken)).ToList();
         }
         else
         {
             Input = await _supplierService.GetDetailAsync(Id!.Value, cancellationToken) ?? new SupplierDetailDto();
+            if (!CanAccessDepartment(Input.DeptID))
+            {
+                return Forbid();
+            }
             Histories = (await _supplierService.GetApprovalHistoryAsync(Id.Value, cancellationToken)).ToList();
         }
         if (string.Equals(Msg, "submitted", StringComparison.OrdinalIgnoreCase))
@@ -110,10 +134,20 @@ public class DetailModel : PageModel
     public async Task<IActionResult> OnGetCheckSupplierCodeAsync(string? supplierCode, int? id, CancellationToken cancellationToken)
     {
         LoadPagePermissions();
-        var canAccess = (id.HasValue && id.Value > 0) ? HasPermission(1) : HasPermission(2);
+        await LoadUserDataScopeAsync(cancellationToken);
+        var canAccess = (id.HasValue && id.Value > 0) ? HasPermission(PermissionEdit) : HasPermission(PermissionAdd);
         if (!canAccess)
         {
             return new JsonResult(new { ok = false, message = "Forbidden" }) { StatusCode = StatusCodes.Status403Forbidden };
+        }
+
+        if (id.HasValue && id.Value > 0)
+        {
+            var supplierDept = await _supplierService.GetSupplierDepartmentAsync(id.Value, "current", null, cancellationToken);
+            if (!CanAccessDepartment(supplierDept))
+            {
+                return new JsonResult(new { ok = false, message = "Forbidden" }) { StatusCode = StatusCodes.Status403Forbidden };
+            }
         }
 
         var normalized = (supplierCode ?? string.Empty).Trim();
@@ -129,7 +163,8 @@ public class DetailModel : PageModel
     public async Task<IActionResult> OnGetSuggestSupplierCodeAsync(CancellationToken cancellationToken)
     {
         LoadPagePermissions();
-        if (!HasPermission(2))
+        await LoadUserDataScopeAsync(cancellationToken);
+        if (!HasPermission(PermissionAdd))
         {
             return new JsonResult(new { ok = false, message = "Forbidden" }) { StatusCode = StatusCodes.Status403Forbidden };
         }
@@ -141,11 +176,12 @@ public class DetailModel : PageModel
     public async Task<IActionResult> OnPostSaveAsync(CancellationToken cancellationToken)
     {
         LoadPagePermissions();
+        await LoadUserDataScopeAsync(cancellationToken);
         if (IsAnnualView)
         {
             return Forbid();
         }
-        if ((IsEdit && !HasPermission(3)) || (!IsEdit && !HasPermission(2)))
+        if ((IsEdit && !HasPermission(PermissionEdit)) || (!IsEdit && !HasPermission(PermissionAdd)))
         {
             return Forbid();
         }
@@ -155,6 +191,16 @@ public class DetailModel : PageModel
 
         if (!IsEdit)
         {
+            if (!_isAdminRole && !_dataScope.SeeDataAllDept)
+            {
+                if (!_dataScope.DeptID.HasValue)
+                {
+                    return Forbid();
+                }
+
+                Input.DeptID = _dataScope.DeptID.Value;
+            }
+
             Input.Status = 0; // New supplier is always Draft. Status changes only via workflow actions.
         }
         else
@@ -165,6 +211,17 @@ public class DetailModel : PageModel
                 SetMessage("Supplier not found.", "error");
                 return Page();
             }
+
+            if (!CanAccessDepartment(currentDetail.DeptID))
+            {
+                return Forbid();
+            }
+
+            if (!_isAdminRole && !_dataScope.SeeDataAllDept)
+            {
+                Input.DeptID = currentDetail.DeptID;
+            }
+
             Input.Status = currentDetail.Status;
         }
 
@@ -196,13 +253,16 @@ public class DetailModel : PageModel
             {
                 ModelState.AddModelError("Input.SupplierCode", ex.Message);
             }
+            else
+            {
+                SetMessage(ex.Message, "error");
+            }
 
             if (IsEdit)
             {
                 Histories = (await _supplierService.GetApprovalHistoryAsync(Id!.Value, cancellationToken)).ToList();
             }
 
-            SetMessage(ex.Message, "error");
             return Page();
         }
         catch (SqlException ex)
@@ -242,11 +302,12 @@ public class DetailModel : PageModel
     public async Task<IActionResult> OnPostSubmitApprovalAsync(CancellationToken cancellationToken)
     {
         LoadPagePermissions();
+        await LoadUserDataScopeAsync(cancellationToken);
         if (IsAnnualView)
         {
             return Forbid();
         }
-        if (!HasPermission(4))
+        if (!HasPermission(PermissionSubmit))
         {
             return Forbid();
         }
@@ -260,6 +321,11 @@ public class DetailModel : PageModel
 
         // Re-check current status from DB to prevent re-submitting via forged request.
         Input = await _supplierService.GetDetailAsync(Id!.Value, cancellationToken) ?? new SupplierDetailDto();
+        if (!CanAccessDepartment(Input.DeptID))
+        {
+            return Forbid();
+        }
+
         if (IsSubmitted)
         {
             Histories = (await _supplierService.GetApprovalHistoryAsync(Id.Value, cancellationToken)).ToList();
@@ -278,11 +344,33 @@ public class DetailModel : PageModel
         var departments = await _supplierService.GetDepartmentsAsync(cancellationToken);
         var statuses = await _supplierService.GetStatusesAsync(cancellationToken);
 
-        Departments = departments.Select(x => new SelectListItem
+        if (!_isAdminRole && !_dataScope.SeeDataAllDept)
         {
-            Value = x.Id.ToString(),
-            Text = x.CodeOrName
-        }).ToList();
+            if (!_dataScope.DeptID.HasValue)
+            {
+                Departments = [];
+                Input.DeptID = null;
+                return;
+            }
+
+            Departments = departments
+                .Where(x => _dataScope.DeptID.HasValue && x.Id == _dataScope.DeptID.Value)
+                .Select(x => new SelectListItem
+                {
+                    Value = x.Id.ToString(),
+                    Text = x.CodeOrName
+                }).ToList();
+
+            Input.DeptID = _dataScope.DeptID.Value;
+        }
+        else
+        {
+            Departments = departments.Select(x => new SelectListItem
+            {
+                Value = x.Id.ToString(),
+                Text = x.CodeOrName
+            }).ToList();
+        }
 
         Statuses = statuses.Select(x => new SelectListItem
         {
@@ -310,6 +398,33 @@ public class DetailModel : PageModel
     }
 
     private bool HasPermission(int permissionNo) => PagePerm.HasPermission(permissionNo);
+
+    private async Task LoadUserDataScopeAsync(CancellationToken cancellationToken)
+    {
+        _isAdminRole = string.Equals(User.FindFirst("IsAdminRole")?.Value, "True", StringComparison.OrdinalIgnoreCase);
+        if (_isAdminRole)
+        {
+            _dataScope = new EmployeeDataScopeDto { SeeDataAllDept = true };
+            return;
+        }
+
+        _dataScope = await _supplierService.GetEmployeeDataScopeAsync(User.Identity?.Name, cancellationToken);
+    }
+
+    private bool CanAccessDepartment(int? supplierDeptId)
+    {
+        if (_isAdminRole || _dataScope.SeeDataAllDept)
+        {
+            return true;
+        }
+
+        if (!_dataScope.DeptID.HasValue || !supplierDeptId.HasValue)
+        {
+            return false;
+        }
+
+        return _dataScope.DeptID.Value == supplierDeptId.Value;
+    }
 
     private void SetFlashMessage(string message, string type = "info")
     {

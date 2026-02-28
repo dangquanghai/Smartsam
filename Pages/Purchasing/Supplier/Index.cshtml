@@ -171,19 +171,29 @@
                                     {
                                         foreach (var r in Model.Rows)
                                         {
+                                            var detailUrl = Model.CanViewDetail
+                                                ? Url.Page("/Purchasing/Supplier/Detail", new { id = r.SupplierID, viewMode = Model.ViewMode, year = Model.Year })
+                                                : null;
                                             <tr class="supplier-row"
                                                 data-supplier-id="@r.SupplierID"
-                                                data-detail-url="@Url.Page("/Purchasing/Supplier/Detail", new { id = r.SupplierID, viewMode = Model.ViewMode, year = Model.Year })"
+                                                data-detail-url="@(detailUrl ?? string.Empty)"
                                                 data-status="@r.Status"
                                                 data-is-submitted="@(r.Status == 1 ? "1" : "0")"
                                                 onclick="window.toggleSupplierRowSelection && window.toggleSupplierRowSelection(event, this)">
                                                 <td class="selector-cell"><input type="checkbox" class="supplier-selector" aria-label="Select supplier" onchange="window.syncSupplierSelection && window.syncSupplierSelection()" /></td>
                                                 <td>
-                                                    <a href="@Url.Page("/Purchasing/Supplier/Detail", new { id = r.SupplierID, viewMode = Model.ViewMode, year = Model.Year })"
-                                                       class="text-primary font-weight-600 supplier-open-link"
-                                                       onclick="event.stopPropagation();">
-                                                        @r.SupplierCode
-                                                    </a>
+                                                    @if (Model.CanViewDetail && !string.IsNullOrWhiteSpace(detailUrl))
+                                                    {
+                                                        <a href="@detailUrl"
+                                                           class="text-primary font-weight-600 supplier-open-link"
+                                                           onclick="event.stopPropagation();">
+                                                            @r.SupplierCode
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="font-weight-600 text-muted">@r.SupplierCode</span>
+                                                    }
                                                 </td>
                                                 <td>@r.SupplierName</td>
                                                 <td>@r.Address</td>
