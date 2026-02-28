@@ -59,6 +59,56 @@ public class SupplierService
         return Task.FromResult<IReadOnlyList<SupplierLookupOptionDto>>(result);
     }
 
+    public async Task<EmployeeDataScopeDto> GetEmployeeDataScopeAsync(string? employeeCode, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(employeeCode))
+        {
+            return new EmployeeDataScopeDto();
+        }
+
+        const string sql = @"
+                            SELECT TOP 1 DeptID, ISNULL(SeeDataAllDept, 0) AS SeeDataAllDept
+                            FROM dbo.MS_Employee
+                            WHERE EmployeeCode = @EmployeeCode";
+
+        return await Helper.QuerySingleOrDefaultAsync(
+            _connectionString,
+            sql,
+            rd => new EmployeeDataScopeDto
+            {
+                DeptID = rd.IsDBNull(0) ? null : Convert.ToInt32(rd[0]),
+                SeeDataAllDept = !rd.IsDBNull(1) && Convert.ToBoolean(rd[1])
+            },
+            cmd => Helper.AddParameter(cmd, "@EmployeeCode", employeeCode.Trim(), SqlDbType.NVarChar, 50),
+            cancellationToken) ?? new EmployeeDataScopeDto();
+    }
+
+    public async Task<int?> GetSupplierDepartmentAsync(int supplierId, string? viewMode, int? year, CancellationToken cancellationToken = default)
+    {
+        var isByYear = string.Equals(viewMode, "byyear", StringComparison.OrdinalIgnoreCase);
+        var sourceTable = isByYear ? "dbo.PC_SupplierAnualy" : "dbo.PC_Suppliers";
+        var yearFilter = isByYear ? $@" AND [{AnnualYearColumn}] = @Year" : string.Empty;
+
+        var sql = $@"
+                    SELECT TOP 1 DeptID
+                    FROM {sourceTable}
+                    WHERE SupplierID = @SupplierID{yearFilter}";
+
+        return await Helper.QuerySingleOrDefaultAsync<int?>(
+            _connectionString,
+            sql,
+            rd => rd.IsDBNull(0) ? null : Convert.ToInt32(rd[0]),
+            cmd =>
+            {
+                Helper.AddParameter(cmd, "@SupplierID", supplierId, SqlDbType.Int);
+                if (isByYear)
+                {
+                    Helper.AddParameter(cmd, "@Year", year, SqlDbType.Int);
+                }
+            },
+            cancellationToken);
+    }
+
     public async Task<IReadOnlyList<SupplierListRowDto>> SearchAsync(SupplierFilterCriteria criteria, CancellationToken cancellationToken = default)
     {
         var noPagingCriteria = new SupplierFilterCriteria

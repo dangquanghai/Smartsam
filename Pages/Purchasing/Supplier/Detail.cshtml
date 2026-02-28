@@ -3,7 +3,18 @@
 @{
     ViewData["Title"] = "Supplier Detail";
     var messageType = (Model.MessageType ?? "info").ToLowerInvariant();
-    var useInlineAlert = !string.IsNullOrWhiteSpace(Model.Message) && (messageType == "warning" || messageType == "error");
+    var hasInputFieldError = false;
+    foreach (var state in ViewData.ModelState)
+    {
+        if (state.Key.StartsWith("Input.", StringComparison.OrdinalIgnoreCase) && state.Value.Errors.Count > 0)
+        {
+            hasInputFieldError = true;
+            break;
+        }
+    }
+    var useInlineAlert = !string.IsNullOrWhiteSpace(Model.Message)
+        && (messageType == "warning" || messageType == "error")
+        && !hasInputFieldError;
     var lockGeneralInfo = !Model.CanSave;
 }
 
@@ -27,7 +38,7 @@
                                     <button type="button" class="close" data-dismiss="alert" aria-label="Close">
                                         <span aria-hidden="true">&times;</span>
                                     </button>
-                                    <h5 class="mb-1"><i class="icon @alertIcon"></i> Alert</h5>
+                                    <h5 class="mb-1"><i class="icon @alertIcon"></i> @(messageType == "error" ? "Error" : "Warning")</h5>
                                     @Model.Message
                                 </div>
                             }
@@ -38,87 +49,89 @@
                             }
                             <fieldset disabled="@(lockGeneralInfo ? "disabled" : null)">
                                 <div class="supplier-detail-grid">
-                                    <label class="supplier-detail-label">Supplier Code*</label>
+                                    <label class="supplier-detail-label">Supplier Code<span class="required-mark">*</span></label>
                                     <div class="supplier-detail-control">
-                                        <input asp-for="Input.SupplierCode" class="form-control form-control-sm" />
+                                        <input asp-for="Input.SupplierCode" class="form-control form-control-sm" tabindex="1" />
                                         <span asp-validation-for="Input.SupplierCode" class="text-danger small"></span>
                                     </div>
 
-                                    <label class="supplier-detail-label">Supplier Name*</label>
+                                    <label class="supplier-detail-label">Supplier Name<span class="required-mark">*</span></label>
                                     <div class="supplier-detail-control supplier-detail-span-3">
-                                        <input asp-for="Input.SupplierName" class="form-control form-control-sm" />
+                                        <input asp-for="Input.SupplierName" class="form-control form-control-sm" tabindex="2" />
+                                        <span asp-validation-for="Input.SupplierName" class="text-danger small"></span>
                                     </div>
 
-                                    <label class="supplier-detail-label">Address</label>
+                                    <label class="supplier-detail-label">Address<span class="required-mark">*</span></label>
                                     <div class="supplier-detail-control supplier-detail-span-5">
-                                        <textarea asp-for="Input.Address" class="form-control form-control-sm" rows="2"></textarea>
+                                        <textarea asp-for="Input.Address" class="form-control form-control-sm" rows="2" tabindex="3"></textarea>
+                                        <span asp-validation-for="Input.Address" class="text-danger small"></span>
                                     </div>
 
                                     <label class="supplier-detail-label">Phone</label>
                                     <div class="supplier-detail-control">
-                                        <input asp-for="Input.Phone" class="form-control form-control-sm" />
+                                        <input asp-for="Input.Phone" class="form-control form-control-sm" tabindex="4" />
                                     </div>
 
                                     <label class="supplier-detail-label">Fax</label>
                                     <div class="supplier-detail-control">
-                                        <input asp-for="Input.Fax" class="form-control form-control-sm" />
+                                        <input asp-for="Input.Fax" class="form-control form-control-sm" tabindex="5" />
                                     </div>
 
                                     <div class="supplier-detail-empty"></div>
 
                                     <label class="supplier-detail-label">Contact Person</label>
                                     <div class="supplier-detail-control">
-                                        <input asp-for="Input.Contact" class="form-control form-control-sm" />
+                                        <input asp-for="Input.Contact" class="form-control form-control-sm" tabindex="6" />
                                     </div>
 
                                     <label class="supplier-detail-label">Position</label>
                                     <div class="supplier-detail-control">
-                                        <input asp-for="Input.Position" class="form-control form-control-sm" />
+                                        <input asp-for="Input.Position" class="form-control form-control-sm" tabindex="7" />
                                     </div>
 
                                     <label class="supplier-detail-label">Mobile</label>
                                     <div class="supplier-detail-control">
-                                        <input asp-for="Input.Mobile" class="form-control form-control-sm" />
+                                        <input asp-for="Input.Mobile" class="form-control form-control-sm" tabindex="8" />
                                     </div>
 
                                     <label class="supplier-detail-label">Business</label>
                                     <div class="supplier-detail-control supplier-detail-span-5">
-                                        <input asp-for="Input.Business" class="form-control form-control-sm" />
+                                        <input asp-for="Input.Business" class="form-control form-control-sm" tabindex="9" />
                                     </div>
 
                                     <label class="supplier-detail-label">Document</label>
                                     <div class="supplier-detail-check">
-                                        <input asp-for="Input.Document" type="checkbox" class="align-middle" style="width:16px;height:16px;@(Model.CanSave ? "cursor:pointer;" : "")" />
+                                        <input asp-for="Input.Document" type="checkbox" class="align-middle" tabindex="10" style="width:16px;height:16px;@(Model.CanSave ? "cursor:pointer;" : "")" />
                                     </div>
 
                                     <label class="supplier-detail-label">Certificate</label>
                                     <div class="supplier-detail-control">
-                                        <input asp-for="Input.Certificate" class="form-control form-control-sm" />
+                                        <input asp-for="Input.Certificate" class="form-control form-control-sm" tabindex="11" />
                                     </div>
 
                                     <label class="supplier-detail-label">Dept*</label>
                                     <div class="supplier-detail-control">
-                                        <select asp-for="Input.DeptID" asp-items="Model.Departments" class="form-control form-control-sm"></select>
+                                        <select asp-for="Input.DeptID" asp-items="Model.Departments" class="form-control form-control-sm" tabindex="12"></select>
                                     </div>
 
                                     <label class="supplier-detail-label">Service</label>
                                     <div class="supplier-detail-control supplier-detail-span-5">
-                                        <input asp-for="Input.Service" class="form-control form-control-sm" />
+                                        <input asp-for="Input.Service" class="form-control form-control-sm" tabindex="13" />
                                     </div>
 
                                     <label class="supplier-detail-label">Comment</label>
                                     <div class="supplier-detail-control supplier-detail-span-5">
-                                        <textarea asp-for="Input.Comment" class="form-control form-control-sm" rows="2"></textarea>
+                                        <textarea asp-for="Input.Comment" class="form-control form-control-sm" rows="2" tabindex="14"></textarea>
                                     </div>
 
                                     <label class="supplier-detail-label">CodeOfAcc</label>
                                     <div class="supplier-detail-control">
-                                        <input asp-for="Input.CodeOfAcc" class="form-control form-control-sm" />
+                                        <input asp-for="Input.CodeOfAcc" class="form-control form-control-sm" tabindex="15" />
                                     </div>
 
                                     <label class="supplier-detail-label">IsNew</label>
                                     <div class="supplier-detail-check">
-                                        <input asp-for="Input.IsNew" type="checkbox" class="align-middle" style="width:16px;height:16px;@(Model.CanSave ? "cursor:pointer;" : "")" />
+                                        <input asp-for="Input.IsNew" type="checkbox" class="align-middle" tabindex="16" style="width:16px;height:16px;@(Model.CanSave ? "cursor:pointer;" : "")" />
                                     </div>
 
                                     <label class="supplier-detail-label">Status</label>
@@ -203,6 +216,10 @@
         (() => {
             const supplierCodeInput = document.getElementById("Input_SupplierCode");
             const supplierCodeValidationEl = document.querySelector('[data-valmsg-for="Input.SupplierCode"]');
+            const supplierNameInput = document.getElementById("Input_SupplierName");
+            const supplierNameValidationEl = document.querySelector('[data-valmsg-for="Input.SupplierName"]');
+            const supplierAddressInput = document.getElementById("Input_Address");
+            const supplierAddressValidationEl = document.querySelector('[data-valmsg-for="Input.Address"]');
             const saveForm = document.querySelector('form[asp-page-handler="Save"]') || document.querySelector("form[method='post']");
             const isEditMode = @Model.IsEdit.ToString().ToLowerInvariant();
             let supplierCodeCheckToken = 0;
@@ -217,13 +234,63 @@
                 }
             };
 
+            const setRequiredValidation = (inputEl, validationEl, message) => {
+                if (!inputEl) return;
+                const normalized = (inputEl.value || "").trim();
+                const hasError = normalized.length === 0;
+                inputEl.classList.toggle("is-invalid", hasError);
+                if (validationEl) {
+                    validationEl.textContent = hasError ? message : "";
+                    validationEl.classList.toggle("field-validation-error", hasError);
+                    validationEl.classList.toggle("field-validation-valid", !hasError);
+                }
+                return !hasError;
+            };
+
+            const applyExistingServerValidationState = (inputEl, validationEl) => {
+                if (!inputEl || !validationEl) return;
+                const hasMessage = (validationEl.textContent || "").trim().length > 0;
+                inputEl.classList.toggle("is-invalid", hasMessage);
+                validationEl.classList.toggle("field-validation-error", hasMessage);
+                validationEl.classList.toggle("field-validation-valid", !hasMessage);
+            };
+
+            const validateRequiredFields = () => {
+                const isCodeValid = setRequiredValidation(supplierCodeInput, supplierCodeValidationEl, "Supplier code is required.");
+                const isNameValid = setRequiredValidation(supplierNameInput, supplierNameValidationEl, "Supplier name is required.");
+                const isAddressValid = setRequiredValidation(supplierAddressInput, supplierAddressValidationEl, "Address is required.");
+                return !!isCodeValid && !!isNameValid && !!isAddressValid;
+            };
+
+            const focusFirstInvalidField = () => {
+                if (!saveForm) return false;
+
+                const controls = saveForm.querySelectorAll("input, textarea, select");
+                for (const control of controls) {
+                    if (control.disabled || control.type === "hidden") continue;
+
+                    const fieldName = control.getAttribute("name");
+                    const validationEl = fieldName
+                        ? saveForm.querySelector(`[data-valmsg-for="${fieldName}"]`)
+                        : null;
+                    const hasMessage = !!validationEl && (validationEl.textContent || "").trim().length > 0;
+                    const hasInvalidClass = control.classList.contains("is-invalid");
+
+                    if (hasInvalidClass || hasMessage) {
+                        control.focus();
+                        return true;
+                    }
+                }
+
+                return false;
+            };
+
             const checkSupplierCodeDuplicate = async () => {
                 if (!supplierCodeInput) return true;
 
                 const raw = (supplierCodeInput.value || "").trim();
                 if (!raw) {
-                    setSupplierCodeValidation("");
-                    return true;
+                    return false;
                 }
 
                 const requestToken = ++supplierCodeCheckToken;
@@ -261,13 +328,35 @@
 
             if (supplierCodeInput) {
                 supplierCodeInput.addEventListener("blur", () => {
-                    void checkSupplierCodeDuplicate();
+                    const isRequiredValid = setRequiredValidation(supplierCodeInput, supplierCodeValidationEl, "Supplier code is required.");
+                    if (isRequiredValid) {
+                        void checkSupplierCodeDuplicate();
+                    }
                 });
 
                 supplierCodeInput.addEventListener("input", () => {
                     setSupplierCodeValidation("");
                 });
             }
+
+            supplierNameInput?.addEventListener("blur", () => {
+                setRequiredValidation(supplierNameInput, supplierNameValidationEl, "Supplier name is required.");
+            });
+            supplierNameInput?.addEventListener("input", () => {
+                setRequiredValidation(supplierNameInput, supplierNameValidationEl, "Supplier name is required.");
+            });
+
+            supplierAddressInput?.addEventListener("blur", () => {
+                setRequiredValidation(supplierAddressInput, supplierAddressValidationEl, "Address is required.");
+            });
+            supplierAddressInput?.addEventListener("input", () => {
+                setRequiredValidation(supplierAddressInput, supplierAddressValidationEl, "Address is required.");
+            });
+
+            applyExistingServerValidationState(supplierCodeInput, supplierCodeValidationEl);
+            applyExistingServerValidationState(supplierNameInput, supplierNameValidationEl);
+            applyExistingServerValidationState(supplierAddressInput, supplierAddressValidationEl);
+            focusFirstInvalidField();
 
             if (saveForm) {
                 saveForm.addEventListener("submit", async (e) => {
@@ -276,10 +365,17 @@
                         return;
                     }
 
+                    const requiredOk = validateRequiredFields();
+                    if (!requiredOk) {
+                        e.preventDefault();
+                        focusFirstInvalidField();
+                        return;
+                    }
+
                     const ok = await checkSupplierCodeDuplicate();
                     if (!ok) {
                         e.preventDefault();
-                        supplierCodeInput?.focus();
+                        focusFirstInvalidField();
                     }
                 });
             }

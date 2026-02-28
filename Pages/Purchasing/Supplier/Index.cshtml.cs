@@ -9,7 +9,14 @@ public class IndexModel : PageModel
 {
     private readonly SupplierService _supplierService;
     private readonly PermissionService _permissionService;
+    private const int NoDepartmentScopeValue = -1;
     private const int SupplierFunctionId = 71;
+    private const int PermissionViewList = 1;
+    private const int PermissionSubmit = 4;
+    private const int PermissionCopy = 5;
+    private const int PermissionViewDetail = 6;
+    private EmployeeDataScopeDto _dataScope = new();
+    private bool _isAdminRole;
 
     public IndexModel(IConfiguration configuration, PermissionService permissionService)
     {
@@ -80,11 +87,13 @@ public class IndexModel : PageModel
     public int TotalPages => PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
     public bool HasPreviousPage => PageIndex > 1;
     public bool HasNextPage => PageIndex < TotalPages;
+    public bool CanViewDetail => HasPermission(PermissionViewDetail);
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         LoadPagePermissions();
-        if (!HasPermission(1))
+        await LoadUserDataScopeAsync(cancellationToken);
+        if (!HasPermission(PermissionViewList))
         {
             return Forbid();
         }
@@ -103,7 +112,8 @@ public class IndexModel : PageModel
     public async Task<IActionResult> OnPostCopyYearAsync(CancellationToken cancellationToken)
     {
         LoadPagePermissions();
-        if (!HasPermission(5))
+        await LoadUserDataScopeAsync(cancellationToken);
+        if (!HasPermission(PermissionCopy))
         {
             return Forbid();
         }
@@ -117,6 +127,27 @@ public class IndexModel : PageModel
             return RedirectToCurrentList();
         }
 
+        var accessibleIds = new List<int>();
+        var noAccessCount = 0;
+        foreach (var supplierId in selectedIds)
+        {
+            var supplierDeptId = await _supplierService.GetSupplierDepartmentAsync(supplierId, "current", null, cancellationToken);
+            if (CanAccessDepartment(supplierDeptId))
+            {
+                accessibleIds.Add(supplierId);
+            }
+            else
+            {
+                noAccessCount++;
+            }
+        }
+
+        if (accessibleIds.Count == 0)
+        {
+            SetFlashMessage("No selected supplier is accessible by your department scope.", "warning");
+            return RedirectToCurrentList();
+        }
+
         var currentYear = DateTime.Today.Year;
         if (!ConfirmCopy || CopyYear < 2000 || CopyYear >= currentYear)
         {
@@ -126,8 +157,11 @@ public class IndexModel : PageModel
 
         try
         {
-            await _supplierService.CopyCurrentSuppliersToYearAsync(CopyYear, selectedIds, cancellationToken);
-            SetFlashMessage("Copy completed.", "success");
+            await _supplierService.CopyCurrentSuppliersToYearAsync(CopyYear, accessibleIds, cancellationToken);
+            var message = noAccessCount > 0
+                ? $"Copy completed for {accessibleIds.Count} supplier(s). Skipped (no access): {noAccessCount}."
+                : "Copy completed.";
+            SetFlashMessage(message, "success");
         }
         catch (Exception)
         {
@@ -139,7 +173,8 @@ public class IndexModel : PageModel
     public async Task<IActionResult> OnGetExportCsvAsync(CancellationToken cancellationToken)
     {
         LoadPagePermissions();
-        if (!HasPermission(1))
+        await LoadUserDataScopeAsync(cancellationToken);
+        if (!HasPermission(PermissionViewList))
         {
             return Forbid();
         }
@@ -166,7 +201,8 @@ public class IndexModel : PageModel
     public async Task<IActionResult> OnPostSubmitAsync(CancellationToken cancellationToken)
     {
         LoadPagePermissions();
-        if (!HasPermission(4))
+        await LoadUserDataScopeAsync(cancellationToken);
+        if (!HasPermission(PermissionSubmit))
         {
             return Forbid();
         }
@@ -188,6 +224,7 @@ public class IndexModel : PageModel
 
         var successCount = 0;
         var notFoundCount = 0;
+        var noAccessCount = 0;
 
         foreach (var supplierId in selectedIds)
         {
@@ -198,12 +235,18 @@ public class IndexModel : PageModel
                 continue;
             }
 
+            if (!CanAccessDepartment(supplier.DeptID))
+            {
+                noAccessCount++;
+                continue;
+            }
+
             await _supplierService.ResetWorkflowToPreparingAsync(supplierId, cancellationToken);
             successCount++;
         }
 
         SetFlashMessage(
-            BuildSubmitMessage(successCount, notFoundCount, selectedIds.Count),
+            BuildSubmitMessage(successCount, notFoundCount, noAccessCount, selectedIds.Count),
             successCount > 0 ? "success" : "info");
         return RedirectToCurrentList();
     }
@@ -213,10 +256,25 @@ public class IndexModel : PageModel
         var departments = await _supplierService.GetDepartmentsAsync(cancellationToken);
         var statuses = await _supplierService.GetStatusesAsync(cancellationToken);
 
-        Departments = [
-            new SelectListItem { Value = string.Empty, Text = "--- All ---" },
-            .. departments.Select(x => new SelectListItem { Value = x.Id.ToString(), Text = x.CodeOrName })
-        ];
+        if (!_isAdminRole && !_dataScope.SeeDataAllDept)
+        {
+            var scopedDepartments = departments
+                .Where(x => _dataScope.DeptID.HasValue && x.Id == _dataScope.DeptID.Value)
+                .ToList();
+
+            Departments = [
+                .. scopedDepartments.Select(x => new SelectListItem { Value = x.Id.ToString(), Text = x.CodeOrName })
+            ];
+
+            DeptId = _dataScope.DeptID ?? NoDepartmentScopeValue;
+        }
+        else
+        {
+            Departments = [
+                new SelectListItem { Value = string.Empty, Text = "--- All ---" },
+                .. departments.Select(x => new SelectListItem { Value = x.Id.ToString(), Text = x.CodeOrName })
+            ];
+        }
 
         Statuses = [
             new SelectListItem { Value = string.Empty, Text = "--- All ---" },
@@ -242,11 +300,16 @@ public class IndexModel : PageModel
     }
 
     private SupplierFilterCriteria BuildCriteria(bool includePaging = true)
-        => new()
+    {
+        var restrictedDeptId = (!_isAdminRole && !_dataScope.SeeDataAllDept)
+            ? (_dataScope.DeptID ?? NoDepartmentScopeValue)
+            : DeptId;
+
+        return new SupplierFilterCriteria
         {
             ViewMode = string.IsNullOrWhiteSpace(ViewMode) ? "current" : ViewMode.Trim(),
             Year = Year,
-            DeptId = DeptId,
+            DeptId = restrictedDeptId,
             SupplierCode = NullIfEmpty(SupplierCode),
             SupplierName = NullIfEmpty(SupplierName),
             Business = NullIfEmpty(Business),
@@ -256,6 +319,7 @@ public class IndexModel : PageModel
             PageIndex = includePaging ? PageIndex : null,
             PageSize = includePaging ? PageSize : null
         };
+    }
 
     private static string Csv(string? value)
     {
@@ -294,21 +358,54 @@ public class IndexModel : PageModel
         return ids.ToList();
     }
 
-    private static string BuildSubmitMessage(int successCount, int notFoundCount, int totalSelected)
+    private static string BuildSubmitMessage(int successCount, int notFoundCount, int noAccessCount, int totalSelected)
     {
         if (totalSelected == 1)
         {
             if (successCount == 1) return "Supplier status was reset to Preparing.";
             if (notFoundCount == 1) return "Supplier not found.";
+            if (noAccessCount == 1) return "You do not have permission to submit this supplier.";
         }
 
         var parts = new List<string>();
         if (successCount > 0) parts.Add($"reset to preparing: {successCount}");
         if (notFoundCount > 0) parts.Add($"not found: {notFoundCount}");
+        if (noAccessCount > 0) parts.Add($"no access: {noAccessCount}");
 
         return parts.Count == 0
             ? "No supplier status was changed."
             : $"Submit completed. {string.Join(", ", parts)}.";
+    }
+
+    private async Task LoadUserDataScopeAsync(CancellationToken cancellationToken)
+    {
+        _isAdminRole = string.Equals(User.FindFirst("IsAdminRole")?.Value, "True", StringComparison.OrdinalIgnoreCase);
+        if (_isAdminRole)
+        {
+            _dataScope = new EmployeeDataScopeDto { SeeDataAllDept = true };
+            return;
+        }
+
+        _dataScope = await _supplierService.GetEmployeeDataScopeAsync(User.Identity?.Name, cancellationToken);
+        if (!_dataScope.SeeDataAllDept)
+        {
+            DeptId = _dataScope.DeptID ?? NoDepartmentScopeValue;
+        }
+    }
+
+    private bool CanAccessDepartment(int? supplierDeptId)
+    {
+        if (_isAdminRole || _dataScope.SeeDataAllDept)
+        {
+            return true;
+        }
+
+        if (!_dataScope.DeptID.HasValue || !supplierDeptId.HasValue)
+        {
+            return false;
+        }
+
+        return _dataScope.DeptID.Value == supplierDeptId.Value;
     }
 
     private void LoadPagePermissions()
