@@ -225,6 +225,20 @@ public class DetailModel : PageModel
             Input.Status = currentDetail.Status;
         }
 
+        var normalizedSupplierCode = (Input.SupplierCode ?? string.Empty).Trim();
+        if (!string.IsNullOrWhiteSpace(normalizedSupplierCode))
+        {
+            var exists = await _supplierService.SupplierCodeExistsAsync(
+                normalizedSupplierCode,
+                IsEdit ? Id : null,
+                cancellationToken);
+
+            if (exists)
+            {
+                ModelState.AddModelError("Input.SupplierCode", "Supplier code already exists.");
+            }
+        }
+
         if (!ModelState.IsValid)
         {
             if (IsEdit)
