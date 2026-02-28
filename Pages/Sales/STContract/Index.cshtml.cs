@@ -92,20 +92,25 @@ namespace SmartSam.Pages.Sales.STContract
 
             var (contracts, totalRecords) = SearchContracts(request);
 
-            var dataWithActions = contracts.Select(c => new {
-                data = c,
-                actions = new
+            var dataWithActions = contracts.Select(c => {
+                // Kiểm tra quyền Edit và View thô
+                bool hasEditPerm = rawNos.Contains(4) && (c.StatusID == 1 || c.StatusID == 2);
+                bool hasViewPerm = rawNos.Contains(2);
+
+                return new
                 {
-                    canView = rawNos.Contains(2),
-                    canAdd = rawNos.Contains(3),
-                    
-                    // Edit: Có quyền (4) VÀ (Status là 1 hoặc 2)
-                    canEdit = rawNos.Contains(4) && (c.StatusID == 1 || c.StatusID == 2),
-                    // Cancel: Có quyền (6) VÀ (Status là 1)
-                    canCancel = rawNos.Contains(6) && (c.StatusID == 1),
-                    // To Living : Có quyền (7) VÀ (Status không phải 2 )
-                    canToLiving = rawNos.Contains(7) && (c.StatusID == 2)
-                }
+                    data = c,
+                    actions = new
+                    {
+                        // Logic mới: Có quyền vào chi tiết nếu có Edit HOẶC View
+                        canAccess = hasEditPerm || hasViewPerm,
+                        // Ưu tiên Edit nếu có cả 2 quyền
+                        accessMode = hasEditPerm ? "edit" : "view",
+
+                        canCancel = rawNos.Contains(6) && (c.StatusID == 1),
+                        canToLiving = rawNos.Contains(7) && (c.StatusID == 2)
+                    }
+                };
             });
 
             return new JsonResult(new

@@ -4,8 +4,25 @@
     ViewData["Title"] = "Add Short Term Contract";
 }
 
+
 <section class="content">
     <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <strong><i class="fas fa-check-circle"></i> Thông báo:</strong> @TempData["SuccessMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="alert alert-danger">
+                <div asp-validation-summary="All" class="text-danger"></div>
+            </div>
+        }
         <form method="post">
             <div class="row d-flex align-items-stretch">
                 <div class="col-md-5">
@@ -27,11 +44,12 @@
                                         <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">ContractNo(*)</label></div>
                                         <div class="col-3">
                                             <input type="text" asp-for="Contract.ContractNo" id="ContractNo" class="form-control form-control-sm" readonly tabindex="-1">
+                                            <input type="hidden" id="ContractId" value="@Model.SavedContractID" />
                                         </div>
+
                                         <div class="col-3 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Status(*)</label></div>
                                         <div class="col-4">
                                             <select asp-for="Contract.ContractStatus" id="ContractStatus" asp-items="Model.StatusList" class="form-control form-control-sm" tabindex="5">
-                                                <option value="">-- Status --</option>
                                             </select>
                                         </div>
                                     </div>
@@ -55,6 +73,7 @@
                                         <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Apartment(*)</label></div>
                                         <div class="col-3">
                                             <select asp-for="Contract.ApmtID" id="ApmtId" asp-items="Model.ApmtList" class="form-control form-control-sm" tabindex="2">
+                                               <option value="">-- Select Apartment --</option>
                                             </select>
                                         </div>
                                         <div class="col-3 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Representator</label></div>
@@ -68,14 +87,16 @@
                                     <div class="row no-gutters align-items-center mb-2">
                                         <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">RentIncVAT(*)</label></div>
                                         <div class="col-3">
-                                            <input type="text" asp-for="Contract.CurrentRentRateVND" id="CurrentRentRate" asp-items="Model.ApmtList" class="form-control form-control-sm" tabindex="3">
+                                            <input type="text" asp-for="Contract.CurrentRentRateNVD" id="CurrentRentRate" asp-items="Model.ApmtList" class="form-control form-control-sm" tabindex="3">
                                         </div>
                                         <div class="col-3 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Period(*)</label></div>
                                         <div class="col-4">
                                             <div class="input-group">
                                                 <input type="text" class="form-control form-control-sm" id="contractDuration" tabindex="8">
-                                                <input type="hidden" asp-for="Contract.ContractFromDate" id="ContractFromDate">
-                                                <input type="hidden" asp-for="Contract.ContractToDate" id="ContractToDate">
+                                                <input type="hidden" asp-for="Contract.ContractFromDate"
+                                                       value="@Model.Contract.ContractFromDate?.ToString("yyyy-MM-dd")" id="ContractFromDate" />
+                                                <input type="hidden" asp-for="Contract.ContractToDate"
+                                                       value="@Model.Contract.ContractToDate?.ToString("yyyy-MM-dd")" id="ContractToDate" />
                                             </div>
                                         </div>
                                     </div>
@@ -86,11 +107,16 @@
                                             <input type="text" asp-for="Contract.PerVAT" id="PerVAT" class="form-control form-control-sm text-right" tabindex="-1">
                                         </div>
                                         <div class="col-3 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Is Repeater</label></div>
-                                        <div class="col-4">
+                                        <div class="col-1">
                                             <div class="custom-control custom-checkbox">
                                                 <input type="checkbox" class="custom-control-input" id="IsRepeater" asp-for="Contract.IsRepeater" tabindex="9">
                                                 <label class="custom-control-label" for="IsRepeater"></label>
                                             </div>
+                                        </div>
+
+                                        <div class="col-1 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Occ</label></div>
+                                        <div class="col-2">
+                                            <input type="text" asp-for="Contract.Occupy" id="Occupy" class="form-control form-control-sm text-right" tabindex="10">
                                         </div>
                                     </div>
     
@@ -103,7 +129,7 @@
 
                                         <div class="col-3 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Source(*)</label></div>
                                         <div class="col-4">
-                                            <select asp-for="Contract.ContractSourceID" id="ContractSourceID" asp-items="Model.SourceList" class="form-control form-control-sm" tabindex="10">
+                                            <select asp-for="Contract.ContractSourceID" id="ContractSourceID" asp-items="Model.SourceList" class="form-control form-control-sm" tabindex="11">
                                                 <option value="">--Select--</option>
                                             </select>
                                         </div>
@@ -120,7 +146,7 @@
 
                                         <div class="col-3 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Received By(*)</label></div>
                                         <div class="col-4">
-                                            <select asp-for="Contract.ReceivedByID" id="ContractSourceID" asp-items="Model.ReceiverList" class="form-control form-control-sm" tabindex="11">
+                                            <select asp-for="Contract.ReceivedByID" id="ReceivedByID" asp-items="Model.ReceiverList" class="form-control form-control-sm" tabindex="12">
                                                 <option value="">--Select--</option>
                                             </select>
                                         </div>
@@ -142,12 +168,14 @@
                                                     id="AgentCompanyId"
                                                     class="form-control select2-ajax" tabindex="14"
                                                     style="width: 100%;">
+                                                <option value="">-- Select--</option>
                                             </select>
+                                            <input type="hidden" id="Contract_AgentPersonId" value="@Model.STInfor.AgentPersonId" />
                                         </div>
-                                        <div class="col-3 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Payment By</label></div>
+                                        <div class="col-3 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Payment By(*)</label></div>
                                         <div class="col-4">
-                                            <select asp-for="STInfor.PaidBy" id="ContractStatus" asp-items="Model.PaymnetByList" class="form-control form-control-sm" tabindex="15">
-                                                <option value="">-- Status --</option>
+                                            <select asp-for="STInfor.PaidBy" id="PaymentByID" asp-items="Model.PaymnetByList" class="form-control form-control-sm" tabindex="15">
+                                             <option value="">-- Select --</option>
                                             </select>
                                         </div>
                                     </div>
@@ -257,8 +285,11 @@
                 </div>
                 <div class="col-md-7">
                     <div class="card card-success card-outline h-100 mb-0 d-flex flex-column">
-                        <div class="card-header p-2">
-                            <h3 class="card-title">Contract Services</h3>
+                        <div class="card-header p-2 d-flex justify-content-between align-items-center">
+                            <h3 class="card-title text-bold text-success">Contract Services</h3>
+                            <div class="card-tools">
+                                <button type="button" class="btn btn-tool" onclick="loadServiceGrid()"><i class="fas fa-sync"></i></button>
+                            </div>
                         </div>
 
                         <div class="card-body p-0 flex-grow-1" style="min-height: 400px; overflow-y: auto;">
@@ -266,21 +297,48 @@
                                 <table class="table table-sm table-bordered table-striped m-0" id="tableServices">
                                     <thead class="bg-light sticky-top">
                                         <tr>
-                                            <th>Service Name</th>
+                                            <th style="width: 30%">Service Name</th>
                                             <th>From Date</th>
                                             <th>To Date</th>
                                             <th class="text-center">Interval</th>
-                                            <th class="text-right">Amount</th>
+                                            <th class="text-center">Type</th>
+                                            <th class="text-right">Max Qty</th>
+                                            <th class="text-center">Action</th>
                                         </tr>
                                     </thead>
                                     <tbody>
+                                        @if (Model.ContractServices != null && Model.ContractServices.Any())
+                                        {
+                                            foreach (var item in Model.ContractServices)
+                                            {
+                                                <tr>
+                                                    <td>@item.ServiceName</td>
+                                                    <td class="text-center">@(item.ServiceFromDate?.ToString("dd/MM/yyyy"))</td>
+                                                    <td class="text-center">@(item.ServiceToDate?.ToString("dd/MM/yyyy"))</td>
+                                                    <td class="text-center">@item.ChargeIntervalName</td>
+                                                    <td class="text-center">@item.ChargeTypeName</td>
+                                                    <td class="text-right">@item.MaxQuantity.ToString("N2")</td>
+                                                    <td class="text-center">
+                                                        <button class="btn btn-xs btn-danger" onclick="deleteService(@item.ContractServiceID)">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr id="no-data-row">
+                                                <td colspan="7" class="text-center text-muted">No services found for this contract.</td>
+                                            </tr>
+                                        }
                                     </tbody>
                                 </table>
                             </div>
                         </div>
 
                         <div class="card-footer py-2">
-                            <button type="button" class="btn btn-success btn-sm px-4">
+                            <button type="button" class="btn btn-success btn-sm px-4" onclick="openServiceModal()">
                                 <i class="fas fa-plus"></i> Add Service
                             </button>
                         </div>
@@ -327,8 +385,105 @@
     </div>
 </section>
 
+<div class="modal fade" id="modalService" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-concierge-bell"></i> Add Contract Service</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="formService">
+                    <input type="hidden" id="svc_ContractID" />
+
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label class="font-weight-bold">Service Name (*)</label>
+                                <select id="svc_ServiceID" class="form-control select2" style="width: 100%;">
+                                    <option value="">-- Select Service --</option>
+                                    @if (Model.ServiceList != null)
+                                    {
+                                        foreach (var item in Model.ServiceList)
+                                        {
+                                            <option value="@item.Value">@item.Text</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="font-weight-bold">From Date</label>
+                                <input type="date" id="svc_FromDate" class="form-control" />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="font-weight-bold">To Date</label>
+                                <input type="date" id="svc_ToDate" class="form-control" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="font-weight-bold">Charge Interval</label>
+                                <select id="svc_Interval" class="form-control">
+                                    @foreach (var item in Model.ChargeIntervalList ?? new List<SelectListItem>())
+                                    {
+                                        <option value="@item.Value">@item.Text</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="font-weight-bold">Charge Type</label>
+                                <select id="svc_Type" class="form-control">
+                                    @foreach (var item in Model.ChargeTypeList ?? new List<SelectListItem>())
+                                    {
+                                        // Tự động bỏ qua Type = 2 nếu cần ở đây hoặc xử lý ở Backend
+                                        <option value="@item.Value">@item.Text</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="font-weight-bold">Max Quantity</label>
+                                <input type="number" id="svc_Qty" class="form-control" value="1" step="0.01" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="font-weight-bold">Notes</label>
+                        <textarea id="svc_Notes" class="form-control" rows="2" placeholder="Enter service notes..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-success px-4" onclick="saveContractService()">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 @section Scripts {
+
     <script src="~/js/Sales/STContract/STContractDetail.js" asp-append-version="true"></script>
 }
 

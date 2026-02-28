@@ -53,7 +53,7 @@
             }
         });
     }
-
+    
     // ========== RENDER TABLE ==========
     function renderContracts(items) {
         const tbody = $('table tbody');
@@ -65,32 +65,53 @@
         }
 
         items.forEach(function (item, index) {
-            // item lúc này có cấu trúc { data: {...}, actions: {...} } từ server gởi xuống
             const c = item.data;
+            // Cột Contract No luôn là link màu xanh, có gạch chân
             const row = `
-                <tr data-id="${c.contractID}" data-index="${index}" style="cursor:pointer">
-                    <td><input type="radio" name="selectedContract" value="${index}"></td>
-                    <td style="white-space:nowrap">${c.contractNo}</td>
-                    <td>${c.apartmentNo || ''}</td>
-                    <td style="white-space:nowrap">${c.customerName || ''}</td>
-                    <td>${c.companyName || ''}</td>
-                    <td>${c.contractFromDateDisplay || ''}</td>
-                    <td>${c.contractToDateDisplay || ''}</td>
-                    <td>
-                        <span class="badge badge-info">${c.statusName}</span>
-                    </td>
-                </tr>`;
+            <tr data-id="${c.contractID}" data-index="${index}" style="cursor:pointer">
+                <td><input type="radio" name="selectedContract" value="${index}"></td>
+                <td style="white-space:nowrap">
+                    <a href="javascript:void(0)" class="contract-link text-primary font-weight-bold" style="text-decoration:underline">
+                        ${c.contractNo}
+                    </a>
+                </td>
+                <td>${c.apartmentNo || ''}</td>
+                <td style="white-space:nowrap">${c.customerName || ''}</td>
+                <td>${c.companyName || ''}</td>
+                <td>${c.contractFromDateDisplay || ''}</td>
+                <td>${c.contractToDateDisplay || ''}</td>
+                <td><span class="badge badge-info">${c.statusName}</span></td>
+            </tr>`;
             tbody.append(row);
         });
-
-        // Event click vào dòng để chọn Radio
-        tbody.find('tr').on('click', function () {
-            const idx = $(this).find('input[type="radio"]').val();
-            $(this).find('input').prop('checked', true).trigger('change');
-            $('tr').removeClass('selected');
-            $(this).addClass('selected');
-        });
     }
+    // Sử dụng Delegation để bắt sự kiện cho các link được tạo động
+    $(document).on('click', '.contract-link', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const rowIndex = $(this).closest('tr').data('index');
+        const item = currentDataRows[rowIndex];
+
+        if (!item || !item.actions) {
+            console.error("Dữ liệu không tồn tại!");
+            return;
+        }
+
+        const perms = item.actions;
+        const contractId = item.data.contractID || item.data.ContractID;
+
+        // --- LOGIC DỰA TRÊN DỮ LIỆU THỰC TẾ CỦA BẠN ---
+        if (perms.canAccess === true) {
+            // Lấy mode từ Server (edit hoặc view), nếu không có thì mặc định là view
+            const mode = perms.accessMode || 'view';
+
+            window.location.href = `/Sales/STContract/STContractDetail?id=${contractId}&mode=${mode}`;
+        } else {
+            // Trường hợp canAccess là false
+            alert("Bạn không có quyền truy cập vào hợp đồng này.");
+        }
+    });
 
     // ========== BẮT SỰ KIỆN THAY ĐỔI RADIO (QUAN TRỌNG NHẤT) ==========
     $(document).on("change", "input[name='selectedContract']", function () {
@@ -116,12 +137,12 @@
         $("#btnToLiving").prop("disabled", !perms.canToLiving);
         $("#btnCopy").prop("disabled", false); // Copy thường cho phép mọi trạng thái
     });
-
     function resetActions() {
         selectedContractId = null;
-        $('#btnView, #btnEdit, #btnCopy, #btnCancel, #btnGenBill').prop('disabled', true);
+        // Đã bỏ ID btnView và btnEdit khỏi danh sách disable vì chúng không còn tồn tại trên giao diện
+        $('#btnCopy, #btnCancel, #btnToLiving').prop('disabled', true);
     }
-
+  
     // ========== PAGINATION (ĐÃ SỬA LỖI) ==========
     function updatePagination(total, page, pageSize, totalPages) {
         const $totalBadge = $('#total-records-badge');
@@ -181,9 +202,7 @@
         window.initSelect2('#AgentCompanyId', 'company');
 
         // 2. Đăng ký sự kiện nút bấm
-        $('#btnAdd').off('click').on('click', () => window.location.href = '/Sales/STContract/STContractDetail');
-        $('#btnEdit').off('click').on('click', () => window.location.href = `/Sales/STContract/STContractDetail?id=${selectedContractId}&mode=edit`);
-        $('#btnView').off('click').on('click', () => window.location.href = `/Sales/STContract/STContractDetail?id=${selectedContractId}`);
+        $('#btnAdd').off('click').on('click', () => window.location.href = '/Sales/STContract/STContractDetail?mode=add');
         $('#btnCopy').off('click').on('click', () => window.location.href = `/Sales/STContract/Create?copyFromId=${selectedContractId}`);
 
         // 3. Xử lý Form Search

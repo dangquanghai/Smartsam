@@ -138,7 +138,12 @@
                                             <td>
                                                 <input type="radio" name="selectedContract">
                                             </td>
-                                            <td style="white-space: nowrap;">@c.ContractNo</td> <!-- Không xuống dòng -->
+                                            <td style="white-space: nowrap;">
+                                                <a href="javascript:void(0)" class="contract-no-link text-bold" style="text-decoration: underline;">
+                                                    @c.ContractNo
+                                                </a>
+                                            </td>
+
                                             <td>@c.ApartmentNo</td>
                                             <td style="white-space: nowrap;">@c.CustomerName</td> <!-- Không xuống dòng -->
                                             <td style="white-space: nowrap;">@c.CompanyName</td> <!-- Không xuống dòng -->
@@ -156,14 +161,12 @@
                 <!-- ACTION PANEL -->
                 <div class="card card-outline card-primary">
                     <div class="card-footer p-2 text-center">
-                        <button class="btn btn-info btn-sm" id="btnView" disabled><i class="fas fa-eye"></i> View</button>
                         @if (Model.PagePerm.HasPermission(3)) // Quyền Add Contract
                         {
                             <button class="btn btn-success btn-sm" id="btnAdd">
                                 <i class="fas fa-plus"></i> Add
                             </button>
                         }
-                        <button class="btn btn-warning btn-sm" id="btnEdit" disabled><i class="fas fa-edit"></i> Edit</button>
                         <button class="btn btn-danger btn-sm" id="btnCancel" disabled><i class="fas fa-ban"></i> Cancel</button>
                         <button class="btn btn-danger btn-sm" id="btnCopy" disabled><i class="fas fa-coppy"></i> Copy</button>
                         <button class="btn btn-dark btn-sm" id="btnToLiving" disabled><i class="fas fa-convert"> To Living</button>

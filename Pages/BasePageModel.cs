@@ -2,6 +2,8 @@
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
 using SmartSam.Helpers;
+using System.Data;
+using Dapper;
 
 namespace SmartSam.Pages
 {
@@ -24,6 +26,45 @@ namespace SmartSam.Pages
                 Value = x.Id?.ToString(),
                 Text = x.Text
             }).ToList();
+        }
+
+        // Logic thực thi tách riêng để có thể gọi từ Code-behind nếu cần
+        protected async Task<int> CheckApmtAvailLogic(string apartmentNo, string fromDate, string toDate, long contractId)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(apartmentNo) || string.IsNullOrEmpty(fromDate) || string.IsNullOrEmpty(toDate))
+                    return -1;
+
+                DateTime dFrom = DateTime.Parse(fromDate);
+                DateTime dTo = DateTime.Parse(toDate);
+
+                using (IDbConnection db = new SqlConnection(_config.GetConnectionString("DefaultConnection")))
+                {
+                    var parameters = new
+                    {
+                        ApartmentNo = apartmentNo,
+                        FromDate = dFrom,
+                        ToDate = dTo,
+                        isShortTerm = 1, // Theo logic VB6 của bạn
+                        ContractID = contractId
+                    };
+
+                    // Gọi Stored Procedure
+                    var status = await db.ExecuteScalarAsync<int>(
+                        "sp_CheckApmtAvail",
+                        parameters,
+                        commandType: CommandType.StoredProcedure
+                    );
+
+                    return status;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log lỗi ở đây
+                return -1;
+            }
         }
 
         // Trong BasePageModel.cs

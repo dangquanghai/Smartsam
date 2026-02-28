@@ -174,7 +174,7 @@
         $(elementId).select2({
             width: '100%',
             // AdminLTE 3 đi kèm với CSS cho select2 nhưng thường cần định nghĩa rõ
-            placeholder: 'Chọn dữ liệu...',
+            //placeholder: 'select a ...',
             allowClear: true,
             minimumResultsForSearch: 0, // Luôn hiện ô search
             ajax: {
