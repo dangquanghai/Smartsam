@@ -110,9 +110,37 @@
             <!-- RESULT + ACTION (RIGHT) -->
             <div class="col-md-10" id="supplierResultPanelContainer">
                 <div class="card card-primary">
-                    <div class="card-header">
-                        <h3 class="card-title">Suppliers</h3>
-                        <span class="badge badge-light ml-2 supplier-record-badge" id="total-records-badge">@Model.TotalRecords records</span>
+                    <div class="card-header supplier-table-header">
+                        <div class="supplier-table-header-left">
+                            <h3 class="card-title">Suppliers</h3>
+                            <span class="badge badge-light ml-2 supplier-record-badge" id="total-records-badge">@Model.TotalRecords records</span>
+                        </div>
+                        <div class="supplier-table-header-right app-paging-white">
+                            <small class="supplier-table-paging-info">
+                                @if (Model.TotalRecords == 0)
+                                {
+                                    <text>Showing 0 to 0 of 0 entries</text>
+                                }
+                                else
+                                {
+                                    <text>Showing @pageStart to @pageEnd of @Model.TotalRecords entries</text>
+                                }
+                            </small>
+                            <ul class="pagination pagination-sm m-0">
+                                <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+                                    <a class="page-link supplier-pager-link" href="@(Model.HasPreviousPage ? supplierPageUrl(currentPage - 1) : "#")" tabindex="@(Model.HasPreviousPage ? "0" : "-1")">Prev</a>
+                                </li>
+                                @for (var p = pagerFrom; p <= pagerTo; p++)
+                                {
+                                    <li class="page-item @(p == currentPage ? "active" : "")">
+                                        <a class="page-link supplier-pager-link" href="@supplierPageUrl(p)">@p</a>
+                                    </li>
+                                }
+                                <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+                                    <a class="page-link supplier-pager-link" href="@(Model.HasNextPage ? supplierPageUrl(currentPage + 1) : "#")" tabindex="@(Model.HasNextPage ? "0" : "-1")">Next</a>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
 
                     <div class="card-body p-0">
@@ -174,52 +202,24 @@
                             </table>
                         </div>
                     </div>
-                    <div class="card-footer clearfix py-2">
-                        <div class="float-left">
-                            <small class="text-muted">
-                                @if (Model.TotalRecords == 0)
-                                {
-                                    <text>Showing 0 to 0 of 0 entries</text>
-                                }
-                                else
-                                {
-                                    <text>Showing @pageStart to @pageEnd of @Model.TotalRecords entries</text>
-                                }
-                            </small>
-                        </div>
-                        <ul class="pagination pagination-sm m-0 float-right">
-                            <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
-                                        <a class="page-link supplier-pager-link" href="@(Model.HasPreviousPage ? supplierPageUrl(currentPage - 1) : "#")" tabindex="@(Model.HasPreviousPage ? "0" : "-1")">Prev</a>
-                            </li>
-                            @for (var p = pagerFrom; p <= pagerTo; p++)
-                            {
-                                <li class="page-item @(p == currentPage ? "active" : "")">
-                                    <a class="page-link supplier-pager-link" href="@supplierPageUrl(p)">@p</a>
-                                </li>
-                            }
-                            <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
-                                <a class="page-link supplier-pager-link" href="@(Model.HasNextPage ? supplierPageUrl(currentPage + 1) : "#")" tabindex="@(Model.HasNextPage ? "0" : "-1")">Next</a>
-                            </li>
-                        </ul>
-                    </div>
                 </div>
 
                 <div class="card card-outline card-primary">
-                    <div class="card-footer p-2 text-center">
+                    <div class="card-footer p-2 text-center module-action-bar">
                         @if (Model.PagePerm.HasPermission(2))
                         {
-                            <a id="addSupplierBtn" asp-page="/Purchasing/Supplier/Detail" class="btn btn-success btn-sm mx-1 my-1"><i class="fas fa-plus"></i> Add</a>
+                            <a id="addSupplierBtn" asp-page="/Purchasing/Supplier/Detail" class="btn btn-sm btn-action-add mx-1 my-1"><i class="fas fa-plus"></i> Add</a>
                         }
                         @if (Model.PagePerm.HasPermission(5))
                         {
-                            <button id="copySupplierBtn" type="button" class="btn btn-secondary btn-sm mx-1 my-1" disabled data-toggle="modal" data-target="#copyYearModal"><i class="fas fa-copy"></i> Copy</button>
+                            <button id="copySupplierBtn" type="button" class="btn btn-sm btn-action-copy mx-1 my-1" disabled data-toggle="modal" data-target="#copyYearModal"><i class="fas fa-copy"></i> Copy</button>
                         }
                         @if (Model.PagePerm.HasPermission(4))
                         {
                             <form id="submitSupplierForm" method="post" asp-page-handler="Submit" class="d-inline">
                                 <input type="hidden" asp-for="SelectedSupplierId" id="selectedSupplierIdInput" />
                                 <input type="hidden" asp-for="SelectedSupplierIdsCsv" id="selectedSupplierIdsCsvInput" />
-                                <button id="submitSupplierBtn" type="submit" class="btn btn-dark btn-sm mx-1 my-1" disabled><i class="fas fa-paper-plane"></i> Submit</button>
+                                <button id="submitSupplierBtn" type="submit" class="btn btn-sm btn-action-submit mx-1 my-1" disabled><i class="fas fa-paper-plane"></i> Submit</button>
                             </form>
                         }
                         @if (Model.PagePerm.HasPermission(1))
@@ -234,9 +234,9 @@
                                asp-route-Contact="@Model.Contact"
                                asp-route-StatusId="@Model.StatusId"
                                asp-route-IsNew="@Model.IsNew"
-                               class="btn btn-primary btn-sm mx-1 my-1"><i class="fas fa-file-export"></i> Excel</a>
+                               class="btn btn-sm btn-action-export mx-1 my-1"><i class="fas fa-file-export"></i> Excel</a>
                         }
-                        <a href="/Index" class="btn btn-default btn-sm mx-1 my-1"><i class="fas fa-times"></i> Close</a>
+                        <a href="/Index" class="btn btn-sm btn-action-close mx-1 my-1"><i class="fas fa-times"></i> Close</a>
                     </div>
                 </div>
             </div>
@@ -468,8 +468,7 @@
                 if (copySelectedSupplierIdsCsvInput) copySelectedSupplierIdsCsvInput.value = selectedIds.join(",");
 
                 const hasAnySelected = count > 0;
-                const hasSubmittedSelected = selectedRows.some((row) => isSubmitted(row));
-                setSubmitButtonState(submitBtn, !hasAnySelected || hasSubmittedSelected);
+                setSubmitButtonState(submitBtn, !hasAnySelected);
 
                 const isMultiSelectMode = count > 1;
                 setUiDisabled(addBtn, isMultiSelectMode);

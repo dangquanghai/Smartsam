@@ -3,21 +3,19 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Data.SqlClient;
-using SmartSam.Models.Purchasing.Supplier;
 using SmartSam.Services;
-using SmartSam.Services.Purchasing.Supplier.Abstractions;
 
 namespace SmartSam.Pages.Purchasing.Supplier;
 
 public class DetailModel : PageModel
 {
-    private readonly ISupplierService _supplierService;
+    private readonly SupplierService _supplierService;
     private readonly PermissionService _permissionService;
     private const int SupplierFunctionId = 71;
 
-    public DetailModel(ISupplierService supplierService, PermissionService permissionService)
+    public DetailModel(IConfiguration configuration, PermissionService permissionService)
     {
-        _supplierService = supplierService;
+        _supplierService = new SupplierService(configuration);
         _permissionService = permissionService;
     }
 
@@ -184,7 +182,6 @@ public class DetailModel : PageModel
         {
             // Preserve current workflow status. Save action must not change status directly.
             Input.Status = currentDetail?.Status;
-            Input.ApprovedDate = currentDetail?.ApprovedDate;
         }
 
         var operatorCode = User.Identity?.Name ?? "SYSTEM";

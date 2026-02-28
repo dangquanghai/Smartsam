@@ -1,21 +1,19 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using SmartSam.Models.Purchasing.Supplier;
 using SmartSam.Services;
-using SmartSam.Services.Purchasing.Supplier.Abstractions;
 
 namespace SmartSam.Pages.Purchasing.Supplier;
 
 public class IndexModel : PageModel
 {
-    private readonly ISupplierService _supplierService;
+    private readonly SupplierService _supplierService;
     private readonly PermissionService _permissionService;
     private const int SupplierFunctionId = 71;
 
-    public IndexModel(ISupplierService supplierService, PermissionService permissionService)
+    public IndexModel(IConfiguration configuration, PermissionService permissionService)
     {
-        _supplierService = supplierService;
+        _supplierService = new SupplierService(configuration);
         _permissionService = permissionService;
     }
 
@@ -173,6 +171,12 @@ public class IndexModel : PageModel
             return Forbid();
         }
 
+        if (string.Equals(ViewMode, "byyear", StringComparison.OrdinalIgnoreCase))
+        {
+            SetFlashMessage("Submit is available only in Current List mode.", "warning");
+            return RedirectToCurrentList();
+        }
+
         await LoadFiltersAsync(cancellationToken);
 
         var selectedIds = ParseSelectedSupplierIds();
@@ -182,9 +186,7 @@ public class IndexModel : PageModel
             return RedirectToCurrentList();
         }
 
-        var operatorCode = User.Identity?.Name ?? "SYSTEM";
         var successCount = 0;
-        var alreadySubmittedCount = 0;
         var notFoundCount = 0;
 
         foreach (var supplierId in selectedIds)
@@ -196,19 +198,13 @@ public class IndexModel : PageModel
                 continue;
             }
 
-            if (supplier.Status == 1)
-            {
-                alreadySubmittedCount++;
-                continue;
-            }
-
-            await _supplierService.SubmitApprovalAsync(supplierId, operatorCode, cancellationToken);
+            await _supplierService.ResetWorkflowToPreparingAsync(supplierId, cancellationToken);
             successCount++;
         }
 
         SetFlashMessage(
-            BuildSubmitMessage(successCount, alreadySubmittedCount, notFoundCount, selectedIds.Count),
-            successCount > 0 ? "success" : (alreadySubmittedCount > 0 ? "warning" : "info"));
+            BuildSubmitMessage(successCount, notFoundCount, selectedIds.Count),
+            successCount > 0 ? "success" : "info");
         return RedirectToCurrentList();
     }
 
@@ -298,22 +294,20 @@ public class IndexModel : PageModel
         return ids.ToList();
     }
 
-    private static string BuildSubmitMessage(int successCount, int alreadySubmittedCount, int notFoundCount, int totalSelected)
+    private static string BuildSubmitMessage(int successCount, int notFoundCount, int totalSelected)
     {
         if (totalSelected == 1)
         {
-            if (successCount == 1) return "Submitted successfully.";
-            if (alreadySubmittedCount == 1) return "Supplier already submitted.";
+            if (successCount == 1) return "Supplier status was reset to Preparing.";
             if (notFoundCount == 1) return "Supplier not found.";
         }
 
         var parts = new List<string>();
-        if (successCount > 0) parts.Add($"submitted: {successCount}");
-        if (alreadySubmittedCount > 0) parts.Add($"already submitted: {alreadySubmittedCount}");
+        if (successCount > 0) parts.Add($"reset to preparing: {successCount}");
         if (notFoundCount > 0) parts.Add($"not found: {notFoundCount}");
 
         return parts.Count == 0
-            ? "No suppliers submitted."
+            ? "No supplier status was changed."
             : $"Submit completed. {string.Join(", ", parts)}.";
     }
 

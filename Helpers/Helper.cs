@@ -98,7 +98,7 @@ namespace SmartSam.Helpers
             // Chống lỗi SQL Injection cho tên bảng/cột bằng cách dùng ngoặc vuông []
             string sql = $@"
                 SELECT TOP {top} [{idField}], [{textField}]
-                FROM [{table}]
+                FROM {QuoteSqlIdentifier(table)}
                 WHERE (@term IS NULL OR [{textField}] LIKE '%' + @term + '%')
                 ORDER BY [{textField}]";
 
@@ -118,6 +118,20 @@ namespace SmartSam.Helpers
                 ));
             }
             return list;
+        }
+
+        /// <summary>
+        /// Bọc tên schema/bảng/cột động theo chuẩn SQL Server, ví dụ:
+        /// dbo.MS_Department -> [dbo].[MS_Department].
+        /// Mục đích: tránh lỗi khi trùng keyword và giảm rủi ro SQL injection ở phần identifier.
+        /// </summary>
+        private static string QuoteSqlIdentifier(string identifier)
+        {
+            var parts = identifier
+                .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(x => $"[{x.Replace("]", "]]")}]");
+
+            return string.Join(".", parts);
         }
 
         /// <summary>

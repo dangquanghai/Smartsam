@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using SmartSam.Helpers;
 using Microsoft.Data.SqlClient;
 using System.Security.Claims;
+using System.Data;
 using System.Threading.Tasks;
 
 namespace SmartSam.Pages
@@ -14,13 +15,22 @@ namespace SmartSam.Pages
         private readonly IConfiguration _config;
         public LoginModel(IConfiguration config) => _config = config;
 
-        [BindProperty] public string Username { get; set; }
-        [BindProperty] public string Password { get; set; }
-        public string Message { get; set; }
+        [BindProperty] public string? Username { get; set; }
+        [BindProperty] public string? Password { get; set; }
+        public string? Message { get; set; }
 
         public async Task<IActionResult> OnPostAsync()
         {
-            string connStr = _config.GetConnectionString("DefaultConnection");
+            var username = (Username ?? string.Empty).Trim();
+            var password = Password ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+            {
+                Message = "Vui lòng nhập tài khoản và mật khẩu.";
+                return Page();
+            }
+
+            string connStr = _config.GetConnectionString("DefaultConnection")
+                ?? throw new InvalidOperationException("Missing connection string: DefaultConnection");
             using var conn = new SqlConnection(connStr);
             await conn.OpenAsync();
 
@@ -34,17 +44,17 @@ namespace SmartSam.Pages
                 WHERE e.EmployeeCode = @User AND e.IsActive = 1";
 
             using var cmd = new SqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@User", Username);
+            cmd.Parameters.Add("@User", SqlDbType.NVarChar, 50).Value = username;
 
             using var reader = await cmd.ExecuteReaderAsync();
             if (reader.Read())
             {
                 var dbPass = reader["NewPassword"].ToString();
-                if (Helper.CompareEncrypted(Password, dbPass))
+                if (Helper.CompareEncrypted(password, dbPass ?? string.Empty))
                 {
-                    string empCode = reader["EmployeeCode"].ToString();
-                    string empName = reader["EmployeeName"].ToString();
-                    string roleId = reader["RoleID"] != DBNull.Value ? reader["RoleID"].ToString() : "0";
+                    string empCode = reader["EmployeeCode"].ToString() ?? string.Empty;
+                    string empName = reader["EmployeeName"].ToString() ?? string.Empty;
+                    string roleId = reader["RoleID"] != DBNull.Value ? reader["RoleID"].ToString() ?? "0" : "0";
                     bool isAdminRole = reader["IsAdminRole"] != DBNull.Value && Convert.ToBoolean(reader["IsAdminRole"]);
 
                     var claims = new List<Claim>
