@@ -288,7 +288,12 @@ ORDER BY s.SupplierID DESC";
                         FinancialCode, FinancialApproveDate, FinancialCPT,
                         BODCode, BODApproveDate, BODCPT, @CopyYear
                     FROM dbo.PC_Suppliers
-                    WHERE SupplierID IN (SELECT SupplierID FROM #CopyIds);";
+                    WHERE SupplierID IN (SELECT SupplierID FROM #CopyIds);
+
+                    UPDATE s
+                    SET s.IsNew = 0
+                    FROM dbo.PC_Suppliers s
+                    INNER JOIN #CopyIds c ON c.SupplierID = s.SupplierID;";
 
         await using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync(cancellationToken);

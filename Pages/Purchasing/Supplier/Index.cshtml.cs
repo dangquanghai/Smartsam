@@ -225,6 +225,7 @@ public class IndexModel : PageModel
         var successCount = 0;
         var notFoundCount = 0;
         var noAccessCount = 0;
+        var alreadyPreparingCount = 0;
 
         foreach (var supplierId in selectedIds)
         {
@@ -241,12 +242,18 @@ public class IndexModel : PageModel
                 continue;
             }
 
+            if ((supplier.Status ?? 0) == 0)
+            {
+                alreadyPreparingCount++;
+                continue;
+            }
+
             await _supplierService.ResetWorkflowToPreparingAsync(supplierId, cancellationToken);
             successCount++;
         }
 
         SetFlashMessage(
-            BuildSubmitMessage(successCount, notFoundCount, noAccessCount, selectedIds.Count),
+            BuildSubmitMessage(successCount, notFoundCount, noAccessCount, alreadyPreparingCount, selectedIds.Count),
             successCount > 0 ? "success" : "info");
         return RedirectToCurrentList();
     }
@@ -358,19 +365,21 @@ public class IndexModel : PageModel
         return ids.ToList();
     }
 
-    private static string BuildSubmitMessage(int successCount, int notFoundCount, int noAccessCount, int totalSelected)
+    private static string BuildSubmitMessage(int successCount, int notFoundCount, int noAccessCount, int alreadyPreparingCount, int totalSelected)
     {
         if (totalSelected == 1)
         {
-            if (successCount == 1) return "Supplier status was reset to Preparing.";
+            if (successCount == 1) return "Supplier submitted. Workflow reset to Preparing.";
             if (notFoundCount == 1) return "Supplier not found.";
             if (noAccessCount == 1) return "You do not have permission to submit this supplier.";
+            if (alreadyPreparingCount == 1) return "Supplier is already in Preparing status.";
         }
 
         var parts = new List<string>();
-        if (successCount > 0) parts.Add($"reset to preparing: {successCount}");
+        if (successCount > 0) parts.Add($"submitted and reset to preparing: {successCount}");
         if (notFoundCount > 0) parts.Add($"not found: {notFoundCount}");
         if (noAccessCount > 0) parts.Add($"no access: {noAccessCount}");
+        if (alreadyPreparingCount > 0) parts.Add($"already preparing: {alreadyPreparingCount}");
 
         return parts.Count == 0
             ? "No supplier status was changed."
