@@ -28,3 +28,5 @@ db/
 db/*
 !db/migrations/
 !db/migrations/**
+scripts/use-db-local.sh
+scripts/use-db-remote.sh

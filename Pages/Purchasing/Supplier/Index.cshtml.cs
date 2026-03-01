@@ -1,3 +1,4 @@
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -170,7 +171,7 @@ public class IndexModel : PageModel
         return RedirectToCurrentList();
     }
 
-    public async Task<IActionResult> OnGetExportCsvAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetExportExcelAsync(CancellationToken cancellationToken)
     {
         LoadPagePermissions();
         await LoadUserDataScopeAsync(cancellationToken);
@@ -180,22 +181,44 @@ public class IndexModel : PageModel
         }
 
         var rows = await _supplierService.SearchAsync(BuildCriteria(includePaging: false), cancellationToken);
-        var lines = new List<string>
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("Suppliers");
+        var headers = new[]
         {
-            "SupplierCode,SupplierName,Address,Phone,Mobile,Fax,Contact,Position,Business,Status,DeptCode"
+            "Supplier Code", "Supplier Name", "Address", "Phone", "Mobile",
+            "Fax", "Contact", "Position", "Business", "Status", "Dept"
         };
+        for (var col = 0; col < headers.Length; col++)
+        {
+            ws.Cell(1, col + 1).Value = headers[col];
+        }
+        ws.Row(1).Style.Font.Bold = true;
 
+        var rowIndex = 2;
         foreach (var r in rows)
         {
-            lines.Add(string.Join(",",
-                Csv(r.SupplierCode), Csv(r.SupplierName), Csv(r.Address), Csv(r.Phone),
-                Csv(r.Mobile), Csv(r.Fax), Csv(r.Contact), Csv(r.Position),
-                Csv(r.Business), Csv(r.SupplierStatusName), Csv(r.DeptCode)
-            ));
+            ws.Cell(rowIndex, 1).Value = r.SupplierCode ?? string.Empty;
+            ws.Cell(rowIndex, 2).Value = r.SupplierName ?? string.Empty;
+            ws.Cell(rowIndex, 3).Value = r.Address ?? string.Empty;
+            ws.Cell(rowIndex, 4).Value = r.Phone ?? string.Empty;
+            ws.Cell(rowIndex, 5).Value = r.Mobile ?? string.Empty;
+            ws.Cell(rowIndex, 6).Value = r.Fax ?? string.Empty;
+            ws.Cell(rowIndex, 7).Value = r.Contact ?? string.Empty;
+            ws.Cell(rowIndex, 8).Value = r.Position ?? string.Empty;
+            ws.Cell(rowIndex, 9).Value = r.Business ?? string.Empty;
+            ws.Cell(rowIndex, 10).Value = r.SupplierStatusName ?? string.Empty;
+            ws.Cell(rowIndex, 11).Value = r.DeptCode ?? string.Empty;
+            rowIndex++;
         }
+        ws.Columns().AdjustToContents();
 
-        var bytes = System.Text.Encoding.UTF8.GetBytes(string.Join("\n", lines));
-        return File(bytes, "text/csv", "suppliers.csv");
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        var fileName = $"suppliers_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+        return File(
+            stream.ToArray(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            fileName);
     }
 
     public async Task<IActionResult> OnPostSubmitAsync(CancellationToken cancellationToken)
@@ -326,17 +349,6 @@ public class IndexModel : PageModel
             PageIndex = includePaging ? PageIndex : null,
             PageSize = includePaging ? PageSize : null
         };
-    }
-
-    private static string Csv(string? value)
-    {
-        var v = value ?? string.Empty;
-        if (v.Contains(',') || v.Contains('"') || v.Contains('\n'))
-        {
-            return $"\"{v.Replace("\"", "\"\"")}\"";
-        }
-
-        return v;
     }
 
     private static string? NullIfEmpty(string? value)

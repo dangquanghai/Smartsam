@@ -234,7 +234,7 @@
                         }
                         @if (Model.PagePerm.HasPermission(1))
                         {
-                            <a asp-page="./Index" asp-page-handler="ExportCsv"
+                            <a asp-page="./Index" asp-page-handler="ExportExcel"
                                asp-route-ViewMode="@Model.ViewMode"
                                asp-route-Year="@Model.Year"
                                asp-route-DeptId="@Model.DeptId"
