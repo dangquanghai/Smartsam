@@ -30,3 +30,8 @@ db/*
 !db/migrations/**
 scripts/use-db-local.sh
 scripts/use-db-remote.sh
+
+# Local change tracking (do not commit)
+CHANGE_TRACKING.md
+user.md
+run.log
