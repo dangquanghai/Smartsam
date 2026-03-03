@@ -1,0 +1,389 @@
+@page
+@model SmartSam.Pages.Purchasing.MaterialRequest.IndexModel
+@{
+    ViewData["Title"] = "Material Request";
+    var messageType = (Model.MessageType ?? "info").ToLowerInvariant();
+    var useInlineAlert = !string.IsNullOrWhiteSpace(Model.Message);
+    var isStoremanMode = Model.IsStoremanConditionMode;
+    var allUsersDisabledAttr = isStoremanMode ? "disabled" : null;
+    var storemanDisabledAttr = isStoremanMode ? null : "disabled";
+    var currentPage = Model.PageIndex <= 0 ? 1 : Model.PageIndex;
+    var totalPages = Model.TotalPages <= 0 ? 1 : Model.TotalPages;
+    var pageStart = Model.TotalRecords == 0 ? 0 : ((currentPage - 1) * Model.PageSize) + 1;
+    var pageEnd = Model.TotalRecords == 0 ? 0 : Math.Min(currentPage * Model.PageSize, Model.TotalRecords);
+    var pagerFrom = Math.Max(1, currentPage - 2);
+    var pagerTo = Math.Min(totalPages, currentPage + 2);
+    Func<int, string> pageUrl = (page) => Url.Page("./Index", new
+    {
+        RequestNo = Model.RequestNo,
+        StoreGroup = Model.StoreGroup,
+        StatusIds = Model.StatusIds,
+        ItemCode = Model.ItemCode,
+        IssueLessThanOrder = Model.IssueLessThanOrder,
+        BuyGreaterThanZero = Model.BuyGreaterThanZero,
+        AutoOnly = Model.AutoOnly,
+        FromDate = Model.FromDate?.ToString("yyyy-MM-dd"),
+        ToDate = Model.ToDate?.ToString("yyyy-MM-dd"),
+        AccordingToKeyword = Model.AccordingToKeyword,
+        ConditionMode = Model.ConditionMode,
+        PageIndex = page,
+        PageSize = Model.PageSize
+    }) ?? "#";
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <div id="materialRequestResultPanelContainer">
+            @if (useInlineAlert)
+            {
+                var alertClass = messageType switch
+                {
+                    "success" => "alert-success",
+                    "warning" => "alert-warning",
+                    "error" => "alert-danger",
+                    _ => "alert-info"
+                };
+                var alertIcon = messageType switch
+                {
+                    "success" => "fas fa-check-circle",
+                    "warning" => "fas fa-exclamation-triangle",
+                    "error" => "fas fa-ban",
+                    _ => "fas fa-info-circle"
+                };
+                var alertTitle = messageType switch
+                {
+                    "error" => "Error",
+                    "warning" => "Warning",
+                    _ => "Notification"
+                };
+                <div class="alert @alertClass alert-dismissible mb-2">
+                    <div class="d-flex align-items-center pr-4">
+                        <i class="@alertIcon mr-2" aria-hidden="true"></i>
+                        <span class="font-weight-bold mr-1">@alertTitle:</span>
+                        <span>@Model.Message</span>
+                    </div>
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            }
+
+            <div class="row">
+                <div class="col-md-2">
+                    <div class="card card-info mr-search-panel">
+                        <div class="card-header p-2">
+                            <h3 class="card-title"><i class="fas fa-search"></i> Search</h3>
+                        </div>
+                <div class="card-body p-2">
+                    <form method="get" id="mrSearchForm">
+                        <input type="hidden" name="PageIndex" value="1" />
+                        <input type="hidden" name="PageSize" value="@Model.PageSize" />
+
+                        <div class="mr-header-filter-grid">
+                            <div class="mr-inline-field">
+                                <label class="mb-0 mr-2">Store Group</label>
+                                <select asp-for="StoreGroup"
+                                        asp-items="Model.StoreGroups"
+                                        class="form-control form-control-sm"
+                                        disabled="@Model.StoreGroupLocked"></select>
+                                @if (Model.StoreGroupLocked)
+                                {
+                                    <input type="hidden" asp-for="StoreGroup" />
+                                }
+                            </div>
+
+                            <div class="mr-inline-field">
+                                <label class="mb-0 mr-2">From Date</label>
+                                <input asp-for="FromDate" type="date" class="form-control form-control-sm" />
+                            </div>
+
+                            <div class="mr-inline-field">
+                                <label class="mb-0 mr-2">To Date</label>
+                                <input asp-for="ToDate" type="date" class="form-control form-control-sm" />
+                            </div>
+                        </div>
+
+                        <div class="mr-condition-search-row mt-2">
+                            <fieldset class="mr-condition-box @(isStoremanMode ? "mr-condition-group-disabled" : string.Empty)" data-condition-group="allUsers">
+                                <legend>
+                                    <span class="mr-condition-legend">
+                                        <input type="radio" id="conditionModeAllUsers" name="ConditionMode" value="allUsers" @(!isStoremanMode ? "checked" : null) />
+                                        <label for="conditionModeAllUsers" class="mb-0">Condition for all users</label>
+                                    </span>
+                                </legend>
+                                <div class="mr-condition-grid">
+                                    <div class="mr-inline-field mb-1">
+                                        <label class="mb-0 mr-2">Request No</label>
+                                        <input asp-for="RequestNo" class="form-control form-control-sm mr-request-no-input" disabled="@allUsersDisabledAttr" />
+                                    </div>
+                                    <div class="mr-inline-field mb-1">
+                                        <label class="mb-0 mr-2">Status</label>
+                                        <div class="dropdown mr-status-dropdown">
+                                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle text-left" type="button" id="mrStatusDropdownBtn" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" disabled="@allUsersDisabledAttr">
+                                                Select status
+                                            </button>
+                                            <div class="dropdown-menu p-2 mr-status-menu" aria-labelledby="mrStatusDropdownBtn">
+                                                @foreach (var status in Model.Statuses)
+                                                {
+                                                    if (!int.TryParse(status.Value, out var statusValue))
+                                                    {
+                                                        continue;
+                                                    }
+
+                                                    var statusCheckboxId = $"mrStatus_{statusValue}";
+                                                    var checkedAttr = Model.StatusIds.Contains(statusValue) ? "checked" : null;
+                                                    <div class="custom-control custom-checkbox mr-status-option">
+                                                        <input class="custom-control-input mr-status-checkbox" type="checkbox" id="@statusCheckboxId" name="StatusIds" value="@statusValue" data-label="@status.Text" @checkedAttr disabled="@allUsersDisabledAttr" />
+                                                        <label class="custom-control-label" for="@statusCheckboxId">@status.Text</label>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mr-inline-field mb-1">
+                                        <label class="mb-0 mr-2"></label>
+                                        <div class="custom-control custom-checkbox mr-micro-check">
+                                            <input asp-for="BuyGreaterThanZero" class="custom-control-input" disabled="@allUsersDisabledAttr" />
+                                            <label asp-for="BuyGreaterThanZero" class="custom-control-label">Buy &gt; 0</label>
+                                        </div>
+                                    </div>
+                                    <div class="mr-inline-field mb-1">
+                                        <label class="mb-0 mr-2"></label>
+                                        <div class="custom-control custom-checkbox mr-micro-check">
+                                            <input asp-for="AutoOnly" class="custom-control-input" disabled="@allUsersDisabledAttr" />
+                                            <label asp-for="AutoOnly" class="custom-control-label">Auto</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </fieldset>
+
+                            <fieldset class="mr-condition-box @(!isStoremanMode ? "mr-condition-group-disabled" : string.Empty)" data-condition-group="storeman">
+                                <legend>
+                                    <span class="mr-condition-legend">
+                                        <input type="radio" id="conditionModeStoreman" name="ConditionMode" value="storeman" @(isStoremanMode ? "checked" : null) />
+                                        <label for="conditionModeStoreman" class="mb-0">Condition for storeman</label>
+                                    </span>
+                                </legend>
+                                <div class="mr-condition-grid mr-condition-grid-store">
+                                    <div class="mr-inline-field mb-1">
+                                        <label class="mb-0 mr-2 mr-label-red">Item Code</label>
+                                        <input asp-for="ItemCode" class="form-control form-control-sm" disabled="@storemanDisabledAttr" />
+                                    </div>
+                                    <div class="mb-1 d-flex align-items-center mr-issue-inline">
+                                        <input asp-for="IssueLessThanOrder" id="IssueLessThanOrder" class="mr-2" disabled="@storemanDisabledAttr" />
+                                        <label for="IssueLessThanOrder" class="mb-0 mr-label-red">Issue &lt; Oder</label>
+                                    </div>
+                                </div>
+                            </fieldset>
+
+                            <div class="mr-search-actions">
+                                <button type="submit" class="btn btn-sm btn-primary mb-1">
+                                    <i class="fas fa-search"></i> Search
+                                </button>
+                                <a href="@Url.Page("./Index")" class="btn btn-sm btn-outline-secondary">
+                                    ADV Search
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-10">
+                    <div class="card card-primary">
+                    <div class="card-header border-bottom-0 mr-table-header">
+                        <div class="mr-table-header-left">
+                            <h3 class="card-title mb-0">Request</h3>
+                            <span class="badge badge-light ml-2">@Model.TotalRecords records</span>
+                        </div>
+                        <div class="mr-table-header-right app-paging-white">
+                            <small class="mr-table-paging-info">
+                                @if (Model.TotalRecords == 0)
+                                {
+                                    <text>Showing 0 to 0 of 0 entries</text>
+                                }
+                                else
+                                {
+                                    <text>Showing @pageStart to @pageEnd of @Model.TotalRecords entries</text>
+                                }
+                            </small>
+                            <ul class="pagination pagination-sm m-0">
+                                <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+                                    <a class="page-link" href="@(Model.HasPreviousPage ? pageUrl(currentPage - 1) : "#")">Prev</a>
+                                </li>
+                                @for (var p = pagerFrom; p <= pagerTo; p++)
+                                {
+                                    <li class="page-item @(p == currentPage ? "active" : "")">
+                                        <a class="page-link" href="@pageUrl(p)">@p</a>
+                                    </li>
+                                }
+                                <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+                                    <a class="page-link" href="@(Model.HasNextPage ? pageUrl(currentPage + 1) : "#")">Next</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                    <div class="table-responsive mr-table-wrap">
+                            <table class="table table-hover table-bordered mb-0 text-nowrap" id="mrTable">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>REQUEST_NO</th>
+                                        <th>DATE_CREATE</th>
+                                        <th>ACCORDINGTO</th>
+                                        <th>KPGroupName</th>
+                                        <th>MaterialStatusName</th>
+                                    <th>PRNO</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (Model.Rows.Count == 0)
+                                {
+                                    <tr><td colspan="6" class="text-center text-muted">No data</td></tr>
+                                }
+                                else
+                                {
+                                    foreach (var row in Model.Rows)
+                                    {
+                                        var detailUrl = Url.Page("./Detail", new { id = row.RequestNo });
+                                        <tr class="mr-row"
+                                            data-request-no="@row.RequestNo"
+                                            data-detail-url="@detailUrl">
+                                            <td class="mr-col-request-no">
+                                                <a href="@detailUrl" class="text-primary font-weight-600" onclick="event.stopPropagation();">
+                                                    @row.RequestNo
+                                                </a>
+                                            </td>
+                                            <td>@(row.DateCreate?.ToString("dd/MM/yyyy HH:mm") ?? "")</td>
+                                            <td>@row.AccordingTo</td>
+                                            <td>@row.KPGroupName</td>
+                                            <td>@(string.IsNullOrWhiteSpace(row.MaterialStatusName) ? row.MaterialStatusId?.ToString() : row.MaterialStatusName)</td>
+                                            <td>@row.PrNo</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer py-2 module-action-bar text-center">
+                    <button type="button" class="btn btn-sm btn-action-copy mx-1 my-1" disabled>CreateAT</button>
+                    @if (Model.CanCreate)
+                    {
+                        <button type="button" id="openCreateMrPopupBtn" class="btn btn-sm btn-action-add mx-1 my-1">Create MR</button>
+                    }
+                    <a href="@Url.Page("./Index", new { RequestNo = Model.RequestNo, StoreGroup = Model.StoreGroup, StatusIds = Model.StatusIds, ItemCode = Model.ItemCode, IssueLessThanOrder = Model.IssueLessThanOrder, BuyGreaterThanZero = Model.BuyGreaterThanZero, AutoOnly = Model.AutoOnly, FromDate = Model.FromDate?.ToString("yyyy-MM-dd"), ToDate = Model.ToDate?.ToString("yyyy-MM-dd"), AccordingToKeyword = Model.AccordingToKeyword, ConditionMode = Model.ConditionMode, PageIndex = Model.PageIndex, PageSize = Model.PageSize })"
+                       class="btn btn-sm btn-action-save mx-1 my-1">RefreshList</a>
+                    <button type="button" class="btn btn-sm btn-action-export mx-1 my-1" disabled>Excel</button>
+                    <a href="/Index" class="btn btn-sm btn-action-close mx-1 my-1">Close</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@if (Model.CanCreate)
+{
+    <div class="modal fade" id="createMrModal" tabindex="-1" role="dialog" aria-labelledby="createMrModalLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+        <div class="modal-dialog modal-xl" role="document">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title" id="createMrModalLabel">Create MR</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body pt-2 pb-1">
+                    <div class="row create-mr-modal-row">
+                        <div class="col-md-5 create-mr-column">
+                            <div class="create-mr-header-block">
+                                <div class="form-group mb-2">
+                                    <label class="mb-1">Item Code / Name</label>
+                                    <div class="create-mr-input-row">
+                                        <input type="text" id="createMrKeyword" class="form-control form-control-sm create-mr-text-input" />
+                                        <button type="button" id="createMrSearchBtn" class="btn btn-sm btn-primary create-mr-inline-btn">Search</button>
+                                    </div>
+                                </div>
+                                <div class="form-group mb-2">
+                                    <div class="custom-control custom-checkbox">
+                                        <input type="checkbox" id="createMrCheckBalance" class="custom-control-input" />
+                                        <label class="custom-control-label" for="createMrCheckBalance">Check Balance in Store</label>
+                                    </div>
+                                </div>
+                                <label class="mb-1">Search Result</label>
+                            </div>
+                            <div class="table-responsive border create-mr-table-wrap">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th style="width:28px"></th>
+                                            <th style="width:140px">Item Code</th>
+                                            <th>Item Name</th>
+                                            <th style="width:80px">Unit</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="createMrSearchResultBody">
+                                        <tr><td colspan="4" class="text-center text-muted">No data</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-center justify-content-center py-3">
+                            <div class="d-flex flex-column">
+                                <button type="button" id="createMrMoveRightBtn" class="btn btn-outline-primary btn-sm mb-2">&gt;</button>
+                                <button type="button" id="createMrMoveLeftBtn" class="btn btn-outline-secondary btn-sm">&lt;</button>
+                            </div>
+                        </div>
+                        <div class="col-md-5 create-mr-column">
+                            <form id="createMrSubmitForm" method="post" asp-page-handler="CreateMr" class="d-none">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="CreateDescription" id="createMrDescriptionInput" />
+                                <input type="hidden" name="CreateLinesJson" id="createMrLinesJsonInput" />
+                                <input type="hidden" name="CreateStoreGroup" id="createMrStoreGroupInput" />
+                            </form>
+                            <div class="create-mr-header-block">
+                                <div class="form-group mb-2">
+                                    <div class="mr-create-desc-wrap">
+                                        <label class="mb-1">Description <span class="text-danger">*</span></label>
+                                        <div class="create-mr-input-row create-mr-input-row-top">
+                                            <textarea id="createMrDescription" class="form-control form-control-sm create-mr-text-input create-mr-desc-textarea" rows="2"></textarea>
+                                            <button type="submit" form="createMrSubmitForm" class="btn btn-sm btn-primary create-mr-inline-btn" id="createMrConfirmBtn">Create MR</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <label class="mb-1">Selected Items</label>
+                            </div>
+                            <div class="table-responsive border create-mr-table-wrap">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th style="width:28px"></th>
+                                            <th style="width:140px">Item Code</th>
+                                            <th>Item Name</th>
+                                            <th style="width:80px">Unit</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="createMrSelectedBody">
+                                        <tr><td colspan="4" class="text-center text-muted">No selected item</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <small class="text-danger d-none mt-1" id="createMrValidation"></small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Purchasing/MaterialRequest/index.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script src="~/js/Purchasing/MaterialRequest/index.js" asp-append-version="true"></script>
+}

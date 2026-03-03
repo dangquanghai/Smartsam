@@ -2,6 +2,8 @@
 @model SmartSam.Pages.Purchasing.Supplier.IndexModel
 @{
     ViewData["Title"] = "Suppliers";
+    var messageType = (Model.MessageType ?? "info").ToLowerInvariant();
+    var useInlineAlert = !string.IsNullOrWhiteSpace(Model.Message);
     var currentPage = Model.PageIndex <= 0 ? 1 : Model.PageIndex;
     var totalPages = Model.TotalPages <= 0 ? 1 : Model.TotalPages;
     var pageStart = Model.TotalRecords == 0 ? 0 : ((currentPage - 1) * Model.PageSize) + 1;
@@ -109,6 +111,39 @@
 
             <!-- RESULT + ACTION (RIGHT) -->
             <div class="col-md-10" id="supplierResultPanelContainer">
+                @if (useInlineAlert)
+                {
+                    var alertClass = messageType switch
+                    {
+                        "success" => "alert-success",
+                        "warning" => "alert-warning",
+                        "error" => "alert-danger",
+                        _ => "alert-info"
+                    };
+                    var alertIcon = messageType switch
+                    {
+                        "success" => "fas fa-check-circle",
+                        "warning" => "fas fa-exclamation-triangle",
+                        "error" => "fas fa-ban",
+                        _ => "fas fa-info-circle"
+                    };
+                    var alertTitle = messageType switch
+                    {
+                        "error" => "Error",
+                        "warning" => "Warning",
+                        _ => "Notification"
+                    };
+                    <div class="alert @alertClass alert-dismissible mb-2">
+                        <div class="d-flex align-items-center pr-4">
+                            <i class="@alertIcon mr-2" aria-hidden="true"></i>
+                            <span class="font-weight-bold mr-1">@alertTitle:</span>
+                            <span>@Model.Message</span>
+                        </div>
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                }
                 <div class="card card-primary">
                     <div class="card-header supplier-table-header">
                         <div class="supplier-table-header-left">

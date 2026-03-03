@@ -253,15 +253,19 @@ ORDER BY s.SupplierID DESC";
             throw new InvalidOperationException("No valid supplier selected for copy.");
         }
 
-        var inClause = string.Join(", ", normalizedIds);
+        var selectedIdValues = string.Join(", ", normalizedIds.Select(id => $"({id})"));
 
         var sql = $@"
+                    CREATE TABLE #SelectedIds (SupplierID int NOT NULL PRIMARY KEY);
                     CREATE TABLE #CopyIds (SupplierID int NOT NULL PRIMARY KEY);
+
+                    INSERT INTO #SelectedIds (SupplierID)
+                    VALUES {selectedIdValues};
 
                     INSERT INTO #CopyIds (SupplierID)
                     SELECT s.SupplierID
                     FROM dbo.PC_Suppliers s
-                    WHERE s.SupplierID IN ({inClause})
+                    INNER JOIN #SelectedIds sel ON sel.SupplierID = s.SupplierID
                     AND NOT EXISTS (
                         SELECT 1
                         FROM dbo.PC_SupplierAnualy a
@@ -293,7 +297,7 @@ ORDER BY s.SupplierID DESC";
                     UPDATE s
                     SET s.IsNew = 0
                     FROM dbo.PC_Suppliers s
-                    INNER JOIN #CopyIds c ON c.SupplierID = s.SupplierID;";
+                    INNER JOIN #SelectedIds sel ON sel.SupplierID = s.SupplierID;";
 
         await using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync(cancellationToken);
