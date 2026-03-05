@@ -80,6 +80,27 @@ public class ApproveSupplierAnnualyService
             cancellationToken);
     }
 
+    public async Task<bool> SupplierCodeExistsAsync(string supplierCode, int? excludeSupplierId = null, CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+                            SELECT COUNT(1)
+                            FROM dbo.PC_Suppliers
+                            WHERE LTRIM(RTRIM(ISNULL(SupplierCode, ''))) = LTRIM(RTRIM(@SupplierCode))
+                            AND (@ExcludeSupplierId IS NULL OR SupplierID <> @ExcludeSupplierId);";
+
+        var result = await Helper.ExecuteScalarAsync(
+            _connectionString,
+            sql,
+            cmd =>
+            {
+                Helper.AddParameter(cmd, "@SupplierCode", supplierCode.Trim(), SqlDbType.NVarChar, 255);
+                Helper.AddParameter(cmd, "@ExcludeSupplierId", excludeSupplierId, SqlDbType.Int);
+            },
+            cancellationToken);
+
+        return Convert.ToInt32(result) > 0;
+    }
+
     public async Task<int?> GetSupplierDepartmentAsync(int supplierId, CancellationToken cancellationToken = default)
     {
         const string sql = @"
@@ -239,6 +260,127 @@ WHERE s.SupplierID = @SupplierID";
             },
             cmd => { Helper.AddParameter(cmd, "@SupplierID", supplierId, SqlDbType.Int); },
             cancellationToken);
+    }
+
+    public async Task<ApproveAnnualPurchaseOrderInfoDto> GetPurchaseOrderInfoAsync(int supplierId, int currentYear, CancellationToken cancellationToken = default)
+    {
+        var targetYear = currentYear - 1;
+
+        const string sqlCountPo = @"
+SELECT COUNT(1)
+FROM dbo.PC_PO
+WHERE SupplierID = @SupplierID
+  AND YEAR(PODate) = @TheYear;";
+
+        const string sqlTotalCost = @"
+SELECT
+    ISNULL(SUM(
+        CASE
+            WHEN p.Currency = 1 THEN d.POAmount
+            ELSE d.POAmount * p.ExRate
+        END
+    ), 0) AS POAmountVND
+FROM dbo.PC_PO p
+INNER JOIN dbo.PC_PODetail d ON p.POID = d.POID
+WHERE YEAR(p.PODate) = @TheYear
+  AND p.SupplierID = @SupplierID;";
+
+        const string sqlRows = @"
+SELECT
+    e.PO_IndexDetailID,
+    i.PO_IndexName AS IndexName,
+    id.PO_IndexDetailName AS SubIndex,
+    COUNT(p.POID) AS TheTime,
+    e.Point
+FROM dbo.PC_PO p
+INNER JOIN dbo.PO_Estimate e ON p.POID = e.POID
+INNER JOIN dbo.PO_IndexDetail id ON e.PO_IndexDetailID = id.PO_IndexDetailID
+INNER JOIN dbo.PO_Index i ON id.PO_Index = i.PO_Index
+WHERE YEAR(e.TheDate) = @TheYear
+  AND p.SupplierID = @SupplierID
+GROUP BY
+    e.PO_IndexDetailID,
+    i.PO_IndexName,
+    id.PO_IndexDetailName,
+    e.Point
+ORDER BY
+    e.PO_IndexDetailID;";
+
+        var countObj = await Helper.ExecuteScalarAsync(
+            _connectionString,
+            sqlCountPo,
+            cmd =>
+            {
+                Helper.AddParameter(cmd, "@SupplierID", supplierId, SqlDbType.Int);
+                Helper.AddParameter(cmd, "@TheYear", targetYear, SqlDbType.Int);
+            },
+            cancellationToken);
+
+        var totalCostObj = await Helper.ExecuteScalarAsync(
+            _connectionString,
+            sqlTotalCost,
+            cmd =>
+            {
+                Helper.AddParameter(cmd, "@SupplierID", supplierId, SqlDbType.Int);
+                Helper.AddParameter(cmd, "@TheYear", targetYear, SqlDbType.Int);
+            },
+            cancellationToken);
+
+        var rows = await Helper.QueryAsync(
+            _connectionString,
+            sqlRows,
+            rd => new ApproveAnnualPurchaseOrderRowDto
+            {
+                PO_IndexDetailID = rd.IsDBNull(0) ? 0 : Convert.ToInt32(rd[0]),
+                IndexName = rd[1]?.ToString() ?? string.Empty,
+                SubIndex = rd[2]?.ToString() ?? string.Empty,
+                TheTime = rd.IsDBNull(3) ? 0 : Convert.ToInt32(rd[3]),
+                Point = rd.IsDBNull(4) ? 0m : Convert.ToDecimal(rd[4])
+            },
+            cmd =>
+            {
+                Helper.AddParameter(cmd, "@SupplierID", supplierId, SqlDbType.Int);
+                Helper.AddParameter(cmd, "@TheYear", targetYear, SqlDbType.Int);
+            },
+            cancellationToken);
+
+        return new ApproveAnnualPurchaseOrderInfoDto
+        {
+            Year = targetYear,
+            CountPO = countObj is null || countObj == DBNull.Value ? 0 : Convert.ToInt32(countObj),
+            TotalCost = totalCostObj is null || totalCostObj == DBNull.Value ? 0m : Convert.ToDecimal(totalCostObj),
+            Rows = rows.ToList()
+        };
+    }
+
+    public async Task<IReadOnlyList<ApproveAnnualSupplierServiceRowDto>> GetSupplierServiceRowsAsync(int supplierId, CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+SELECT
+    TheDate,
+    Comment,
+    ThePoint,
+    WarrantyOrService,
+    UserCode
+FROM dbo.PC_SupplierService_TMP
+WHERE SupplierID = @SupplierID
+ORDER BY TheDate DESC;";
+
+        var rows = await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd => new ApproveAnnualSupplierServiceRowDto
+            {
+                TheDate = rd.IsDBNull(0) ? null : Convert.ToDateTime(rd[0]),
+                Comment = rd[1]?.ToString() ?? string.Empty,
+                ThePoint = rd.IsDBNull(2) ? null : Convert.ToInt32(rd[2]),
+                WarrantyOrService = rd.IsDBNull(3) ? null : Convert.ToInt32(rd[3]),
+                UserCode = rd[4]?.ToString() ?? string.Empty
+            },
+            cmd => { Helper.AddParameter(cmd, "@SupplierID", supplierId, SqlDbType.Int); },
+            cancellationToken);
+
+        return rows;
     }
 
     public async Task ApproveSupplierAsync(int supplierId, string operatorCode, CancellationToken cancellationToken = default)

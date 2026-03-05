@@ -44,105 +44,99 @@
                 else
                 {
                     <form method="post" id="approveSupplierForm">
+                        <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
                         <input type="hidden" asp-for="DeptId" />
                         <input type="hidden" asp-for="PageIndex" />
                         <input type="hidden" asp-for="PageSize" />
                         <input type="hidden" asp-for="CurrentSupplierId" />
                         <input type="hidden" asp-for="EditSupplier.SupplierID" />
 
-                        <table class="table table-sm table-borderless approve-form-table mb-2">
-                            <colgroup>
-                                <col class="approve-col-label" />
-                                <col class="approve-col-input" />
-                                <col class="approve-col-label" />
-                                <col class="approve-col-input" />
-                                <col class="approve-col-label" />
-                                <col class="approve-col-input" />
-                                <col class="approve-col-label-sm" />
-                                <col class="approve-col-check" />
-                            </colgroup>
-                            <tbody>
-                                <tr>
-                                    <th>Supplier Code</th>
-                                    <td>
-                                        <input asp-for="EditSupplier.SupplierCode" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
-                                    </td>
-                                    <th>Supplier Name</th>
-                                    <td>
-                                        <input asp-for="EditSupplier.SupplierName" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
-                                    </td>
-                                    <th>Address</th>
-                                    <td>
-                                        <input asp-for="EditSupplier.Address" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
-                                    </td>
-                                    <th class="text-right">IsNew</th>
-                                    <td class="text-center isnew-cell">
-                                        <input asp-for="EditSupplier.IsNew" type="checkbox" disabled="@(editAll ? null : "disabled")" />
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <th>Phone</th>
-                                    <td>
-                                        <input asp-for="EditSupplier.Phone" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
-                                    </td>
-                                    <th>Fax</th>
-                                    <td>
-                                        <input asp-for="EditSupplier.Fax" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
-                                    </td>
-                                    <th>Certificate</th>
-                                    <td>
-                                        <input asp-for="EditSupplier.Certificate" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
-                                    </td>
-                                    <th class="text-right">Document</th>
-                                    <td class="text-center isnew-cell">
-                                        <input asp-for="EditSupplier.Document" type="checkbox" disabled="@(editAll ? null : "disabled")" />
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <th>Business</th>
-                                    <td colspan="7">
-                                        <input asp-for="EditSupplier.Business" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <th>Contact</th>
-                                    <td>
-                                        <input asp-for="EditSupplier.Contact" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
-                                    </td>
-                                    <th>Position</th>
-                                    <td>
-                                        <input asp-for="EditSupplier.Position" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
-                                    </td>
-                                    <th>Mobile</th>
-                                    <td>
-                                        <input asp-for="EditSupplier.Mobile" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
-                                    </td>
-                                    <th></th>
-                                    <td></td>
-                                </tr>
-                                <tr>
-                                    <th>Service</th>
-                                    <td colspan="7">
-                                        <textarea asp-for="EditSupplier.Service" class="form-control form-control-sm" rows="2" readonly="@(editAll ? null : "readonly")"></textarea>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <th>Comment</th>
-                                    <td colspan="7">
-                                        <div class="d-flex align-items-start">
-                                            <textarea asp-for="EditSupplier.Comment" class="form-control form-control-sm mr-2" rows="2" readonly="@((editAll || commentOnly) ? null : "readonly")"></textarea>
-                                            <button
-                                                type="submit"
-                                                formaction="?handler=SaveMoreComment"
-                                                class="btn btn-sm btn-secondary text-nowrap"
-                                                disabled="@(!Model.CanEditComment ? "disabled" : null)">
-                                                More Comment
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <div class="approve-detail-grid mb-2">
+                            <label class="approve-detail-label">Supplier Code<span class="required-mark">*</span></label>
+                            <div class="approve-detail-control">
+                                <input asp-for="EditSupplier.SupplierCode" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" required="@(editAll ? "required" : null)" />
+                                <span asp-validation-for="EditSupplier.SupplierCode" class="text-danger small"></span>
+                            </div>
+
+                            <label class="approve-detail-label">Supplier Name<span class="required-mark">*</span></label>
+                            <div class="approve-detail-control">
+                                <input asp-for="EditSupplier.SupplierName" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" required="@(editAll ? "required" : null)" />
+                                <span asp-validation-for="EditSupplier.SupplierName" class="text-danger small"></span>
+                            </div>
+
+                            <label class="approve-detail-label">Business</label>
+                            <div class="approve-detail-control">
+                                <input asp-for="EditSupplier.Business" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
+                            </div>
+
+                            <label class="approve-detail-label approve-detail-label-right">IsNew</label>
+                            <div class="approve-detail-check">
+                                <input asp-for="EditSupplier.IsNew" type="checkbox" disabled="@(editAll ? null : "disabled")" />
+                            </div>
+
+                            <label class="approve-detail-label">Address<span class="required-mark">*</span></label>
+                            <div class="approve-detail-control approve-detail-span-7">
+                                <textarea asp-for="EditSupplier.Address" class="form-control form-control-sm" rows="2" readonly="@(editAll ? null : "readonly")" required="@(editAll ? "required" : null)"></textarea>
+                                <span asp-validation-for="EditSupplier.Address" class="text-danger small"></span>
+                            </div>
+
+                            <label class="approve-detail-label">Phone</label>
+                            <div class="approve-detail-control">
+                                <input asp-for="EditSupplier.Phone" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
+                            </div>
+
+                            <label class="approve-detail-label">Fax</label>
+                            <div class="approve-detail-control">
+                                <input asp-for="EditSupplier.Fax" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
+                            </div>
+
+                            <label class="approve-detail-label">Certificate</label>
+                            <div class="approve-detail-control">
+                                <input asp-for="EditSupplier.Certificate" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
+                            </div>
+
+                            <label class="approve-detail-label approve-detail-label-right">Document</label>
+                            <div class="approve-detail-check">
+                                <input asp-for="EditSupplier.Document" type="checkbox" disabled="@(editAll ? null : "disabled")" />
+                            </div>
+
+                            <label class="approve-detail-label">Contact</label>
+                            <div class="approve-detail-control">
+                                <input asp-for="EditSupplier.Contact" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
+                            </div>
+
+                            <label class="approve-detail-label">Position</label>
+                            <div class="approve-detail-control">
+                                <input asp-for="EditSupplier.Position" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
+                            </div>
+
+                            <label class="approve-detail-label">Mobile</label>
+                            <div class="approve-detail-control">
+                                <input asp-for="EditSupplier.Mobile" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
+                            </div>
+
+                            <div class="approve-detail-empty"></div>
+                            <div class="approve-detail-empty"></div>
+
+                            <label class="approve-detail-label">Service</label>
+                            <div class="approve-detail-control approve-detail-span-7">
+                                <textarea asp-for="EditSupplier.Service" class="form-control form-control-sm" rows="2" readonly="@(editAll ? null : "readonly")"></textarea>
+                            </div>
+
+                            <label class="approve-detail-label">Comment</label>
+                            <div class="approve-detail-control approve-detail-span-7">
+                                <div class="d-flex align-items-start">
+                                    <textarea asp-for="EditSupplier.Comment" class="form-control form-control-sm mr-2" rows="2" readonly="@((editAll || commentOnly) ? null : "readonly")"></textarea>
+                                    <button
+                                        type="submit"
+                                        formaction="?handler=SaveMoreComment"
+                                        class="btn btn-sm btn-secondary text-nowrap"
+                                        disabled="@(!Model.CanEditComment ? "disabled" : null)">
+                                        More Comment
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
 
                         <div class="d-flex align-items-center mb-2 module-action-bar">
                             <div class="d-flex align-items-center flex-wrap">
@@ -240,21 +234,73 @@
                 <h3 class="card-title">Purchase Order Information</h3>
             </div>
             <div class="card-body p-2">
-                <div class="font-weight-bold">CountPO:3, Total Cost:376666 VND</div>
+                <div class="font-weight-bold">CountPO: @Model.PurchaseOrderInfo.CountPO, Total Cost: @Model.PurchaseOrderInfo.TotalCost.ToString("N0") VND</div>
                 <table class="table table-bordered table-sm mt-2 mb-0">
                     <thead>
                         <tr>
                             <th style="width:30%">Index Name</th>
-                            <th style="width:30%">Sub Index</th>
-                            <th style="width:20%">The Time</th>
-                            <th style="width:20%">Point</th>
+                            <th style="width:40%">Sub Index</th>
+                            <th style="width:15%">TheTime</th>
+                            <th style="width:15%">Point</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr><td>Delivery Time</td><td>Meet requirement</td><td>2</td><td>4</td></tr>
-                        <tr><td>Goods Quality</td><td>Very Good</td><td>2</td><td>4</td></tr>
-                        <tr><td>Supply Goods Quantity as per P.O</td><td>Always inadequate</td><td>2</td><td>4</td></tr>
-                        <tr><td>Price</td><td>The same price with other subcontractors</td><td>4</td><td>3</td></tr>
+                        @if (Model.PurchaseOrderInfo.Rows.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">No PO information in year @Model.PurchaseOrderInfo.Year.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var po in Model.PurchaseOrderInfo.Rows)
+                            {
+                                <tr>
+                                    <td>@(string.IsNullOrWhiteSpace(po.IndexName) ? "-" : po.IndexName)</td>
+                                    <td>@(string.IsNullOrWhiteSpace(po.SubIndex) ? "-" : po.SubIndex)</td>
+                                    <td>@po.TheTime</td>
+                                    <td>@po.Point.ToString("0.##")</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card card-secondary card-outline mt-2">
+            <div class="card-header p-2">
+                <h3 class="card-title">Warranty Service</h3>
+            </div>
+            <div class="card-body p-2">
+                <table class="table table-bordered table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width:20%">TheDate</th>
+                            <th style="width:45%">Comment</th>
+                            <th style="width:15%">ThePoint</th>
+                            <th style="width:20%">WarrantyOrService</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.SupplierServiceRows.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">No service data.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var row in Model.SupplierServiceRows)
+                            {
+                                <tr>
+                                    <td>@(row.TheDate.HasValue ? row.TheDate.Value.ToString("dd/MM/yyyy") : "-")</td>
+                                    <td>@(string.IsNullOrWhiteSpace(row.Comment) ? "-" : row.Comment)</td>
+                                    <td>@(row.ThePoint.HasValue ? row.ThePoint.Value.ToString() : "-")</td>
+                                    <td>@(row.WarrantyOrService.HasValue ? row.WarrantyOrService.Value.ToString() : "-")</td>
+                                </tr>
+                            }
+                        }
                     </tbody>
                 </table>
             </div>

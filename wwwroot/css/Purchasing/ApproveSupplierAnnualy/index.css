@@ -2,6 +2,10 @@
     min-width: 110px;
 }
 
+.card-header .card-title {
+    font-weight: 700;
+}
+
 .module-action-bar .btn-action-add {
     background-color: #28a745;
     border-color: #28a745;
@@ -72,6 +76,98 @@
 .approve-form-table .isnew-cell {
     width: 56px;
     white-space: nowrap;
+}
+
+.approve-form-table .required-mark {
+    color: #dc3545;
+    margin-left: 2px;
+}
+
+.approve-detail-grid {
+    display: grid;
+    grid-template-columns: 100px minmax(180px, 1fr) 100px minmax(180px, 1fr) 100px minmax(180px, 1fr) 88px 56px;
+    column-gap: .5rem;
+    row-gap: .5rem;
+    align-items: center;
+}
+
+.approve-detail-label {
+    display: block;
+    width: 100%;
+    justify-self: stretch;
+    margin: 0;
+    font-size: .9rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    font-weight: 600;
+    text-align: right;
+    padding-right: .35rem;
+}
+
+.approve-detail-label-right {
+    text-align: right;
+}
+
+.approve-detail-control {
+    min-width: 0;
+}
+
+.approve-detail-control .form-control-sm {
+    margin: 0;
+}
+
+.approve-detail-control .text-danger {
+    display: block;
+    margin-top: .2rem;
+    line-height: 1.1;
+}
+
+.approve-detail-check {
+    min-height: 31px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.approve-detail-check input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+}
+
+.approve-detail-span-7 {
+    grid-column: span 7;
+}
+
+.approve-detail-empty {
+    min-height: 1px;
+}
+
+.approve-detail-grid .required-mark {
+    color: #dc3545;
+    margin-left: 2px;
+}
+
+@media (max-width: 1199.98px) {
+    .approve-detail-grid {
+        grid-template-columns: 140px minmax(0, 1fr);
+    }
+
+    .approve-detail-label-right {
+        text-align: left;
+    }
+
+    .approve-detail-check {
+        justify-content: flex-start;
+    }
+
+    .approve-detail-span-7 {
+        grid-column: auto;
+    }
+
+    .approve-detail-empty {
+        display: none;
+    }
 }
 
 .nav-mini-btn {

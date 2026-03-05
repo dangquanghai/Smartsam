@@ -82,7 +82,15 @@
                     kind,
                     onConfirm: () => {
                         form.action = `?handler=${handler}`;
-                        form.submit();
+                        if (!form.checkValidity()) {
+                            form.reportValidity();
+                            return;
+                        }
+                        if (typeof form.requestSubmit === "function") {
+                            form.requestSubmit();
+                        } else {
+                            form.submit();
+                        }
                     }
                 });
             });

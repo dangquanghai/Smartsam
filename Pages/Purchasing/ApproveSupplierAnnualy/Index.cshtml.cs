@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using System.ComponentModel.DataAnnotations;
+using SmartSam.Pages.Purchasing.Supplier;
 using SmartSam.Services;
 
 namespace SmartSam.Pages.Purchasing.ApproveSupplierAnnualy;
@@ -70,6 +72,8 @@ public class IndexModel : PageModel
     public bool HasLastSupplier => LastSupplierId.HasValue && CurrentSupplierPosition < CurrentPageSupplierCount;
     public bool HasPrevSupplier => PrevSupplierId.HasValue;
     public bool HasNextSupplier => NextSupplierId.HasValue;
+    public ApproveAnnualPurchaseOrderInfoDto PurchaseOrderInfo { get; private set; } = new();
+    public List<ApproveAnnualSupplierServiceRowDto> SupplierServiceRows { get; private set; } = [];
 
     public int? LevelCheckSupplier => _dataScope.LevelCheckSupplier;
     public bool CanEditAllSupplierFields => _isAdminRole || _dataScope.LevelCheckSupplier == 1;
@@ -130,6 +134,20 @@ public class IndexModel : PageModel
         if (!CanEditAllSupplierFields && !CanEditCommentOnly)
         {
             return Forbid();
+        }
+
+        var saveValidationMessage = await ValidateSupplierInputLikeDetailAsync(
+            supplierId,
+            current,
+            EditSupplier,
+            CanEditAllSupplierFields,
+            CanEditComment,
+            cancellationToken);
+        if (!string.IsNullOrWhiteSpace(saveValidationMessage))
+        {
+            CurrentSupplierId = supplierId;
+            SetFlashMessage(saveValidationMessage, "warning");
+            return RedirectToCurrentList();
         }
 
         await _approveService.UpdateSupplierForApprovalAsync(supplierId, EditSupplier, CanEditAllSupplierFields, cancellationToken);
@@ -193,6 +211,20 @@ public class IndexModel : PageModel
         if (!CanAccessDepartment(current.DeptID))
         {
             return Forbid();
+        }
+
+        var approveValidationMessage = await ValidateSupplierInputLikeDetailAsync(
+            supplierId,
+            current,
+            EditSupplier,
+            CanEditAllSupplierFields,
+            CanEditComment,
+            cancellationToken);
+        if (!string.IsNullOrWhiteSpace(approveValidationMessage))
+        {
+            CurrentSupplierId = supplierId;
+            SetFlashMessage(approveValidationMessage, "warning");
+            return RedirectToCurrentList();
         }
 
         await LoadRowsAsync(cancellationToken);
@@ -367,6 +399,8 @@ public class IndexModel : PageModel
     private async Task LoadCurrentSupplierDetailAsync(CancellationToken cancellationToken)
     {
         CurrentSupplierDetail = null;
+        PurchaseOrderInfo = new ApproveAnnualPurchaseOrderInfoDto();
+        SupplierServiceRows = [];
         CurrentSupplierPosition = 0;
         FirstSupplierId = null;
         LastSupplierId = null;
@@ -399,6 +433,17 @@ public class IndexModel : PageModel
         EditSupplier = CurrentSupplierDetail is null
             ? new ApproveAnnualSupplierDetailDto()
             : CloneForEdit(CurrentSupplierDetail);
+
+        if (CurrentSupplierDetail is not null)
+        {
+            PurchaseOrderInfo = await _approveService.GetPurchaseOrderInfoAsync(
+                CurrentSupplierDetail.SupplierID,
+                DateTime.Now.Year,
+                cancellationToken);
+            SupplierServiceRows = (await _approveService.GetSupplierServiceRowsAsync(
+                CurrentSupplierDetail.SupplierID,
+                cancellationToken)).ToList();
+        }
     }
 
     private ApproveAnnualFilterCriteria BuildCriteria(bool includePaging = true)
@@ -560,4 +605,84 @@ public class IndexModel : PageModel
             SupplierStatusName = source.SupplierStatusName
         };
     }
+
+    private async Task<string?> ValidateSupplierInputLikeDetailAsync(
+        int supplierId,
+        ApproveAnnualSupplierDetailDto current,
+        ApproveAnnualSupplierDetailDto posted,
+        bool canEditAllFields,
+        bool canEditComment,
+        CancellationToken cancellationToken)
+    {
+        var model = new SupplierDetailDto
+        {
+            SupplierCode = canEditAllFields ? posted.SupplierCode : current.SupplierCode,
+            SupplierName = canEditAllFields ? posted.SupplierName : current.SupplierName,
+            Address = canEditAllFields ? posted.Address : current.Address,
+            Phone = canEditAllFields ? posted.Phone : current.Phone,
+            Mobile = canEditAllFields ? posted.Mobile : current.Mobile,
+            Fax = canEditAllFields ? posted.Fax : current.Fax,
+            Contact = canEditAllFields ? posted.Contact : current.Contact,
+            Position = canEditAllFields ? posted.Position : current.Position,
+            Business = canEditAllFields ? posted.Business : current.Business,
+            Document = canEditAllFields ? posted.Document : current.Document,
+            Certificate = canEditAllFields ? posted.Certificate : current.Certificate,
+            Service = canEditAllFields ? posted.Service : current.Service,
+            Comment = canEditComment ? posted.Comment : current.Comment,
+            IsNew = canEditAllFields ? posted.IsNew : current.IsNew,
+            CodeOfAcc = canEditAllFields ? posted.CodeOfAcc : current.CodeOfAcc,
+            DeptID = current.DeptID,
+            Status = current.Status
+        };
+
+        model.SupplierCode = NormalizeText(model.SupplierCode);
+        model.SupplierName = NormalizeText(model.SupplierName);
+        model.Address = NormalizeText(model.Address);
+        model.Phone = NormalizeText(model.Phone);
+        model.Mobile = NormalizeText(model.Mobile);
+        model.Fax = NormalizeText(model.Fax);
+        model.Contact = NormalizeText(model.Contact);
+        model.Position = NormalizeText(model.Position);
+        model.Business = NormalizeText(model.Business);
+        model.Certificate = NormalizeText(model.Certificate);
+        model.Service = NormalizeText(model.Service);
+        model.Comment = NormalizeText(model.Comment);
+        model.CodeOfAcc = NormalizeText(model.CodeOfAcc);
+
+        var context = new ValidationContext(model);
+        var results = new List<ValidationResult>();
+        if (!Validator.TryValidateObject(model, context, results, validateAllProperties: true))
+        {
+            var firstError = results.FirstOrDefault()?.ErrorMessage;
+            return string.IsNullOrWhiteSpace(firstError) ? "Supplier data is invalid." : firstError;
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.SupplierCode))
+        {
+            var exists = await _approveService.SupplierCodeExistsAsync(model.SupplierCode, supplierId, cancellationToken);
+            if (exists)
+            {
+                return "Supplier code already exists.";
+            }
+        }
+
+        posted.SupplierCode = model.SupplierCode ?? string.Empty;
+        posted.SupplierName = model.SupplierName ?? string.Empty;
+        posted.Address = model.Address ?? string.Empty;
+        posted.Phone = model.Phone ?? string.Empty;
+        posted.Mobile = model.Mobile ?? string.Empty;
+        posted.Fax = model.Fax ?? string.Empty;
+        posted.Contact = model.Contact ?? string.Empty;
+        posted.Position = model.Position ?? string.Empty;
+        posted.Business = model.Business ?? string.Empty;
+        posted.Certificate = model.Certificate ?? string.Empty;
+        posted.Service = model.Service ?? string.Empty;
+        posted.Comment = model.Comment ?? string.Empty;
+        posted.CodeOfAcc = model.CodeOfAcc ?? string.Empty;
+
+        return null;
+    }
+
+    private static string? NormalizeText(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

@@ -70,3 +70,29 @@ public class ApproveAnnualEmployeeDataScopeDto
     public bool CanAsk { get; set; }
     public int? LevelCheckSupplier { get; set; }
 }
+
+public class ApproveAnnualPurchaseOrderInfoDto
+{
+    public int Year { get; set; }
+    public int CountPO { get; set; }
+    public decimal TotalCost { get; set; }
+    public List<ApproveAnnualPurchaseOrderRowDto> Rows { get; set; } = [];
+}
+
+public class ApproveAnnualPurchaseOrderRowDto
+{
+    public int PO_IndexDetailID { get; set; }
+    public string IndexName { get; set; } = string.Empty;
+    public string SubIndex { get; set; } = string.Empty;
+    public int TheTime { get; set; }
+    public decimal Point { get; set; }
+}
+
+public class ApproveAnnualSupplierServiceRowDto
+{
+    public DateTime? TheDate { get; set; }
+    public string Comment { get; set; } = string.Empty;
+    public int? ThePoint { get; set; }
+    public int? WarrantyOrService { get; set; }
+    public string UserCode { get; set; } = string.Empty;
+}
