@@ -194,10 +194,18 @@ function openServiceModal() {
         return;
     }
 
+    // Đóng select2 để tránh lỗi hiển thị đè lên modal
+    if ($.fn.select2) {
+        $('#CompanyId, #AgentCompanyId').select2('close');
+    }
+
     $('#formService')[0].reset();
     $('#svc_ContractID').val(contractId);
+
+    // Gán ngày mặc định từ hợp đồng
     $('#svc_FromDate').val($('#ContractFromDate').val());
     $('#svc_ToDate').val($('#ContractToDate').val());
+
     $('#modalService').modal('show');
 }
 
@@ -209,7 +217,8 @@ function saveContractService() {
         ServiceToDate: $('#svc_ToDate').val(),
         ChargeInterval: parseInt($('#svc_Interval').val()),
         ChargeType: parseInt($('#svc_Type').val()),
-        MaxQuantity: parseFloat($('#svc_Qty').val()),
+        ChargeAmount: parseFloat($('#svc_ChargeAmount').val().replace(/,/g, '')) || 0, // BỔ SUNG DÒNG NÀY
+        MaxQuantity: parseFloat($('#svc_Qty').val()) || 0,
         Notes: $('#svc_Notes').val()
     };
 
@@ -224,7 +233,7 @@ function saveContractService() {
         success: function (res) {
             if (res.success) {
                 $('#modalService').modal('hide');
-                loadServiceGrid();
+                loadServiceGrid(); // Load lại lưới bằng AJAX
                 if (typeof toastr !== 'undefined') toastr.success('Saved successfully!');
             } else {
                 alert("Error: " + res.message);
@@ -234,23 +243,64 @@ function saveContractService() {
 }
 
 function loadServiceGrid() {
-    var contractId = $('#ContractId').val();
+    var contractId = $('#Contract_ContractID').val() || $('#ContractId').val();
     if (!contractId || contractId == "0") return;
 
-    $.get('?handler=ContractServices', { contractId }, function (data) {
+    $.get('?handler=ContractServices', { contractId: contractId }, function (data) {
         var $tbody = $('#tableServices tbody').empty();
+
         if (data && data.length > 0) {
             $.each(data, function (i, item) {
                 $tbody.append(`<tr>
-                    <td>${item.ServiceName}</td>
-                    <td>${moment(item.ServiceFromDate).format('DD/MM/YYYY')}</td>
-                    <td>${moment(item.ServiceToDate).format('DD/MM/YYYY')}</td>
-                    <td class="text-center"><span class="badge badge-info">${item.ChargeIntervalName}</span></td>
-                    <td class="text-right text-bold">${new Intl.NumberFormat('en-US').format(item.UnitPrice || 0)}</td>
+                    <td class="text-center">
+                        <input type="radio" name="selectedService" value="${item.contractServiceID || item.ContractServiceID}" />
+                    </td>
+                    <td>${item.serviceName || item.ServiceName || ""}</td>
+                    <td class="text-center">${item.serviceFromDate ? moment(item.serviceFromDate).format('DD/MM/YYYY') : (item.ServiceFromDate ? moment(item.ServiceFromDate).format('DD/MM/YYYY') : "")}</td>
+                    <td class="text-center">${item.serviceToDate ? moment(item.serviceToDate).format('DD/MM/YYYY') : (item.ServiceToDate ? moment(item.ServiceToDate).format('DD/MM/YYYY') : "")}</td>
+
+                    <td class="text-center">${item.chargeIntervalName || item.ChargeIntervalName || ""}</td>
+                    <td class="text-center">${item.chargeTypeName || item.ChargeTypeName || ""}</td>
+                    <td class="text-right">${new Intl.NumberFormat('en-US').format(item.chargeAmount || item.ChargeAmount || 0)}</td>
+                    <td class="text-center">${item.maxQuantity || item.MaxQuantity || 0}</td>
+                    <td><small>${item.notes || item.Notes || ""}</small></td>
                 </tr>`);
             });
         } else {
-            $tbody.append('<tr><td colspan="5" class="text-center text-muted">No services found</td></tr>');
+            $tbody.append('<tr><td colspan="9" class="text-center text-muted">No services found</td></tr>');
         }
     });
 }
+
+function removeSelectedService() {
+    var selectedId = $('input[name="selectedService"]:checked').val();
+
+    if (!selectedId) {
+        alert("Pls select a service to remove.");
+        return;
+    }
+
+    if (confirm("Are you sure to remove?")) {
+        $.ajax({
+            type: "POST",
+            url: window.location.pathname + "?handler=DeleteService",
+            data: { id: selectedId },
+            beforeSend: function (xhr) {
+                xhr.setRequestHeader("RequestVerificationToken",
+                    $('input:hidden[name="__RequestVerificationToken"]').val());
+            },
+            success: function (response) {
+                if (response.success) {
+                    loadServiceGrid(); // Thay vì reload trang, chỉ load lại grid cho mượt
+                    if (typeof toastr !== 'undefined') toastr.success(response.message);
+                } else {
+                    alert(response.message);
+                }
+            },
+            error: function () {
+                alert("System connection error.");
+            }
+        });
+    }
+}
+

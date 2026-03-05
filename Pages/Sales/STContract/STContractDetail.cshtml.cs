@@ -8,6 +8,7 @@ using Microsoft.Data.SqlClient;
 using System.Data;
 using System.ComponentModel.DataAnnotations;
 using Dapper;
+using Google.Api;
 
 namespace SmartSam.Pages.Sales.STContract
 {
@@ -495,15 +496,15 @@ namespace SmartSam.Pages.Sales.STContract
         {
             // Câu SQL theo yêu cầu của bạn
             string sql = @"
-            SELECT cs.ContractServiceID, sv.ServiceName, 
+            SELECT cs.ContractServiceID, cs.ContractID, sv.ServiceName, 
             cs.ServiceFromDate, cs.ServiceToDate, 
             itv.ChargeIntervalName, ct.ChargeTypeName, 
-            cs.MaxQuantity, cs.Notes
+            cs.ChargeAmount, cs.MaxQuantity, cs.Notes 
             FROM CM_ContractService cs 
             INNER JOIN SV_ServiceList sv ON cs.ServiceID = sv.ServiceID
             INNER JOIN SV_ChargeIntervalFL itv ON cs.ChargeInterval = itv.ChargeIntervalID 
             INNER JOIN SV_ChargeTypeFL ct ON cs.ChargeType = ct.ChargeTypeID 
-            WHERE cs.ContractID = @ContractID ";
+            WHERE cs.ContractID = @ContractID";
 
             using (var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection")))
             {
@@ -514,10 +515,16 @@ namespace SmartSam.Pages.Sales.STContract
         private async Task LoadContractServices(long contractId)
         {
             string sql = @"
-            SELECT cs.ContractServiceID, cs.ContractID, sv.ServiceName, 
-            cs.ServiceFromDate, cs.ServiceToDate, 
-            itv.ChargeIntervalName, ct.ChargeTypeName, 
-            cs.MaxQuantity, cs.Notes 
+            SELECT cs.ContractServiceID,
+            cs.ContractID,
+            sv.ServiceName, 
+            cs.ServiceFromDate,
+            cs.ServiceToDate, 
+            itv.ChargeIntervalName,
+            ct.ChargeTypeName, 
+            cs.ChargeAmount,
+            cs.MaxQuantity,
+            cs.Notes 
             FROM CM_ContractService cs 
             INNER JOIN SV_ServiceList sv ON cs.ServiceID = sv.ServiceID
             INNER JOIN SV_ChargeIntervalFL itv ON cs.ChargeInterval = itv.ChargeIntervalID 
@@ -531,6 +538,7 @@ namespace SmartSam.Pages.Sales.STContract
                 ContractServices = result.ToList();
             }
         }
+
         // 2. Handler Lưu dịch vụ từ Popup
         public async Task<JsonResult> OnPostSaveService([FromBody] ContractServiceViewModel model)
         {
@@ -540,9 +548,9 @@ namespace SmartSam.Pages.Sales.STContract
             {
                 string sql = @"
             INSERT INTO CM_ContractService 
-            (ContractID, ServiceID, ServiceFromDate, ServiceToDate, ChargeInterval, ChargeType, MaxQuantity, Notes)
+            (ContractID, ServiceID, ServiceFromDate, ServiceToDate, ChargeInterval, ChargeType,ChargeAmount, MaxQuantity, Notes)
             VALUES 
-            (@ContractID, @ServiceID, @ServiceFromDate, @ServiceToDate, @ChargeInterval, @ChargeType, @MaxQuantity,  @Notes)";
+            (@ContractID, @ServiceID, @ServiceFromDate, @ServiceToDate, @ChargeInterval, @ChargeType,@ChargeAmount, @MaxQuantity,  @Notes)";
 
                 using (var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection")))
                 {
@@ -553,6 +561,56 @@ namespace SmartSam.Pages.Sales.STContract
             catch (Exception ex)
             {
                 return new JsonResult(new { success = false, message = ex.Message });
+            }
+        }
+
+        public async Task<JsonResult> OnPostDeleteServiceAsync(long id)
+        {
+            try
+            {
+                string connString = _config.GetConnectionString("DefaultConnection");
+
+                using (var conn = new SqlConnection(connString))
+                {
+                    await conn.OpenAsync();
+
+                    // 1. Kiểm tra trạng thái hợp đồng trước khi cho phép xóa
+                    // Chúng ta Join bảng Service với bảng Contract để lấy ContractStatus
+                    string checkSql = @"
+                SELECT c.ContractStatus 
+                FROM CM_ContractService cs
+                INNER JOIN CM_Contract c ON cs.ContractID = c.ContractID
+                WHERE cs.ContractServiceID = @SvcID";
+
+                    var status = await conn.QueryFirstOrDefaultAsync<int?>(checkSql, new { SvcID = id });
+
+                    if (status == null)
+                    {
+                        return new JsonResult(new { success = false, message = "Dịch vụ không tồn tại hoặc đã bị xóa trước đó." });
+                    }
+
+                    if (status != 1)
+                    {
+                        return new JsonResult(new { success = false, message = "Hợp đồng đã chốt hoặc đang thực hiện (Status != 1). Không thể xóa dịch vụ!" });
+                    }
+
+                    // 2. Thực hiện xóa nếu thỏa mãn điều kiện
+                    string deleteSql = "DELETE FROM CM_ContractService WHERE ContractServiceID = @SvcID";
+                    int affectedRows = await conn.ExecuteAsync(deleteSql, new { SvcID = id });
+
+                    if (affectedRows > 0)
+                    {
+                        return new JsonResult(new { success = true, message = "Đã xóa dịch vụ thành công." });
+                    }
+                    else
+                    {
+                        return new JsonResult(new { success = false, message = "Không thể xóa dữ liệu vào lúc này." });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return new JsonResult(new { success = false, message = "Lỗi hệ thống: " + ex.Message });
             }
         }
 
@@ -637,17 +695,44 @@ namespace SmartSam.Pages.Sales.STContract
         }
 
         // Vùng 2: CM_ContractService
+        public class ContractServiceViewModel
+        {
+            // Các trường ánh xạ từ bảng CM_ContractService
+            public long ContractServiceID { get; set; }
+            public long ContractID { get; set; }
+            public int ServiceID { get; set; }
+
+            public string ServiceName { get; set; }
+
+            public DateTime? ServiceFromDate { get; set; }
+            public DateTime? ServiceToDate { get; set; }
+
+            public int ChargeInterval { get; set; }
+            public string ChargeIntervalName { get; set; }
+            public int ChargeType { get; set; }
+            public string ChargeTypeName { get; set; }
+
+            public double ChargeAmount { get; set; }
+            public double MaxQuantity { get; set; }
+            public string Notes { get; set; }
+        }
         public class ServiceViewModel
         {
             public int ServiceID { get; set; }
             public string? ServiceName { get; set; }
             public DateTime? ServiceFromDate { get; set; }
             public DateTime? ServiceToDate { get; set; }
+            
+            public int ChargeInterval { get; set; }
             public string? ChargeIntervalName { get; set; }
+
+            public int ChargeType { get; set; }
             public string? ChargeTypeName { get; set; }
-            public decimal ChargeAmount { get; set; }
-            public int MaxQuantity { get; set; }
-            public string? Notes { get; set; }
+
+            public double ChargeAmount { get; set; }
+            public double MaxQuantity { get; set; }
+            public string Notes { get; set; }
+
         }
 
         // Vùng 3: CM_ContractTenant
@@ -666,25 +751,6 @@ namespace SmartSam.Pages.Sales.STContract
             public string? EntryDate { get; set; }
             public string? Notes { get; set; }
         }
-        public class ContractServiceViewModel
-        {
-            // Các trường ánh xạ từ bảng CM_ContractService
-            public long ContractServiceID { get; set; }
-            public long ContractID { get; set; }
-            public int ServiceID { get; set; }
-
-            // Các trường để hiển thị (Join từ các bảng FL)
-            public string ServiceName { get; set; }
-            public string ChargeIntervalName { get; set; }
-            public string ChargeTypeName { get; set; }
-
-            // Các trường dữ liệu ngày tháng và giá trị
-            public DateTime? ServiceFromDate { get; set; }
-            public DateTime? ServiceToDate { get; set; }
-            public int ChargeInterval { get; set; }
-            public int ChargeType { get; set; }
-            public double MaxQuantity { get; set; }
-            public string Notes { get; set; }
-        }
+       
     }
 }

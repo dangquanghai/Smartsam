@@ -26,7 +26,7 @@ namespace SmartSam.Helpers
 
             // 1. Bỏ qua các trang công khai và tài nguyên tĩnh
             if (path.StartsWith("/Login") || path.StartsWith("/Logout") ||
-                path.StartsWith("/dist") || path.StartsWith("/plugins") ||
+                path.StartsWith("/dist") || path.StartsWith("/plugins") || path.StartsWith("/hangfire")||
                 path == "/" || path.Equals("/Index", StringComparison.OrdinalIgnoreCase) ||
                 path == "/AccessDenied")
             {

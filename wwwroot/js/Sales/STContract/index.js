@@ -94,7 +94,7 @@
         const item = currentDataRows[rowIndex];
 
         if (!item || !item.actions) {
-            console.error("Dữ liệu không tồn tại!");
+            console.error("This contract does not exist !");
             return;
         }
 
@@ -109,7 +109,7 @@
             window.location.href = `/Sales/STContract/STContractDetail?id=${contractId}&mode=${mode}`;
         } else {
             // Trường hợp canAccess là false
-            alert("Bạn không có quyền truy cập vào hợp đồng này.");
+            alert("You have no right to view this contract.");
         }
     });
 

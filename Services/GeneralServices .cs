@@ -1,11 +1,11 @@
 ﻿using Google.Cloud.Vision.V1;
+using SmartSam.Models;
 using System;
 using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 namespace SmartSam.Services
 {
-   
     public class GeneralServices 
     {
         public static (int Month, int Year) GetDefaultMonthYear(int boundaryDays = 5)
@@ -39,6 +39,7 @@ namespace SmartSam.Services
         {
             return string.IsNullOrEmpty(value) ? (object)DBNull.Value : value;
         }
+        
     }
    
 }

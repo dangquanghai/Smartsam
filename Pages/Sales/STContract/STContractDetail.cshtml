@@ -3,7 +3,39 @@
 @{
     ViewData["Title"] = "Add Short Term Contract";
 }
+<style>
+    /* 1. Khi Modal đang mở, ép tất cả container Select2 ở trang chính xuống dưới lớp backdrop */
+    body.modal-open .select2-container {
+        z-index: 1030 !important; /* Thấp hơn z-index mặc định của backdrop là 1040 */
+    }
 
+    /* 2. Ép lớp nền đen của Modal phải che phủ toàn bộ */
+    .modal-backdrop {
+        z-index: 1040 !important;
+    }
+
+    /* 3. Đảm bảo cửa sổ Modal phải nằm trên lớp nền đen */
+    .modal {
+        z-index: 1050 !important;
+    }
+
+    /* 4. CỰC KỲ QUAN TRỌNG: Đảm bảo các Select2 nằm TRONG Modal (như svc_ServiceID)
+           phải hiện lên trên cùng để có thể chọn được */
+    body.modal-open .modal .select2-container,
+    body.modal-open .select2-container--open {
+        z-index: 9999 !important;
+        pointer-events: auto !important;
+    }
+
+    /* 5. Khóa tương tác chuột của vùng trang chính khi Modal đang hiện */
+    body.modal-open .card {
+        pointer-events: none;
+    }
+
+    body.modal-open .modal {
+        pointer-events: auto;
+    }
+</style>
 
 <section class="content">
     <div class="container-fluid">
@@ -297,13 +329,15 @@
                                 <table class="table table-sm table-bordered table-striped m-0" id="tableServices">
                                     <thead class="bg-light sticky-top">
                                         <tr>
-                                            <th style="width: 30%">Service Name</th>
-                                            <th>From Date</th>
-                                            <th>To Date</th>
+                                            <th style="width: 40px;" class="text-center"></th>
+                                            <th style="width: 20%">Service Name</th>
+                                            <th class="text-center">From Date</th>
+                                            <th class="text-center">To Date</th>
                                             <th class="text-center">Interval</th>
                                             <th class="text-center">Type</th>
-                                            <th class="text-right">Max Qty</th>
-                                            <th class="text-center">Action</th>
+                                            <th class="text-right">Charge Amount</th>
+                                            <th class="text-center">Max Qty</th>
+                                            <th>Notes</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -312,24 +346,24 @@
                                             foreach (var item in Model.ContractServices)
                                             {
                                                 <tr>
+                                                    <td class="text-center">
+                                                        <input type="radio" name="selectedService" value="@item.ContractServiceID" />
+                                                    </td>
                                                     <td>@item.ServiceName</td>
-                                                    <td class="text-center">@(item.ServiceFromDate?.ToString("dd/MM/yyyy"))</td>
-                                                    <td class="text-center">@(item.ServiceToDate?.ToString("dd/MM/yyyy"))</td>
+                                                    <td class="text-center">@item.ServiceFromDate?.ToString("dd/MM/yyyy")</td>
+                                                    <td class="text-center">@item.ServiceToDate?.ToString("dd/MM/yyyy")</td>
                                                     <td class="text-center">@item.ChargeIntervalName</td>
                                                     <td class="text-center">@item.ChargeTypeName</td>
-                                                    <td class="text-right">@item.MaxQuantity.ToString("N2")</td>
-                                                    <td class="text-center">
-                                                        <button class="btn btn-xs btn-danger" onclick="deleteService(@item.ContractServiceID)">
-                                                            <i class="fas fa-trash"></i>
-                                                        </button>
-                                                    </td>
+                                                    <td class="text-right">@item.ChargeAmount.ToString("N0")</td>
+                                                    <td class="text-center">@item.MaxQuantity</td>
+                                                    <td><small>@item.Notes</small></td>
                                                 </tr>
                                             }
                                         }
                                         else
                                         {
                                             <tr id="no-data-row">
-                                                <td colspan="7" class="text-center text-muted">No services found for this contract.</td>
+                                                <td colspan="9" class="text-center text-muted">No services found.</td>
                                             </tr>
                                         }
                                     </tbody>
@@ -340,6 +374,9 @@
                         <div class="card-footer py-2">
                             <button type="button" class="btn btn-success btn-sm px-4" onclick="openServiceModal()">
                                 <i class="fas fa-plus"></i> Add Service
+                            </button>
+                            <button type="button" class="btn btn-danger btn-sm px-4 ml-2" onclick="removeSelectedService()">
+                                <i class="fas fa-trash-alt"></i> Remove Service
                             </button>
                         </div>
                     </div>
@@ -458,6 +495,13 @@
                     </div>
 
                     <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="font-weight-bold">Charge Amount</label>
+                                <input type="text" id="svc_ChargeAmount" class="form-control text-right" placeholder="0" onkeyup="formatCurrency(this)" />
+                            </div>
+                        </div>
+
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label class="font-weight-bold">Max Quantity</label>
