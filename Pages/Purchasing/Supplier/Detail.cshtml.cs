@@ -58,7 +58,7 @@ public class DetailModel : PageModel
     public bool IsAnnualView => string.Equals(ViewMode, "byyear", StringComparison.OrdinalIgnoreCase) && Year.HasValue;
     public PagePermissions PagePerm { get; private set; } = new();
     public bool CanSave => !IsAnnualView && (IsEdit ? HasPermission(PermissionEdit) : HasPermission(PermissionAdd));
-    public bool IsSubmitted => (Input.Status ?? 0) == 1;
+    public bool IsSubmitted => (Input.Status ?? 0) >= 1;
     public bool CanSubmit => !IsAnnualView && IsEdit && HasPermission(PermissionSubmit) && !IsSubmitted;
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
@@ -222,7 +222,29 @@ public class DetailModel : PageModel
                 Input.DeptID = currentDetail.DeptID;
             }
 
+            if ((currentDetail.Status ?? 0) >= 1)
+            {
+                Input = currentDetail;
+                Histories = (await _supplierService.GetApprovalHistoryAsync(Id.Value, cancellationToken)).ToList();
+                SetMessage("Supplier is in approval workflow and is read-only.", "warning");
+                return Page();
+            }
+
             Input.Status = currentDetail.Status;
+        }
+
+        var normalizedSupplierCode = (Input.SupplierCode ?? string.Empty).Trim();
+        if (!string.IsNullOrWhiteSpace(normalizedSupplierCode))
+        {
+            var exists = await _supplierService.SupplierCodeExistsAsync(
+                normalizedSupplierCode,
+                IsEdit ? Id : null,
+                cancellationToken);
+
+            if (exists)
+            {
+                ModelState.AddModelError("Input.SupplierCode", "Supplier code already exists.");
+            }
         }
 
         if (!ModelState.IsValid)

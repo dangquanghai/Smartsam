@@ -12,15 +12,17 @@
             break;
         }
     }
-    var useInlineAlert = !string.IsNullOrWhiteSpace(Model.Message)
-        && (messageType == "warning" || messageType == "error")
-        && !hasInputFieldError;
+    var useInlineAlert = !string.IsNullOrWhiteSpace(Model.Message) && !hasInputFieldError;
     var lockGeneralInfo = !Model.CanSave;
 }
 
 <section class="content">
     <div class="container-fluid">
-        <form method="post" asp-page-handler="Save">
+        <form method="post"
+              asp-page-handler="Save"
+              id="supplierDetailForm"
+              data-is-edit="@Model.IsEdit.ToString().ToLowerInvariant()"
+              data-current-id="@(Model.Id?.ToString() ?? string.Empty)">
             <div class="row d-flex align-items-stretch">
                 <div class="col-md-8">
                     <div class="card card-primary card-outline h-100 mb-0">
@@ -32,14 +34,35 @@
                             <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
                             @if (useInlineAlert)
                             {
-                                var alertClass = messageType == "error" ? "alert-danger" : "alert-warning";
-                                var alertIcon = messageType == "error" ? "fas fa-ban" : "fas fa-exclamation-triangle";
+                                var alertClass = messageType switch
+                                {
+                                    "success" => "alert-success",
+                                    "warning" => "alert-warning",
+                                    "error" => "alert-danger",
+                                    _ => "alert-info"
+                                };
+                                var alertIcon = messageType switch
+                                {
+                                    "success" => "fas fa-check-circle",
+                                    "warning" => "fas fa-exclamation-triangle",
+                                    "error" => "fas fa-ban",
+                                    _ => "fas fa-info-circle"
+                                };
+                                var alertTitle = messageType switch
+                                {
+                                    "error" => "Error",
+                                    "warning" => "Warning",
+                                    _ => "Notification"
+                                };
                                 <div class="alert @alertClass alert-dismissible mb-2">
+                                    <div class="d-flex align-items-center pr-4">
+                                        <i class="@alertIcon mr-2" aria-hidden="true"></i>
+                                        <span class="font-weight-bold mr-1">@alertTitle:</span>
+                                        <span>@Model.Message</span>
+                                    </div>
                                     <button type="button" class="close" data-dismiss="alert" aria-label="Close">
                                         <span aria-hidden="true">&times;</span>
                                     </button>
-                                    <h5 class="mb-1"><i class="icon @alertIcon"></i> @(messageType == "error" ? "Error" : "Warning")</h5>
-                                    @Model.Message
                                 </div>
                             }
                             @{
@@ -202,232 +225,10 @@
     </div>
 </section>
 
-@if (!string.IsNullOrWhiteSpace(Model.Message) && !useInlineAlert)
-{
-    <div id="supplierDetailFlash" data-message="@Model.Message" data-type="@Model.MessageType" class="d-none"></div>
-}
-
 @section Styles {
     <link rel="stylesheet" href="~/css/Purchasing/Supplier/index.css" asp-append-version="true" />
 }
 
 @section Scripts {
-    <script>
-        (() => {
-            const supplierCodeInput = document.getElementById("Input_SupplierCode");
-            const supplierCodeValidationEl = document.querySelector('[data-valmsg-for="Input.SupplierCode"]');
-            const supplierNameInput = document.getElementById("Input_SupplierName");
-            const supplierNameValidationEl = document.querySelector('[data-valmsg-for="Input.SupplierName"]');
-            const supplierAddressInput = document.getElementById("Input_Address");
-            const supplierAddressValidationEl = document.querySelector('[data-valmsg-for="Input.Address"]');
-            const saveForm = document.querySelector('form[asp-page-handler="Save"]') || document.querySelector("form[method='post']");
-            const isEditMode = @Model.IsEdit.ToString().ToLowerInvariant();
-            let supplierCodeCheckToken = 0;
-
-            const setSupplierCodeValidation = (message) => {
-                if (!supplierCodeInput) return;
-                supplierCodeInput.classList.toggle("is-invalid", !!message);
-                if (supplierCodeValidationEl) {
-                    supplierCodeValidationEl.textContent = message || "";
-                    supplierCodeValidationEl.classList.toggle("field-validation-error", !!message);
-                    supplierCodeValidationEl.classList.toggle("field-validation-valid", !message);
-                }
-            };
-
-            const setRequiredValidation = (inputEl, validationEl, message) => {
-                if (!inputEl) return;
-                const normalized = (inputEl.value || "").trim();
-                const hasError = normalized.length === 0;
-                inputEl.classList.toggle("is-invalid", hasError);
-                if (validationEl) {
-                    validationEl.textContent = hasError ? message : "";
-                    validationEl.classList.toggle("field-validation-error", hasError);
-                    validationEl.classList.toggle("field-validation-valid", !hasError);
-                }
-                return !hasError;
-            };
-
-            const applyExistingServerValidationState = (inputEl, validationEl) => {
-                if (!inputEl || !validationEl) return;
-                const hasMessage = (validationEl.textContent || "").trim().length > 0;
-                inputEl.classList.toggle("is-invalid", hasMessage);
-                validationEl.classList.toggle("field-validation-error", hasMessage);
-                validationEl.classList.toggle("field-validation-valid", !hasMessage);
-            };
-
-            const validateRequiredFields = () => {
-                const isCodeValid = setRequiredValidation(supplierCodeInput, supplierCodeValidationEl, "Supplier code is required.");
-                const isNameValid = setRequiredValidation(supplierNameInput, supplierNameValidationEl, "Supplier name is required.");
-                const isAddressValid = setRequiredValidation(supplierAddressInput, supplierAddressValidationEl, "Address is required.");
-                return !!isCodeValid && !!isNameValid && !!isAddressValid;
-            };
-
-            const focusFirstInvalidField = () => {
-                if (!saveForm) return false;
-
-                const controls = saveForm.querySelectorAll("input, textarea, select");
-                for (const control of controls) {
-                    if (control.disabled || control.type === "hidden") continue;
-
-                    const fieldName = control.getAttribute("name");
-                    const validationEl = fieldName
-                        ? saveForm.querySelector(`[data-valmsg-for="${fieldName}"]`)
-                        : null;
-                    const hasMessage = !!validationEl && (validationEl.textContent || "").trim().length > 0;
-                    const hasInvalidClass = control.classList.contains("is-invalid");
-
-                    if (hasInvalidClass || hasMessage) {
-                        control.focus();
-                        return true;
-                    }
-                }
-
-                return false;
-            };
-
-            const checkSupplierCodeDuplicate = async () => {
-                if (!supplierCodeInput) return true;
-
-                const raw = (supplierCodeInput.value || "").trim();
-                if (!raw) {
-                    return false;
-                }
-
-                const requestToken = ++supplierCodeCheckToken;
-                const currentId = "@(Model.Id?.ToString() ?? "")";
-                const url = new URL(window.location.href);
-                url.searchParams.set("handler", "CheckSupplierCode");
-                url.searchParams.set("supplierCode", raw);
-                if (currentId) {
-                    url.searchParams.set("id", currentId);
-                } else {
-                    url.searchParams.delete("id");
-                }
-
-                try {
-                    const response = await fetch(url.toString(), {
-                        method: "GET",
-                        headers: { "X-Requested-With": "XMLHttpRequest" }
-                    });
-
-                    if (requestToken !== supplierCodeCheckToken) return true;
-                    if (!response.ok) return true;
-
-                    const data = await response.json();
-                    if (data && data.exists === true) {
-                        setSupplierCodeValidation("Supplier code already exists.");
-                        return false;
-                    }
-
-                    setSupplierCodeValidation("");
-                    return true;
-                } catch {
-                    return true;
-                }
-            };
-
-            if (supplierCodeInput) {
-                supplierCodeInput.addEventListener("blur", () => {
-                    const isRequiredValid = setRequiredValidation(supplierCodeInput, supplierCodeValidationEl, "Supplier code is required.");
-                    if (isRequiredValid) {
-                        void checkSupplierCodeDuplicate();
-                    }
-                });
-
-                supplierCodeInput.addEventListener("input", () => {
-                    setSupplierCodeValidation("");
-                });
-            }
-
-            supplierNameInput?.addEventListener("blur", () => {
-                setRequiredValidation(supplierNameInput, supplierNameValidationEl, "Supplier name is required.");
-            });
-            supplierNameInput?.addEventListener("input", () => {
-                setRequiredValidation(supplierNameInput, supplierNameValidationEl, "Supplier name is required.");
-            });
-
-            supplierAddressInput?.addEventListener("blur", () => {
-                setRequiredValidation(supplierAddressInput, supplierAddressValidationEl, "Address is required.");
-            });
-            supplierAddressInput?.addEventListener("input", () => {
-                setRequiredValidation(supplierAddressInput, supplierAddressValidationEl, "Address is required.");
-            });
-
-            applyExistingServerValidationState(supplierCodeInput, supplierCodeValidationEl);
-            applyExistingServerValidationState(supplierNameInput, supplierNameValidationEl);
-            applyExistingServerValidationState(supplierAddressInput, supplierAddressValidationEl);
-            focusFirstInvalidField();
-
-            if (saveForm) {
-                saveForm.addEventListener("submit", async (e) => {
-                    const submitter = e.submitter;
-                    if (submitter && submitter.getAttribute("formaction")?.includes("SubmitApproval")) {
-                        return;
-                    }
-
-                    const requiredOk = validateRequiredFields();
-                    if (!requiredOk) {
-                        e.preventDefault();
-                        focusFirstInvalidField();
-                        return;
-                    }
-
-                    const ok = await checkSupplierCodeDuplicate();
-                    if (!ok) {
-                        e.preventDefault();
-                        focusFirstInvalidField();
-                    }
-                });
-            }
-
-            const loadSuggestedSupplierCode = async () => {
-                if (!supplierCodeInput || isEditMode) return;
-                if ((supplierCodeInput.value || "").trim()) return;
-
-                try {
-                    const url = new URL(window.location.href);
-                    url.searchParams.set("handler", "SuggestSupplierCode");
-                    const response = await fetch(url.toString(), {
-                        method: "GET",
-                        headers: { "X-Requested-With": "XMLHttpRequest" }
-                    });
-
-                    if (!response.ok) return;
-                    const data = await response.json();
-                    const suggested = (data?.supplierCode || "").trim();
-                    if (!suggested) return;
-                    if ((supplierCodeInput.value || "").trim()) return;
-                    supplierCodeInput.value = suggested;
-                } catch {
-                    // ignore suggestion errors; backend save validation still protects uniqueness
-                }
-            };
-
-            void loadSuggestedSupplierCode();
-
-            const flashMessageEl = document.getElementById("supplierDetailFlash");
-            if (!flashMessageEl || !window.jQuery || !$.fn.Toasts) return;
-
-            const message = flashMessageEl.getAttribute("data-message");
-            const type = (flashMessageEl.getAttribute("data-type") || "info").toLowerCase();
-            if (!message) return;
-            const toastClass = type === "success"
-                ? "bg-success"
-                : type === "warning"
-                    ? "bg-warning"
-                    : type === "error"
-                        ? "bg-danger"
-                        : "bg-info";
-            const shouldKeepOpen = type === "warning" || type === "error";
-
-            $(document).Toasts('create', {
-                class: toastClass,
-                title: 'Supplier',
-                position: 'topRight',
-                autohide: !shouldKeepOpen,
-                delay: shouldKeepOpen ? 0 : 3200,
-                body: message
-            });
-        })();
-    </script>
+    <script src="~/js/Purchasing/Supplier/detail.js" asp-append-version="true"></script>
 }
