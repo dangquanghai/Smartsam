@@ -494,7 +494,7 @@ ORDER BY TheDate DESC;";
                         BODCode = CASE WHEN @LevelCheck = 4 THEN @OperatorCode ELSE BODCode END,
                         BODApproveDate = CASE WHEN @LevelCheck = 4 THEN GETDATE() ELSE BODApproveDate END,
                         IsApproved = 0,
-                        [Status] = 5
+                        [Status] = 9
                     WHERE SupplierID = @SupplierID
                         AND @LevelCheck IN (2, 3, 4)";
 
@@ -512,6 +512,29 @@ ORDER BY TheDate DESC;";
             cancellationToken);
 
         return affected > 0;
+    }
+
+    public async Task<IReadOnlyList<string>> GetEmailsByLevelCheckAsync(int levelCheckSupplier, CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+SELECT DISTINCT LTRIM(RTRIM(TheEmail))
+FROM dbo.MS_Employee
+WHERE LevelCheckSupplier = @LevelCheckSupplier
+  AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
+  AND ISNULL(IsActive, 0) = 1;";
+
+        var rows = await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd => rd[0]?.ToString() ?? string.Empty,
+            cmd => { Helper.AddParameter(cmd, "@LevelCheckSupplier", levelCheckSupplier, SqlDbType.Int); },
+            cancellationToken);
+
+        return rows
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     public async Task UpdateSupplierForApprovalAsync(int supplierId, ApproveAnnualSupplierDetailDto input, bool canEditAllFields, CancellationToken cancellationToken = default)

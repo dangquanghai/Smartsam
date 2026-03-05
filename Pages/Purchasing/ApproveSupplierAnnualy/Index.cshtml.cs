@@ -2,6 +2,8 @@
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
+using System.Net.Mail;
 using SmartSam.Pages.Purchasing.Supplier;
 using SmartSam.Services;
 
@@ -9,6 +11,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplierAnnualy;
 
 public class IndexModel : PageModel
 {
+    private readonly IConfiguration _configuration;
     private readonly ApproveSupplierAnnualyService _approveService;
     private readonly PermissionService _permissionService;
     private const int NoDepartmentScopeValue = -1;
@@ -20,6 +23,7 @@ public class IndexModel : PageModel
 
     public IndexModel(IConfiguration configuration, PermissionService permissionService)
     {
+        _configuration = configuration;
         _approveService = new ApproveSupplierAnnualyService(configuration);
         _permissionService = permissionService;
     }
@@ -229,6 +233,8 @@ public class IndexModel : PageModel
 
         await LoadRowsAsync(cancellationToken);
         var nextSupplierId = GetNextSupplierIdFromCurrentRows(supplierId);
+        var isLastSupplier = IsLastSupplierInCurrentRows(supplierId);
+        var currentLevel = _dataScope.LevelCheckSupplier.Value;
 
         var operatorCode = User.Identity?.Name?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(operatorCode))
@@ -239,7 +245,7 @@ public class IndexModel : PageModel
 
         var approved = await _approveService.ApproveByLevelAsync(
             supplierId,
-            _dataScope.LevelCheckSupplier.Value,
+            currentLevel,
             operatorCode,
             EditSupplier,
             CanEditAllSupplierFields,
@@ -252,8 +258,18 @@ public class IndexModel : PageModel
             return RedirectToCurrentList();
         }
 
+        var notifyResult = isLastSupplier
+            ? await TryNotifyNextLevelAsync(currentLevel, current, "approved", cancellationToken)
+            : null;
+
         CurrentSupplierId = nextSupplierId;
-        SetFlashMessage("Approved supplier successfully.", "success");
+        var approveMessage = "Approved supplier successfully.";
+        if (!string.IsNullOrWhiteSpace(notifyResult))
+        {
+            approveMessage += $" {notifyResult}";
+        }
+
+        SetFlashMessage(approveMessage, "success");
         return RedirectToCurrentList();
     }
 
@@ -289,6 +305,8 @@ public class IndexModel : PageModel
 
         await LoadRowsAsync(cancellationToken);
         var nextSupplierId = GetNextSupplierIdFromCurrentRows(supplierId);
+        var isLastSupplier = IsLastSupplierInCurrentRows(supplierId);
+        var currentLevel = _dataScope.LevelCheckSupplier.Value;
 
         var operatorCode = User.Identity?.Name?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(operatorCode))
@@ -299,7 +317,7 @@ public class IndexModel : PageModel
 
         var disapproved = await _approveService.DisapproveByLevelAsync(
             supplierId,
-            _dataScope.LevelCheckSupplier.Value,
+            currentLevel,
             operatorCode,
             EditSupplier.Comment,
             CanEditComment,
@@ -311,8 +329,18 @@ public class IndexModel : PageModel
             return RedirectToCurrentList();
         }
 
+        var notifyResult = isLastSupplier
+            ? await TryNotifyNextLevelAsync(currentLevel, current, "disapproved", cancellationToken)
+            : null;
+
         CurrentSupplierId = nextSupplierId;
-        SetFlashMessage("Disapproved supplier successfully.", "success");
+        var disapproveMessage = "Disapproved supplier successfully.";
+        if (!string.IsNullOrWhiteSpace(notifyResult))
+        {
+            disapproveMessage += $" {notifyResult}";
+        }
+
+        SetFlashMessage(disapproveMessage, "success");
         return RedirectToCurrentList();
     }
 
@@ -576,6 +604,106 @@ public class IndexModel : PageModel
         }
 
         return null;
+    }
+
+    private bool IsLastSupplierInCurrentRows(int supplierId)
+    {
+        if (Rows.Count == 0)
+        {
+            return false;
+        }
+
+        var currentIndex = Rows.FindIndex(x => x.SupplierID == supplierId);
+        return currentIndex >= 0 && currentIndex == Rows.Count - 1;
+    }
+
+    private async Task<string?> TryNotifyNextLevelAsync(
+        int currentLevel,
+        ApproveAnnualSupplierDetailDto supplier,
+        string action,
+        CancellationToken cancellationToken)
+    {
+        if (currentLevel >= 4)
+        {
+            return null;
+        }
+
+        var nextLevel = currentLevel + 1;
+        var recipients = (await _approveService.GetEmailsByLevelCheckAsync(nextLevel, cancellationToken)).ToList();
+        if (recipients.Count == 0)
+        {
+            return $"No email recipients found for level {nextLevel}.";
+        }
+
+        var senderEmail = _configuration.GetValue<string>("EmailSettings:SenderEmail");
+        var mailPass = _configuration.GetValue<string>("EmailSettings:Password");
+        var mailServer = _configuration.GetValue<string>("EmailSettings:MailServer");
+        var mailPort = _configuration.GetValue<int?>("EmailSettings:MailPort") ?? 0;
+        if (string.IsNullOrWhiteSpace(senderEmail) ||
+            string.IsNullOrWhiteSpace(mailPass) ||
+            string.IsNullOrWhiteSpace(mailServer) ||
+            mailPort <= 0)
+        {
+            return $"Email settings are missing. Skip notify to level {nextLevel}.";
+        }
+
+        var operatorCode = User.Identity?.Name?.Trim() ?? "SYSTEM";
+        var supplierCode = string.IsNullOrWhiteSpace(supplier.SupplierCode) ? supplier.SupplierID.ToString() : supplier.SupplierCode;
+        var supplierName = string.IsNullOrWhiteSpace(supplier.SupplierName) ? "-" : supplier.SupplierName;
+
+        var detailUrl = Url.Page("/Purchasing/ApproveSupplierAnnualy/Index", values: new
+        {
+            DeptId,
+            PageIndex,
+            PageSize,
+            CurrentSupplierId = supplier.SupplierID
+        });
+
+        var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl)
+            ? string.Empty
+            : $"{Request.Scheme}://{Request.Host}{detailUrl}";
+
+        var subject = $"[Supplier Approval] Last supplier processed at level {currentLevel}";
+        var body = $@"
+<p>Dear Approver Level {nextLevel},</p>
+<p>The last supplier in current approval list has been <b>{action}</b> at level {currentLevel}.</p>
+<ul>
+  <li>Supplier Code: <b>{WebUtility.HtmlEncode(supplierCode)}</b></li>
+  <li>Supplier Name: <b>{WebUtility.HtmlEncode(supplierName)}</b></li>
+  <li>Action by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
+  <li>Action time: <b>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</b></li>
+</ul>
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Approve Supplier Annualy</a></p>")}
+<p>SmartSam System</p>";
+
+        try
+        {
+            using var mail = new MailMessage
+            {
+                From = new MailAddress(senderEmail, "SmartSam System"),
+                Subject = subject,
+                Body = body,
+                IsBodyHtml = true
+            };
+
+            foreach (var recipient in recipients)
+            {
+                mail.To.Add(recipient);
+            }
+
+            using var smtp = new SmtpClient(mailServer, mailPort)
+            {
+                EnableSsl = true,
+                Credentials = new NetworkCredential(senderEmail, mailPass)
+            };
+
+            await smtp.SendMailAsync(mail, cancellationToken);
+            return $"Notification email sent to level {nextLevel}.";
+        }
+        catch (Exception ex)
+        {
+            return $"Cannot send notification email to level {nextLevel}: {ex.Message}";
+        }
     }
 
     private static ApproveAnnualSupplierDetailDto CloneForEdit(ApproveAnnualSupplierDetailDto source)
