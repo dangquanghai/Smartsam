@@ -12,7 +12,6 @@ using Google.Api;
 
 namespace SmartSam.Pages.Sales.STContract
 {
-    // 1. QUAN TRỌNG: Đổi PageModel thành BasePageModel
     public class STContractDetailModel : BasePageModel
     {
         // Constructor truyền config vào BasePageModel
