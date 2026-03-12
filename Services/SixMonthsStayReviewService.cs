@@ -99,7 +99,7 @@ namespace SmartSam.Services
                 <html>
                 <body style='font-family: Arial, sans-serif; line-height: 1.6;'>
                     <p>Dear CSD,</p>
-                    <p>The system is filtering the list of long-term residents who have been living at Saigon Sky Garden for 6 months or more and merging it into a Word file for CSD to print out> Please Check it before sending to the residents.</p>
+                    <p>The system filters out long-term contracts which have been living at Saigon Sky Garden for 6 months or more and merging it into a Word file for CSD to print out> Please Check it before sending to the residents.</p>
                     <p>Please double-check the information before sending it.</p>
                     <p>Sincerely,</p>
                     <hr style='border:none; border-top:1px solid #eee; margin-top:20px;' />
@@ -117,6 +117,7 @@ namespace SmartSam.Services
 
             }
         }
+
         private byte[] GenerateSurveyLetters(List<SixMonthsStayReviewVM> tenants, List<byte[]> qrEng, List<byte[]> qrJap, dynamic manager)
         {
             try
@@ -129,82 +130,109 @@ namespace SmartSam.Services
                         mainPart.Document = new Document(new Body());
                         Body body = mainPart.Document.Body;
 
+                        SectionProperties sectionProps = new SectionProperties();
+                        // 1. CẬP NHẬT LỀ: Left/Right tăng lên 1080 (rộng gấp 1.5 lần mức 720 cũ)
+                        // Giữ Top/Bottom ở mức 500 để không bị tràn trang
+                        PageMargin pageMargin = new PageMargin() { Top = 500, Bottom = 500, Left = 1080, Right = 1080 };
+                        sectionProps.Append(pageMargin);
+                        body.Append(sectionProps);
+
                         for (int i = 0; i < tenants.Count; i++)
                         {
                             var t = tenants[i];
 
-                            // 1. 5 dòng trống đầu trang
-                            for (int j = 0; j < 5; j++) { body.AppendChild(new Paragraph()); }
+                            // 1. Ngày tháng
+                            Paragraph pDate = CreateCompactParagraph(JustificationValues.Right);
+                            pDate.AppendChild(new Run(new Text(DateTime.Now.ToString("MMMM dd, yyyy"))) { RunProperties = new RunProperties(new FontSize { Val = "24" }) });
+                            body.Append(pDate);
 
-                            // 2. Dear khách hàng
-                            Paragraph pDear = body.AppendChild(new Paragraph());
-                            Run rDear = pDear.AppendChild(new Run());
-                            rDear.RunProperties = new DocumentFormat.OpenXml.Wordprocessing.RunProperties(
-                                new DocumentFormat.OpenXml.Wordprocessing.Bold(),
-                                new DocumentFormat.OpenXml.Wordprocessing.FontSize { Val = "26" }
+                            // 2. Tiêu đề QUESTIONNAIRE
+                            Paragraph pTitle = CreateCompactParagraph(JustificationValues.Center);
+                            pTitle.AppendChild(new Run(new Text("QUESTIONNAIRE")) { RunProperties = new RunProperties(new Bold(), new FontSize { Val = "28" }) });
+                            body.Append(pTitle);
+
+                            body.AppendChild(new Paragraph()); // Dòng trắng dưới tiêu đề
+
+                            // 3. Bảng Tên khách & Số phòng
+                            Table infoTable = new Table();
+                            infoTable.AppendChild(new TableProperties(new TableWidth { Type = TableWidthUnitValues.Pct, Width = "5000" },
+                                new TableBorders(new TopBorder { Val = BorderValues.None }, new BottomBorder { Val = BorderValues.None },
+                                new LeftBorder { Val = BorderValues.None }, new RightBorder { Val = BorderValues.None },
+                                new InsideHorizontalBorder { Val = BorderValues.None }, new InsideVerticalBorder { Val = BorderValues.None })));
+
+                            TableRow infoRow = new TableRow();
+                            infoRow.Append(
+                                new TableCell(new Paragraph(new Run(new Text($"Dear {t.Title} {t.CustomerName},")) { RunProperties = new RunProperties(new Bold(), new FontSize { Val = "24" }) })),
+                                new TableCell(new Paragraph(new Run(new Text($"Apartment: {t.CurrentApartmentNo}")) { RunProperties = new RunProperties(new Bold(), new FontSize { Val = "24" }) })
+                                { ParagraphProperties = new ParagraphProperties(new Justification { Val = JustificationValues.Right }) })
                             );
-                            rDear.AppendChild(new Text($"Dear {t.Title} {t.CustomerName},"));
+                            infoTable.Append(infoRow);
+                            body.Append(infoTable);
 
-                            Paragraph pApmt = body.AppendChild(new Paragraph());
-                            Run rApmt = pApmt.AppendChild(new Run());
-                            rApmt.RunProperties = new DocumentFormat.OpenXml.Wordprocessing.RunProperties(
-                                new DocumentFormat.OpenXml.Wordprocessing.Bold()
-                            );
-                            rApmt.AppendChild(new Text($"Apartment No: {t.CurrentApartmentNo}"));
+                            // --- ĐÃ XÓA DÒNG TRẮNG Ở ĐÂY ĐỂ BÙ LẠI PHẦN LỀ ---
 
-                            // 3. Nội dung văn bản
+                            // 4. Nội dung chính - Nối tiếp ngay sau bảng thông tin
+                            AddCompactBilingualSection(body,
+                                "We would like to express our hearty thanks for your choosing Saigon Sky Garden as your home during your stay in Ho Chi Minh City.",
+                                "ホーチミン市ご滞在中にサイゴン スカイ ガーデンをお選びいただき、心より感謝申し上げます。");
 
-                            body.AppendChild(new Paragraph(new Run(new Text("We greatly appreciate you choosing our apartment."))));
-                            body.AppendChild(new Paragraph(new Run(new Text("To maintain and continuously improve the quality of our services, we would like to request your feedback on the details of the services we provide."))));
-                            body.AppendChild(new Paragraph(new Run(new Text("Please scan one of the two QR codes below, which version you prefer."))));
+                            AddCompactBilingualSection(body,
+                                "We, all staffs of Saigon Sky Garden, always do our best to make your stay more comfortable and happy day by day.",
+                                "サイゴン スカイ ガーデンのスタッフ一同、お客様に日々より快適なご滞在をお届けできるよう、常に最善を尽くしております。");
 
-                            // 4. 1 dòng trống trước bảng QR
-                            body.AppendChild(new Paragraph());
+                            AddCompactBilingualSection(body,
+                                "In order for us to achieve this objective, we also need to know your comments on our services.",
+                                "この目標を達成するため、当館のサービスに関するお客様のご意見をぜひお聞かせください。");
 
-                            // 5. Bảng QR
-                            DocumentFormat.OpenXml.Wordprocessing.Table table = new DocumentFormat.OpenXml.Wordprocessing.Table();
-                            table.AppendChild(new TableProperties(new TableWidth { Type = TableWidthUnitValues.Pct, Width = "5000" }));
+                            AddCompactBilingualSection(body,
+                                "We are very grateful if you can spend your time to read, fill in the questionnaire and submit to us as following QR code:",
+                                "お時間のある方は、アンケートにご記入のうえ、下記のQRコードより送信していただけますと幸いです。");
 
-                            TableRow row = new TableRow();
-
-                            // Ô English (Căn giữa)
+                            // 5. Bảng QR Code
+                            Table qrTable = new Table();
+                            qrTable.AppendChild(new TableProperties(new TableWidth { Type = TableWidthUnitValues.Pct, Width = "5000" }));
+                            TableRow rowQr = new TableRow();
                             TableCell cellEng = new TableCell();
                             if (qrEng[i] != null) InsertImage(mainPart, cellEng, qrEng[i]);
-                            Paragraph pLabelEng = cellEng.AppendChild(new Paragraph(new Run(new Text("English Version"))
-                            {
-                                RunProperties = new DocumentFormat.OpenXml.Wordprocessing.RunProperties(new DocumentFormat.OpenXml.Wordprocessing.Bold())
-                            }));
-                            pLabelEng.ParagraphProperties = new ParagraphProperties(new Justification { Val = JustificationValues.Center });
-                            row.Append(cellEng);
-
-                            // Ô Japanese (Căn giữa)
+                            cellEng.AppendChild(new Paragraph(new Run(new Text("English Version")) { RunProperties = new RunProperties(new Bold(), new FontSize { Val = "20" }) }) { ParagraphProperties = new ParagraphProperties(new Justification { Val = JustificationValues.Center }) });
                             TableCell cellJap = new TableCell();
                             if (qrJap[i] != null) InsertImage(mainPart, cellJap, qrJap[i]);
-                            Paragraph pLabelJap = cellJap.AppendChild(new Paragraph(new Run(new Text("Japanese Version"))
-                            {
-                                RunProperties = new DocumentFormat.OpenXml.Wordprocessing.RunProperties(new DocumentFormat.OpenXml.Wordprocessing.Bold())
-                            }));
-                            pLabelJap.ParagraphProperties = new ParagraphProperties(new Justification { Val = JustificationValues.Center });
-                            row.Append(cellJap);
+                            cellJap.AppendChild(new Paragraph(new Run(new Text("Japanese Version")) { RunProperties = new RunProperties(new Bold(), new FontSize { Val = "20" }) }) { ParagraphProperties = new ParagraphProperties(new Justification { Val = JustificationValues.Center }) });
+                            rowQr.Append(cellEng, cellJap);
+                            qrTable.Append(rowQr);
+                            body.Append(qrTable);
 
-                            table.Append(row);
-                            body.Append(table);
+                            // 6. Lưu ý & Bảo mật tách dòng
+                            AddCompactBilingualSection(body,
+                                "You do not have to fill in this questionnaire in case you do not have any special thing to mention.",
+                                "特にご指摘のない場合は、本アンケートへのご回答は不要でございます。");
 
-                            // 6. 1 dòng trống trước chữ ký
+                            AddCompactBilingualSection(body,
+                                "You also do not have to reply all items if you do not know them clearly. Please just reply the items you know or write your comments if you think that you need to inform us.",
+                                "また、ご不明な点やご回答が難しい項目につきましては、すべての項目にご回答いただく必要はございません。気になる点やお知らせいただきたい内容がございましたら、その項目のみご回答ください。");
+
+                            Paragraph pPrivEng = CreateCompactParagraph(JustificationValues.Left);
+                            pPrivEng.AppendChild(new Run(new Text("Please note: personal information (email/phone) is NOT required for this questionnaire.")) { RunProperties = new RunProperties(new Bold(), new FontSize { Val = "22" }) });
+                            body.Append(pPrivEng);
+
+                            Paragraph pPrivJap = CreateCompactParagraph(JustificationValues.Left);
+                            pPrivJap.AppendChild(new Run(new Text("このアンケートでは、個人情報をご提供いただく必要はありません。")) { RunProperties = new RunProperties(new Bold(), new FontSize { Val = "20" }) });
+                            pPrivJap.ParagraphProperties.Append(new SpacingBetweenLines() { After = "120" });
+                            body.Append(pPrivJap);
+
+                            // 7. Lời kết và Chữ ký
+                            body.AppendChild(new Paragraph(new Run(new Text("Thank you very much for your kind attention and co-operation,")) { RunProperties = new RunProperties(new FontSize { Val = "24" }) }) { ParagraphProperties = new ParagraphProperties(new SpacingBetweenLines() { After = "0", Line = "240" }) });
+                            body.AppendChild(new Paragraph(new Run(new Text("ご協力いただき、誠にありがとうございます。")) { RunProperties = new RunProperties(new FontSize { Val = "22" }) }) { ParagraphProperties = new ParagraphProperties(new SpacingBetweenLines() { After = "80", Line = "240" }) });
+
+                            body.AppendChild(new Paragraph(new Run(new Text("Sincerely yours,")) { RunProperties = new RunProperties(new FontSize { Val = "24" }) }) { ParagraphProperties = new ParagraphProperties(new SpacingBetweenLines() { After = "0" }) });
+
                             body.AppendChild(new Paragraph());
-                            body.AppendChild(new Paragraph(new Run(new Text("Thanks and Best Regard"))));
+                            body.AppendChild(new Paragraph());
 
-                            Paragraph pPos = body.AppendChild(new Paragraph());
-                            pPos.AppendChild(new Run(new Text(manager?.PositionTitle ?? "Manager"))
-                            {
-                                RunProperties = new DocumentFormat.OpenXml.Wordprocessing.RunProperties(new DocumentFormat.OpenXml.Wordprocessing.Italic())
-                            });
-
-                            Paragraph pManager = body.AppendChild(new Paragraph());
-                            pManager.AppendChild(new Run(new Text(manager?.EmployeeName ?? "CSS Team"))
-                            {
-                                RunProperties = new DocumentFormat.OpenXml.Wordprocessing.RunProperties(new DocumentFormat.OpenXml.Wordprocessing.Bold())
-                            });
+                            Paragraph pBoss = CreateCompactParagraph(null);
+                            pBoss.AppendChild(new Run(new Text("TATSUYA FUKUZAWA")) { RunProperties = new RunProperties(new Bold(), new FontSize { Val = "26" }) });
+                            body.Append(pBoss);
+                            body.AppendChild(new Paragraph(new Run(new Text("General Director")) { RunProperties = new RunProperties(new FontSize { Val = "22" }) }));
 
                             if (i < tenants.Count - 1)
                                 body.AppendChild(new Paragraph(new Run(new Break() { Type = BreakValues.Page })));
@@ -214,11 +242,27 @@ namespace SmartSam.Services
                     return mem.ToArray();
                 }
             }
-            catch (Exception ex)
-            {
-                throw new Exception($"[Lỗi OpenXML Final] {ex.Message}");
-            }
+            catch (Exception ex) { throw new Exception($"[Lỗi OpenXML] {ex.Message}"); }
         }
+
+        private Paragraph CreateCompactParagraph(JustificationValues? align)
+        {
+            Paragraph p = new Paragraph();
+            ParagraphProperties pp = new ParagraphProperties(new SpacingBetweenLines() { After = "0", Line = "240", LineRule = LineSpacingRuleValues.Auto });
+            if (align != null) pp.Append(new Justification { Val = align.Value });
+            p.ParagraphProperties = pp;
+            return p;
+        }
+
+        private void AddCompactBilingualSection(Body body, string eng, string jap)
+        {
+            Paragraph pEng = body.AppendChild(new Paragraph(new Run(new Text(eng)) { RunProperties = new RunProperties(new FontSize { Val = "24" }) }));
+            pEng.ParagraphProperties = new ParagraphProperties(new SpacingBetweenLines() { After = "0", Line = "240", LineRule = LineSpacingRuleValues.Auto });
+
+            Paragraph pJap = body.AppendChild(new Paragraph(new Run(new Text(jap)) { RunProperties = new RunProperties(new FontSize { Val = "22" }) }));
+            pJap.ParagraphProperties = new ParagraphProperties(new SpacingBetweenLines() { After = "80", Line = "240", LineRule = LineSpacingRuleValues.Auto });
+        }
+
         private void InsertImage(MainDocumentPart mainPart, TableCell cell, byte[] imageBytes)
         {
             ImagePart imagePart = mainPart.AddImagePart(ImagePartType.Png);
@@ -297,7 +341,7 @@ namespace SmartSam.Services
                 //mail.To.Add("hai.dq@saigonskygarden.com.vn");
                 mail.To.Add("bao.q@saigonskygarden.com.vn");
                 mail.CC.Add("phung.ctm@saigonskygarden.com.vn");
-                mail.CC.Add("lan.dtm@saigonskygarden.com.vn");
+                mail.CC.Add("hai.dq@saigonskygarden.com.vn");
 
                 // Đính kèm file Word duy nhất
                 if (wordFile != null && wordFile.Length > 0)

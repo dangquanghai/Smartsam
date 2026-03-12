@@ -1,132 +1,150 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using System;
-using System.Collections.Generic;
-using SmartSam.Helpers;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
 using System.Data;
+using SmartSam.Helpers;
 using SmartSam.Services;
-using System.Data.SqlTypes;
+using Microsoft.AspNetCore.Mvc.Rendering;
+
 namespace SmartSam.Pages.Sales.STContract
 {
     public class IndexModel : BasePageModel
     {
-        
         private readonly ILogger<IndexModel> _logger;
-        
         private readonly PermissionService _permissionService;
-        public IndexModel(IConfiguration config, ILogger<IndexModel> logger, PermissionService permissionService): base(config)
+
+        // ID của chức năng trong bảng SYS_Function (Bạn có thể điều chỉnh số 1 này cho đúng DB)
+        private const int FUNCTION_ID = 5;
+
+        public IndexModel(IConfiguration config, ILogger<IndexModel> logger, PermissionService permissionService) : base(config)
         {
             _logger = logger;
             _permissionService = permissionService;
         }
-        // Đối tượng chứa quyền của trang này
+
+        // Đối tượng chứa quyền của trang này (Dùng cho Giai đoạn 2)
         public PagePermissions PagePerm { get; set; }
 
         [BindProperty(SupportsGet = true)]
-        public string DateRangeIn { get; set; }
-
-        [BindProperty(SupportsGet = true)]
-        public string DateRangeOut { get; set; }
-        public int DefaultPageSize => _config.GetValue<int>("AppSettings:DefaultPageSize", 25);
+        public STContractFilter Filter { get; set; } = new();
+        public List<ContractRow> Contracts { get; set; } = new List<ContractRow>();
         public List<SelectListItem> ApartmentList { get; set; }
         public List<SelectListItem> ContractStatusList { get; set; }
         public List<SelectListItem> CompanyList { get; set; } = new List<SelectListItem>();
         public List<SelectListItem> AgentCompanyList { get; set; } = new List<SelectListItem>();
 
-        // 🔹 SEARCH CONDITION
-        [BindProperty(SupportsGet = true)]
-        public STContractFilter Filter { get; set; } = new();
+        public int DefaultPageSize => _config.GetValue<int>("AppSettings:DefaultPageSize", 25);
 
-        public List<ContractRow> Contracts { get; set; } = new();
-
-
-
+        // ==========================================
+        // 1. GIAI ĐOẠN LOAD TRANG (GET)
+        // ==========================================
         public void OnGet()
         {
-            // --- BẮT ĐẦU PHẦN PHÂN QUYỀN MỚI ---
+            // Lấy quyền được admin cấp cho role login
+            PagePerm = GetUserPermissions();
 
-            // 1. Kiểm tra quyền Admin từ Claim trước
-            bool isAdmin = User.FindFirst("IsAdminRole")?.Value == "True";
-
-            // 2. Lấy RoleID từ Claims
-            var roleClaim = User.FindFirst("RoleID")?.Value;
-            int roleId = int.Parse(roleClaim ?? "0");
-
-            // Giả sử ID của phân hệ Long Term Contract trong bảng SYS_Function là 1
-            int functionID = 1;
-
-            PagePerm = new PagePermissions();
-
-            if (isAdmin)
-            {
-                // Nếu là Admin, gán một danh sách số quyền giả lập đủ lớn (ví dụ từ 1-10) 
-                // để tất cả các nút Add, Edit, Delete trên giao diện đều hiện ra
-                PagePerm.AllowedNos = Enumerable.Range(1, 10).ToList();
-            }
-            else
-            {
-                // Nếu không phải Admin, lấy chuỗi quyền thực tế (2,3,4,5...) từ DB
-                PagePerm.AllowedNos = _permissionService.GetPermissionsForPage(roleId, functionID);
-            }
-
-            // --- KẾT THÚC PHẦN PHÂN QUYỀN ---
-
-            // Các logic load dữ liệu cũ của bạn
+            // Khởi tạo các giá trị mặc định cho Filter
             Filter.StatusID ??= 1;
+
+            // Load dữ liệu cho các Dropdown
             LoadContractStatus();
             LoadApartments();
-
             CompanyList = LoadSelect2("CM_Company", "CompanyID", "CompanyName");
             AgentCompanyList = LoadSelect2("CM_Company", "CompanyID", "CompanyName");
 
             ViewData["DefaultPageSize"] = DefaultPageSize;
         }
-        // AJAX Search Handler
+
+        // ==========================================
+        // 2. XỬ LÝ SEARCH AJAX (POST)
+        // ==========================================
         public IActionResult OnPostSearch([FromBody] SearchRequest request)
         {
-            int functionId = 1;
-            int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
-            var rawNos = _permissionService.GetPermissionsForPage(roleId, functionId);
-
-            var (contracts, totalRecords) = SearchContracts(request);
-
-            var dataWithActions = contracts.Select(c => {
-                // Kiểm tra quyền Edit và View thô
-                bool hasEditPerm = rawNos.Contains(4) && (c.StatusID == 1 || c.StatusID == 2);
-                bool hasViewPerm = rawNos.Contains(2);
-
-                return new
-                {
-                    data = c,
-                    actions = new
-                    {
-                        // Logic mới: Có quyền vào chi tiết nếu có Edit HOẶC View
-                        canAccess = hasEditPerm || hasViewPerm,
-                        // Ưu tiên Edit nếu có cả 2 quyền
-                        accessMode = hasEditPerm ? "edit" : "view",
-
-                        canCancel = rawNos.Contains(6) && (c.StatusID == 1),
-                        canToLiving = rawNos.Contains(7) && (c.StatusID == 2)
-                    }
-                };
-            });
-
-            return new JsonResult(new
+            try
             {
-                success = true,
-                data = dataWithActions,
-                total = totalRecords,
-                page = request.Page,
-                pageSize = request.PageSize,
-                totalPages = (int)Math.Ceiling((double)totalRecords / request.PageSize)
-            });
+                // Bước A: Lấy quyền được admin cấp cho role login
+                var perms = GetUserPermissions();
+
+                // Bước B: Gọi Database lấy dữ liệu thô
+                var (contracts, totalRecords) = SearchContracts(request);
+
+                // Bước C: Giao thoa Quyền + Trạng thái để trả về các cờ (Flags) cho JS
+                var dataWithActions = contracts.Select(c => {
+
+                    // Định nghĩa các mã quyền tương ứng trong DB của bạn
+                    bool hasView = perms.HasPermission(2);
+                    bool hasEdit = perms.HasPermission(4); 
+                    bool hasCancel = perms.HasPermission(6);
+                    bool hasToLiving = perms.HasPermission(7);
+
+                    // Logic nghiệp vụ: Chỉ cho sửa nếu trạng thái là Draft (1) hoặc Pending (2)
+                    bool isEditableStatus = (c.StatusID == 1 || c.StatusID == 2);
+
+                    return new
+                    {
+                        data = c,
+                        actions = new
+                        {
+                            // Quyền truy cập link trực tiếp (Contract No)
+                            canAccess = hasView || hasEdit,
+                            accessMode = (hasEdit && isEditableStatus) ? "edit" : "view",
+
+                            // Quyền cho các nút chức năng (Khớp với file JS xử lý Radio)
+                            canView = hasView,
+                            canEdit = hasEdit && isEditableStatus,
+                            canCancel = hasCancel && (c.StatusID == 1),
+                            canToLiving = hasToLiving && (c.StatusID == 2),
+                            canCopy = true // Thường cho phép copy mọi lúc
+                        }
+                    };
+                });
+
+                return new JsonResult(new
+                {
+                    success = true,
+                    data = dataWithActions,
+                    total = totalRecords,
+                    page = request.Page,
+                    pageSize = request.PageSize,
+                    totalPages = (int)Math.Ceiling((double)totalRecords / request.PageSize)
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in OnPostSearch");
+                return new JsonResult(new { success = false, message = ex.Message });
+            }
         }
 
+        // ==========================================
+        // 3. CÁC HÀM BỔ TRỢ (HELPER)
+        // ==========================================
+
+
+        private PagePermissions GetUserPermissions()
+        {
+            bool isAdmin = User.FindFirst("IsAdminRole")?.Value == "True";
+            int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
+
+            // 1. Khởi tạo đối tượng PagePermissions mới
+            var permsObj = new PagePermissions();
+
+            if (isAdmin)
+            {
+                // Admin: Gán danh sách quyền giả lập
+                permsObj.AllowedNos = Enumerable.Range(1, 20).ToList();
+            }
+            else
+            {
+                // 2. Lấy danh sách List<int> từ Service và gán vào thuộc tính AllowedNos của Object
+                permsObj.AllowedNos = _permissionService.GetPermissionsForPage(roleId, FUNCTION_ID);
+            }
+
+            // 3. Trả về đối tượng (Object) chứa danh sách đó
+            return permsObj;
+        }
         private (List<ContractRow> contracts, int totalRecords) SearchContracts(SearchRequest request)
         {
-
             var (CheckInFrom, CheckInTo) = Helper.ParseDateRange(request.DateRangeIn);
             var (CheckOutFrom, CheckOutTo) = Helper.ParseDateRange(request.DateRangeOut);
 
@@ -137,150 +155,78 @@ namespace SmartSam.Pages.Sales.STContract
             using var cmd = new SqlCommand("SAL_SearchSTContract", conn);
             cmd.CommandType = CommandType.StoredProcedure;
 
-            // Xử lý từng parameter rõ ràng
-            // int? parameters
-            cmd.Parameters.Add("@StatusID", SqlDbType.Int).Value =
-                request.StatusID.HasValue ? (object)request.StatusID.Value : DBNull.Value;
-
-            cmd.Parameters.Add("@ApartmentId", SqlDbType.Int).Value =
-                request.ApartmentId.HasValue ? (object)request.ApartmentId.Value : DBNull.Value;
-
-            cmd.Parameters.Add("@CompanyId", SqlDbType.Int).Value =
-                request.CompanyId.HasValue ? (object)request.CompanyId.Value : DBNull.Value;
-
-            cmd.Parameters.Add("@AgentCompnayId", SqlDbType.Int).Value =
-                request.AgentCompanyId.HasValue ? (object)request.AgentCompanyId.Value : DBNull.Value;
-
-            
-            // DateTime? parameters  
-            cmd.Parameters.Add("@CheckInFrom", SqlDbType.Date).Value =
-               CheckInFrom.HasValue ? CheckInFrom.Value : DBNull.Value;
-
-            cmd.Parameters.Add("@CheckInTo", SqlDbType.Date).Value =
-               CheckInTo.HasValue ? CheckInTo.Value : DBNull.Value;
-
-            cmd.Parameters.Add("@CheckOutFrom", SqlDbType.Date).Value =
-              CheckOutFrom.HasValue ? CheckOutFrom.Value : DBNull.Value;
-
-            cmd.Parameters.Add("@CheckOutTo", SqlDbType.Date).Value =
-                CheckOutTo.HasValue ? CheckOutTo.Value : DBNull.Value;
-
-            // string parameters
-            cmd.Parameters.Add("@ContractNo", SqlDbType.NVarChar, 50).Value =
-                !string.IsNullOrWhiteSpace(request.ContractNo) ? (object)request.ContractNo : DBNull.Value;
-
-            cmd.Parameters.Add("@CustomerName", SqlDbType.NVarChar, 100).Value =
-                !string.IsNullOrWhiteSpace(request.CustomerName) ? (object)request.CustomerName : DBNull.Value;
-
-            // Non-nullable parameters
+            // Parameters
+            cmd.Parameters.Add("@StatusID", SqlDbType.Int).Value = request.StatusID ?? (object)DBNull.Value;
+            cmd.Parameters.Add("@ApartmentId", SqlDbType.Int).Value = request.ApartmentId ?? (object)DBNull.Value;
+            cmd.Parameters.Add("@CompanyId", SqlDbType.Int).Value = request.CompanyId ?? (object)DBNull.Value;
+            cmd.Parameters.Add("@AgentCompanyId", SqlDbType.Int).Value = request.AgentCompanyId ?? (object)DBNull.Value;
+            cmd.Parameters.Add("@CheckInFrom", SqlDbType.Date).Value = CheckInFrom ?? (object)DBNull.Value;
+            cmd.Parameters.Add("@CheckInTo", SqlDbType.Date).Value = CheckInTo ?? (object)DBNull.Value;
+            cmd.Parameters.Add("@CheckOutFrom", SqlDbType.Date).Value = CheckOutFrom ?? (object)DBNull.Value;
+            cmd.Parameters.Add("@CheckOutTo", SqlDbType.Date).Value = CheckOutTo ?? (object)DBNull.Value;
+            cmd.Parameters.Add("@ContractNo", SqlDbType.NVarChar, 50).Value = (object)request.ContractNo ?? DBNull.Value;
+            cmd.Parameters.Add("@CustomerName", SqlDbType.NVarChar, 100).Value = (object)request.CustomerName ?? DBNull.Value;
             cmd.Parameters.AddWithValue("@PageNumber", request.Page);
             cmd.Parameters.AddWithValue("@PageSize", request.PageSize);
 
-            // Output parameter
             var totalParam = cmd.Parameters.Add("@TotalRecords", SqlDbType.Int);
             totalParam.Direction = ParameterDirection.Output;
 
             conn.Open();
             using var reader = cmd.ExecuteReader();
-
             while (reader.Read())
             {
                 contracts.Add(new ContractRow
                 {
-                    ContractID = Convert.ToInt32(reader[0]), // Dùng Convert
-                    ContractNo = Convert.ToString(reader[1]),
-                    ApartmentNo = Convert.ToString(reader[2]),
-                    CustomerName = Convert.ToString(reader[3]),
-                    CompanyName = Convert.ToString(reader[4]),
-                    ContractFromDate = Convert.ToDateTime(reader[5]),
-                    ContractToDate = Convert.ToDateTime(reader[6]),
-                    StatusID = Convert.ToInt32(reader[7]),
-                    StatusName = Convert.ToString(reader[8])
+                    ContractID = Convert.ToInt32(reader["ContractID"]),
+                    ContractNo = reader["ContractNo"].ToString(),
+                    ApartmentNo = reader["ApartmentNo"].ToString(),
+                    CustomerName = reader["CustomerName"].ToString(),
+                    CompanyName = reader["CompanyName"].ToString(),
+                    ContractFromDate = Convert.ToDateTime(reader["ContractFromDate"]),
+                    ContractToDate = Convert.ToDateTime(reader["ContractToDate"]),
+                    StatusID = Convert.ToInt32(reader["StatusID"]),
+                    StatusName = reader["StatusName"].ToString()
                 });
             }
-
             reader.Close();
 
-            if (totalParam.Value != DBNull.Value)
-            {
-                totalRecords = Convert.ToInt32(totalParam.Value);
-            }
-
+            totalRecords = totalParam.Value != DBNull.Value ? Convert.ToInt32(totalParam.Value) : 0;
             return (contracts, totalRecords);
         }
 
         public IActionResult OnPostCancel([FromBody] CancelRequest req)
         {
-            // TODO: call stored procedure CancelContract(@ContractID)
-            return new JsonResult(new
-            {
-                success = true,
-                message = "Contract cancelled successfully"
-            });
+            // Thực hiện gọi SP Cancel tại đây
+            return new JsonResult(new { success = true, message = "Contract cancelled successfully" });
         }
 
         private void LoadContractStatus()
         {
             var list = new List<(int Id, string Name)>();
-
-            using var conn = new SqlConnection(
-                _config.GetConnectionString("DefaultConnection"));
-
-            using var cmd = new SqlCommand(@"
-            select StatusID , StatusName  from CM_ContractStatus
-            ORDER BY StatusID", conn);
-
+            using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+            using var cmd = new SqlCommand("SELECT StatusID, StatusName FROM CM_ContractStatus ORDER BY StatusID", conn);
             conn.Open();
             using var rd = cmd.ExecuteReader();
-            while (rd.Read())
-            {
-                list.Add((
-                    Convert.ToInt32(rd[0]),  // 👈 CHỐT Ở ĐÂY
-                    Convert.ToString(rd[1])!
-                ));
-            }
+            while (rd.Read()) { list.Add((Convert.ToInt32(rd[0]), rd[1].ToString())); }
 
-            ContractStatusList = Helper.BuildIntSelectList(
-                list,
-                x => x.Id,
-                x => x.Name,
-                showAll: false
-            );
+            ContractStatusList = Helper.BuildIntSelectList(list, x => x.Id, x => x.Name, showAll: false);
         }
+
         private void LoadApartments()
         {
             var list = new List<(int Id, string Name)>();
-
-            using var conn = new SqlConnection(
-                _config.GetConnectionString("DefaultConnection"));
-
-            using var cmd = new SqlCommand(@"
-            SELECT ApmtID, ApartmentNo
-            FROM AM_Apmt
-            WHERE ExistFrom <= GETDATE()
-            AND ExistTo >= GETDATE()
-            ORDER BY ApartmentNo", conn);
-
+            using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+            using var cmd = new SqlCommand("SELECT ApmtID, ApartmentNo FROM AM_Apmt WHERE ExistFrom <= GETDATE() AND ExistTo >= GETDATE() ORDER BY ApartmentNo", conn);
             conn.Open();
             using var rd = cmd.ExecuteReader();
-            while (rd.Read())
-            {
-                list.Add((
-                    Convert.ToInt32(rd[0]),  // 👈 CHỐT Ở ĐÂY
-                    Convert.ToString(rd[1])!
-                ));
-            }
+            while (rd.Read()) { list.Add((Convert.ToInt32(rd[0]), rd[1].ToString())); }
 
-            ApartmentList = Helper.BuildIntSelectList(
-                list,
-                x => x.Id,
-                x => x.Name,
-                showAll: true
-            );
+            ApartmentList = Helper.BuildIntSelectList(list, x => x.Id, x => x.Name, showAll: true);
         }
     }
 
-    // Request model cho AJAX search
+    // --- CÁC CLASS DỮ LIỆU ---
     public class SearchRequest
     {
         public int? StatusID { get; set; }
@@ -295,7 +241,6 @@ namespace SmartSam.Pages.Sales.STContract
         public int PageSize { get; set; } = 10;
     }
 
-    // Mở rộng ContractRow để chứa thêm thông tin
     public class ContractRow
     {
         public int ContractID { get; set; }
@@ -303,7 +248,6 @@ namespace SmartSam.Pages.Sales.STContract
         public string ApartmentNo { get; set; }
         public string CustomerName { get; set; }
         public string CompanyName { get; set; }
-        public string AgentCompanyName { get; set; }
         public DateTime ContractFromDate { get; set; }
         public DateTime ContractToDate { get; set; }
         public int StatusID { get; set; }
@@ -312,12 +256,12 @@ namespace SmartSam.Pages.Sales.STContract
         public string ContractToDateDisplay => ContractToDate.ToString("dd/MM/yyyy");
     }
 
-
     public class STContractFilter
     {
         public int? StatusID { get; set; }
         public int? ApartmentId { get; set; }
 
+        // Đảm bảo có 2 dòng này bên trong class Filter
         public string? DateRangeIn { get; set; }
         public string? DateRangeOut { get; set; }
 
@@ -327,10 +271,6 @@ namespace SmartSam.Pages.Sales.STContract
         public string? ContractNo { get; set; }
         public string? CustomerName { get; set; }
     }
-    public class CancelRequest
-    {
-        public int ContractId { get; set; }
-    }
-    
 
+    public class CancelRequest { public int ContractId { get; set; } }
 }

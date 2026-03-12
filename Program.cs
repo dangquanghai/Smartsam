@@ -90,10 +90,22 @@ RecurringJob.AddOrUpdate<SixMonthsStayReviewService>(
     "SixMonthsReview",
     service => service.Process6MonthsStayReview(),
     Cron.Monthly(1, 6),//ngay 1 luc 6 gio sang
-    //Cron.Daily(11, 55), //Chạy vào lúc 14:30 chiều nay.
+    //Cron.Daily(11,36), //Chạy vào lúc 14:30 chiều nay.
     new RecurringJobOptions
     {
         TimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time")
     }
 );
+
+// Job thông báo chứng từ (Receiving & Issue Vouchers)
+RecurringJob.AddOrUpdate<VoucherNotifyService>(
+    "DailyVoucherNotification",
+    service => service.ProcessVoucherNotification(),
+    Cron.Daily(5, 0), // Chạy định kỳ vào lúc 5:00 sáng hàng ngày
+    new RecurringJobOptions
+    {
+        TimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time")
+    }
+);
+
 app.Run();

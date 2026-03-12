@@ -2,19 +2,21 @@
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace SmartSam.Services
 {
+    // Class này giữ lại để dùng làm "helper" hoặc chứa quyền
     public class PagePermissions
     {
         public List<int> AllowedNos { get; set; } = new List<int>();
 
-        // Hàm check quyền nhanh cho file .cshtml
         public bool HasPermission(int no)
         {
             return AllowedNos != null && AllowedNos.Contains(no);
         }
     }
+
     public class PermissionService
     {
         private readonly string _connectionString;
@@ -23,13 +25,12 @@ namespace SmartSam.Services
             _connectionString = configuration.GetConnectionString("DefaultConnection");
         }
 
-        // Trả về danh sách PermissionNo thô từ SQL (ví dụ: 2, 3, 4, 6, 7)
+        // SỬA LẠI Ở ĐÂY: Trả về List<int> để khớp với tất cả các trang cũ
         public List<int> GetPermissionsForPage(int roleId, int functionId)
         {
             var result = new List<int>();
             using var conn = new SqlConnection(_connectionString);
 
-            // Câu SQL theo cấu trúc mới của bạn
             string sql = "SELECT Permission FROM SYS_RolePermission WHERE FunctionID = @FunctionID AND RoleID = @RoleID";
 
             try
@@ -42,15 +43,17 @@ namespace SmartSam.Services
                 object scalar = cmd.ExecuteScalar();
                 if (scalar != null && scalar != DBNull.Value)
                 {
-                    string permString = scalar.ToString(); // Ví dụ: "2,3,4,6"
-                    result = permString.Split(',')
-                                       .Select(s => int.Parse(s.Trim()))
+                    string permString = scalar.ToString();
+                    result = permString.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                       .Select(s => int.TryParse(s.Trim(), out int n) ? n : (int?)null)
+                                       .Where(n => n.HasValue)
+                                       .Select(n => n.Value)
                                        .ToList();
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                // Log error if needed
+                // Log lỗi nếu cần
             }
 
             return result;

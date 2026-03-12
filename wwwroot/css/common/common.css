@@ -3,3 +3,8 @@
 .page-container {
     position: relative;
 }
+
+.vni-font {
+    font-family: "VNI-Times", "VNI-Helve", sans-serif !important;
+    font-size: 14px;
+}
