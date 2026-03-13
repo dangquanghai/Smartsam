@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Data.SqlClient;
 using System.Data;
 using SmartSam.Helpers;
+using SmartSam.Services.Interfaces; 
 using SmartSam.Services;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
@@ -11,13 +12,15 @@ namespace SmartSam.Pages.Sales.STContract
     public class IndexModel : BasePageModel
     {
         private readonly ILogger<IndexModel> _logger;
+        private readonly ISecurityService _securityService; 
         private readonly PermissionService _permissionService;
 
         // ID của chức năng trong bảng SYS_Function (Bạn có thể điều chỉnh số 1 này cho đúng DB)
         private const int FUNCTION_ID = 5;
 
-        public IndexModel(IConfiguration config, ILogger<IndexModel> logger, PermissionService permissionService) : base(config)
+        public IndexModel(ISecurityService securityService, IConfiguration config, ILogger<IndexModel> logger, PermissionService permissionService) : base(config)
         {
+            _securityService = securityService;
             _logger = logger;
             _permissionService = permissionService;
         }
@@ -58,43 +61,40 @@ namespace SmartSam.Pages.Sales.STContract
         // ==========================================
         // 2. XỬ LÝ SEARCH AJAX (POST)
         // ==========================================
+
         public IActionResult OnPostSearch([FromBody] SearchRequest request)
         {
             try
             {
-                // Bước A: Lấy quyền được admin cấp cho role login
-                var perms = GetUserPermissions();
+                // 1. Lấy thông tin Role của người dùng hiện tại
+                int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
 
-                // Bước B: Gọi Database lấy dữ liệu thô
+                // 2. Gọi Database lấy dữ liệu thô
                 var (contracts, totalRecords) = SearchContracts(request);
 
-                // Bước C: Giao thoa Quyền + Trạng thái để trả về các cờ (Flags) cho JS
+                // 3. Sử dụng SecurityService để "phán quyết" quyền cho từng dòng dữ liệu
                 var dataWithActions = contracts.Select(c => {
 
-                    // Định nghĩa các mã quyền tương ứng trong DB của bạn
-                    bool hasView = perms.HasPermission(2);
-                    bool hasEdit = perms.HasPermission(4); 
-                    bool hasCancel = perms.HasPermission(6);
-                    bool hasToLiving = perms.HasPermission(7);
-
-                    // Logic nghiệp vụ: Chỉ cho sửa nếu trạng thái là Draft (1) hoặc Pending (2)
-                    bool isEditableStatus = (c.StatusID == 1 || c.StatusID == 2);
+                    // Lấy tập quyền thực tế cho bản ghi này (đã giao thoa Quyền + Trạng thái)
+                    var effectivePerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, c.StatusID);
 
                     return new
                     {
                         data = c,
                         actions = new
                         {
-                            // Quyền truy cập link trực tiếp (Contract No)
-                            canAccess = hasView || hasEdit,
-                            accessMode = (hasEdit && isEditableStatus) ? "edit" : "view",
+                            // Chế độ truy cập khi click vào link (Dán link mode=edit cũng vô hiệu nếu không có mã 4)
+                            canAccess = effectivePerms.Contains(2), // Chỉ cần có quyền View (2)
+                            accessMode = effectivePerms.Contains(4) ? "edit" : "view",
 
-                            // Quyền cho các nút chức năng (Khớp với file JS xử lý Radio)
-                            canView = hasView,
-                            canEdit = hasEdit && isEditableStatus,
-                            canCancel = hasCancel && (c.StatusID == 1),
-                            canToLiving = hasToLiving && (c.StatusID == 2),
-                            canCopy = true // Thường cho phép copy mọi lúc
+                            // Các nút chức năng dựa trên danh sách mã quyền thực tế trả về từ Service
+                            canView = effectivePerms.Contains(2),
+                            canEdit = effectivePerms.Contains(4),
+                            canEditMember = effectivePerms.Contains(5),
+                            canCancel = effectivePerms.Contains(6),
+                            canChangeStatus = effectivePerms.Contains(7),
+                            canAdjustDate = effectivePerms.Contains(8),
+                            canCopy = effectivePerms.Contains(9)
                         }
                     };
                 });
@@ -115,12 +115,9 @@ namespace SmartSam.Pages.Sales.STContract
                 return new JsonResult(new { success = false, message = ex.Message });
             }
         }
-
         // ==========================================
         // 3. CÁC HÀM BỔ TRỢ (HELPER)
         // ==========================================
-
-
         private PagePermissions GetUserPermissions()
         {
             bool isAdmin = User.FindFirst("IsAdminRole")?.Value == "True";
@@ -143,6 +140,7 @@ namespace SmartSam.Pages.Sales.STContract
             // 3. Trả về đối tượng (Object) chứa danh sách đó
             return permsObj;
         }
+
         private (List<ContractRow> contracts, int totalRecords) SearchContracts(SearchRequest request)
         {
             var (CheckInFrom, CheckInTo) = Helper.ParseDateRange(request.DateRangeIn);

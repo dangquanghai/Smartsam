@@ -21,6 +21,7 @@
     });
 
     // 4. Các sự kiện tính toán tự động
+    /*
     $('#CurrentRentRate, #PerVAT').on('input', calculateNetPrice);
 
     $('#CurrentRentRate').on('blur', function () {
@@ -29,7 +30,21 @@
     }).on('focus', function () {
         $(this).val($(this).val().replace(/,/g, ''));
     });
+    */
+     $('#CurrentRentRate').on('input', function () {
+        let selection = window.getSelection().toString();
+        if (selection !== '') return;
 
+        let val = $(this).val().replace(/[^0-9.]/g, '');
+        if (val === "") return;
+
+        // Tạm thời lưu vị trí con trỏ để không bị nhảy khi gõ
+        let n = parseFloat(val);
+        $(this).val(n.toLocaleString('en-US'));
+
+        // Gọi hàm tính Net Price luôn
+        calculateNetPrice();
+    });
     // 5. Đồng bộ DateRangePicker với thẻ Hidden
     $('#contractDuration').on('apply.daterangepicker', function (ev, picker) {
         $('#ContractFromDate').val(picker.startDate.format('YYYY-MM-DD'));
@@ -80,10 +95,17 @@ function initializePage(mode) {
         $('input, select, textarea').prop('disabled', true);
         $('#btnSave, .btn-primary, .btn-success').hide();
         $('#contractDuration').addClass('bg-light').css('cursor', 'not-allowed');
+
+        // Khóa click vào các radio chọn service trong table
+        $(document).on('click', 'input[name="selectedService"]', function (e) {
+            e.preventDefault();
+            return false;
+        });
     }
 
     // Tự động load Grid dịch vụ ở Vùng 2 nếu là Edit mode
     loadServiceGrid();
+   
 }
 
 function validateMainForm() {
@@ -176,14 +198,27 @@ function fetchAgentPersons(companyId, selectedPersonId) {
         }
     });
 }
-
+/*
 function calculateNetPrice() {
     let gross = parseFloat($('#CurrentRentRate').val().replace(/[^0-9.]/g, '')) || 0;
     let vat = parseFloat($('#PerVAT').val()) || 0;
     let netPrice = gross > 0 ? Math.round(gross / (1 + (vat / 100))) : 0;
     $('#TotalPriceExcVAT').val(netPrice.toLocaleString('en-US'));
 }
+*/
+function calculateNetPrice() {
+    let grossStr = $('#CurrentRentRate').val().replace(/[^0-9.]/g, '');
+    let gross = parseFloat(grossStr) || 0;
+    let vat = parseFloat($('#PerVAT').val()) || 0;
 
+    if (gross > 0) {
+        // Công thức: Net = Gross / (1 + VAT%)
+        let netPrice = Math.round(gross / (1 + (vat / 100)));
+        $('#TotalPriceExcVAT').val(netPrice.toLocaleString('en-US'));
+    } else {
+        $('#TotalPriceExcVAT').val(0);
+    }
+}
 // --- VÙNG 2: CONTRACT SERVICES (AJAX) ---
 
 function openServiceModal() {

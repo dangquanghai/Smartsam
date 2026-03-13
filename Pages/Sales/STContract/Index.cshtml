@@ -161,15 +161,31 @@
                 <!-- ACTION PANEL -->
                 <div class="card card-outline card-primary">
                     <div class="card-footer p-2 text-center">
-                        @if (Model.PagePerm.HasPermission(3)) // Quyền Add Contract
+                        @if (Model.PagePerm.HasPermission(3))
                         {
                             <button class="btn btn-success btn-sm" id="btnAdd">
-                                <i class="fas fa-plus"></i> Add
+                                <i class="fas fa-plus"></i> Add New
                             </button>
                         }
-                        <button class="btn btn-danger btn-sm" id="btnCancel" disabled><i class="fas fa-ban"></i> Cancel</button>
-                        <button class="btn btn-danger btn-sm" id="btnCopy" disabled><i class="fas fa-coppy"></i> Copy</button>
-                        <button class="btn btn-dark btn-sm" id="btnToLiving" disabled><i class="fas fa-convert"> To Living</button>
+                        <button class="btn btn-warning btn-sm" id="btnEditMember" disabled>
+                            <i class="fas fa-users-cog"></i> Members
+                        </button>
+
+                        <button class="btn btn-danger btn-sm" id="btnCancel" disabled>
+                            <i class="fas fa-ban"></i> Cancel
+                        </button>
+
+                        <button class="btn btn-primary btn-sm" id="btnCopy" disabled>
+                            <i class="fas fa-copy"></i> Copy
+                        </button>
+
+                        <button class="btn btn-dark btn-sm" id="btnChangeStatus" disabled>
+                            <i class="fas fa-exchange-alt"></i> Change Status
+                        </button>
+
+                        <button class="btn btn-secondary btn-sm" id="btnAdjustDate" disabled>
+                            <i class="fas fa-calendar-alt"></i> Adjust Date
+                        </button>
                     </div>
                 </div>
             </div>

@@ -27,9 +27,12 @@ builder.Services.AddMemoryCache();
 
 builder.Services.AddScoped<MenuService>();
 builder.Services.AddScoped<PermissionService>();
+builder.Services.AddScoped<SmartSam.Services.Interfaces.ISecurityService, SmartSam.Services.Implementations.SecurityService>();
 
 // Đăng ký Service xử lý Review của bạn
 builder.Services.AddScoped<SixMonthsStayReviewService>();
+
+
 
 builder.Services.Configure<FormOptions>(options =>
 {

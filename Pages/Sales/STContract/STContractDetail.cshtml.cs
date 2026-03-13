@@ -8,16 +8,31 @@ using Microsoft.Data.SqlClient;
 using System.Data;
 using System.ComponentModel.DataAnnotations;
 using Dapper;
-using Google.Api;
+using SmartSam.Services;
+using SmartSam.Services.Interfaces; 
+
 
 namespace SmartSam.Pages.Sales.STContract
 {
     public class STContractDetailModel : BasePageModel
     {
+        private readonly ISecurityService _securityService;
+        private readonly PermissionService _permissionService;
         // Constructor truyền config vào BasePageModel
-        public STContractDetailModel(IConfiguration config) : base(config) { }
-
+        public STContractDetailModel(ISecurityService securityService, PermissionService permissionService, IConfiguration config) : base(config) 
+        {
+            _securityService = securityService;
+            _permissionService = permissionService; 
+        }
         
+       
+        
+        private const int FUNCTION_ID = 5;
+        public bool CanChangeStatus { get; set; }
+        public bool CanAdjustDate { get; set; }
+        public bool CanSave { get; set; } // Quyền Edit/Add thực tế
+
+
         [BindProperty(SupportsGet = true)]
         public string Mode { get; set; } // Sẽ nhận "add", "edit", hoặc "view" từ URL
 
@@ -97,12 +112,81 @@ namespace SmartSam.Pages.Sales.STContract
                 }
             }
         }
+        public async Task<IActionResult> OnGetAsync(int? id, string mode = "view")
+        {
+            // 1. Lấy thông tin Role của User hiện tại
+            int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
+            //const int FUNCTION_ID = 102; // ID của ST Contract
 
+            // Gán mặc định ban đầu
+            Mode = mode ?? "view";
+
+            if (id.HasValue && id > 0)
+            {
+                // 2. Load dữ liệu thực tế (Giữ nguyên hàm của anh nhưng chuyển sang Async nếu cần)
+                // Nếu LoadContractData chưa async, anh có thể để nguyên hoặc bọc Task
+                LoadContractData(id.Value);
+
+                if (Contract == null) return NotFound();
+
+                // 3. BIỆN LUẬN BẢO MẬT GIAI ĐOẠN 3: Giao thoa Quyền hệ thống & Trạng thái đối tượng
+                // Gọi Service để lấy tập quyền "thực tế" (đã check StatusID 1, 2, 3, 4, 9)
+                var effectivePerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, Contract.ContractStatus??3);
+
+                // Bước A: Kiểm tra quyền truy cập bản ghi (Mã 2: View)
+                if (!effectivePerms.Contains(2))
+                {
+                    return RedirectToPage("/Index", new { msg = "Bản ghi không tồn tại hoặc không có quyền truy cập." });
+                }
+
+                // Bước B: Ép Mode dựa trên trạng thái (Mã 4: Edit)
+                // Nếu yêu cầu sửa (mode=edit) nhưng tập quyền thực tế không cho phép (do trạng thái hoặc do role)
+                if (Mode == "edit" && !effectivePerms.Contains(4))
+                {
+                    Mode = "view";
+                }
+
+                // Cập nhật các cờ quyền khác cho UI (nếu anh có dùng các biến này)
+                CanChangeStatus = effectivePerms.Contains(7);
+                CanAdjustDate = effectivePerms.Contains(8);
+            }
+            else
+            {
+                // TRƯỜNG HỢP ADD MỚI: Kiểm tra mã quyền 3 (Add) từ SecurityService
+                // Truyền trạng thái 0 (vì chưa có bản ghi) để check quyền Add
+                var addPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, 0);
+
+                if (!addPerms.Contains(3))
+                    return RedirectToPage("/Index", new { msg = "Bạn không có quyền thực hiện chức năng này." });
+
+                Mode = "add";
+                Contract = new ContractViewModel
+                {
+                    ContractNo = GetNewSTContractNo(),
+                    ContractDate = DateTime.Now,
+                    ContractStatus = 1,
+                    PerVAT = 10,
+                    ContractFromDate = DateTime.Now.Date,
+                    ContractToDate = DateTime.Now.Date.AddMonths(1)
+                };
+                STInfor = new CM_STInfoViewModel();
+            }
+
+            // 4. Giữ nguyên các hàm Load dữ liệu hỗ trợ của anh
+            LoadAllDropdowns(isNew: (Mode == "add"));
+
+            if (STInfor != null && STInfor.AgentCompany.HasValue)
+            {
+                AgentPersonList = FetchAgentPersons(STInfor.AgentCompany.Value);
+            }
+
+            return Page();
+        }
+        /*
         public void OnGet(int? id, string mode)
         {
             // Cập nhật Mode từ query string (nếu có)
             Mode = mode ?? Mode;
-
             if (id.HasValue && id > 0)
             {
                 // Nếu có ID, ưu tiên mode view nếu không được chỉ định
@@ -136,6 +220,29 @@ namespace SmartSam.Pages.Sales.STContract
                 AgentPersonList = FetchAgentPersons(STInfor.AgentCompany.Value);
             }
         }
+        */
+        private PagePermissions GetUserPermissions()
+        {
+            bool isAdmin = User.FindFirst("IsAdminRole")?.Value == "True";
+            int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
+
+            // 1. Khởi tạo đối tượng PagePermissions mới
+            var permsObj = new PagePermissions();
+
+            if (isAdmin)
+            {
+                // Admin: Gán danh sách quyền giả lập
+                permsObj.AllowedNos = Enumerable.Range(1, 20).ToList();
+            }
+            else
+            {
+                // 2. Lấy danh sách List<int> từ Service và gán vào thuộc tính AllowedNos của Object
+                permsObj.AllowedNos = _permissionService.GetPermissionsForPage(roleId, FUNCTION_ID);
+            }
+
+            // 3. Trả về đối tượng (Object) chứa danh sách đó
+            return permsObj;
+        }
         private List<SelectListItem> FetchAgentPersons(int companyId)
         {
             // 1. Lấy chuỗi kết nối
@@ -168,6 +275,22 @@ namespace SmartSam.Pages.Sales.STContract
         }
         public IActionResult OnPost()
         {
+            // CHỐT CHẶN CUỐI CÙNG TRƯỚC KHI LƯU
+            int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
+            // Kiểm tra: Nếu là sửa (ID > 0) thì check quyền Edit (4), nếu là mới thì check quyền Add (3)
+            int statusToCheck = Contract.ContractID > 0 ? (Contract.ContractStatus ?? 1) : 0;
+            var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, statusToCheck);
+
+            bool hasPermission = Contract.ContractID == 0 ? currentPerms.Contains(3) : currentPerms.Contains(4);
+
+            if (!hasPermission)
+            {
+                ModelState.AddModelError("", "You have no permition to do it");
+                LoadAllDropdowns(isNew: (Contract.ContractID == 0));
+                return Page();
+            }
+
+
             if (!ModelState.IsValid)
             {
                 LoadAllDropdowns(isNew: (Contract.ContractID == 0));

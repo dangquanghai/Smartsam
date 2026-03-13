@@ -114,33 +114,73 @@
     });
 
     // ========== BẮT SỰ KIỆN THAY ĐỔI RADIO (QUAN TRỌNG NHẤT) ==========
+    // ========== BẮT SỰ KIỆN THAY ĐỔI RADIO (CẬP NHẬT GIAI ĐOẠN 3) ==========
     $(document).on("change", "input[name='selectedContract']", function () {
         const index = $(this).val();
         const item = currentDataRows[index];
 
-        // --- ĐOẠN DEBUG QUAN TRỌNG ---
-        console.log("--- DEBUG ROW SELECTION ---");
+        // --- DEBUG ĐỂ KIỂM TRA QUYỀN THỰC TẾ ---
+        console.log("--- DEBUG ROW SELECTION (ST CONTRACT) ---");
         console.log("Contract No:", item.data.contractNo);
         console.log("Status ID:", item.data.statusID);
-        console.log("Permissions received from Server:");
-        console.table(item.actions); // Hiển thị bảng quyền: canEdit, canCancel, canGenBill...
-        // ---
+        console.table(item.actions);
 
+        // Lưu ID hợp đồng đang chọn
         selectedContractId = item.data.contractID;
         const perms = item.actions;
 
-        // Bật/Tắt nút bấm dựa trên logic quyền + trạng thái đã tính ở Server
-        $("#btnView").prop("disabled", !perms.canView);
-        $("#btnEdit").prop("disabled", !perms.canEdit);
-        $("#btnCancel").prop("disabled", !perms.canCancel);
-        $("#btnCopy").prop("disabled", !perms.canCopy);
-        $("#btnToLiving").prop("disabled", !perms.canToLiving);
-        $("#btnCopy").prop("disabled", false); // Copy thường cho phép mọi trạng thái
+        // 1. CẬP NHẬT TRẠNG THÁI ENABLE/DISABLE CÁC NÚT
+        // Nút Edit/View đã bỏ vì dùng link ở Contract No, ta tập trung vào các nút nghiệp vụ:
+
+        $("#btnEditMember").prop("disabled", !perms.canEditMember); // Mã 5
+        $("#btnCancel").prop("disabled", !perms.canCancel);         // Mã 6
+        $("#btnChangeStatus").prop("disabled", !perms.canChangeStatus); // Mã 7
+        $("#btnAdjustDate").prop("disabled", !perms.canAdjustDate);     // Mã 8
+        $("#btnCopy").prop("disabled", !perms.canCopy);             // Mã 9
+
+        // 2. CẬP NHẬT GIAO DIỆN NÚT CHANGE STATUS (Tùy chọn giúp User dễ hiểu)
+        updateChangeStatusUI(item.data.statusID);
     });
+
+    // Hàm bổ trợ để đổi màu/icon cho nút Change Status tùy theo trạng thái
+    function updateChangeStatusUI(statusId) {
+        const $btn = $("#btnChangeStatus");
+
+        // Reset class về mặc định trước khi add mới
+        $btn.removeClass('btn-dark btn-success btn-warning');
+
+        switch (parseInt(statusId)) {
+            case 1: // Reser -> To Living
+                $btn.html('<i class="fas fa-play"></i> To Living').addClass('btn-dark');
+                break;
+            case 2: // Living -> Back to Reser
+                $btn.html('<i class="fas fa-backward"></i> Back to Reser').addClass('btn-warning');
+                break;
+            case 4: // Cancelled -> Restore
+            case 9: // Exception -> Restore
+                $btn.html('<i class="fas fa-undo"></i> Restore to Reser').addClass('btn-success');
+                break;
+            default:
+                $btn.html('<i class="fas fa-exchange-alt"></i> Change Status').addClass('btn-dark');
+                break;
+        }
+    }
+
     function resetActions() {
+        // 1. Xóa ID hợp đồng đang chọn
         selectedContractId = null;
-        // Đã bỏ ID btnView và btnEdit khỏi danh sách disable vì chúng không còn tồn tại trên giao diện
-        $('#btnCopy, #btnCancel, #btnToLiving').prop('disabled', true);
+
+        // 2. Khóa tất cả các nút chức năng nghiệp vụ
+        // Chúng ta gom nhóm các ID mới: Member, Cancel, Status, Adjust, Copy
+        $('#btnEditMember, #btnCancel, #btnChangeStatus, #btnAdjustDate, #btnCopy').prop('disabled', true);
+
+        // 3. (Tùy chọn) Reset lại Text và Màu sắc của nút Change Status về mặc định
+        const $btnStatus = $("#btnChangeStatus");
+        $btnStatus.html('<i class="fas fa-exchange-alt"></i> Change Status')
+            .removeClass('btn-success btn-warning')
+            .addClass('btn-dark');
+
+        console.log("Actions have been reset.");
     }
   
     // ========== PAGINATION (ĐÃ SỬA LỖI) ==========
