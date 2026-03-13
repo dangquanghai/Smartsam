@@ -1,0 +1,183 @@
+@page
+@model SmartSam.Pages.Purchasing.PurchaseRequisition.PurchaseRequisitionDetailModel
+@{
+    ViewData["Title"] = "Purchase Requisition Detail";
+    var messageType = (Model.MessageType ?? "info").ToLowerInvariant();
+    var alertClass = messageType switch
+    {
+        "success" => "alert-success",
+        "warning" => "alert-warning",
+        "error" => "alert-danger",
+        _ => "alert-info"
+    };
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <form method="post" id="prqDetailForm">
+            <div class="card card-primary card-outline">
+                <div class="card-header py-2">
+                    <h3 class="card-title prq-detail-title">Purchase Requisition Detail</h3>
+                </div>
+                <div class="card-body pb-2">
+                    <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
+                    @if (!string.IsNullOrWhiteSpace(Model.Message))
+                    {
+                        <div class="alert @alertClass mb-2 py-2">@Model.Message</div>
+                    }
+
+                    <input asp-for="DetailsJson" type="hidden" id="DetailsJson" />
+
+                    <div class="prq-detail-grid mb-3">
+                        <label>No.</label>
+                        <div>
+                            <input asp-for="RequestNo" class="form-control form-control-sm" />
+                            <span asp-validation-for="RequestNo" class="text-danger small"></span>
+                        </div>
+
+                        <label>Currency</label>
+                        <div>
+                            <select asp-for="Currency" class="form-control form-control-sm">
+                                <option value="1">VND</option>
+                            </select>
+                        </div>
+
+                        <label>Date</label>
+                        <div>
+                            <input asp-for="RequestDate" type="date" class="form-control form-control-sm" />
+                        </div>
+
+                        <label>Status</label>
+                        <div>
+                            <select asp-for="Status" asp-items="Model.StatusList" class="form-control form-control-sm"></select>
+                        </div>
+
+                        <label>Description</label>
+                        <div class="prq-detail-span-full">
+                            <textarea asp-for="Description" rows="2" class="form-control form-control-sm"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="mb-2">
+                        <button type="button" class="btn btn-sm btn-action-add border mr-2" data-toggle="modal" data-target="#prqAddDetailModal">
+                            <i class="fas fa-plus"></i> Add Detail
+                        </button>
+                        <button type="submit" class="btn btn-sm btn-action-save border mr-2">
+                            <i class="fas fa-save"></i> Save
+                        </button>
+                        <a asp-page="./Index" class="btn btn-sm btn-action-close border">
+                            <i class="fas fa-times"></i> Close
+                        </a>
+                    </div>
+
+                    <div class="table-responsive prq-detail-table-wrap">
+                        <table class="table table-sm table-bordered table-hover mb-0 text-nowrap">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th style="width:140px;">Item Code</th>
+                                    <th>Item Name</th>
+                                    <th style="width:80px;" class="prq-center">Unit</th>
+                                    <th style="width:90px;" class="prq-center">QtyFromM</th>
+                                    <th style="width:90px;" class="prq-center">QtyPur</th>
+                                    <th style="width:100px;" class="prq-center">U.Price</th>
+                                    <th style="width:120px;" class="prq-center">Amount</th>
+                                    <th style="width:220px;" class="prq-center">Remark</th>
+                                    <th style="width:180px;">Supplier</th>
+                                    <th style="width:60px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="prqDetailRows">
+                                <tr id="prqDetailEmptyRow">
+                                    <td colspan="10" class="text-center text-muted">No detail rows</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+
+<div class="modal fade" id="prqAddDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title">Add Detail</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body pb-2">
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label class="mb-1">Item</label>
+                        <select id="detailItemId" class="form-control form-control-sm">
+                            <option value="">-- Select item --</option>
+                            @foreach (var item in Model.ItemList)
+                            {
+                                <option value="@item.Id" data-code="@item.ItemCode" data-name="@item.ItemName" data-unit="@item.Unit">
+                                    @item.ItemCode - @item.ItemName
+                                </option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group col-md-2">
+                        <label class="mb-1">Unit</label>
+                        <input id="detailUnit" class="form-control form-control-sm" readonly />
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label class="mb-1">Supplier</label>
+                        <select id="detailSupplierId" class="form-control form-control-sm">
+                            <option value="">-- Select supplier --</option>
+                            @foreach (var supplier in Model.SupplierList)
+                            {
+                                <option value="@supplier.Id">@supplier.SupplierCode - @supplier.SupplierName</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col-md-3">
+                        <label class="mb-1">QtyFromM</label>
+                        <input id="detailQtyFromM" type="number" min="0" step="0.01" class="form-control form-control-sm" value="0" />
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label class="mb-1">QtyPur</label>
+                        <input id="detailQtyPur" type="number" min="0" step="0.01" class="form-control form-control-sm" value="0" />
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label class="mb-1">U.Price</label>
+                        <input id="detailUnitPrice" type="number" min="0" step="0.01" class="form-control form-control-sm" value="0" />
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label class="mb-1">Amount</label>
+                        <input id="detailAmount" class="form-control form-control-sm" readonly />
+                    </div>
+                </div>
+
+                <div class="form-group mb-1">
+                    <label class="mb-1">Remark</label>
+                    <input id="detailRemark" class="form-control form-control-sm" maxlength="500" />
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-action-add border mr-2" id="btnAddDetailConfirm">
+                    <i class="fas fa-plus"></i> Add
+                </button>
+                <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Purchasing/PurchaseRequisition/PurchaseRequisitionDetail.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script src="~/js/Purchasing/PurchaseRequisition/PurchaseRequisitionDetail.js" asp-append-version="true"></script>
+}
