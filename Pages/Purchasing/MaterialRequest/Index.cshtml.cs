@@ -3,10 +3,18 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Text.Json;
 using SmartSam.Services;
+using Microsoft.AspNetCore.Http;
+using System.ComponentModel.DataAnnotations;
+using System.Data;
+using System.Linq;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.Data.SqlClient;
+using SmartSam.Helpers;
+using SmartSam.Pages;
 
 namespace SmartSam.Pages.Purchasing.MaterialRequest;
 
-public class IndexModel : PageModel
+public class IndexModel : BasePageModel
 {
     private readonly MaterialRequestService _materialRequestService;
     private readonly PermissionService _permissionService;
@@ -23,10 +31,10 @@ public class IndexModel : PageModel
     private const string ConditionModeAllUsers = "allUsers";
     private const string ConditionModeStoreman = "storeman";
 
-    private EmployeeMaterialScopeDto _dataScope = new();
+    private EmployeeMaterialScopeDto _dataScope = new EmployeeMaterialScopeDto();
     private bool _isAdminRole;
 
-    public IndexModel(IConfiguration configuration, PermissionService permissionService)
+    public IndexModel(IConfiguration configuration, PermissionService permissionService) : base(configuration)
     {
         _materialRequestService = new MaterialRequestService(configuration);
         _permissionService = permissionService;
@@ -39,7 +47,7 @@ public class IndexModel : PageModel
     public int? StoreGroup { get; set; }
 
     [BindProperty(SupportsGet = true)]
-    public List<int> StatusIds { get; set; } = [];
+    public List<int> StatusIds { get; set; } = new List<int>();
 
     [BindProperty(SupportsGet = true)]
     public string? ItemCode { get; set; }
@@ -69,7 +77,12 @@ public class IndexModel : PageModel
     public int PageIndex { get; set; } = 1;
 
     [BindProperty(SupportsGet = true)]
-    public int PageSize { get; set; } = 25;
+    public int PageSize { get; set; }
+
+    public int DefaultPageSize
+    {
+        get { return _config.GetValue<int>("AppSettings:DefaultPageSize", 10); }
+    }
 
     [BindProperty]
     public string? CreateDescription { get; set; }
@@ -87,34 +100,92 @@ public class IndexModel : PageModel
     public int? CreateAutoStoreGroup { get; set; }
 
     [TempData]
-    public string? FlashMessage { get; set; }
+    public string? SuccessMessage { get; set; }
 
     [TempData]
-    public string? FlashMessageType { get; set; }
+    public string? WarningMessage { get; set; }
 
-    public string? Message { get; set; }
-    public string MessageType { get; set; } = "info";
+    [TempData]
+    public string? ErrorMessage { get; set; }
 
-    public PagePermissions PagePerm { get; private set; } = new();
-    public List<SelectListItem> StoreGroups { get; set; } = [];
-    public List<SelectListItem> Statuses { get; set; } = [];
-    public List<MaterialRequestListRowDto> Rows { get; set; } = [];
+    public PagePermissions PagePerm { get; private set; } = new PagePermissions();
+    public List<SelectListItem> StoreGroups { get; set; } = new List<SelectListItem>();
+    public List<SelectListItem> Statuses { get; set; } = new List<SelectListItem>();
+    public List<MaterialRequestListRowDto> Rows { get; set; } = new List<MaterialRequestListRowDto>();
 
     public int TotalRecords { get; set; }
-    public int TotalPages => PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
-    public bool HasPreviousPage => PageIndex > 1;
-    public bool HasNextPage => PageIndex < TotalPages;
+    public int TotalPages
+    {
+        get
+        {
+            if (PageSize <= 0)
+            {
+                return 1;
+            }
 
-    public bool CanCreate => HasPermission(PermissionCreate) || HasPermission(PermissionShowCreate);
-    public bool CanCreateAuto => HasPermission(PermissionCreateAuto);
-    public bool CanEdit => HasPermission(PermissionEdit);
-    public bool CanShowAll => _isAdminRole || HasPermission(PermissionShowAll);
-    public bool CanShowPcCondition => _isAdminRole || HasPermission(PermissionShowPc) || CanShowAll;
-    public bool CanShowStoreCondition => _isAdminRole || HasPermission(PermissionShowStore) || CanShowAll;
-    public bool StoreGroupLocked => !CanShowAll;
-    public int UserApprovalLevel => _dataScope.ApprovalLevel;
-    public bool ConditionForAllUsers => CanShowAll;
-    public bool IsStoremanConditionMode => string.Equals(ConditionMode, ConditionModeStoreman, StringComparison.OrdinalIgnoreCase);
+            return Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
+        }
+    }
+
+    public bool HasPreviousPage
+    {
+        get { return PageIndex > 1; }
+    }
+
+    public bool HasNextPage
+    {
+        get { return PageIndex < TotalPages; }
+    }
+
+    public bool CanCreate
+    {
+        get { return HasPermission(PermissionCreate) || HasPermission(PermissionShowCreate); }
+    }
+
+    public bool CanCreateAuto
+    {
+        get { return HasPermission(PermissionCreateAuto); }
+    }
+
+    public bool CanEdit
+    {
+        get { return HasPermission(PermissionEdit); }
+    }
+
+    public bool CanShowAll
+    {
+        get { return _isAdminRole || HasPermission(PermissionShowAll) || _dataScope.SeeDataAllDept; }
+    }
+
+    public bool CanShowPcCondition
+    {
+        get { return _isAdminRole || HasPermission(PermissionShowPc) || CanShowAll; }
+    }
+
+    public bool CanShowStoreCondition
+    {
+        get { return _isAdminRole || HasPermission(PermissionShowStore) || CanShowAll; }
+    }
+
+    public bool StoreGroupLocked
+    {
+        get { return !CanShowAll; }
+    }
+
+    public int UserApprovalLevel
+    {
+        get { return _dataScope.ApprovalLevel; }
+    }
+
+    public bool ConditionForAllUsers
+    {
+        get { return CanShowAll; }
+    }
+
+    public bool IsStoremanConditionMode
+    {
+        get { return string.Equals(ConditionMode, ConditionModeStoreman, StringComparison.OrdinalIgnoreCase); }
+    }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -125,19 +196,95 @@ public class IndexModel : PageModel
             return Forbid();
         }
 
-        if (string.IsNullOrWhiteSpace(Message) && !string.IsNullOrWhiteSpace(FlashMessage))
+        ApplyTempDataMessagesToModelState();
+        NormalizeConditionMode();
+        if (PageSize <= 0)
         {
-            Message = FlashMessage;
-            MessageType = string.IsNullOrWhiteSpace(FlashMessageType) ? "info" : FlashMessageType!;
+            PageSize = DefaultPageSize;
+        }
+        if (!FromDate.HasValue)
+        {
+            FromDate = DateTime.Today.AddMonths(-3).Date;
         }
 
-        NormalizeConditionMode();
-        FromDate ??= DateTime.Today.AddMonths(-3).Date;
-        ToDate ??= DateTime.Today.Date;
+        if (!ToDate.HasValue)
+        {
+            ToDate = DateTime.Today.Date;
+        }
 
-        await LoadFiltersAsync(cancellationToken);
+        LoadFilters();
         await LoadRowsAsync(cancellationToken);
         return Page();
+    }
+
+    // API search: trả JSON data + actions + paging cho lưới danh sách.
+    public async Task<IActionResult> OnPostSearchAsync([FromBody] MaterialRequestSearchRequest request, CancellationToken cancellationToken)
+    {
+        LoadPagePermissions();
+        await LoadUserScopeAsync(cancellationToken);
+        if (!CanAccessPage())
+        {
+            return new JsonResult(new { success = false, message = "Forbidden" })
+            {
+                StatusCode = StatusCodes.Status403Forbidden
+            };
+        }
+
+        RequestNo = request.RequestNo;
+        StoreGroup = request.StoreGroup;
+        if (request.StatusIds == null)
+        {
+            StatusIds = new List<int>();
+        }
+        else
+        {
+            StatusIds = request.StatusIds.Distinct().ToList();
+        }
+        ItemCode = request.ItemCode;
+        IssueLessThanOrder = request.IssueLessThanOrder;
+        BuyGreaterThanZero = request.BuyGreaterThanZero;
+        AutoOnly = request.AutoOnly;
+        FromDate = request.FromDate;
+        ToDate = request.ToDate;
+        AccordingToKeyword = request.AccordingToKeyword;
+        ConditionMode = string.IsNullOrWhiteSpace(request.ConditionMode) ? ConditionModeAllUsers : request.ConditionMode.Trim();
+        PageIndex = request.Page <= 0 ? 1 : request.Page;
+        PageSize = request.PageSize <= 0 ? DefaultPageSize : Math.Min(request.PageSize, 200);
+
+        NormalizeConditionMode();
+
+        var result = await _materialRequestService.SearchPagedAsync(BuildCriteria(includePaging: true), cancellationToken);
+        var totalPages = PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(result.TotalCount / (double)PageSize));
+
+        var rowsWithActions = result.Rows.Select(r =>
+        {
+            var statusId = r.MaterialStatusId ?? 0;
+            var canEditRow = CanEdit && statusId == 0;
+
+            return new
+            {
+                data = r,
+                actions = new
+                {
+                    canAccess = true,
+                    accessMode = canEditRow ? "edit" : "view",
+                    canEdit = canEditRow,
+                    canSubmit = canEditRow,
+                    canApprove = CanApproveStatus(statusId),
+                    canReject = CanRejectStatus(statusId)
+                }
+            };
+        });
+
+        return new JsonResult(new
+        {
+            success = true,
+            data = rowsWithActions,
+            total = result.TotalCount,
+            page = PageIndex,
+            pageSize = PageSize,
+            totalPages
+        });
     }
 
     public async Task<IActionResult> OnGetSearchItemsAsync(string? keyword, bool checkBalanceInStore = false, int? storeGroup = null, CancellationToken cancellationToken = default)
@@ -173,15 +320,13 @@ public class IndexModel : PageModel
         var selectedItems = ParseCreateItems(CreateLinesJson);
         if (selectedItems.Count == 0)
         {
-            FlashMessage = "Please select at least one item.";
-            FlashMessageType = "warning";
+            WarningMessage = "Please select at least one item.";
             return RedirectToPage("./Index");
         }
 
         if (string.IsNullOrWhiteSpace(CreateDescription))
         {
-            FlashMessage = "Description is required.";
-            FlashMessageType = "warning";
+            WarningMessage = "Description is required.";
             return RedirectToPage("./Index");
         }
 
@@ -200,8 +345,7 @@ public class IndexModel : PageModel
             }
             else
             {
-                FlashMessage = "Please choose Store Group before creating MR.";
-                FlashMessageType = "warning";
+                WarningMessage = "Please choose Store Group before creating MR.";
                 return RedirectToPage("./Index");
             }
         }
@@ -226,14 +370,12 @@ public class IndexModel : PageModel
         try
         {
             var requestNo = await _materialRequestService.SaveAsync(null, header, lines, cancellationToken);
-            FlashMessage = "Material Request created successfully.";
-            FlashMessageType = "success";
-            return RedirectToPage("./Detail", new { id = requestNo });
+            SuccessMessage = "Material Request created successfully.";
+            return RedirectToPage("./MaterialRequestDetail", new { id = requestNo });
         }
         catch (Exception ex)
         {
-            FlashMessage = $"Cannot create Material Request. {ex.Message}";
-            FlashMessageType = "error";
+            ErrorMessage = $"Cannot create Material Request. {ex.Message}";
             return RedirectToPage("./Index");
         }
     }
@@ -253,16 +395,14 @@ public class IndexModel : PageModel
 
         if (!scopedStoreGroup.HasValue || scopedStoreGroup.Value <= 0)
         {
-            FlashMessage = "Please choose Store Group before creating Auto MR.";
-            FlashMessageType = "warning";
+            WarningMessage = "Please choose Store Group before creating Auto MR.";
             return RedirectToPage("./Index");
         }
 
         var lines = (await _materialRequestService.BuildAutoLinesAsync(scopedStoreGroup.Value, cancellationToken)).ToList();
         if (lines.Count == 0)
         {
-            FlashMessage = "No item template found for Auto MR.";
-            FlashMessageType = "warning";
+            WarningMessage = "No item template found for Auto MR.";
             return RedirectToPage("./Index");
         }
 
@@ -288,56 +428,105 @@ public class IndexModel : PageModel
         try
         {
             var requestNo = await _materialRequestService.SaveAsync(null, header, lines, cancellationToken);
-            FlashMessage = "Auto Material Request created successfully.";
-            FlashMessageType = "success";
-            return RedirectToPage("./Detail", new { id = requestNo });
+            SuccessMessage = "Auto Material Request created successfully.";
+            return RedirectToPage("./MaterialRequestDetail", new { id = requestNo });
         }
         catch (Exception ex)
         {
-            FlashMessage = $"Cannot create Auto MR. {ex.Message}";
-            FlashMessageType = "error";
+            ErrorMessage = $"Cannot create Auto MR. {ex.Message}";
             return RedirectToPage("./Index");
         }
     }
 
-    private async Task LoadFiltersAsync(CancellationToken cancellationToken)
+    private void LoadFilters()
     {
-        var stores = await _materialRequestService.GetStoreGroupsAsync(cancellationToken);
-        StoreGroups = [
-            new SelectListItem { Value = string.Empty, Text = "--- All ---" },
-            .. stores.Select(x => new SelectListItem { Value = x.Id.ToString(), Text = x.Name })
-        ];
+        var stores = LoadListFromSql(
+            @"SELECT KPGroupID, KPGroupName
+              FROM dbo.INV_KPGroup
+              ORDER BY KPGroupID",
+            "KPGroupID",
+            "KPGroupName");
 
-        var statuses = await _materialRequestService.GetStatusesAsync(cancellationToken);
-        Statuses = [
-            .. statuses.Select(x => new SelectListItem { Value = x.Id.ToString(), Text = x.Name })
-        ];
+        if (stores.Count == 0)
+        {
+            stores = LoadListFromSql(
+                @"SELECT DISTINCT
+                        CAST(StoreGR AS int) AS StoreGroup,
+                        CONCAT('Store Group ', CAST(StoreGR AS varchar(20))) AS StoreGroupName
+                  FROM dbo.MS_Employee
+                  WHERE StoreGR IS NOT NULL AND StoreGR > 0
+                  ORDER BY StoreGroup",
+                "StoreGroup",
+                "StoreGroupName");
+        }
+
+        StoreGroups = new List<SelectListItem>();
+        StoreGroups.Add(new SelectListItem { Value = string.Empty, Text = "--- All ---" });
+        StoreGroups.AddRange(stores);
+
+        var statuses = LoadListFromSql(
+            @"SELECT MaterialStatusID, MaterialStatusName
+              FROM dbo.MaterialStatus
+              ORDER BY MaterialStatusID",
+            "MaterialStatusID",
+            "MaterialStatusName");
+
+        Statuses = new List<SelectListItem>(statuses);
 
         if (!CanShowAll && (StatusIds?.Count ?? 0) == 0 && !Request.Query.ContainsKey(nameof(StatusIds)))
         {
-            var defaultStatus = _dataScope.ApprovalLevel switch
+            int defaultStatus;
+            if (_dataScope.ApprovalLevel <= 0)
             {
-                <= 0 => 0,
-                1 => 1,
-                2 => 2,
-                _ => 3
-            };
+                defaultStatus = 0;
+            }
+            else if (_dataScope.ApprovalLevel == 1)
+            {
+                defaultStatus = 1;
+            }
+            else if (_dataScope.ApprovalLevel == 2)
+            {
+                defaultStatus = 2;
+            }
+            else
+            {
+                defaultStatus = 3;
+            }
 
-            StatusIds = [defaultStatus];
+            StatusIds = new List<int> { defaultStatus };
         }
 
         if (StoreGroupLocked)
         {
             StoreGroup = _dataScope.StoreGroup ?? NoScopeStoreGroup;
-            StoreGroups = _dataScope.StoreGroup.HasValue
-                ? [new SelectListItem { Value = _dataScope.StoreGroup.Value.ToString(), Text = $"Store Group {_dataScope.StoreGroup.Value}" }]
-                : [new SelectListItem { Value = NoScopeStoreGroup.ToString(), Text = "(No Store Group Scope)" }];
+            if (_dataScope.StoreGroup.HasValue)
+            {
+                StoreGroups = new List<SelectListItem>
+                {
+                    new SelectListItem
+                    {
+                        Value = _dataScope.StoreGroup.Value.ToString(),
+                        Text = $"Store Group {_dataScope.StoreGroup.Value}"
+                    }
+                };
+            }
+            else
+            {
+                StoreGroups = new List<SelectListItem>
+                {
+                    new SelectListItem
+                    {
+                        Value = NoScopeStoreGroup.ToString(),
+                        Text = "(No Store Group Scope)"
+                    }
+                };
+            }
         }
     }
 
     private async Task LoadRowsAsync(CancellationToken cancellationToken)
     {
-        if (PageSize <= 0) PageSize = 25;
+        if (PageSize <= 0) PageSize = DefaultPageSize;
         if (PageSize > 200) PageSize = 200;
         if (PageIndex <= 0) PageIndex = 1;
 
@@ -364,7 +553,7 @@ public class IndexModel : PageModel
         {
             RequestNo = isStoremanMode ? null : RequestNo,
             StoreGroup = scopedStoreGroup == NoScopeStoreGroup ? null : scopedStoreGroup,
-            StatusIds = isStoremanMode ? [] : StatusIds,
+            StatusIds = isStoremanMode ? new List<int>() : StatusIds,
             ItemCode = isStoremanMode && !string.IsNullOrWhiteSpace(ItemCode) ? ItemCode.Trim() : null,
             NoIssue = isStoremanMode && IssueLessThanOrder ? 1 : null,
             IsAuto = isStoremanMode ? null : (AutoOnly ? true : null),
@@ -445,13 +634,69 @@ public class IndexModel : PageModel
         return PagePerm.AllowedNos.Count > 0;
     }
 
-    private bool HasPermission(int permissionNo) => PagePerm.HasPermission(permissionNo);
+    private bool HasPermission(int permissionNo)
+    {
+        return PagePerm.HasPermission(permissionNo);
+    }
+
+    // Chuyển warning/error từ TempData sang ModelState để hiển thị đúng chuẩn trang.
+    private void ApplyTempDataMessagesToModelState()
+    {
+        if (!string.IsNullOrWhiteSpace(ErrorMessage))
+        {
+            ModelState.AddModelError(string.Empty, ErrorMessage);
+        }
+
+        if (!string.IsNullOrWhiteSpace(WarningMessage))
+        {
+            ModelState.AddModelError(string.Empty, WarningMessage);
+        }
+    }
+
+    private bool CanApproveStatus(int statusId)
+    {
+        if (_isAdminRole)
+        {
+            return true;
+        }
+
+        if (statusId == 1)
+        {
+            return _dataScope.IsHeadDept || _dataScope.ApprovalLevel >= 2;
+        }
+
+        if (statusId == 2)
+        {
+            return _dataScope.ApprovalLevel >= 2;
+        }
+
+        if (statusId == 3)
+        {
+            return _dataScope.ApprovalLevel >= 3;
+        }
+
+        return false;
+    }
+
+    private bool CanRejectStatus(int statusId)
+    {
+        if (_isAdminRole)
+        {
+            return true;
+        }
+        if (statusId is not (1 or 2 or 3))
+        {
+            return false;
+        }
+
+        return _dataScope.IsHeadDept || _dataScope.ApprovalLevel >= 2;
+    }
 
     private static List<MaterialRequestItemLookupDto> ParseCreateItems(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
         {
-            return [];
+            return new List<MaterialRequestItemLookupDto>();
         }
 
         try
@@ -459,7 +704,12 @@ public class IndexModel : PageModel
             var rows = JsonSerializer.Deserialize<List<MaterialRequestItemLookupDto>>(json, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
-            }) ?? [];
+            });
+
+            if (rows == null)
+            {
+                return new List<MaterialRequestItemLookupDto>();
+            }
 
             return rows
                 .Where(x => !string.IsNullOrWhiteSpace(x.ItemCode))
@@ -467,29 +717,961 @@ public class IndexModel : PageModel
         }
         catch
         {
-            return [];
+            return new List<MaterialRequestItemLookupDto>();
         }
     }
 
     private static List<MaterialRequestLineDto> MapItemsToCreateLines(IEnumerable<MaterialRequestItemLookupDto> items)
     {
-        return items
-            .Where(x => !string.IsNullOrWhiteSpace(x.ItemCode))
-            .Select(x => new MaterialRequestLineDto
+        var result = new List<MaterialRequestLineDto>();
+
+        foreach (var item in items)
+        {
+            if (string.IsNullOrWhiteSpace(item.ItemCode))
             {
-                ItemCode = x.ItemCode.Trim(),
-                ItemName = (x.ItemName ?? string.Empty).Trim(),
-                Unit = (x.Unit ?? string.Empty).Trim(),
+                continue;
+            }
+
+            var line = new MaterialRequestLineDto
+            {
+                ItemCode = item.ItemCode.Trim(),
+                ItemName = (item.ItemName ?? string.Empty).Trim(),
+                Unit = (item.Unit ?? string.Empty).Trim(),
                 OrderQty = 0,
                 NotReceipt = 0,
-                InStock = x.InStock,
+                InStock = item.InStock,
                 AccIn = 0,
                 Buy = 0,
                 Price = 0,
                 Note = string.Empty,
                 NewItem = false,
                 Selected = true
-            })
-            .ToList();
+            };
+
+            result.Add(line);
+        }
+
+        return result;
     }
 }
+
+public class MaterialRequestSearchRequest
+{
+    public long? RequestNo { get; set; }
+    public int? StoreGroup { get; set; }
+    public List<int>? StatusIds { get; set; }
+    public string? ItemCode { get; set; }
+    public bool IssueLessThanOrder { get; set; }
+    public bool BuyGreaterThanZero { get; set; }
+    public bool AutoOnly { get; set; }
+    public DateTime? FromDate { get; set; }
+    public DateTime? ToDate { get; set; }
+    public string? AccordingToKeyword { get; set; }
+    public string? ConditionMode { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 10;
+}
+
+// ==================== Material Request DTOs ====================
+public class MaterialRequestLookupOptionDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+public class MaterialRequestFilterCriteria
+{
+    public long? RequestNo { get; set; }
+    public int? StoreGroup { get; set; }
+    public IReadOnlyList<int>? StatusIds { get; set; }
+    public string? ItemCode { get; set; }
+    public int? NoIssue { get; set; }
+    public bool? IsAuto { get; set; }
+    public bool? BuyGreaterThanZero { get; set; }
+    public DateTime? FromDate { get; set; }
+    public DateTime? ToDate { get; set; }
+    public string? AccordingToKeyword { get; set; }
+    public int? PageIndex { get; set; }
+    public int? PageSize { get; set; }
+}
+
+public class MaterialRequestSearchResultDto
+{
+    public List<MaterialRequestListRowDto> Rows { get; set; } = new List<MaterialRequestListRowDto>();
+    public int TotalCount { get; set; }
+}
+
+public class MaterialRequestListRowDto
+{
+    public long RequestNo { get; set; }
+    public int? StoreGroup { get; set; }
+    public string KPGroupName { get; set; } = string.Empty;
+    public DateTime? DateCreate { get; set; }
+    public DateTime? FromDate { get; set; }
+    public DateTime? ToDate { get; set; }
+    public string AccordingTo { get; set; } = string.Empty;
+    public bool Approval { get; set; }
+    public bool ApprovalEnd { get; set; }
+    public bool IsAuto { get; set; }
+    public bool PostPr { get; set; }
+    public int? MaterialStatusId { get; set; }
+    public string MaterialStatusName { get; set; } = string.Empty;
+    public int? NoIssue { get; set; }
+    public string PrNo { get; set; } = string.Empty;
+}
+
+public class MaterialRequestDetailDto
+{
+    [BindNever]
+    public long RequestNo { get; set; }
+
+    [Required(ErrorMessage = "Store Group is required.")]
+    public int? StoreGroup { get; set; }
+
+    [Required(ErrorMessage = "Date is required.")]
+    public DateTime? DateCreate { get; set; }
+
+    [Required(ErrorMessage = "Description is required.")]
+    [StringLength(300, ErrorMessage = "Description must be at most 300 characters.")]
+    public string? AccordingTo { get; set; }
+
+    public bool Approval { get; set; }
+    public bool ApprovalEnd { get; set; }
+    public bool PostPr { get; set; }
+    public bool IsAuto { get; set; }
+
+    public DateTime? FromDate { get; set; }
+
+    public DateTime? ToDate { get; set; }
+
+    public int? MaterialStatusId { get; set; }
+
+    [StringLength(50, ErrorMessage = "PR No must be at most 50 characters.")]
+    public string? PrNo { get; set; }
+
+    public int? NoIssue { get; set; }
+}
+
+public class MaterialRequestLineDto
+{
+    public int? Id { get; set; }
+
+    [Required(ErrorMessage = "Item Code is required.")]
+    [StringLength(20, ErrorMessage = "Item Code must be at most 20 characters.")]
+    public string? ItemCode { get; set; }
+
+    [StringLength(150, ErrorMessage = "Item Name must be at most 150 characters.")]
+    public string? ItemName { get; set; }
+
+    [StringLength(50, ErrorMessage = "Unit must be at most 50 characters.")]
+    public string? Unit { get; set; }
+
+    public decimal? OrderQty { get; set; }
+    public decimal? NotReceipt { get; set; }
+    public decimal? InStock { get; set; }
+    public decimal? AccIn { get; set; }
+    public decimal? Buy { get; set; }
+    public decimal? Price { get; set; }
+
+    [StringLength(255, ErrorMessage = "Note must be at most 255 characters.")]
+    public string? Note { get; set; }
+
+    public bool NewItem { get; set; }
+    public bool Selected { get; set; }
+}
+
+public class MaterialRequestLineReadonlySnapshotDto
+{
+    public string ItemCode { get; set; } = string.Empty;
+    public string Unit { get; set; } = string.Empty;
+    public decimal NotReceipt { get; set; }
+    public decimal InStock { get; set; }
+    public decimal AccIn { get; set; }
+    public decimal Buy { get; set; }
+}
+
+public class EmployeeMaterialScopeDto
+{
+    public int? StoreGroup { get; set; }
+    public int ApprovalLevel { get; set; }
+    public bool IsHeadDept { get; set; }
+    public bool SeeDataAllDept { get; set; }
+}
+
+public class MaterialRequestItemLookupDto
+{
+    public string ItemCode { get; set; } = string.Empty;
+    public string ItemName { get; set; } = string.Empty;
+    public string Unit { get; set; } = string.Empty;
+    public decimal InStock { get; set; }
+    public int? StoreGroupId { get; set; }
+}
+
+// ==================== Material Request Data Access ====================
+public class MaterialRequestService
+{
+    private readonly string _connectionString;
+    public MaterialRequestService(IConfiguration configuration)
+    {
+        _connectionString = configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException("Missing connection string: DefaultConnection");
+    }
+
+    public async Task<EmployeeMaterialScopeDto> GetEmployeeScopeAsync(string? employeeCode, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(employeeCode))
+        {
+            return new EmployeeMaterialScopeDto();
+        }
+
+        const string sql = @"
+            SELECT TOP 1
+                StoreGR,
+                ISNULL(Approval, 0) AS ApprovalLevel,
+                ISNULL(HeadDept, 0) AS IsHeadDept,
+                ISNULL(SeeDataAllDept, 0) AS SeeDataAllDept
+            FROM dbo.MS_Employee
+            WHERE EmployeeCode = @EmployeeCode";
+
+        return await Helper.QuerySingleOrDefaultAsync(
+            _connectionString,
+            sql,
+            rd => new EmployeeMaterialScopeDto
+            {
+                StoreGroup = rd.IsDBNull(0) ? null : Convert.ToInt32(rd[0]),
+                ApprovalLevel = rd.IsDBNull(1) ? 0 : Convert.ToInt32(rd[1]),
+                IsHeadDept = !rd.IsDBNull(2) && Convert.ToInt32(rd[2]) == 1,
+                SeeDataAllDept = !rd.IsDBNull(3) && Convert.ToInt32(rd[3]) == 1
+            },
+            cmd => Helper.AddParameter(cmd, "@EmployeeCode", employeeCode.Trim(), SqlDbType.VarChar, 50),
+            cancellationToken) ?? new EmployeeMaterialScopeDto();
+    }
+
+    public async Task<IReadOnlyList<MaterialRequestLookupOptionDto>> GetStoreGroupsAsync(CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+            SELECT KPGroupID, KPGroupName
+            FROM dbo.INV_KPGroup
+            ORDER BY KPGroupID";
+
+        var rows = await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd => new MaterialRequestLookupOptionDto
+            {
+                Id = rd.GetInt32(0),
+                Name = rd[1]?.ToString() ?? $"Store Group {rd.GetInt32(0)}"
+            },
+            null,
+            cancellationToken);
+
+        if (rows.Count > 0)
+        {
+            return rows;
+        }
+
+        const string fallbackSql = @"
+            SELECT DISTINCT CAST(StoreGR AS int) AS StoreGroup
+            FROM dbo.MS_Employee
+            WHERE StoreGR IS NOT NULL AND StoreGR > 0
+            ORDER BY StoreGroup";
+
+        rows = await Helper.QueryAsync(
+            _connectionString,
+            fallbackSql,
+            rd => new MaterialRequestLookupOptionDto
+            {
+                Id = rd.GetInt32(0),
+                Name = $"Store Group {rd.GetInt32(0)}"
+            },
+            null,
+            cancellationToken);
+
+        return rows;
+    }
+
+    public async Task<IReadOnlyList<MaterialRequestLookupOptionDto>> GetStatusesAsync(CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+            SELECT MaterialStatusID, MaterialStatusName
+            FROM dbo.MaterialStatus
+            ORDER BY MaterialStatusID";
+
+        var rows = await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd => new MaterialRequestLookupOptionDto
+            {
+                Id = rd.GetInt32(0),
+                Name = rd[1]?.ToString() ?? string.Empty
+            },
+            null,
+            cancellationToken);
+
+        return rows;
+    }
+
+    public async Task<MaterialRequestSearchResultDto> SearchPagedAsync(MaterialRequestFilterCriteria criteria, CancellationToken cancellationToken = default)
+    {
+        var pageIndex = criteria.PageIndex.GetValueOrDefault() <= 0 ? 1 : criteria.PageIndex!.Value;
+        var pageSize = criteria.PageSize.GetValueOrDefault() <= 0 ? 25 : criteria.PageSize!.Value;
+        List<int> statusIds;
+        if (criteria.StatusIds == null)
+        {
+            statusIds = new List<int>();
+        }
+        else
+        {
+            statusIds = criteria.StatusIds
+                .Distinct()
+                .ToList();
+        }
+        var statusFilterSql = BuildStatusFilterSql(statusIds);
+
+        var fromWhereSql = $@"
+            FROM dbo.MATERIAL_REQUEST r
+            LEFT JOIN dbo.MaterialStatus ms ON ms.MaterialStatusID = r.MATERIALSTATUSID
+            LEFT JOIN dbo.INV_KPGroup kp ON kp.KPGroupID = r.STORE_GROUP
+            WHERE
+                (@RequestNo IS NULL OR r.REQUEST_NO = @RequestNo)
+                AND (@StoreGroup IS NULL OR r.STORE_GROUP = @StoreGroup)
+                AND {statusFilterSql}
+                AND (@NoIssue IS NULL OR r.NO_ISSUE = @NoIssue)
+                AND (@IsAuto IS NULL OR r.IS_AUTO = @IsAuto)
+                AND (@FromDate IS NULL OR r.DATE_CREATE >= @FromDate)
+                AND (@ToDate IS NULL OR r.DATE_CREATE < DATEADD(DAY, 1, @ToDate))
+                AND (@AccordingTo IS NULL OR r.ACCORDINGTO LIKE '%' + @AccordingTo + '%')
+                AND (
+                    @ItemCode IS NULL OR EXISTS (
+                        SELECT 1
+                        FROM dbo.MATERIAL_REQUEST_DETAIL d
+                        WHERE d.REQUEST_NO = r.REQUEST_NO
+                        AND d.ITEMCODE LIKE '%' + @ItemCode + '%'
+                    )
+                )
+                AND (
+                    @BuyGreaterThanZero IS NULL OR EXISTS (
+                        SELECT 1
+                        FROM dbo.MATERIAL_REQUEST_DETAIL d2
+                        WHERE d2.REQUEST_NO = r.REQUEST_NO
+                        AND ISNULL(d2.BUY, 0) > 0
+                    )
+                )";
+
+        var countSql = "SELECT COUNT(1) " + fromWhereSql;
+        var totalObj = await Helper.ExecuteScalarAsync(
+            _connectionString,
+            countSql,
+            cmd => BindSearchParams(cmd, criteria, statusIds),
+            cancellationToken);
+        var totalCount = Convert.ToInt32(totalObj);
+
+        var querySql = $@"
+            SELECT
+                CAST(r.REQUEST_NO AS bigint) AS REQUEST_NO,
+                CAST(r.STORE_GROUP AS int) AS STORE_GROUP,
+                ISNULL(kp.KPGroupName, CONCAT('Store Group ', CAST(r.STORE_GROUP AS varchar(20)))) AS KPGroupName,
+                r.DATE_CREATE,
+                r.FROM_DATE,
+                r.TO_DATE,
+                ISNULL(r.ACCORDINGTO, '') AS ACCORDINGTO,
+                ISNULL(r.APPROVAL, 0) AS APPROVAL,
+                ISNULL(r.APPROVAL_END, 0) AS APPROVAL_END,
+                ISNULL(r.IS_AUTO, 0) AS IS_AUTO,
+                ISNULL(r.POST_PR, 0) AS POST_PR,
+                r.MATERIALSTATUSID,
+                ISNULL(ms.MaterialStatusName, '') AS MaterialStatusName,
+                r.NO_ISSUE,
+                ISNULL(r.PRNO, '') AS PRNO
+            {fromWhereSql}
+            ORDER BY r.DATE_CREATE DESC, r.REQUEST_NO DESC
+            OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY";
+
+        var rows = await Helper.QueryAsync(
+            _connectionString,
+            querySql,
+            rd => new MaterialRequestListRowDto
+            {
+                RequestNo = rd.IsDBNull(0) ? 0 : rd.GetInt64(0),
+                StoreGroup = rd.IsDBNull(1) ? null : rd.GetInt32(1),
+                KPGroupName = rd[2]?.ToString() ?? string.Empty,
+                DateCreate = rd.IsDBNull(3) ? null : rd.GetDateTime(3),
+                FromDate = rd.IsDBNull(4) ? null : rd.GetDateTime(4),
+                ToDate = rd.IsDBNull(5) ? null : rd.GetDateTime(5),
+                AccordingTo = rd[6]?.ToString() ?? string.Empty,
+                Approval = !rd.IsDBNull(7) && Convert.ToBoolean(rd[7]),
+                ApprovalEnd = !rd.IsDBNull(8) && Convert.ToBoolean(rd[8]),
+                IsAuto = !rd.IsDBNull(9) && Convert.ToBoolean(rd[9]),
+                PostPr = !rd.IsDBNull(10) && Convert.ToBoolean(rd[10]),
+                MaterialStatusId = rd.IsDBNull(11) ? null : Convert.ToInt32(rd[11]),
+                MaterialStatusName = rd[12]?.ToString() ?? string.Empty,
+                NoIssue = rd.IsDBNull(13) ? null : Convert.ToInt32(rd[13]),
+                PrNo = rd[14]?.ToString() ?? string.Empty
+            },
+            cmd =>
+            {
+                BindSearchParams(cmd, criteria, statusIds);
+                Helper.AddParameter(cmd, "@Offset", (pageIndex - 1) * pageSize, SqlDbType.Int);
+                Helper.AddParameter(cmd, "@PageSize", pageSize, SqlDbType.Int);
+            },
+            cancellationToken);
+
+        return new MaterialRequestSearchResultDto
+        {
+            Rows = rows,
+            TotalCount = totalCount
+        };
+    }
+
+    public async Task<MaterialRequestDetailDto?> GetDetailAsync(long requestNo, CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+            SELECT
+                CAST(REQUEST_NO AS bigint) AS REQUEST_NO,
+                CAST(STORE_GROUP AS int) AS STORE_GROUP,
+                DATE_CREATE,
+                ACCORDINGTO,
+                ISNULL(APPROVAL, 0) AS APPROVAL,
+                ISNULL(APPROVAL_END, 0) AS APPROVAL_END,
+                ISNULL(POST_PR, 0) AS POST_PR,
+                ISNULL(IS_AUTO, 0) AS IS_AUTO,
+                FROM_DATE,
+                TO_DATE,
+                MATERIALSTATUSID,
+                PRNO,
+                NO_ISSUE
+            FROM dbo.MATERIAL_REQUEST
+            WHERE REQUEST_NO = @RequestNo";
+
+        return await Helper.QuerySingleOrDefaultAsync(
+            _connectionString,
+            sql,
+            rd => new MaterialRequestDetailDto
+            {
+                RequestNo = rd.IsDBNull(0) ? 0 : rd.GetInt64(0),
+                StoreGroup = rd.IsDBNull(1) ? null : rd.GetInt32(1),
+                DateCreate = rd.IsDBNull(2) ? null : rd.GetDateTime(2),
+                AccordingTo = rd[3]?.ToString(),
+                Approval = !rd.IsDBNull(4) && Convert.ToBoolean(rd[4]),
+                ApprovalEnd = !rd.IsDBNull(5) && Convert.ToBoolean(rd[5]),
+                PostPr = !rd.IsDBNull(6) && Convert.ToBoolean(rd[6]),
+                IsAuto = !rd.IsDBNull(7) && Convert.ToBoolean(rd[7]),
+                FromDate = rd.IsDBNull(8) ? null : rd.GetDateTime(8),
+                ToDate = rd.IsDBNull(9) ? null : rd.GetDateTime(9),
+                MaterialStatusId = rd.IsDBNull(10) ? null : Convert.ToInt32(rd[10]),
+                PrNo = rd[11]?.ToString(),
+                NoIssue = rd.IsDBNull(12) ? null : Convert.ToInt32(rd[12])
+            },
+            cmd => AddNumeric18_0Param(cmd, "@RequestNo", requestNo),
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<MaterialRequestLineDto>> GetLinesAsync(long requestNo, CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+            SELECT
+                d.ID,
+                d.ITEMCODE,
+                ISNULL(i.ItemName, '') AS ITEMNAME,
+                d.UNIT,
+                d.NEW_ORDER,
+                d.NOT_RECEIPT,
+                d.INSTOCK,
+                d.acctualyInventory,
+                d.BUY,
+                d.PRICE,
+                d.NOTE,
+                ISNULL(d.NEW_ITEM, 0) AS NEW_ITEM,
+                ISNULL(d.SELECTED, 0) AS SELECTED
+            FROM dbo.MATERIAL_REQUEST_DETAIL d
+            LEFT JOIN dbo.INV_ItemList i ON i.ItemCode = d.ITEMCODE
+            WHERE REQUEST_NO = @RequestNo
+            ORDER BY d.ID";
+
+        var rows = await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd => new MaterialRequestLineDto
+            {
+                Id = rd.IsDBNull(0) ? null : Convert.ToInt32(rd[0]),
+                ItemCode = rd[1]?.ToString(),
+                ItemName = rd[2]?.ToString(),
+                Unit = rd[3]?.ToString(),
+                OrderQty = rd.IsDBNull(4) ? null : Convert.ToDecimal(rd[4]),
+                NotReceipt = rd.IsDBNull(5) ? null : Convert.ToDecimal(rd[5]),
+                InStock = rd.IsDBNull(6) ? null : Convert.ToDecimal(rd[6]),
+                AccIn = rd.IsDBNull(7) ? null : Convert.ToDecimal(rd[7]),
+                Buy = rd.IsDBNull(8) ? null : Convert.ToDecimal(rd[8]),
+                Price = rd.IsDBNull(9) ? null : Convert.ToDecimal(rd[9]),
+                Note = rd[10]?.ToString(),
+                NewItem = !rd.IsDBNull(11) && Convert.ToBoolean(rd[11]),
+                Selected = !rd.IsDBNull(12) && Convert.ToBoolean(rd[12])
+            },
+            cmd => AddNumeric18_0Param(cmd, "@RequestNo", requestNo),
+            cancellationToken);
+
+        return rows;
+    }
+
+    public async Task<Dictionary<string, MaterialRequestLineReadonlySnapshotDto>> GetLineReadonlySnapshotsAsync(long requestNo, CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+            SELECT
+                ITEMCODE,
+                ISNULL(UNIT, '') AS UNIT,
+                ISNULL(NOT_RECEIPT, 0) AS NOT_RECEIPT,
+                ISNULL(INSTOCK, 0) AS INSTOCK,
+                ISNULL(acctualyInventory, 0) AS acctualyInventory,
+                ISNULL(BUY, 0) AS BUY
+            FROM dbo.MATERIAL_REQUEST_DETAIL
+            WHERE REQUEST_NO = @RequestNo
+            ORDER BY ID";
+
+        var rows = await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd => new MaterialRequestLineReadonlySnapshotDto
+            {
+                ItemCode = rd[0]?.ToString() ?? string.Empty,
+                Unit = rd[1]?.ToString() ?? string.Empty,
+                NotReceipt = rd.IsDBNull(2) ? 0m : Convert.ToDecimal(rd[2]),
+                InStock = rd.IsDBNull(3) ? 0m : Convert.ToDecimal(rd[3]),
+                AccIn = rd.IsDBNull(4) ? 0m : Convert.ToDecimal(rd[4]),
+                Buy = rd.IsDBNull(5) ? 0m : Convert.ToDecimal(rd[5])
+            },
+            cmd => AddNumeric18_0Param(cmd, "@RequestNo", requestNo),
+            cancellationToken);
+
+        var snapshots = new Dictionary<string, MaterialRequestLineReadonlySnapshotDto>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            var itemCode = (row.ItemCode ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(itemCode) || snapshots.ContainsKey(itemCode))
+            {
+                continue;
+            }
+
+            row.ItemCode = itemCode;
+            row.Unit = (row.Unit ?? string.Empty).Trim();
+            snapshots[itemCode] = row;
+        }
+
+        return snapshots;
+    }
+
+    public async Task<Dictionary<string, string>> GetItemUnitsAsync(IEnumerable<string> itemCodes, CancellationToken cancellationToken = default)
+    {
+        var normalizedCodes = itemCodes
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (normalizedCodes.Count == 0)
+        {
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var inParams = normalizedCodes.Select((_, idx) => $"@Code{idx}").ToList();
+        var sql = $@"
+            SELECT ItemCode, ISNULL(Unit, '') AS Unit
+            FROM dbo.INV_ItemList
+            WHERE ItemCode IN ({string.Join(", ", inParams)})";
+
+        var rows = await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd => new MaterialRequestItemLookupDto
+            {
+                ItemCode = rd[0]?.ToString() ?? string.Empty,
+                Unit = rd[1]?.ToString() ?? string.Empty
+            },
+            cmd =>
+            {
+                for (var i = 0; i < normalizedCodes.Count; i++)
+                {
+                    Helper.AddParameter(cmd, $"@Code{i}", normalizedCodes[i], SqlDbType.VarChar, 20);
+                }
+            },
+            cancellationToken);
+
+        var unitMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            var itemCode = (row.ItemCode ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(itemCode))
+            {
+                continue;
+            }
+
+            unitMap[itemCode] = (row.Unit ?? string.Empty).Trim();
+        }
+
+        return unitMap;
+    }
+
+    public async Task<long> SaveAsync(long? requestNo, MaterialRequestDetailDto header, IReadOnlyList<MaterialRequestLineDto> lines, CancellationToken cancellationToken = default)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync(cancellationToken);
+        await using var tx = await conn.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            var resolvedRequestNo = requestNo ?? await GetNextRequestNoAsync(conn, (SqlTransaction)tx, cancellationToken);
+            var statusId = header.MaterialStatusId ?? await GetDefaultStatusIdAsync(conn, (SqlTransaction)tx, cancellationToken);
+
+            if (requestNo.HasValue)
+            {
+                const string updateSql = @"
+                    UPDATE dbo.MATERIAL_REQUEST
+                    SET
+                        STORE_GROUP = @StoreGroup,
+                        DATE_CREATE = @DateCreate,
+                        ACCORDINGTO = @AccordingTo,
+                        APPROVAL = @Approval,
+                        POST_PR = @PostPr,
+                        IS_AUTO = @IsAuto,
+                        FROM_DATE = @FromDate,
+                        TO_DATE = @ToDate,
+                        APPROVAL_END = @ApprovalEnd,
+                        MATERIALSTATUSID = @StatusId,
+                        PRNO = @PrNo,
+                        NO_ISSUE = @NoIssue
+                    WHERE REQUEST_NO = @RequestNo";
+
+                await using var updateCmd = new SqlCommand(updateSql, conn, (SqlTransaction)tx);
+                BindHeaderParams(updateCmd, resolvedRequestNo, header, statusId);
+                var updated = await updateCmd.ExecuteNonQueryAsync(cancellationToken);
+                if (updated == 0)
+                {
+                    throw new InvalidOperationException("Material Request not found.");
+                }
+            }
+            else
+            {
+                const string insertSql = @"
+                    INSERT INTO dbo.MATERIAL_REQUEST
+                    (
+                        REQUEST_NO, STORE_GROUP, DATE_CREATE, ACCORDINGTO, APPROVAL, POST_PR, IS_AUTO,
+                        FROM_DATE, TO_DATE, APPROVAL_END, MATERIALSTATUSID, PRNO, NO_ISSUE
+                    )
+                    VALUES
+                    (
+                        @RequestNo, @StoreGroup, @DateCreate, @AccordingTo, @Approval, @PostPr, @IsAuto,
+                        @FromDate, @ToDate, @ApprovalEnd, @StatusId, @PrNo, @NoIssue
+                    )";
+
+                await using var insertCmd = new SqlCommand(insertSql, conn, (SqlTransaction)tx);
+                BindHeaderParams(insertCmd, resolvedRequestNo, header, statusId);
+                await insertCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            const string deleteLineSql = "DELETE FROM dbo.MATERIAL_REQUEST_DETAIL WHERE REQUEST_NO = @RequestNo";
+            await using (var deleteCmd = new SqlCommand(deleteLineSql, conn, (SqlTransaction)tx))
+            {
+                AddNumeric18_0Param(deleteCmd, "@RequestNo", resolvedRequestNo);
+                await deleteCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            if (lines.Count > 0)
+            {
+                const string insertLineSql = @"
+                    INSERT INTO dbo.MATERIAL_REQUEST_DETAIL
+                    (
+                        REQUEST_NO, ITEMCODE, UNIT, BEGIN_Q, RECEIPT_Q, USING_Q, END_Q,
+                        NORM_Q, NOT_RECEIPT, NEW_ORDER, INSTOCK, acctualyInventory, BUY, ISSUED,
+                        NEW_ITEM, SELECTED, NORM_Q_MAIN, PRICE, NOTE, PostedPR, ManualCheck, TempStore, CreatedAsset
+                    )
+                    VALUES
+                    (
+                        @RequestNo, @ItemCode, @Unit, 0, 0, 0, 0,
+                        0, @NotReceipt, @OrderQty, @InStock, @AccIn, @Buy, 0,
+                        @NewItem, @Selected, 0, @Price, @Note, 0, 0, 0, 0
+                    )";
+
+                foreach (var line in lines)
+                {
+                    await using var lineCmd = new SqlCommand(insertLineSql, conn, (SqlTransaction)tx);
+                    AddNumeric18_0Param(lineCmd, "@RequestNo", resolvedRequestNo);
+                    Helper.AddParameter(lineCmd, "@ItemCode", (line.ItemCode ?? string.Empty).Trim(), SqlDbType.VarChar, 20);
+                    Helper.AddParameter(lineCmd, "@Unit", (line.Unit ?? string.Empty).Trim(), SqlDbType.VarChar, 50);
+                    AddDecimal18_2Param(lineCmd, "@OrderQty", line.OrderQty ?? 0m);
+                    AddDecimal18_2Param(lineCmd, "@NotReceipt", line.NotReceipt ?? 0m);
+                    AddDecimal18_2Param(lineCmd, "@InStock", line.InStock ?? 0m);
+                    AddDecimal18_2Param(lineCmd, "@AccIn", line.AccIn ?? 0m);
+                    AddDecimal18_2Param(lineCmd, "@Buy", line.Buy ?? 0m);
+                    AddDecimal18_2Param(lineCmd, "@Price", line.Price ?? 0m);
+                    Helper.AddParameter(lineCmd, "@Note", (line.Note ?? string.Empty).Trim(), SqlDbType.VarChar, 255);
+                    Helper.AddParameter(lineCmd, "@NewItem", line.NewItem, SqlDbType.Bit);
+                    Helper.AddParameter(lineCmd, "@Selected", line.Selected, SqlDbType.Bit);
+
+                    await lineCmd.ExecuteNonQueryAsync(cancellationToken);
+                }
+            }
+
+            await tx.CommitAsync(cancellationToken);
+            return resolvedRequestNo;
+        }
+        catch
+        {
+            await tx.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyList<MaterialRequestItemLookupDto>> SearchItemsAsync(
+        string? keyword,
+        bool checkBalanceInStore = false,
+        int? storeGroup = null,
+        CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+            SELECT TOP 100
+                i.ItemCode,
+                i.ItemName,
+                ISNULL(i.Unit, '') AS Unit,
+                ISNULL(MAX(b.IsQ), 0) AS InStock,
+                i.KPGroupItem
+            FROM dbo.INV_ItemList i
+            LEFT JOIN dbo.INV_ItemBalanceACC_TMP b ON b.ItemCode = i.ItemCode
+            WHERE
+                (@Keyword IS NULL
+                    OR i.ItemCode LIKE '%' + @Keyword + '%'
+                    OR i.ItemName LIKE '%' + @Keyword + '%')
+                AND (i.IsActive = 1 OR i.IsActive IS NULL)
+                AND (@CheckBalanceInStore = 0 OR ISNULL(b.IsQ, 0) > 0)
+                AND (@StoreGroup IS NULL OR @StoreGroup = 0 OR i.KPGroupItem = @StoreGroup)
+            GROUP BY i.ItemCode, i.ItemName, i.Unit, i.KPGroupItem
+            ORDER BY i.ItemCode";
+
+        var rows = await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd => new MaterialRequestItemLookupDto
+            {
+                ItemCode = rd[0]?.ToString() ?? string.Empty,
+                ItemName = rd[1]?.ToString() ?? string.Empty,
+                Unit = rd[2]?.ToString() ?? string.Empty,
+                InStock = rd.IsDBNull(3) ? 0 : Convert.ToDecimal(rd[3]),
+                StoreGroupId = rd.IsDBNull(4) ? null : Convert.ToInt32(rd[4])
+            },
+            cmd =>
+            {
+                Helper.AddParameter(cmd, "@Keyword", string.IsNullOrWhiteSpace(keyword) ? null : keyword.Trim(), SqlDbType.VarChar, 150);
+                Helper.AddParameter(cmd, "@CheckBalanceInStore", checkBalanceInStore, SqlDbType.Bit);
+                Helper.AddParameter(cmd, "@StoreGroup", storeGroup, SqlDbType.Int);
+            },
+            cancellationToken);
+
+        return rows;
+    }
+
+    public async Task<MaterialRequestItemLookupDto> CreateQuickItemAsync(string itemName, string? unit, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(itemName))
+        {
+            throw new InvalidOperationException("Item Name is required.");
+        }
+
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync(cancellationToken);
+        await using var tx = await conn.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            var itemCode = await GenerateQuickItemCodeAsync(conn, (SqlTransaction)tx, cancellationToken);
+
+            const string sql = @"
+                INSERT INTO dbo.INV_ItemList
+                (
+                    ItemCode, ItemName, ItemCatg, Unit, IsMaterial, IsPurchase, IsActive,
+                    IsNewItem, CreatedDate, ItemNameNew
+                )
+                VALUES
+                (
+                    @ItemCode, @ItemName, 0, @Unit, 1, 1, 1,
+                    1, CONVERT(nvarchar(100), GETDATE(), 120), @ItemName
+                )";
+
+            await using var cmd = new SqlCommand(sql, conn, (SqlTransaction)tx);
+            Helper.AddParameter(cmd, "@ItemCode", itemCode, SqlDbType.VarChar, 20);
+            Helper.AddParameter(cmd, "@ItemName", itemName.Trim(), SqlDbType.VarChar, 150);
+            Helper.AddParameter(cmd, "@Unit", string.IsNullOrWhiteSpace(unit) ? null : unit.Trim(), SqlDbType.VarChar, 10);
+            await cmd.ExecuteNonQueryAsync(cancellationToken);
+
+            await tx.CommitAsync(cancellationToken);
+
+            return new MaterialRequestItemLookupDto
+            {
+                ItemCode = itemCode,
+                ItemName = itemName.Trim(),
+                Unit = string.IsNullOrWhiteSpace(unit) ? string.Empty : unit.Trim()
+            };
+        }
+        catch
+        {
+            await tx.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    private static void BindSearchParams(SqlCommand cmd, MaterialRequestFilterCriteria criteria, IReadOnlyList<int> statusIds)
+    {
+        AddNumeric18_0Param(cmd, "@RequestNo", criteria.RequestNo);
+        AddNumeric18_0Param(cmd, "@StoreGroup", criteria.StoreGroup);
+        Helper.AddParameter(cmd, "@NoIssue", criteria.NoIssue, SqlDbType.Int);
+        Helper.AddParameter(cmd, "@IsAuto", criteria.IsAuto, SqlDbType.Bit);
+        Helper.AddParameter(cmd, "@BuyGreaterThanZero", criteria.BuyGreaterThanZero, SqlDbType.Bit);
+        Helper.AddParameter(cmd, "@FromDate", criteria.FromDate, SqlDbType.DateTime);
+        Helper.AddParameter(cmd, "@ToDate", criteria.ToDate, SqlDbType.DateTime);
+        Helper.AddParameter(cmd, "@AccordingTo", string.IsNullOrWhiteSpace(criteria.AccordingToKeyword) ? null : criteria.AccordingToKeyword.Trim(), SqlDbType.VarChar, 300);
+        Helper.AddParameter(cmd, "@ItemCode", string.IsNullOrWhiteSpace(criteria.ItemCode) ? null : criteria.ItemCode.Trim(), SqlDbType.VarChar, 20);
+
+        for (var i = 0; i < statusIds.Count; i++)
+        {
+            Helper.AddParameter(cmd, $"@StatusId{i}", statusIds[i], SqlDbType.Int);
+        }
+    }
+
+    private static void BindHeaderParams(SqlCommand cmd, long requestNo, MaterialRequestDetailDto header, int statusId)
+    {
+        AddNumeric18_0Param(cmd, "@RequestNo", requestNo);
+        AddNumeric18_0Param(cmd, "@StoreGroup", header.StoreGroup);
+        Helper.AddParameter(cmd, "@DateCreate", header.DateCreate, SqlDbType.DateTime);
+        Helper.AddParameter(cmd, "@AccordingTo", (header.AccordingTo ?? string.Empty).Trim(), SqlDbType.VarChar, 300);
+        Helper.AddParameter(cmd, "@Approval", header.Approval, SqlDbType.Bit);
+        Helper.AddParameter(cmd, "@PostPr", header.PostPr, SqlDbType.Bit);
+        Helper.AddParameter(cmd, "@IsAuto", header.IsAuto, SqlDbType.Bit);
+        Helper.AddParameter(cmd, "@FromDate", header.FromDate, SqlDbType.DateTime);
+        Helper.AddParameter(cmd, "@ToDate", header.ToDate, SqlDbType.DateTime);
+        Helper.AddParameter(cmd, "@ApprovalEnd", header.ApprovalEnd, SqlDbType.Bit);
+        Helper.AddParameter(cmd, "@StatusId", statusId, SqlDbType.Int);
+        Helper.AddParameter(cmd, "@PrNo", string.IsNullOrWhiteSpace(header.PrNo) ? null : header.PrNo.Trim(), SqlDbType.VarChar, 50);
+        Helper.AddParameter(cmd, "@NoIssue", header.NoIssue, SqlDbType.Int);
+    }
+
+    private static string BuildStatusFilterSql(IReadOnlyList<int> statusIds)
+    {
+        if (statusIds.Count == 0)
+        {
+            return "1 = 1";
+        }
+
+        var parameters = Enumerable.Range(0, statusIds.Count)
+            .Select(i => $"@StatusId{i}");
+        return $"r.MATERIALSTATUSID IN ({string.Join(", ", parameters)})";
+    }
+
+    private static async Task<long> GetNextRequestNoAsync(SqlConnection conn, SqlTransaction tx, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT ISNULL(MAX(REQUEST_NO), 0) + 1 FROM dbo.MATERIAL_REQUEST WITH (UPDLOCK, HOLDLOCK)";
+        await using var cmd = new SqlCommand(sql, conn, tx);
+        var value = await cmd.ExecuteScalarAsync(cancellationToken);
+        return Convert.ToInt64(value);
+    }
+
+    private static async Task<int> GetDefaultStatusIdAsync(SqlConnection conn, SqlTransaction tx, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT ISNULL(MIN(MaterialStatusID), 0) FROM dbo.MaterialStatus";
+        await using var cmd = new SqlCommand(sql, conn, tx);
+        var value = await cmd.ExecuteScalarAsync(cancellationToken);
+        return Convert.ToInt32(value);
+    }
+
+    private static async Task<string> GenerateQuickItemCodeAsync(SqlConnection conn, SqlTransaction tx, CancellationToken cancellationToken)
+    {
+        for (var i = 0; i < 50; i++)
+        {
+            var baseCode = $"NI{DateTime.UtcNow:yyMMddHHmmss}";
+            var suffix = i == 0 ? string.Empty : i.ToString("00");
+            var code = $"{baseCode}{suffix}";
+            if (code.Length > 20)
+            {
+                code = code.Substring(0, 20);
+            }
+
+            const string sql = "SELECT COUNT(1) FROM dbo.INV_ItemList WITH (UPDLOCK, HOLDLOCK) WHERE ItemCode = @ItemCode";
+            await using var cmd = new SqlCommand(sql, conn, tx);
+            Helper.AddParameter(cmd, "@ItemCode", code, SqlDbType.VarChar, 20);
+            var count = Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken));
+            if (count == 0)
+            {
+                return code;
+            }
+        }
+
+        throw new InvalidOperationException("Cannot generate Item Code. Please retry.");
+    }
+
+    public async Task<IReadOnlyList<MaterialRequestLineDto>> BuildAutoLinesAsync(int storeGroup, CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+            SELECT
+                i.ItemCode,
+                i.ItemName,
+                ISNULL(i.Unit, '') AS Unit,
+                CAST(ISNULL(NULLIF(i.StoreNormInMain, 0), NULLIF(i.ReOrderPoint, 0), 1) AS decimal(18,2)) AS OrderQty
+            FROM dbo.INV_ItemList i
+            WHERE
+                (i.IsActive = 1 OR i.IsActive IS NULL)
+                AND (i.IsPurchase = 1 OR i.IsPurchase IS NULL)
+                AND i.KPGroupItem = @StoreGroup
+            ORDER BY i.ItemCode";
+
+        var rows = await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd =>
+            {
+                var orderQty = rd.IsDBNull(3) ? 1m : Convert.ToDecimal(rd[3]);
+                if (orderQty <= 0)
+                {
+                    orderQty = 1m;
+                }
+
+                return new MaterialRequestLineDto
+                {
+                    ItemCode = rd[0]?.ToString() ?? string.Empty,
+                    ItemName = rd[1]?.ToString() ?? string.Empty,
+                    Unit = rd[2]?.ToString() ?? string.Empty,
+                    OrderQty = orderQty,
+                    NotReceipt = 0,
+                    InStock = 0,
+                    AccIn = 0,
+                    Buy = 0,
+                    Price = 0,
+                    Note = string.Empty,
+                    NewItem = false,
+                    Selected = true
+                };
+            },
+            cmd => Helper.AddParameter(cmd, "@StoreGroup", storeGroup, SqlDbType.Int),
+            cancellationToken);
+
+        return rows;
+    }
+
+    /// <summary>
+    /// Thêm parameter numeric(18,0) đúng precision/scale để tránh lỗi ép kiểu khi chạy ADO.NET.
+    /// </summary>
+    private static void AddNumeric18_0Param(SqlCommand cmd, string name, object? value)
+    {
+        var p = cmd.Parameters.Add(name, SqlDbType.Decimal);
+        p.Precision = 18;
+        p.Scale = 0;
+        p.Value = value is null ? DBNull.Value : Convert.ToDecimal(value);
+    }
+
+    /// <summary>
+    /// Dùng cho các cột decimal có scale 2 ở dòng chi tiết MR.
+    /// </summary>
+    private static void AddDecimal18_2Param(SqlCommand cmd, string name, object? value)
+    {
+        var p = cmd.Parameters.Add(name, SqlDbType.Decimal);
+        p.Precision = 18;
+        p.Scale = 2;
+        p.Value = value is null ? DBNull.Value : Convert.ToDecimal(value);
+    }
+}
+

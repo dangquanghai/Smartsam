@@ -75,7 +75,7 @@
         tbody.empty();
 
         if (!items || items.length === 0) {
-            tbody.append('<tr><td colspan="12" class="text-center py-4">No suppliers found</td></tr>');
+            tbody.append('<tr class="supplier-grid-state"><td colspan="12" class="text-center py-4">No suppliers found</td></tr>');
             return;
         }
 
@@ -501,11 +501,11 @@
 
     function showLoading(show) {
         if (!show) return;
-        $('#supplierTable tbody').html('<tr><td colspan="12" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div> Loading...</td></tr>');
+        $('#supplierTable tbody').html('<tr class="supplier-grid-state"><td colspan="12" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div> Loading...</td></tr>');
     }
 
     function showError(message) {
-        $('#supplierTable tbody').html(`<tr><td colspan="12" class="text-center text-danger py-4">${escapeHtml(message)}</td></tr>`);
+        $('#supplierTable tbody').html(`<tr class="supplier-grid-state"><td colspan="12" class="text-center text-danger py-4">${escapeHtml(message)}</td></tr>`);
     }
 
     function escapeHtml(input) {

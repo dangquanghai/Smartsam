@@ -1,5 +1,7 @@
 ﻿.supplier-table-wrap {
-    height: clamp(420px, calc(100vh - 280px), 76vh);
+    height: 62vh;
+    min-height: 360px;
+    max-height: 62vh;
     overflow: auto;
     position: relative;
 }
@@ -9,12 +11,17 @@
     font-family: "VNI-Times", "VNI-Helve", sans-serif !important;
     font-size: 14px;
 }
-.supplier-table thead th {
+#supplierTable thead th {
     position: sticky;
     top: 0;
     z-index: 3;
     background: #f8f9fa;
     box-shadow: inset 0 -1px 0 #dee2e6;
+}
+
+.supplier-grid-state > td {
+    height: 260px;
+    vertical-align: middle !important;
 }
 
 .supplier-row {
@@ -295,3 +302,5 @@
         flex: 1 1 100%;
     }
 }
+
+

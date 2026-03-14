@@ -1,6 +1,13 @@
 .mr-table-wrap {
+    height: 62vh;
+    min-height: 360px;
     max-height: 62vh;
     overflow: auto;
+}
+
+.mr-grid-state > td {
+    height: 180px;
+    vertical-align: middle !important;
 }
 
 .mr-search-panel .mr-header-filter-grid,
@@ -74,7 +81,8 @@
 }
 
 .mr-request-no-input {
-    max-width: 150px;
+    width: 100%;
+    max-width: none;
 }
 
 .mr-col-request-no {
