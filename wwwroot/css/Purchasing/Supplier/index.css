@@ -1,9 +1,14 @@
-.supplier-table-wrap {
+﻿.supplier-table-wrap {
     height: clamp(420px, calc(100vh - 280px), 76vh);
     overflow: auto;
     position: relative;
 }
 
+/* Khai bÃ¡o font VNI náº¿u mÃ¡y client Ä‘Ã£ cÃ i */
+.vni-font {
+    font-family: "VNI-Times", "VNI-Helve", sans-serif !important;
+    font-size: 14px;
+}
 .supplier-table thead th {
     position: sticky;
     top: 0;
@@ -245,6 +250,37 @@
     min-height: calc(1.5em + 0.5rem + 2px);
     display: flex;
     align-items: center;
+}
+
+.supplier-cert-dept-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.supplier-cert-input {
+    flex: 1 1 52%;
+    min-width: 0;
+}
+
+.supplier-dept-label {
+    white-space: nowrap;
+    margin: 0;
+}
+
+.supplier-dept-select {
+    flex: 1 1 48%;
+    min-width: 140px;
+}
+
+.supplier-status-dept-align .supplier-isnew-cell {
+    justify-content: flex-start;
+    padding-left: 2px;
+}
+
+.supplier-status-readonly {
+    background-color: #e9ecef;
 }
 
 @media (max-width: 1199.98px) {

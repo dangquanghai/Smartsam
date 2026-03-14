@@ -1,205 +1,241 @@
-@page "/Purchasing/Supplier/Detail/{id?}"
+@page "/Purchasing/SupplierDetail/{id?}"
 @model SmartSam.Pages.Purchasing.Supplier.SupplierDetailModel
 @{
     ViewData["Title"] = "Supplier Detail";
     var messageType = (Model.MessageType ?? "info").ToLowerInvariant();
     var hasInputFieldError = false;
+    string? firstInputFieldKey = null;
+    string? firstInputErrorMessage = null;
     foreach (var state in ViewData.ModelState)
     {
         if (state.Key.StartsWith("Input.", StringComparison.OrdinalIgnoreCase) && state.Value.Errors.Count > 0)
         {
             hasInputFieldError = true;
+            firstInputFieldKey ??= state.Key;
+            firstInputErrorMessage ??= state.Value.Errors[0].ErrorMessage;
             break;
         }
     }
-    var useInlineAlert = !string.IsNullOrWhiteSpace(Model.Message) && !hasInputFieldError;
+    var firstInputFieldId = firstInputFieldKey?.StartsWith("Input.", StringComparison.OrdinalIgnoreCase) == true
+        ? $"Input_{firstInputFieldKey.Substring("Input.".Length)}"
+        : string.Empty;
+    var alertMessage = hasInputFieldError ? firstInputErrorMessage : Model.Message;
+    var useInlineAlert = !string.IsNullOrWhiteSpace(alertMessage);
     var lockGeneralInfo = !Model.CanSave;
 }
 
 <section class="content">
     <div class="container-fluid">
+        @if (useInlineAlert)
+        {
+            var effectiveType = hasInputFieldError ? "error" : messageType;
+            var alertClass = effectiveType switch
+            {
+                "success" => "alert-success",
+                "warning" => "alert-warning",
+                "error" => "alert-danger",
+                _ => "alert-info"
+            };
+            var alertIcon = effectiveType switch
+            {
+                "success" => "fas fa-check-circle",
+                "warning" => "fas fa-exclamation-triangle",
+                "error" => "fas fa-ban",
+                _ => "fas fa-info-circle"
+            };
+            var alertTitle = effectiveType switch
+            {
+                "error" => "Error",
+                "warning" => "Warning",
+                _ => "Notification"
+            };
+            <div class="alert @alertClass alert-dismissible fade show" role="alert">
+                <strong><i class="@alertIcon"></i> @alertTitle:</strong> @alertMessage
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        @if (!ViewData.ModelState.IsValid && !hasInputFieldError && string.IsNullOrWhiteSpace(Model.Message))
+        {
+            <div class="alert alert-danger">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            </div>
+        }
+
         <form method="post"
-              asp-page-handler="Save"
               id="supplierDetailForm"
               data-is-edit="@Model.IsEdit.ToString().ToLowerInvariant()"
-              data-current-id="@(Model.Id?.ToString() ?? string.Empty)">
+              data-current-id="@(Model.Id?.ToString() ?? string.Empty)"
+              data-has-server-input-error="@hasInputFieldError.ToString().ToLowerInvariant()"
+              data-first-invalid-field="@firstInputFieldId">
+            <input type="hidden" asp-for="Mode" />
+            <input type="hidden" asp-for="ViewMode" />
+            <input type="hidden" asp-for="Year" />
+            <input type="hidden" asp-for="DeptId" />
+            <input type="hidden" asp-for="SupplierCode" />
+            <input type="hidden" asp-for="SupplierName" />
+            <input type="hidden" asp-for="Business" />
+            <input type="hidden" asp-for="Contact" />
+            <input type="hidden" asp-for="StatusId" />
+            <input type="hidden" asp-for="IsNew" />
+            <input type="hidden" asp-for="PageIndex" />
+            <input type="hidden" asp-for="PageSize" />
             <div class="row d-flex align-items-stretch">
-                <div class="col-md-8">
+                <div class="col-md-7">
                     <div class="card card-primary card-outline h-100 mb-0">
                         <div class="card-header p-2">
                             <h3 class="card-title">General Information</h3>
                         </div>
 
                         <div class="card-body p-2">
-                            <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
-                            @if (useInlineAlert)
-                            {
-                                var alertClass = messageType switch
-                                {
-                                    "success" => "alert-success",
-                                    "warning" => "alert-warning",
-                                    "error" => "alert-danger",
-                                    _ => "alert-info"
-                                };
-                                var alertIcon = messageType switch
-                                {
-                                    "success" => "fas fa-check-circle",
-                                    "warning" => "fas fa-exclamation-triangle",
-                                    "error" => "fas fa-ban",
-                                    _ => "fas fa-info-circle"
-                                };
-                                var alertTitle = messageType switch
-                                {
-                                    "error" => "Error",
-                                    "warning" => "Warning",
-                                    _ => "Notification"
-                                };
-                                <div class="alert @alertClass alert-dismissible mb-2">
-                                    <div class="d-flex align-items-center pr-4">
-                                        <i class="@alertIcon mr-2" aria-hidden="true"></i>
-                                        <span class="font-weight-bold mr-1">@alertTitle:</span>
-                                        <span>@Model.Message</span>
-                                    </div>
-                                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                                        <span aria-hidden="true">&times;</span>
-                                    </button>
-                                </div>
-                            }
                             @{
                                 var currentStatusId = Model.Input.Status ?? 0;
                                 var statusText = Model.Statuses.FirstOrDefault(x => x.Value == currentStatusId.ToString())?.Text
                                                  ?? (currentStatusId == 0 ? "Draft" : currentStatusId.ToString());
                             }
                             <fieldset disabled="@(lockGeneralInfo ? "disabled" : null)">
-                                <div class="form-horizontal supplier-detail-form">
-                                    <div class="form-group row mb-2">
-                                        <label class="col-sm-2 col-form-label col-form-label-sm text-sm-right">Supplier Code<span class="supplier-required-mark">*</span></label>
-                                        <div class="col-sm-3">
+                                <div class="supplier-detail-form">
+                                    <div class="row no-gutters align-items-start mb-2">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Supplier Code<span class="supplier-required-mark">*</span></label></div>
+                                        <div class="col-3">
                                             <input asp-for="Input.SupplierCode" class="form-control form-control-sm" tabindex="1" />
-                                            <span asp-validation-for="Input.SupplierCode" class="text-danger small"></span>
                                         </div>
-
-                                        <label class="col-sm-2 col-form-label col-form-label-sm text-sm-right">Supplier Name<span class="supplier-required-mark">*</span></label>
-                                        <div class="col-sm-5">
+                                        <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Supplier Name<span class="supplier-required-mark">*</span></label></div>
+                                        <div class="col-5">
                                             <input asp-for="Input.SupplierName" class="form-control form-control-sm" tabindex="2" />
-                                            <span asp-validation-for="Input.SupplierName" class="text-danger small"></span>
                                         </div>
                                     </div>
 
-                                    <div class="form-group row mb-2">
-                                        <label class="col-sm-2 col-form-label col-form-label-sm text-sm-right">Address<span class="supplier-required-mark">*</span></label>
-                                        <div class="col-sm-10">
+                                    <div class="row no-gutters align-items-start mb-2">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">Address<span class="supplier-required-mark">*</span></label></div>
+                                        <div class="col-10">
                                             <textarea asp-for="Input.Address" class="form-control form-control-sm" rows="2" tabindex="3"></textarea>
-                                            <span asp-validation-for="Input.Address" class="text-danger small"></span>
                                         </div>
                                     </div>
 
-                                    <div class="form-group row mb-2">
-                                        <label class="col-sm-2 col-form-label col-form-label-sm text-sm-right">Phone</label>
-                                        <div class="col-sm-3">
+                                    <div class="row no-gutters align-items-center mb-2">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Phone</label></div>
+                                        <div class="col-3">
                                             <input asp-for="Input.Phone" class="form-control form-control-sm" tabindex="4" />
                                         </div>
-
-                                        <label class="col-sm-2 col-form-label col-form-label-sm text-sm-right">Fax</label>
-                                        <div class="col-sm-3">
+                                        <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Fax</label></div>
+                                        <div class="col-3">
                                             <input asp-for="Input.Fax" class="form-control form-control-sm" tabindex="5" />
                                         </div>
                                     </div>
 
-                                    <div class="form-group row mb-2">
-                                        <label class="col-sm-2 col-form-label col-form-label-sm text-sm-right">Contact Person</label>
-                                        <div class="col-sm-3">
+                                    <div class="row no-gutters align-items-center mb-2">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Contact Person</label></div>
+                                        <div class="col-3">
                                             <input asp-for="Input.Contact" class="form-control form-control-sm" tabindex="6" />
                                         </div>
-
-                                        <label class="col-sm-2 col-form-label col-form-label-sm text-sm-right">Position</label>
-                                        <div class="col-sm-3">
+                                        <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Position</label></div>
+                                        <div class="col-3">
                                             <input asp-for="Input.Position" class="form-control form-control-sm" tabindex="7" />
                                         </div>
                                     </div>
 
-                                    <div class="form-group row mb-2">
-                                        <label class="col-sm-2 col-form-label col-form-label-sm text-sm-right">Mobile</label>
-                                        <div class="col-sm-3">
+                                    <div class="row no-gutters align-items-center mb-2">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Mobile</label></div>
+                                        <div class="col-3">
                                             <input asp-for="Input.Mobile" class="form-control form-control-sm" tabindex="8" />
                                         </div>
-
-                                        <label class="col-sm-2 col-form-label col-form-label-sm text-sm-right">Business</label>
-                                        <div class="col-sm-5">
+                                        <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Business</label></div>
+                                        <div class="col-5">
                                             <input asp-for="Input.Business" class="form-control form-control-sm" tabindex="9" />
                                         </div>
                                     </div>
 
-                                    <div class="form-group row mb-2 align-items-center">
-                                        <label class="col-sm-2 col-form-label col-form-label-sm text-sm-right">Document</label>
-                                        <div class="col-sm-1 supplier-checkbox-wrap">
+                                    <div class="row no-gutters align-items-center mb-2 supplier-row-doc-cert-dept">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Document</label></div>
+                                        <div class="col-3 supplier-checkbox-wrap">
                                             <input asp-for="Input.Document" type="checkbox" tabindex="10" style="width:16px;height:16px;@(Model.CanSave ? "cursor:pointer;" : "")" />
                                         </div>
-
-                                        <label class="col-sm-2 col-form-label col-form-label-sm text-sm-right">Certificate</label>
-                                        <div class="col-sm-3">
-                                            <input asp-for="Input.Certificate" class="form-control form-control-sm" tabindex="11" />
-                                        </div>
-
-                                        <label class="col-sm-1 col-form-label col-form-label-sm text-sm-right">Dept*</label>
-                                        <div class="col-sm-3">
-                                            <select asp-for="Input.DeptID" asp-items="Model.Departments" class="form-control form-control-sm" tabindex="12"></select>
+                                        <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Certificate</label></div>
+                                        <div class="col-5">
+                                            <div class="supplier-cert-dept-wrap">
+                                                <input asp-for="Input.Certificate" class="form-control form-control-sm supplier-cert-input" tabindex="11" />
+                                                <label class="col-form-label-sm mb-0 supplier-dept-label">
+                                                    Dept<span class="supplier-required-mark">*</span>
+                                                </label>
+                                                <select asp-for="Input.DeptID" asp-items="Model.Departments" class="form-control form-control-sm supplier-dept-select" tabindex="12"></select>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div class="form-group row mb-2">
-                                        <label class="col-sm-2 col-form-label col-form-label-sm text-sm-right">Service</label>
-                                        <div class="col-sm-10">
+                                    <div class="row no-gutters align-items-center mb-2">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Service</label></div>
+                                        <div class="col-10">
                                             <input asp-for="Input.Service" class="form-control form-control-sm" tabindex="13" />
                                         </div>
                                     </div>
 
-                                    <div class="form-group row mb-2">
-                                        <label class="col-sm-2 col-form-label col-form-label-sm text-sm-right">Comment</label>
-                                        <div class="col-sm-10">
+                                    <div class="row no-gutters align-items-start mb-2">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">Comment</label></div>
+                                        <div class="col-10">
                                             <textarea asp-for="Input.Comment" class="form-control form-control-sm" rows="2" tabindex="14"></textarea>
                                         </div>
                                     </div>
 
-                                    <div class="form-group row mb-0 align-items-center">
-                                        <label class="col-sm-2 col-form-label col-form-label-sm text-sm-right">CodeOfAcc</label>
-                                        <div class="col-sm-3">
+                                    <div class="row no-gutters align-items-center mb-0">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">CodeOfAcc</label></div>
+                                        <div class="col-3">
                                             <input asp-for="Input.CodeOfAcc" class="form-control form-control-sm" tabindex="15" />
                                         </div>
-
-                                        <label class="col-sm-2 col-form-label col-form-label-sm text-sm-right">IsNew</label>
-                                        <div class="col-sm-1 supplier-checkbox-wrap">
-                                            <input asp-for="Input.IsNew" type="checkbox" tabindex="16" style="width:16px;height:16px;@(Model.CanSave ? "cursor:pointer;" : "")" />
-                                        </div>
-
-                                        <label class="col-sm-1 col-form-label col-form-label-sm text-sm-right">Status</label>
-                                        <div class="col-sm-3">
-                                            <input type="text" class="form-control form-control-sm" value="@statusText" readonly />
+                                        <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">IsNew</label></div>
+                                        <div class="col-5">
+                                            <div class="supplier-cert-dept-wrap supplier-status-dept-align">
+                                                <div class="supplier-cert-input supplier-checkbox-wrap supplier-isnew-cell">
+                                                    <input asp-for="Input.IsNew" type="checkbox" tabindex="16" style="width:16px;height:16px;@(Model.CanSave ? "cursor:pointer;" : "")" />
+                                                </div>
+                                                <label class="col-form-label-sm mb-0 supplier-dept-label">Status</label>
+                                                <input type="text" class="form-control form-control-sm supplier-dept-select supplier-status-readonly" value="@statusText" readonly />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </fieldset>
                         </div>
 
-                        <div class="card-footer py-2 module-action-bar">
-                            @if (Model.CanSave)
-                            {
-                                <button type="submit" class="btn btn-sm btn-action-save px-4 mr-2 mb-1"><i class="fas fa-save"></i> Save</button>
-                            }
-                            @if (Model.CanSubmit)
-                            {
-                                <button type="submit" formaction="?handler=SubmitApproval" class="btn btn-sm btn-action-submit px-4 mr-2 mb-1"><i class="fas fa-paper-plane"></i> Submit</button>
-                            }
-                            else if (Model.IsEdit && Model.HasSubmitPermission && Model.IsSubmitted)
-                            {
-                                <button type="button" class="btn btn-sm btn-action-submit px-4 mr-2 mb-1" disabled title="Already submitted"><i class="fas fa-paper-plane"></i> Submit</button>
-                            }
-                            <a asp-page="./Index" asp-route-ViewMode="@Model.ViewMode" asp-route-Year="@Model.Year" class="btn btn-sm btn-action-close px-4 mb-1"><i class="fas fa-arrow-left"></i> Back to List</a>
+                        <div class="card-footer py-2">
+                            <div class="float-left">
+                                @if (Model.CanSave)
+                                {
+                                    <button type="submit" id="btnSave" class="btn btn-primary btn-sm px-4"><i class="fas fa-save"></i> Save</button>
+                                }
+                                @if (Model.CanSubmit)
+                                {
+                                    <button type="submit" id="btnSubmit" formaction="?handler=SubmitApproval" class="btn btn-dark btn-sm px-4 ml-2"><i class="fas fa-paper-plane"></i> Submit</button>
+                                }
+                                else if (Model.IsEdit && Model.HasSubmitPermission && Model.IsSubmitted)
+                                {
+                                    <button type="button" id="btnSubmit" class="btn btn-dark btn-sm px-4 ml-2" disabled title="Already submitted"><i class="fas fa-paper-plane"></i> Submit</button>
+                                }
+                                @if (Model.CanReuse)
+                                {
+                                    <button type="submit" id="btnReuse" formaction="?handler=Reuse" class="btn btn-warning btn-sm px-4 ml-2"><i class="fas fa-redo"></i> Re Use</button>
+                                }
+                            </div>
+                            <a asp-page="./Index"
+                               asp-route-ViewMode="@Model.ViewMode"
+                               asp-route-Year="@Model.Year"
+                               asp-route-DeptId="@Model.DeptId"
+                               asp-route-SupplierCode="@Model.SupplierCode"
+                               asp-route-SupplierName="@Model.SupplierName"
+                               asp-route-Business="@Model.Business"
+                               asp-route-Contact="@Model.Contact"
+                               asp-route-StatusId="@Model.StatusId"
+                               asp-route-IsNew="@Model.IsNew"
+                               asp-route-PageIndex="@Model.PageIndex"
+                               asp-route-PageSize="@Model.PageSize"
+                               class="btn btn-default btn-sm float-right">Back to List</a>
                         </div>
                     </div>
                 </div>
 
-                <div class="col-md-4">
+                <div class="col-md-5">
                     <div class="card card-success card-outline h-100 mb-0">
                         <div class="card-header p-2">
                             <h3 class="card-title">Approved Information</h3>
@@ -214,22 +250,11 @@
                                             <th>Action Date</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
-                                        @if (Model.Histories.Count == 0)
-                                        {
-                                            <tr><td colspan="3" class="text-center text-muted">No history</td></tr>
-                                        }
-                                        else
-                                        {
-                                            @foreach (var h in Model.Histories)
-                                            {
-                                                <tr>
-                                                    <td>@h.Action</td>
-                                                    <td>@h.UserName</td>
-                                                    <td>@(h.ActionDate?.ToString("dd/MM/yyyy HH:mm") ?? "")</td>
-                                                </tr>
-                                            }
-                                        }
+                                    @* Giong STContract: tbody de trong va JS load du lieu qua AJAX handler. *@
+                                    <tbody id="approvalHistoryBody">
+                                        <tr id="no-history-row">
+                                            <td colspan="3" class="text-center text-muted">No history</td>
+                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -246,5 +271,5 @@
 }
 
 @section Scripts {
-    <script src="~/js/Purchasing/Supplier/detail.js" asp-append-version="true"></script>
+    <script src="~/js/Purchasing/Supplier/SupplierDetail.js" asp-append-version="true"></script>
 }

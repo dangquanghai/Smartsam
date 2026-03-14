@@ -1,297 +1,528 @@
-(() => {
-    "use strict";
+(function () {
+    'use strict';
 
-    /**
-     * Validate năm copy theo ngưỡng min/max trên input.
-     */
-    function validateCopyYearInput(copyYearInput, copyYearValidation, showError) {
-        if (!copyYearInput) return false;
+    let pageSize = typeof defaultPageSize !== 'undefined' ? defaultPageSize : 13;
+    let selectedSupplierId = null;
+    let currentPage = 1;
+    let currentDataRows = [];
 
-        const raw = (copyYearInput.value || "").trim();
-        const min = Number(copyYearInput.getAttribute("min") || "2000");
-        const max = Number(copyYearInput.getAttribute("max") || "2099");
-        const year = Number(raw);
-        const isValid = raw.length > 0
-            && Number.isInteger(year)
-            && raw.length === 4
-            && year >= min
-            && year <= max;
+    // ========== SEARCH FUNCTION ==========
+    function performSearch(page = 1) {
+        currentPage = page;
+        const token = $('input[name="__RequestVerificationToken"]').val();
 
-        // Nếu lỗi đã từng được hiển thị thì giữ lại cho tới khi dữ liệu hợp lệ.
-        const hasExistingError = copyYearInput.classList.contains("is-invalid");
-        const shouldShowError = !isValid && (!!showError || hasExistingError);
+        const viewMode = ($('input[name="ViewMode"]:checked').val() || 'current').toLowerCase();
+        const yearRaw = ($('#Year').val() || '').toString().trim();
+        const year = yearRaw === '' ? null : parseInt(yearRaw, 10);
 
-        copyYearInput.classList.toggle("is-invalid", shouldShowError);
-        if (copyYearValidation) {
-            if (shouldShowError) {
-                copyYearValidation.textContent = `Enter a year from ${min} to ${max}.`;
-                copyYearValidation.classList.remove("d-none");
-                copyYearValidation.style.display = "block";
-            } else {
-                copyYearValidation.classList.add("d-none");
-                copyYearValidation.style.display = "";
+        const filter = {
+            viewMode: viewMode,
+            year: viewMode === 'byyear' && Number.isFinite(year) ? year : null,
+            deptId: parseNullableInt($('#DeptId').val()),
+            supplierCode: ($('#SupplierCode').val() || '').trim() || null,
+            supplierName: ($('#SupplierName').val() || '').trim() || null,
+            business: ($('#Business').val() || '').trim() || null,
+            contact: ($('#Contact').val() || '').trim() || null,
+            statusId: parseNullableInt($('#StatusId').val()),
+            isNew: $('#IsNew').is(':checked'),
+            page: currentPage,
+            pageSize: pageSize
+        };
+
+        showLoading(true);
+
+        $.ajax({
+            url: '?handler=Search',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'RequestVerificationToken': token },
+            data: JSON.stringify(filter),
+            success: function (response) {
+                const isSuccess = !!(response && (response.success === true || response.Success === true));
+                if (isSuccess) {
+                    const rows = (response && (response.data || response.Data)) || [];
+                    const total = (response && (response.total ?? response.Total)) || 0;
+                    const current = (response && (response.page ?? response.Page)) || 1;
+                    const size = (response && (response.pageSize ?? response.PageSize)) || pageSize;
+                    const pages = (response && (response.totalPages ?? response.TotalPages)) || 1;
+
+                    currentDataRows = rows;
+                    renderSuppliers(currentDataRows);
+                    updatePagination(total, current, size, pages);
+                    resetActions();
+                } else {
+                    const message = (response && (response.message || response.Message))
+                        || 'Search failed.';
+                    showError(message);
+                }
+            },
+            error: function (xhr) {
+                if (xhr && xhr.status === 403) {
+                    showError('You have no permission to view supplier list.');
+                    return;
+                }
+                showError('Cannot load supplier data.');
+            },
+            complete: function () {
+                showLoading(false);
             }
+        });
+    }
+
+    // ========== RENDER TABLE ==========
+    function renderSuppliers(items) {
+        const tbody = $('#supplierTable tbody');
+        tbody.empty();
+
+        if (!items || items.length === 0) {
+            tbody.append('<tr><td colspan="12" class="text-center py-4">No suppliers found</td></tr>');
+            return;
+        }
+
+        items.forEach(function (item, index) {
+            const s = item.data || {};
+            const actions = item.actions || {};
+            const canAccess = actions.canAccess === true;
+            const supplierNameText = s.supplierName || s.SupplierName || '';
+            const addressText = s.address || s.Address || '';
+            const contactText = s.contact || s.Contact || '';
+            const businessText = s.business || s.Business || '';
+
+            const supplierCode = escapeHtml(s.supplierCode || s.SupplierCode || '');
+            const supplierCodeHtml = canAccess
+                ? `<a href="javascript:void(0)" class="supplier-link text-primary font-weight-bold" style="text-decoration:underline">${supplierCode}</a>`
+                : `<span class="text-muted font-weight-bold">${supplierCode}</span>`;
+
+            const row = `
+            <tr data-id="${s.supplierID || s.SupplierID || 0}" data-index="${index}" style="cursor:pointer">
+                <td><input type="radio" name="selectedSupplier" value="${index}"></td>
+                <td>${supplierCodeHtml}</td>
+                <td class="vni-font">${buildTruncatedCell(supplierNameText, 30)}</td>
+                <td class="vni-font">${buildTruncatedCell(addressText, 42)}</td>
+                <td>${escapeHtml(s.phone || s.Phone || '')}</td>
+                <td>${escapeHtml(s.mobile || s.Mobile || '')}</td>
+                <td>${escapeHtml(s.fax || s.Fax || '')}</td>
+                <td>${buildTruncatedCell(contactText, 26)}</td>
+                <td>${escapeHtml(s.position || s.Position || '')}</td>
+                <td>${buildTruncatedCell(businessText, 30)}</td>
+                <td>${escapeHtml(s.supplierStatusName || s.SupplierStatusName || '')}</td>
+                <td>${escapeHtml(s.deptCode || s.DeptCode || '')}</td>
+            </tr>`;
+
+            tbody.append(row);
+        });
+    }
+
+    // ========== BAT SU KIEN LINK SUPPLIER CODE ==========
+    $(document).on('click', '.supplier-link', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const rowIndex = $(this).closest('tr').data('index');
+        const item = currentDataRows[rowIndex];
+        if (!item || !item.actions) return;
+
+        if (item.actions.canAccess === true) {
+            const supplierId = item.data.supplierID || item.data.SupplierID;
+            const accessMode = (item.actions.accessMode || 'view').toString().toLowerCase();
+            window.location.href = buildDetailUrl(supplierId, accessMode);
+        } else {
+            alert('You have no right to view this supplier.');
+        }
+    });
+
+    // ========== BAT SU KIEN THAY DOI RADIO (QUAN TRONG NHAT) ==========
+    $(document).on('change', 'input[name="selectedSupplier"]', function () {
+        const index = parseInt($(this).val(), 10);
+        const item = currentDataRows[index];
+        if (!item) return;
+
+        const supplierId = item.data.supplierID || item.data.SupplierID;
+        selectedSupplierId = supplierId;
+
+        const canCopy = item.actions && item.actions.canCopy === true;
+        const canSubmit = item.actions && item.actions.canSubmit === true;
+
+        $('#selectedSupplierIdInput').val(selectedSupplierId);
+        $('#selectedSupplierIdsCsvInput').val(selectedSupplierId);
+        $('#copySelectedSupplierIdsCsvInput').val(selectedSupplierId);
+
+        $('#btnCopy').prop('disabled', !canCopy);
+        $('#btnSubmit').prop('disabled', !canSubmit);
+
+        $('#supplierTable tbody tr').removeClass('selected');
+        $(this).closest('tr').addClass('selected');
+    });
+
+    $(document).on('click', '#supplierTable tbody tr', function (e) {
+        if ($(e.target).closest('.supplier-link').length > 0) return;
+        const radio = $(this).find('input[name="selectedSupplier"]');
+        if (radio.length > 0) {
+            radio.prop('checked', true).trigger('change');
+        }
+    });
+
+    $(document).on('dblclick', '#supplierTable tbody tr', function () {
+        const rowIndex = $(this).data('index');
+        const item = currentDataRows[rowIndex];
+        if (!item || !item.actions) return;
+        if (item.actions.canAccess !== true) return;
+
+        const supplierId = item.data.supplierID || item.data.SupplierID;
+        const accessMode = (item.actions.accessMode || 'view').toString().toLowerCase();
+        window.location.href = buildDetailUrl(supplierId, accessMode);
+    });
+
+    function buildDetailUrl(supplierId, accessMode) {
+        let url = `/Purchasing/SupplierDetail/${supplierId}`;
+        const viewMode = ($('input[name="ViewMode"]:checked').val() || 'current').toLowerCase();
+        const mode = (accessMode || 'view').toString().toLowerCase();
+        const query = new URLSearchParams();
+
+        query.set('mode', viewMode === 'byyear' ? 'view' : mode);
+        query.set('viewMode', viewMode);
+
+        const yearRaw = ($('#Year').val() || '').toString().trim();
+        const deptId = ($('#DeptId').val() || '').toString().trim();
+        const supplierCode = ($('#SupplierCode').val() || '').toString().trim();
+        const supplierName = ($('#SupplierName').val() || '').toString().trim();
+        const business = ($('#Business').val() || '').toString().trim();
+        const contact = ($('#Contact').val() || '').toString().trim();
+        const statusId = ($('#StatusId').val() || '').toString().trim();
+        const isNew = $('#IsNew').is(':checked');
+
+        if (viewMode === 'byyear' && yearRaw !== '') query.set('year', yearRaw);
+        if (deptId !== '') query.set('DeptId', deptId);
+        if (supplierCode !== '') query.set('SupplierCode', supplierCode);
+        if (supplierName !== '') query.set('SupplierName', supplierName);
+        if (business !== '') query.set('Business', business);
+        if (contact !== '') query.set('Contact', contact);
+        if (statusId !== '') query.set('StatusId', statusId);
+        if (isNew) query.set('IsNew', 'true');
+        query.set('PageIndex', currentPage.toString());
+        query.set('PageSize', pageSize.toString());
+
+        url += `?${query.toString()}`;
+        return url;
+    }
+
+    function resetActions() {
+        selectedSupplierId = null;
+        $('#selectedSupplierIdInput').val('');
+        $('#selectedSupplierIdsCsvInput').val('');
+        $('#copySelectedSupplierIdsCsvInput').val('');
+        $('#btnCopy').prop('disabled', true);
+        $('#btnSubmit').prop('disabled', true);
+    }
+
+    // ========== PAGINATION ==========
+    function updatePagination(total, page, pageSizeValue, totalPages) {
+        const $totalBadge = $('#total-records-badge');
+        const $paginationInfo = $('#pagination-info');
+        const $pagination = $('#pagination');
+
+        $totalBadge.text(`${total} records`).addClass('badge-light');
+
+        if (total === 0) {
+            $paginationInfo.html('<small>No records</small>');
+            $pagination.empty();
+            return;
+        }
+
+        const start = ((page - 1) * pageSizeValue) + 1;
+        const end = Math.min(page * pageSizeValue, total);
+        $paginationInfo.html(`<small>Showing ${start} to ${end} of ${total} entries</small>`);
+
+        let html = '';
+        html += `<li class="page-item ${page <= 1 ? 'disabled' : ''}">
+                    <a class="page-link" href="#" data-page="${page - 1}">Prev</a>
+                 </li>`;
+
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) {
+                html += `<li class="page-item ${i === page ? 'active' : ''}">
+                            <a class="page-link" href="#" data-page="${i}">${i}</a>
+                         </li>`;
+            } else if (i === page - 3 || i === page + 3) {
+                html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+        }
+
+        html += `<li class="page-item ${page >= totalPages ? 'disabled' : ''}">
+                    <a class="page-link" href="#" data-page="${page + 1}">Next</a>
+                 </li>`;
+
+        $pagination.html(html).show();
+
+        $pagination.find('a.page-link').off('click').on('click', function (e) {
+            e.preventDefault();
+            const p = parseInt($(this).data('page'), 10);
+            if (!Number.isFinite(p)) return;
+            if ($(this).closest('.page-item').hasClass('disabled')) return;
+            performSearch(p);
+        });
+    }
+
+    // ========== COPY POPUP ==========
+    function bindCopyModal() {
+        const $modal = $('#copyYearModal');
+        if ($modal.length === 0) return;
+
+        $modal.off('shown.bs.modal.supplier').on('shown.bs.modal.supplier', function () {
+            if (($('#copyYearInput').val() || '').toString() === '0') {
+                $('#copyYearInput').val('');
+            }
+
+            $('#ConfirmCopy').prop('checked', false);
+            $('#copyYearInput').removeClass('is-invalid');
+            $('#copyYearValidation').addClass('d-none').hide();
+            syncCopyButtonState(false);
+            $('#copyYearInput').trigger('focus');
+        });
+
+        $modal.off('hidden.bs.modal.supplier').on('hidden.bs.modal.supplier', function () {
+            $('#ConfirmCopy').prop('checked', false);
+            $('#copyYearInput').removeClass('is-invalid');
+            $('#copyYearValidation').addClass('d-none').hide();
+            syncCopyButtonState(false);
+        });
+
+        $('#ConfirmCopy').off('change.supplier').on('change.supplier', function () {
+            syncCopyButtonState(false);
+        });
+
+        $('#copyYearInput').off('input.supplier').on('input.supplier', function () {
+            syncCopyButtonState(false);
+        });
+
+        $('#copyYearInput').off('blur.supplier').on('blur.supplier', function () {
+            syncCopyButtonState(true);
+        });
+    }
+
+    function syncCopyButtonState(showYearError) {
+        const isYearValid = validateCopyYearInput(showYearError === true);
+        const canSubmit = $('#ConfirmCopy').is(':checked') && isYearValid;
+        $('#copyYearSubmitBtn').prop('disabled', !canSubmit);
+    }
+
+    function validateCopyYearInput(showError) {
+        const $copyYearInput = $('#copyYearInput');
+        if ($copyYearInput.length === 0) return false;
+
+        const raw = ($copyYearInput.val() || '').toString().trim();
+        const min = Number($copyYearInput.attr('min') || '2000');
+        const max = Number($copyYearInput.attr('max') || '2099');
+        const year = Number(raw);
+
+        const isValid = raw.length === 4 && Number.isInteger(year) && year >= min && year <= max;
+        const hasExistingError = $copyYearInput.hasClass('is-invalid');
+        const shouldShowError = !isValid && (showError || hasExistingError);
+
+        $copyYearInput.toggleClass('is-invalid', shouldShowError);
+        if (shouldShowError) {
+            $('#copyYearValidation').text(`Enter a year from ${min} to ${max}.`).removeClass('d-none').show();
+        } else {
+            $('#copyYearValidation').addClass('d-none').hide();
         }
 
         return isValid;
     }
 
-    /**
-     * Đồng bộ trạng thái bật/tắt nút Copy trong modal.
-     */
-    function syncCopyModalButtonState(copyYearInput, copyYearValidation, copyConfirmCheckbox, copyYearSubmitBtn, showYearError = false) {
-        if (!copyYearSubmitBtn || !copyConfirmCheckbox) return;
-        const isYearValid = validateCopyYearInput(copyYearInput, copyYearValidation, showYearError);
-        copyYearSubmitBtn.disabled = !copyConfirmCheckbox.checked || !isYearValid;
-    }
-
-    /**
-     * Reload riêng panel kết quả để phân trang mượt, không refresh full page.
-     */
-    async function reloadSupplierResultPanel(url) {
-        const panel = document.getElementById("supplierResultPanelContainer");
-        if (!panel) {
-            window.location.href = url;
-            return;
+    // ========== INITIALIZE ==========
+    function initializePage() {
+        const initialPageSize = parseInt(($('#PageSize').val() || '').toString(), 10);
+        if (Number.isFinite(initialPageSize) && initialPageSize > 0) {
+            pageSize = initialPageSize;
         }
 
-        try {
-            const response = await fetch(url, {
-                method: "GET",
-                headers: { "X-Requested-With": "XMLHttpRequest" }
-            });
-            if (!response.ok) {
-                window.location.href = url;
-                return;
-            }
+        const initialPageIndex = parseInt(($('#PageIndex').val() || '').toString(), 10);
+        const startPage = (Number.isFinite(initialPageIndex) && initialPageIndex > 0) ? initialPageIndex : 1;
 
-            const html = await response.text();
-            const doc = new DOMParser().parseFromString(html, "text/html");
-            const newPanel = doc.getElementById("supplierResultPanelContainer");
-            if (!newPanel) {
-                window.location.href = url;
-                return;
-            }
+        // 1. Dang ky su kien nut bam
+        $('#btnAdd').off('click').on('click', () => {
+            const viewMode = ($('input[name="ViewMode"]:checked').val() || 'current').toLowerCase();
+            const query = new URLSearchParams();
+            query.set('mode', 'add');
+            query.set('viewMode', viewMode);
 
-            panel.replaceWith(newPanel);
-            if (window.history?.replaceState) {
-                window.history.replaceState({}, "", url);
-            }
-            if (typeof window.initSupplierResultPanel === "function") {
-                window.initSupplierResultPanel();
-            }
-        } catch {
-            window.location.href = url;
-        }
+            const yearRaw = ($('#Year').val() || '').toString().trim();
+            const deptId = ($('#DeptId').val() || '').toString().trim();
+            const supplierCode = ($('#SupplierCode').val() || '').toString().trim();
+            const supplierName = ($('#SupplierName').val() || '').toString().trim();
+            const business = ($('#Business').val() || '').toString().trim();
+            const contact = ($('#Contact').val() || '').toString().trim();
+            const statusId = ($('#StatusId').val() || '').toString().trim();
+            const isNew = $('#IsNew').is(':checked');
+
+            if (viewMode === 'byyear' && yearRaw !== '') query.set('year', yearRaw);
+            if (deptId !== '') query.set('DeptId', deptId);
+            if (supplierCode !== '') query.set('SupplierCode', supplierCode);
+            if (supplierName !== '') query.set('SupplierName', supplierName);
+            if (business !== '') query.set('Business', business);
+            if (contact !== '') query.set('Contact', contact);
+            if (statusId !== '') query.set('StatusId', statusId);
+            if (isNew) query.set('IsNew', 'true');
+            query.set('PageIndex', currentPage.toString());
+            query.set('PageSize', pageSize.toString());
+
+            window.location.href = `/Purchasing/SupplierDetail?${query.toString()}`;
+        });
+
+        $('#btnCopy').off('click').on('click', function () {
+            if (!selectedSupplierId) return;
+            syncListStateToPostForms();
+            $('#copySelectedSupplierIdsCsvInput').val(selectedSupplierId);
+            $('#copyYearModal').modal('show');
+        });
+
+        $('#btnSubmit').off('click').on('click', function () {
+            if (!selectedSupplierId) return;
+            syncListStateToPostForms();
+            $('#selectedSupplierIdInput').val(selectedSupplierId);
+            $('#selectedSupplierIdsCsvInput').val(selectedSupplierId);
+            $('#submitSupplierForm').trigger('submit');
+        });
+
+        $('#btnExcel').off('click').on('click', function () {
+            window.location.href = buildExportExcelUrl();
+        });
+
+        $('#btnPrintList').off('click').on('click', function () {
+            window.print();
+        });
+
+        // 2. Xu ly mode current/byyear
+        $('#viewCurrent, #viewByYear').off('change').on('change', function () {
+            const showYear = $('#viewByYear').is(':checked');
+            $('#Year').prop('disabled', !showYear);
+            $('#yearGroup').toggleClass('show', showYear);
+            if (!showYear) $('#Year').val('');
+        }).trigger('change');
+
+        // 3. Xu ly Form Search
+        $('#supplierSearchForm').off('submit').on('submit', function (e) {
+            e.preventDefault();
+            performSearch(1);
+        });
+
+        // 4. Init popup Copy + reset action state
+        bindCopyModal();
+        resetActions();
+        syncListStateToPostForms();
+
+        // 5. Tu dong search lan dau khi load trang
+        performSearch(startPage);
     }
 
-    /**
-     * Disable/enable UI control và xử lý accessibility cho anchor/button.
-     */
-    function setUiDisabled(btn, disabled) {
-        if (!btn) return;
-        if (btn.tagName === "A") {
-            if (disabled) {
-                btn.classList.add("disabled");
-                btn.setAttribute("aria-disabled", "true");
-                btn.dataset.prevTabIndex = btn.getAttribute("tabindex") || "";
-                btn.setAttribute("tabindex", "-1");
-            } else {
-                btn.classList.remove("disabled");
-                btn.setAttribute("aria-disabled", "false");
-                if ((btn.dataset.prevTabIndex || "") === "") btn.removeAttribute("tabindex");
-                else btn.setAttribute("tabindex", btn.dataset.prevTabIndex);
-            }
-            return;
-        }
+    function buildExportExcelUrl() {
+        const query = new URLSearchParams();
+        const viewMode = ($('input[name="ViewMode"]:checked').val() || 'current').toLowerCase();
+        const yearRaw = ($('#Year').val() || '').toString().trim();
+        const deptId = ($('#DeptId').val() || '').toString().trim();
+        const supplierCode = ($('#SupplierCode').val() || '').toString().trim();
+        const supplierName = ($('#SupplierName').val() || '').toString().trim();
+        const business = ($('#Business').val() || '').toString().trim();
+        const contact = ($('#Contact').val() || '').toString().trim();
+        const statusId = ($('#StatusId').val() || '').toString().trim();
+        const isNew = $('#IsNew').is(':checked');
 
-        btn.disabled = disabled;
-        btn.setAttribute("aria-disabled", disabled ? "true" : "false");
+        query.set('handler', 'ExportExcel');
+        query.set('ViewMode', viewMode);
+        if (viewMode === 'byyear' && yearRaw !== '') query.set('Year', yearRaw);
+        if (deptId !== '') query.set('DeptId', deptId);
+        if (supplierCode !== '') query.set('SupplierCode', supplierCode);
+        if (supplierName !== '') query.set('SupplierName', supplierName);
+        if (business !== '') query.set('Business', business);
+        if (contact !== '') query.set('Contact', contact);
+        if (statusId !== '') query.set('StatusId', statusId);
+        if (isNew) query.set('IsNew', 'true');
+
+        return `?${query.toString()}`;
     }
 
-    /**
-     * Bật/tắt submit button theo trạng thái chọn dòng.
-     */
-    function setSubmitButtonState(btn, disabled) {
-        if (!btn) return;
-        btn.disabled = disabled;
-        if (disabled) {
-            btn.setAttribute("disabled", "disabled");
-            btn.setAttribute("aria-disabled", "true");
-        } else {
-            btn.removeAttribute("disabled");
-            btn.setAttribute("aria-disabled", "false");
-        }
-    }
+    // Dong bo state bo loc hien tai vao cac form POST (Submit/Copy)
+    // de sau redirect van giu dung filter/page user dang xem.
+    function syncListStateToPostForms() {
+        const state = collectListState();
+        const $submitForm = $('#submitSupplierForm');
+        const $copyForm = $('#copyYearForm');
 
-    /**
-     * Lấy danh sách các row đang được check.
-     */
-    function getSelectedRows(rows) {
-        return rows.filter((row) => {
-            const radio = row.querySelector(".supplier-selector");
-            return !!radio && radio.checked;
+        Object.keys(state).forEach(function (key) {
+            setHiddenFieldValue($submitForm, key, state[key]);
+            setHiddenFieldValue($copyForm, key, state[key]);
         });
     }
 
-    /**
-     * Khởi tạo toàn bộ hành vi cho panel kết quả (selection, paging, dblclick).
-     */
-    function initSupplierResultPanel() {
-        const panel = document.getElementById("supplierResultPanelContainer");
-        if (!panel) return;
+    function collectListState() {
+        const viewMode = ($('input[name="ViewMode"]:checked').val() || 'current').toLowerCase();
+        const yearRaw = ($('#Year').val() || '').toString().trim();
+        const deptId = ($('#DeptId').val() || '').toString().trim();
+        const supplierCode = ($('#SupplierCode').val() || '').toString().trim();
+        const supplierName = ($('#SupplierName').val() || '').toString().trim();
+        const business = ($('#Business').val() || '').toString().trim();
+        const contact = ($('#Contact').val() || '').toString().trim();
+        const statusId = ($('#StatusId').val() || '').toString().trim();
+        const isNew = $('#IsNew').is(':checked') ? 'true' : 'false';
 
-        const rows = Array.from(panel.querySelectorAll(".supplier-row"));
-        const submitBtn = panel.querySelector("#submitSupplierBtn");
-        const selectedSupplierIdInput = panel.querySelector("#selectedSupplierIdInput");
-        const selectedSupplierIdsCsvInput = panel.querySelector("#selectedSupplierIdsCsvInput");
-        const copySelectedSupplierIdsCsvInput = document.getElementById("copySelectedSupplierIdsCsvInput");
-        const addBtn = panel.querySelector("#addSupplierBtn");
-        const copyBtn = panel.querySelector("#copySupplierBtn");
-
-        /**
-         * Đồng bộ hidden input + trạng thái nút theo danh sách row được chọn.
-         */
-        function syncSelectionState() {
-            const selectedRows = getSelectedRows(rows);
-            rows.forEach((row) => row.classList.toggle("selected", selectedRows.includes(row)));
-
-            const count = selectedRows.length;
-            const singleRow = count === 1 ? selectedRows[0] : null;
-            const singleId = singleRow?.getAttribute("data-supplier-id") || null;
-            const selectedIds = selectedRows
-                .map((row) => row.getAttribute("data-supplier-id"))
-                .filter((id) => !!id);
-
-            if (selectedSupplierIdInput) selectedSupplierIdInput.value = singleId || "";
-            if (selectedSupplierIdsCsvInput) selectedSupplierIdsCsvInput.value = selectedIds.join(",");
-            if (copySelectedSupplierIdsCsvInput) copySelectedSupplierIdsCsvInput.value = selectedIds.join(",");
-
-            const hasAnySelected = count > 0;
-            setSubmitButtonState(submitBtn, !hasAnySelected);
-
-            setUiDisabled(addBtn, false);
-            setUiDisabled(copyBtn, !hasAnySelected);
-        }
-
-        window.syncSupplierSelection = syncSelectionState;
-        window.toggleSupplierRowSelection = (ev, row) => {
-            if (!row) return;
-            if (ev?.target?.closest?.(".supplier-selector")) {
-                syncSelectionState();
-                return;
-            }
-
-            const radio = row.querySelector(".supplier-selector");
-            if (!radio) return;
-            radio.checked = true;
-            syncSelectionState();
+        return {
+            ViewMode: viewMode,
+            Year: viewMode === 'byyear' ? yearRaw : '',
+            DeptId: deptId,
+            SupplierCode: supplierCode,
+            SupplierName: supplierName,
+            Business: business,
+            Contact: contact,
+            StatusId: statusId,
+            IsNew: isNew,
+            PageIndex: currentPage.toString(),
+            PageSize: pageSize.toString()
         };
-
-        rows.forEach((row) => {
-            row.addEventListener("dblclick", () => {
-                const detailUrl = row.getAttribute("data-detail-url");
-                if (detailUrl) {
-                    window.location.href = detailUrl;
-                }
-            });
-        });
-
-        panel.querySelectorAll(".supplier-pager-link").forEach((link) => {
-            link.addEventListener("click", (e) => {
-                const href = link.getAttribute("href");
-                if (!href || href === "#" || link.closest(".page-item.disabled")) {
-                    e.preventDefault();
-                    return;
-                }
-                e.preventDefault();
-                void reloadSupplierResultPanel(href);
-            });
-        });
-
-        syncSelectionState();
     }
 
-    /**
-     * Bật/tắt input năm theo radio Current/By Year.
-     */
-    function syncYearInputState(yearInput, currentList, byYear, yearGroup) {
-        if (!yearInput || !currentList || !byYear) return;
-        const showYear = byYear.checked;
-        yearInput.disabled = !showYear;
-        if (yearGroup) {
-            yearGroup.classList.toggle("show", showYear);
+    function setHiddenFieldValue($form, name, value) {
+        if (!$form || $form.length === 0) return;
+
+        let $field = $form.find(`input[name='${name}']`);
+        if ($field.length === 0) {
+            $field = $('<input>', { type: 'hidden', name: name });
+            $form.append($field);
         }
-        if (!showYear) yearInput.value = "";
+        $field.val(value ?? '');
     }
 
-    /**
-     * Entry point của trang Supplier Index.
-     */
-    function initSupplierIndexPage() {
-        const yearInput = document.querySelector(".year-input");
-        const currentList = document.getElementById("viewCurrent");
-        const byYear = document.getElementById("viewByYear");
-        const yearGroup = document.getElementById("yearGroup");
-        const copyYearModal = document.getElementById("copyYearModal");
-        const copyYearInput = document.getElementById("copyYearInput");
-        const copyConfirmCheckbox = document.getElementById("ConfirmCopy");
-        const copyYearSubmitBtn = document.getElementById("copyYearSubmitBtn");
-        const copyYearValidation = document.getElementById("copyYearValidation");
-
-        window.initSupplierResultPanel = initSupplierResultPanel;
-
-        currentList?.addEventListener("change", () => syncYearInputState(yearInput, currentList, byYear, yearGroup));
-        byYear?.addEventListener("change", () => syncYearInputState(yearInput, currentList, byYear, yearGroup));
-
-        syncYearInputState(yearInput, currentList, byYear, yearGroup);
-        initSupplierResultPanel();
-
-        if (copyYearModal && copyYearInput && window.jQuery) {
-            $(copyYearModal).on("shown.bs.modal", function () {
-                if (copyYearInput.value === "0") {
-                    copyYearInput.value = "";
-                }
-                if (copyConfirmCheckbox) {
-                    copyConfirmCheckbox.checked = false;
-                }
-                copyYearInput.classList.remove("is-invalid");
-                if (copyYearValidation) {
-                    copyYearValidation.classList.add("d-none");
-                    copyYearValidation.style.display = "";
-                }
-                syncCopyModalButtonState(copyYearInput, copyYearValidation, copyConfirmCheckbox, copyYearSubmitBtn, false);
-                copyYearInput.focus();
-            });
-
-            $(copyYearModal).on("hidden.bs.modal", function () {
-                if (copyConfirmCheckbox) {
-                    copyConfirmCheckbox.checked = false;
-                }
-                copyYearInput.classList.remove("is-invalid");
-                if (copyYearValidation) {
-                    copyYearValidation.classList.add("d-none");
-                    copyYearValidation.style.display = "";
-                }
-                syncCopyModalButtonState(copyYearInput, copyYearValidation, copyConfirmCheckbox, copyYearSubmitBtn, false);
-            });
-        }
-
-        copyConfirmCheckbox?.addEventListener("change", () => {
-            syncCopyModalButtonState(copyYearInput, copyYearValidation, copyConfirmCheckbox, copyYearSubmitBtn, false);
-        });
-        copyYearInput?.addEventListener("input", () => {
-            syncCopyModalButtonState(copyYearInput, copyYearValidation, copyConfirmCheckbox, copyYearSubmitBtn, false);
-        });
-        copyYearInput?.addEventListener("blur", () => {
-            syncCopyModalButtonState(copyYearInput, copyYearValidation, copyConfirmCheckbox, copyYearSubmitBtn, true);
-        });
-        syncCopyModalButtonState(copyYearInput, copyYearValidation, copyConfirmCheckbox, copyYearSubmitBtn, false);
+    function parseNullableInt(value) {
+        if (value === undefined || value === null) return null;
+        const raw = value.toString().trim();
+        if (raw === '') return null;
+        const num = parseInt(raw, 10);
+        return Number.isFinite(num) ? num : null;
     }
 
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", initSupplierIndexPage);
-    } else {
-        initSupplierIndexPage();
+    function showLoading(show) {
+        if (!show) return;
+        $('#supplierTable tbody').html('<tr><td colspan="12" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div> Loading...</td></tr>');
     }
+
+    function showError(message) {
+        $('#supplierTable tbody').html(`<tr><td colspan="12" class="text-center text-danger py-4">${escapeHtml(message)}</td></tr>`);
+    }
+
+    function escapeHtml(input) {
+        return (input || '')
+            .toString()
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function buildTruncatedCell(input, maxLength) {
+        const raw = (input || '').toString();
+        const display = raw.length > maxLength ? raw.substring(0, maxLength) + '...' : raw;
+        return `<span title="${escapeHtml(raw)}">${escapeHtml(display)}</span>`;
+    }
+
+    $(document).ready(initializePage);
 })();
