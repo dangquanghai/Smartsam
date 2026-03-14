@@ -17,9 +17,13 @@
             && year >= min
             && year <= max;
 
-        copyYearInput.classList.toggle("is-invalid", !!showError && !isValid);
+        // Nếu lỗi đã từng được hiển thị thì giữ lại cho tới khi dữ liệu hợp lệ.
+        const hasExistingError = copyYearInput.classList.contains("is-invalid");
+        const shouldShowError = !isValid && (!!showError || hasExistingError);
+
+        copyYearInput.classList.toggle("is-invalid", shouldShowError);
         if (copyYearValidation) {
-            if (showError && !isValid) {
+            if (shouldShowError) {
                 copyYearValidation.textContent = `Enter a year from ${min} to ${max}.`;
                 copyYearValidation.classList.remove("d-none");
                 copyYearValidation.style.display = "block";
