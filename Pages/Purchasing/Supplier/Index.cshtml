@@ -207,7 +207,7 @@
                                         foreach (var r in Model.Rows)
                                         {
                                             var detailUrl = Model.CanViewDetail
-                                                ? Url.Page("/Purchasing/Supplier/Detail", new { id = r.SupplierID, viewMode = Model.ViewMode, year = Model.Year })
+                                                ? Url.Page("/Purchasing/Supplier/SupplierDetail", new { id = r.SupplierID, viewMode = Model.ViewMode, year = Model.Year })
                                                 : null;
                                             <tr class="supplier-row"
                                                 data-supplier-id="@r.SupplierID"
@@ -259,7 +259,7 @@
                     <div class="card-footer p-2 text-center module-action-bar">
                         @if (Model.CanAdd)
                         {
-                            <a id="addSupplierBtn" asp-page="/Purchasing/Supplier/Detail" class="btn btn-sm btn-action-add mx-1 my-1"><i class="fas fa-plus"></i> Add</a>
+                            <a id="addSupplierBtn" asp-page="/Purchasing/Supplier/SupplierDetail" class="btn btn-sm btn-action-add mx-1 my-1"><i class="fas fa-plus"></i> Add</a>
                         }
                         @if (Model.CanCopy)
                         {
