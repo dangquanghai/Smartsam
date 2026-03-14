@@ -1,25 +1,26 @@
 using ClosedXML.Excel;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.Data.SqlClient;
+using SmartSam.Pages;
 using SmartSam.Services;
 
 namespace SmartSam.Pages.Purchasing.Supplier;
 
-public class IndexModel : PageModel
+public class IndexModel : BasePageModel
 {
     private readonly SupplierService _supplierService;
     private readonly PermissionService _permissionService;
     private const int NoDepartmentScopeValue = -1;
-    private const int SupplierFunctionId = 71;
     private const int PermissionViewList = 1;
-    private const int PermissionSubmit = 4;
-    private const int PermissionCopy = 5;
-    private const int PermissionViewDetail = 6;
+    private const int PermissionViewDetail = 2;
+    private const int PermissionAdd = 3;
+    private const int PermissionSubmit = 5;
+    private const int PermissionCopy = 6;
     private EmployeeDataScopeDto _dataScope = new();
     private bool _isAdminRole;
 
-    public IndexModel(IConfiguration configuration, PermissionService permissionService)
+    public IndexModel(IConfiguration configuration, PermissionService permissionService) : base(configuration)
     {
         _supplierService = new SupplierService(configuration);
         _permissionService = permissionService;
@@ -88,7 +89,11 @@ public class IndexModel : PageModel
     public int TotalPages => PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
     public bool HasPreviousPage => PageIndex > 1;
     public bool HasNextPage => PageIndex < TotalPages;
+    public bool CanViewList => HasPermission(PermissionViewList);
     public bool CanViewDetail => HasPermission(PermissionViewDetail);
+    public bool CanAdd => HasPermission(PermissionAdd);
+    public bool CanCopy => HasPermission(PermissionCopy);
+    public bool CanSubmit => HasPermission(PermissionSubmit);
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -281,20 +286,25 @@ public class IndexModel : PageModel
         return RedirectToCurrentList();
     }
 
-    private async Task LoadFiltersAsync(CancellationToken cancellationToken)
+    private Task LoadFiltersAsync(CancellationToken cancellationToken)
     {
-        var departments = await _supplierService.GetDepartmentsAsync(cancellationToken);
-        var statuses = await _supplierService.GetStatusesAsync(cancellationToken);
+        var departments = LoadListFromSql(
+            "SELECT DeptID, DeptCode FROM dbo.MS_Department ORDER BY DeptCode",
+            "DeptID",
+            "DeptCode");
+
+        var statuses = LoadListFromSql(
+            "SELECT SupplierStatusID, SupplierStatusName FROM dbo.PC_SupplierStatus ORDER BY SupplierStatusID",
+            "SupplierStatusID",
+            "SupplierStatusName");
 
         if (!_isAdminRole && !_dataScope.SeeDataAllDept)
         {
             var scopedDepartments = departments
-                .Where(x => _dataScope.DeptID.HasValue && x.Id == _dataScope.DeptID.Value)
+                .Where(x => _dataScope.DeptID.HasValue && int.TryParse(x.Value, out var id) && id == _dataScope.DeptID.Value)
                 .ToList();
 
-            Departments = [
-                .. scopedDepartments.Select(x => new SelectListItem { Value = x.Id.ToString(), Text = x.CodeOrName })
-            ];
+            Departments = [.. scopedDepartments];
 
             DeptId = _dataScope.DeptID ?? NoDepartmentScopeValue;
         }
@@ -302,14 +312,16 @@ public class IndexModel : PageModel
         {
             Departments = [
                 new SelectListItem { Value = string.Empty, Text = "--- All ---" },
-                .. departments.Select(x => new SelectListItem { Value = x.Id.ToString(), Text = x.CodeOrName })
+                .. departments
             ];
         }
 
         Statuses = [
             new SelectListItem { Value = string.Empty, Text = "--- All ---" },
-            .. statuses.Select(x => new SelectListItem { Value = x.Id.ToString(), Text = x.CodeOrName })
+            .. statuses
         ];
+
+        return Task.CompletedTask;
     }
 
     private async Task LoadRowsAsync(CancellationToken cancellationToken)
@@ -432,7 +444,7 @@ public class IndexModel : PageModel
         var isAdmin = string.Equals(User.FindFirst("IsAdminRole")?.Value, "True", StringComparison.OrdinalIgnoreCase);
         if (isAdmin)
         {
-            PagePerm.AllowedNos = Enumerable.Range(1, 10).ToList();
+            PagePerm.AllowedNos = Enumerable.Range(1, 20).ToList();
             return;
         }
 
@@ -441,10 +453,60 @@ public class IndexModel : PageModel
             roleId = 0;
         }
 
-        PagePerm.AllowedNos = _permissionService.GetPermissionsForPage(roleId, SupplierFunctionId);
+        var functionId = ResolveFunctionIdByPath(Request.Path.Value);
+        PagePerm.AllowedNos = functionId > 0
+            ? _permissionService.GetPermissionsForPage(roleId, functionId)
+            : [];
     }
 
     private bool HasPermission(int permissionNo) => PagePerm.HasPermission(permissionNo);
+
+    private int ResolveFunctionIdByPath(string? requestPath)
+    {
+        var path = (requestPath ?? string.Empty).Split('?')[0].Trim().ToLowerInvariant().TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return 0;
+        }
+        var pathWithIndex = path + "/index";
+
+        const string sql = @"
+SELECT TOP 1 u.FunctionID
+FROM (
+    SELECT FunctionID, Url FROM SYS_FuncPermission WHERE Url IS NOT NULL AND Url <> ''
+    UNION
+    SELECT FunctionID, Url FROM SYS_Function WHERE Url IS NOT NULL AND Url <> ''
+) u
+WHERE LOWER(RTRIM(u.Url)) = @Path
+   OR @Path LIKE LOWER(RTRIM(u.Url)) + '/%'
+   OR LOWER(RTRIM(u.Url)) = @PathWithIndex
+   OR @PathWithIndex LIKE LOWER(RTRIM(u.Url)) + '/%'
+ORDER BY
+    CASE
+        WHEN LOWER(RTRIM(u.Url)) = @Path THEN 0
+        WHEN LOWER(RTRIM(u.Url)) = @PathWithIndex THEN 1
+        WHEN @Path LIKE LOWER(RTRIM(u.Url)) + '/%' THEN 2
+        WHEN @PathWithIndex LIKE LOWER(RTRIM(u.Url)) + '/%' THEN 3
+        ELSE 9
+    END,
+    LEN(u.Url) DESC";
+
+        try
+        {
+            using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Path", path);
+            cmd.Parameters.AddWithValue("@PathWithIndex", pathWithIndex);
+            conn.Open();
+
+            var scalar = cmd.ExecuteScalar();
+            return scalar == null || scalar == DBNull.Value ? 0 : Convert.ToInt32(scalar);
+        }
+        catch
+        {
+            return 0;
+        }
+    }
 
     private void SetFlashMessage(string message, string type = "info")
     {

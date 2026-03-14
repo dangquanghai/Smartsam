@@ -257,15 +257,15 @@
 
                 <div class="card card-outline card-primary">
                     <div class="card-footer p-2 text-center module-action-bar">
-                        @if (Model.PagePerm.HasPermission(2))
+                        @if (Model.CanAdd)
                         {
                             <a id="addSupplierBtn" asp-page="/Purchasing/Supplier/Detail" class="btn btn-sm btn-action-add mx-1 my-1"><i class="fas fa-plus"></i> Add</a>
                         }
-                        @if (Model.PagePerm.HasPermission(5))
+                        @if (Model.CanCopy)
                         {
                             <button id="copySupplierBtn" type="button" class="btn btn-sm btn-action-copy mx-1 my-1" disabled data-toggle="modal" data-target="#copyYearModal"><i class="fas fa-copy"></i> Copy</button>
                         }
-                        @if (Model.PagePerm.HasPermission(4))
+                        @if (Model.CanSubmit)
                         {
                             <form id="submitSupplierForm" method="post" asp-page-handler="Submit" class="d-inline">
                                 <input type="hidden" asp-for="SelectedSupplierId" id="selectedSupplierIdInput" />
@@ -273,7 +273,7 @@
                                 <button id="submitSupplierBtn" type="submit" class="btn btn-sm btn-action-submit mx-1 my-1" disabled><i class="fas fa-paper-plane"></i> Submit</button>
                             </form>
                         }
-                        @if (Model.PagePerm.HasPermission(1))
+                        @if (Model.CanViewList)
                         {
                             <a asp-page="./Index" asp-page-handler="ExportExcel"
                                asp-route-ViewMode="@Model.ViewMode"
@@ -295,7 +295,7 @@
     </div>
 </section>
 
-@if (Model.PagePerm.HasPermission(5))
+@if (Model.CanCopy)
 {
     <div class="modal fade" id="copyYearModal" tabindex="-1" role="dialog" aria-labelledby="copyYearModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered" role="document" style="max-width: 460px;">

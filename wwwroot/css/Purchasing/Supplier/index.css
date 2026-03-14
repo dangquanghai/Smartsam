@@ -1,14 +1,9 @@
-﻿.supplier-table-wrap {
-    max-height: 62vh;
+.supplier-table-wrap {
+    height: clamp(420px, calc(100vh - 280px), 76vh);
     overflow: auto;
     position: relative;
 }
 
-/* Khai báo font VNI nếu máy client đã cài */
-.vni-font {
-    font-family: "VNI-Times", "VNI-Helve", sans-serif !important;
-    font-size: 14px;
-}
 .supplier-table thead th {
     position: sticky;
     top: 0;
@@ -126,6 +121,8 @@
 
 @media (max-width: 767.98px) {
     .supplier-table-wrap {
+        height: auto;
+        min-height: 0;
         max-height: 52vh;
         overflow: auto;
     }

@@ -1,25 +1,24 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Data.SqlClient;
+using SmartSam.Pages;
 using SmartSam.Services;
 
 namespace SmartSam.Pages.Purchasing.Supplier;
 
-public class DetailModel : PageModel
+public class DetailModel : BasePageModel
 {
     private readonly SupplierService _supplierService;
     private readonly PermissionService _permissionService;
-    private const int SupplierFunctionId = 71;
-    private const int PermissionAdd = 2;
-    private const int PermissionEdit = 3;
-    private const int PermissionSubmit = 4;
-    private const int PermissionViewDetail = 6;
+    private const int PermissionViewDetail = 2;
+    private const int PermissionAdd = 3;
+    private const int PermissionEdit = 4;
+    private const int PermissionSubmit = 5;
     private EmployeeDataScopeDto _dataScope = new();
     private bool _isAdminRole;
 
-    public DetailModel(IConfiguration configuration, PermissionService permissionService)
+    public DetailModel(IConfiguration configuration, PermissionService permissionService) : base(configuration)
     {
         _supplierService = new SupplierService(configuration);
         _permissionService = permissionService;
@@ -57,6 +56,7 @@ public class DetailModel : PageModel
     public bool IsEdit => Id.HasValue && Id.Value > 0;
     public bool IsAnnualView => string.Equals(ViewMode, "byyear", StringComparison.OrdinalIgnoreCase) && Year.HasValue;
     public PagePermissions PagePerm { get; private set; } = new();
+    public bool HasSubmitPermission => HasPermission(PermissionSubmit);
     public bool CanSave => !IsAnnualView && (IsEdit ? HasPermission(PermissionEdit) : HasPermission(PermissionAdd));
     public bool IsSubmitted => (Input.Status ?? 0) >= 1;
     public bool CanSubmit => !IsAnnualView && IsEdit && HasPermission(PermissionSubmit) && !IsSubmitted;
@@ -361,10 +361,17 @@ public class DetailModel : PageModel
         return RedirectToPage("./Detail", new { id = Id, msg = "submitted" });
     }
 
-    private async Task LoadDropdownsAsync(CancellationToken cancellationToken)
+    private Task LoadDropdownsAsync(CancellationToken cancellationToken)
     {
-        var departments = await _supplierService.GetDepartmentsAsync(cancellationToken);
-        var statuses = await _supplierService.GetStatusesAsync(cancellationToken);
+        var departments = LoadListFromSql(
+            "SELECT DeptID, DeptCode FROM dbo.MS_Department ORDER BY DeptCode",
+            "DeptID",
+            "DeptCode");
+
+        var statuses = LoadListFromSql(
+            "SELECT SupplierStatusID, SupplierStatusName FROM dbo.PC_SupplierStatus ORDER BY SupplierStatusID",
+            "SupplierStatusID",
+            "SupplierStatusName");
 
         if (!_isAdminRole && !_dataScope.SeeDataAllDept)
         {
@@ -372,34 +379,23 @@ public class DetailModel : PageModel
             {
                 Departments = [];
                 Input.DeptID = null;
-                return;
+                return Task.CompletedTask;
             }
 
             Departments = departments
-                .Where(x => _dataScope.DeptID.HasValue && x.Id == _dataScope.DeptID.Value)
-                .Select(x => new SelectListItem
-                {
-                    Value = x.Id.ToString(),
-                    Text = x.CodeOrName
-                }).ToList();
+                .Where(x => _dataScope.DeptID.HasValue && int.TryParse(x.Value, out var id) && id == _dataScope.DeptID.Value)
+                .ToList();
 
             Input.DeptID = _dataScope.DeptID.Value;
         }
         else
         {
-            Departments = departments.Select(x => new SelectListItem
-            {
-                Value = x.Id.ToString(),
-                Text = x.CodeOrName
-            }).ToList();
+            Departments = departments;
         }
 
-        Statuses = statuses.Select(x => new SelectListItem
-        {
-            Value = x.Id.ToString(),
-            Text = x.CodeOrName
-        }).ToList();
+        Statuses = statuses;
 
+        return Task.CompletedTask;
     }
 
     private void LoadPagePermissions()
@@ -407,7 +403,7 @@ public class DetailModel : PageModel
         var isAdmin = string.Equals(User.FindFirst("IsAdminRole")?.Value, "True", StringComparison.OrdinalIgnoreCase);
         if (isAdmin)
         {
-            PagePerm.AllowedNos = Enumerable.Range(1, 10).ToList();
+            PagePerm.AllowedNos = Enumerable.Range(1, 20).ToList();
             return;
         }
 
@@ -416,10 +412,60 @@ public class DetailModel : PageModel
             roleId = 0;
         }
 
-        PagePerm.AllowedNos = _permissionService.GetPermissionsForPage(roleId, SupplierFunctionId);
+        var functionId = ResolveFunctionIdByPath(Request.Path.Value);
+        PagePerm.AllowedNos = functionId > 0
+            ? _permissionService.GetPermissionsForPage(roleId, functionId)
+            : [];
     }
 
     private bool HasPermission(int permissionNo) => PagePerm.HasPermission(permissionNo);
+
+    private int ResolveFunctionIdByPath(string? requestPath)
+    {
+        var path = (requestPath ?? string.Empty).Split('?')[0].Trim().ToLowerInvariant().TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return 0;
+        }
+        var pathWithIndex = path + "/index";
+
+        const string sql = @"
+SELECT TOP 1 u.FunctionID
+FROM (
+    SELECT FunctionID, Url FROM SYS_FuncPermission WHERE Url IS NOT NULL AND Url <> ''
+    UNION
+    SELECT FunctionID, Url FROM SYS_Function WHERE Url IS NOT NULL AND Url <> ''
+) u
+WHERE LOWER(RTRIM(u.Url)) = @Path
+   OR @Path LIKE LOWER(RTRIM(u.Url)) + '/%'
+   OR LOWER(RTRIM(u.Url)) = @PathWithIndex
+   OR @PathWithIndex LIKE LOWER(RTRIM(u.Url)) + '/%'
+ORDER BY
+    CASE
+        WHEN LOWER(RTRIM(u.Url)) = @Path THEN 0
+        WHEN LOWER(RTRIM(u.Url)) = @PathWithIndex THEN 1
+        WHEN @Path LIKE LOWER(RTRIM(u.Url)) + '/%' THEN 2
+        WHEN @PathWithIndex LIKE LOWER(RTRIM(u.Url)) + '/%' THEN 3
+        ELSE 9
+    END,
+    LEN(u.Url) DESC";
+
+        try
+        {
+            using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Path", path);
+            cmd.Parameters.AddWithValue("@PathWithIndex", pathWithIndex);
+            conn.Open();
+
+            var scalar = cmd.ExecuteScalar();
+            return scalar == null || scalar == DBNull.Value ? 0 : Convert.ToInt32(scalar);
+        }
+        catch
+        {
+            return 0;
+        }
+    }
 
     private async Task LoadUserDataScopeAsync(CancellationToken cancellationToken)
     {
