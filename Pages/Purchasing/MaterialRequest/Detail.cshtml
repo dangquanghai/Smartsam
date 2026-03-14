@@ -6,6 +6,7 @@
     var useInlineAlert = !string.IsNullOrWhiteSpace(Model.Message);
     var statusText = Model.Statuses.FirstOrDefault(x => x.Value == (Model.Input.MaterialStatusId ?? 0).ToString())?.Text
         ?? (Model.Input.MaterialStatusId?.ToString() ?? "0");
+    var canEditDraft = Model.CanSave;
 }
 
 <section class="content">
@@ -53,74 +54,91 @@
                         </div>
                     }
 
-                    <div class="mr-detail-legacy-panel">
-                        <div class="mr-detail-legacy-row">
-                            <div class="mr-legacy-field mr-field-sm">
-                                <label class="mb-0">Request No</label>
-                                <input class="form-control form-control-sm" value="@(Model.IsEdit ? Model.Input.RequestNo.ToString() : "(auto)")" readonly />
-                            </div>
+                    <fieldset disabled="@(canEditDraft ? null : "disabled")">
+                        <div class="mr-detail-header-box">
+                            <div class="form-horizontal mr-detail-form">
+                                <div class="form-group row mb-2 align-items-center">
+                                    <label class="col-sm-1 col-form-label col-form-label-sm text-sm-right">Request No</label>
+                                    <div class="col-sm-2">
+                                        <input class="form-control form-control-sm" value="@(Model.IsEdit ? Model.Input.RequestNo.ToString() : "(auto)")" readonly />
+                                    </div>
 
-                            <div class="mr-legacy-field mr-field-sm">
-                                <label class="mb-0">Date Create</label>
-                                <input asp-for="Input.DateCreate" type="date" class="form-control form-control-sm" />
-                            </div>
+                                    <label class="col-sm-1 col-form-label col-form-label-sm text-sm-right">Date Create</label>
+                                    <div class="col-sm-2">
+                                        <input asp-for="Input.DateCreate" type="date" class="form-control form-control-sm" />
+                                        <span asp-validation-for="Input.DateCreate" class="text-danger small"></span>
+                                    </div>
 
-                            <div class="mr-legacy-field mr-field-lg">
-                                <label class="mb-0">Status</label>
-                                <input type="text" class="form-control form-control-sm" value="@statusText" readonly />
-                            </div>
+                                    <label class="col-sm-1 col-form-label col-form-label-sm text-sm-right">Status</label>
+                                    <div class="col-sm-3">
+                                        <input type="text" class="form-control form-control-sm" value="@statusText" readonly />
+                                    </div>
 
-                            <div class="mr-legacy-check">
-                                <input asp-for="Input.IsAuto" type="checkbox" id="Input_IsAuto" />
-                                <label for="Input_IsAuto" class="mb-0">Auto</label>
+                                    <div class="col-sm-2">
+                                        <div class="custom-control custom-checkbox mr-detail-check-inline">
+                                            <input asp-for="Input.IsAuto" type="checkbox" id="Input_IsAuto" class="custom-control-input" />
+                                            <label for="Input_IsAuto" class="custom-control-label">Auto</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-group row mb-0 align-items-center">
+                                    <label class="col-sm-1 col-form-label col-form-label-sm text-sm-right">Store Group</label>
+                                    <div class="col-sm-2">
+                                        <select asp-for="Input.StoreGroup"
+                                                asp-items="Model.StoreGroups"
+                                                class="form-control form-control-sm"
+                                                disabled="@Model.StoreGroupLocked"></select>
+                                        @if (Model.StoreGroupLocked)
+                                        {
+                                            <input type="hidden" asp-for="Input.StoreGroup" />
+                                        }
+                                        <span asp-validation-for="Input.StoreGroup" class="text-danger small"></span>
+                                    </div>
+
+                                    <label class="col-sm-1 col-form-label col-form-label-sm text-sm-right">Description</label>
+                                    <div class="col-sm-6">
+                                        <input asp-for="Input.AccordingTo" class="form-control form-control-sm" maxlength="300" />
+                                        <span asp-validation-for="Input.AccordingTo" class="text-danger small"></span>
+                                    </div>
+
+                                    <div class="col-sm-2">
+                                        <div class="custom-control custom-checkbox mr-detail-check-inline">
+                                            <input type="checkbox" id="NoIssueCheck" class="custom-control-input" @(Model.Input.NoIssue.GetValueOrDefault() == 1 ? "checked" : "") />
+                                            <label for="NoIssueCheck" class="custom-control-label">Not issue</label>
+                                            <input type="hidden" asp-for="Input.NoIssue" id="Input_NoIssue" />
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-
-                        <div class="mr-detail-legacy-row">
-                            <div class="mr-legacy-field mr-field-sm">
-                                <label class="mb-0">Store Group</label>
-                                <select asp-for="Input.StoreGroup"
-                                        asp-items="Model.StoreGroups"
-                                        class="form-control form-control-sm"
-                                        disabled="@Model.StoreGroupLocked"></select>
-                                @if (Model.StoreGroupLocked)
-                                {
-                                    <input type="hidden" asp-for="Input.StoreGroup" />
-                                }
-                            </div>
-
-                            <div class="mr-legacy-field mr-field-desc">
-                                <label class="mb-0">Description</label>
-                                <input asp-for="Input.AccordingTo" class="form-control form-control-sm" maxlength="300" />
-                            </div>
-
-                            <div class="mr-legacy-check">
-                                <input type="checkbox" id="NoIssueCheck" @(Model.Input.NoIssue.GetValueOrDefault() == 1 ? "checked" : "") />
-                                <label for="NoIssueCheck" class="mb-0">Not issue</label>
-                                <input type="hidden" asp-for="Input.NoIssue" id="Input_NoIssue" />
-                            </div>
-                        </div>
-                        <div class="mr-detail-validation-row">
-                            <span asp-validation-for="Input.DateCreate" class="text-danger small"></span>
-                            <span asp-validation-for="Input.StoreGroup" class="text-danger small"></span>
-                            <span asp-validation-for="Input.AccordingTo" class="text-danger small"></span>
-                        </div>
-                    </div>
+                    </fieldset>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-sm table-bordered mb-0" id="mrLineTable">
+                            <colgroup>
+                                <col class="mr-col-itemcode" />
+                                <col class="mr-col-itemname" />
+                                <col class="mr-col-unit" />
+                                <col class="mr-col-order" />
+                                <col class="mr-col-notrec" />
+                                <col class="mr-col-in" />
+                                <col class="mr-col-accin" />
+                                <col class="mr-col-buy" />
+                                <col class="mr-col-note" />
+                            </colgroup>
                             <thead class="thead-light">
                                 <tr>
-                                    <th style="width:170px">ITEMCODE</th>
+                                    <th>ITEMCODE</th>
                                     <th>ITEMNAME</th>
-                                    <th style="width:90px">Unit</th>
-                                    <th style="width:90px">Order</th>
-                                    <th style="width:90px">NotRec</th>
-                                    <th style="width:90px">In</th>
-                                    <th style="width:90px">Acc.In</th>
-                                    <th style="width:90px">Buy</th>
-                                    <th style="width:180px">Note</th>
+                                    <th>Unit</th>
+                                    <th>Order</th>
+                                    <th>NotRec</th>
+                                    <th>In</th>
+                                    <th>Acc.In</th>
+                                    <th>Buy</th>
+                                    <th>Note</th>
                                 </tr>
                             </thead>
                             <tbody id="mrLineTableBody">
@@ -134,18 +152,39 @@
                                     {
                                         var line = Model.Lines[i];
                                         <tr class="mr-line-row">
-                                            <td><input type="text" class="form-control form-control-sm mr-line-itemcode" value="@line.ItemCode" /></td>
-                                            <td><input type="text" class="form-control form-control-sm mr-line-itemname" value="@line.ItemName" /></td>
-                                            <td><input type="text" class="form-control form-control-sm mr-line-unit" value="@line.Unit" /></td>
-                                            <td><input type="number" step="0.01" class="form-control form-control-sm mr-line-order" value="@(line.OrderQty?.ToString("0.##") ?? "0")" /></td>
-                                            <td><input type="number" step="0.01" class="form-control form-control-sm mr-line-notrec" value="@(line.NotReceipt?.ToString("0.##") ?? "0")" /></td>
-                                            <td><input type="number" step="0.01" class="form-control form-control-sm mr-line-in" value="@(line.InStock?.ToString("0.##") ?? "0")" /></td>
-                                            <td><input type="number" step="0.01" class="form-control form-control-sm mr-line-accin" value="@(line.AccIn?.ToString("0.##") ?? "0")" /></td>
-                                            <td><input type="number" step="0.01" class="form-control form-control-sm mr-line-buy" value="@(line.Buy?.ToString("0.##") ?? "0")" /></td>
                                             <td>
-                                                <input type="text" class="form-control form-control-sm mr-line-note" value="@line.Note" />
+                                                <span class="mr-readonly-cell-text">@(line.ItemCode ?? string.Empty)</span>
+                                                <input type="hidden" class="mr-line-itemcode" value="@line.ItemCode" />
+                                            </td>
+                                            <td>
+                                                <span class="mr-readonly-cell-text">@(line.ItemName ?? string.Empty)</span>
+                                                <input type="hidden" class="mr-line-itemname" value="@line.ItemName" />
+                                            </td>
+                                            <td>
+                                                <span class="mr-readonly-cell-text">@(line.Unit ?? string.Empty)</span>
+                                                <input type="hidden" class="mr-line-unit" value="@line.Unit" />
+                                            </td>
+                                            <td><input type="number" min="0.01" step="0.01" class="form-control form-control-sm mr-line-order" value="@(line.OrderQty?.ToString("0.##") ?? "0")" disabled="@(canEditDraft ? null : "disabled")" /></td>
+                                            <td>
+                                                <span class="mr-readonly-cell-text">@(line.NotReceipt?.ToString("0.##") ?? "0")</span>
+                                                <input type="hidden" class="mr-line-notrec" value="@(line.NotReceipt?.ToString("0.##") ?? "0")" />
+                                            </td>
+                                            <td>
+                                                <span class="mr-readonly-cell-text">@(line.InStock?.ToString("0.##") ?? "0")</span>
+                                                <input type="hidden" class="mr-line-in" value="@(line.InStock?.ToString("0.##") ?? "0")" />
+                                            </td>
+                                            <td>
+                                                <span class="mr-readonly-cell-text">@(line.AccIn?.ToString("0.##") ?? "0")</span>
+                                                <input type="hidden" class="mr-line-accin" value="@(line.AccIn?.ToString("0.##") ?? "0")" />
+                                            </td>
+                                            <td>
+                                                <span class="mr-readonly-cell-text">@(line.Buy?.ToString("0.##") ?? "0")</span>
+                                                <input type="hidden" class="mr-line-buy" value="@(line.Buy?.ToString("0.##") ?? "0")" />
+                                            </td>
+                                            <td>
+                                                <input type="text" class="form-control form-control-sm mr-line-note" value="@line.Note" disabled="@(canEditDraft ? null : "disabled")" />
                                                 <input type="hidden" class="mr-line-price" value="@(line.Price?.ToString("0.##") ?? "0")" />
-                                                <input type="hidden" class="mr-line-new-item" value="@(line.NewItem ? "1" : "0")" />
+                                                <input type="hidden" class="mr-line-new-item" value="@(line.NewItem ? "true" : "false")" />
                                             </td>
                                         </tr>
                                     }
@@ -164,23 +203,21 @@
                                 <button type="button" class="btn btn-sm btn-light border mx-1 my-1" id="createNewItemBtn">Create new item</button>
                                 <button type="button" class="btn btn-sm btn-light border mx-1 my-1" id="calculateBtn" disabled>Calculate</button>
                                 <button type="submit" asp-page-handler="Save" id="mrSaveBtn" class="btn btn-sm btn-light border mx-1 my-1">Save</button>
-                                @if (Model.CanSubmit)
-                                {
-                                    <button type="submit" asp-page-handler="Submit" id="mrSubmitBtn" class="btn btn-sm btn-light border mx-1 my-1">Submit</button>
-                                }
-                                @if (Model.CanApprove)
-                                {
-                                    <button type="submit" asp-page-handler="Approve" id="mrApproveBtn" class="btn btn-sm btn-light border mx-1 my-1">Approve</button>
-                                }
-                                @if (Model.CanReject)
-                                {
-                                    <button type="submit" asp-page-handler="Reject" id="mrRejectBtn" class="btn btn-sm btn-light border mx-1 my-1">Reject</button>
-                                }
+                            }
+                            @if (Model.CanSubmit)
+                            {
+                                <button type="submit" asp-page-handler="Submit" id="mrSubmitBtn" class="btn btn-sm btn-light border mx-1 my-1">Submit</button>
+                            }
+                            @if (Model.CanApprove)
+                            {
+                                <button type="submit" asp-page-handler="Approve" id="mrApproveBtn" class="btn btn-sm btn-light border mx-1 my-1">Approve</button>
+                            }
+                            @if (Model.CanReject)
+                            {
+                                <button type="submit" asp-page-handler="Reject" id="mrRejectBtn" class="btn btn-sm btn-light border mx-1 my-1">Reject</button>
                             }
                             <button type="button" class="btn btn-sm btn-light border mx-1 my-1" onclick="window.print()">Print</button>
                             <a asp-page="./Index" class="btn btn-sm btn-light border mx-1 my-1">Close</a>
-                            <button type="button" class="btn btn-sm btn-light border mx-1 my-1" disabled>Excels</button>
-                            <button type="button" class="btn btn-sm btn-light border mx-1 my-1" disabled>&gt;&gt;ISSUED</button>
                         </div>
                         <div class="mr-detail-action-right">
                             <span id="mrTotalItemText">Total Item @Model.Lines.Count</span>

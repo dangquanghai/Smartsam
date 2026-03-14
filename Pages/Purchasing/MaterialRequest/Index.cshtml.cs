@@ -16,6 +16,8 @@ public class IndexModel : PageModel
     private const int PermissionCreateAuto = 2;
     private const int PermissionEdit = 3;
     private const int PermissionShowAll = 4;
+    private const int PermissionShowPc = 5;
+    private const int PermissionShowStore = 6;
     private const int PermissionShowCreate = 7;
     private const int NoScopeStoreGroup = -1;
     private const string ConditionModeAllUsers = "allUsers";
@@ -78,6 +80,12 @@ public class IndexModel : PageModel
     [BindProperty]
     public int? CreateStoreGroup { get; set; }
 
+    [BindProperty]
+    public string? CreateAutoDescription { get; set; }
+
+    [BindProperty]
+    public int? CreateAutoStoreGroup { get; set; }
+
     [TempData]
     public string? FlashMessage { get; set; }
 
@@ -101,6 +109,8 @@ public class IndexModel : PageModel
     public bool CanCreateAuto => HasPermission(PermissionCreateAuto);
     public bool CanEdit => HasPermission(PermissionEdit);
     public bool CanShowAll => _isAdminRole || HasPermission(PermissionShowAll);
+    public bool CanShowPcCondition => _isAdminRole || HasPermission(PermissionShowPc) || CanShowAll;
+    public bool CanShowStoreCondition => _isAdminRole || HasPermission(PermissionShowStore) || CanShowAll;
     public bool StoreGroupLocked => !CanShowAll;
     public int UserApprovalLevel => _dataScope.ApprovalLevel;
     public bool ConditionForAllUsers => CanShowAll;
@@ -228,6 +238,68 @@ public class IndexModel : PageModel
         }
     }
 
+    public async Task<IActionResult> OnPostCreateAutoAsync(CancellationToken cancellationToken)
+    {
+        LoadPagePermissions();
+        await LoadUserScopeAsync(cancellationToken);
+        if (!CanAccessPage() || !CanCreateAuto)
+        {
+            return Forbid();
+        }
+
+        var scopedStoreGroup = StoreGroupLocked
+            ? _dataScope.StoreGroup
+            : (CreateAutoStoreGroup ?? StoreGroup);
+
+        if (!scopedStoreGroup.HasValue || scopedStoreGroup.Value <= 0)
+        {
+            FlashMessage = "Please choose Store Group before creating Auto MR.";
+            FlashMessageType = "warning";
+            return RedirectToPage("./Index");
+        }
+
+        var lines = (await _materialRequestService.BuildAutoLinesAsync(scopedStoreGroup.Value, cancellationToken)).ToList();
+        if (lines.Count == 0)
+        {
+            FlashMessage = "No item template found for Auto MR.";
+            FlashMessageType = "warning";
+            return RedirectToPage("./Index");
+        }
+
+        var description = string.IsNullOrWhiteSpace(CreateAutoDescription)
+            ? $"Auto MR {DateTime.Today:MM/yyyy}"
+            : CreateAutoDescription.Trim();
+
+        var header = new MaterialRequestDetailDto
+        {
+            StoreGroup = scopedStoreGroup,
+            DateCreate = DateTime.Today,
+            FromDate = DateTime.Today.AddMonths(-3),
+            ToDate = DateTime.Today,
+            AccordingTo = description,
+            MaterialStatusId = 0,
+            NoIssue = 0,
+            IsAuto = true,
+            Approval = false,
+            ApprovalEnd = false,
+            PostPr = false
+        };
+
+        try
+        {
+            var requestNo = await _materialRequestService.SaveAsync(null, header, lines, cancellationToken);
+            FlashMessage = "Auto Material Request created successfully.";
+            FlashMessageType = "success";
+            return RedirectToPage("./Detail", new { id = requestNo });
+        }
+        catch (Exception ex)
+        {
+            FlashMessage = $"Cannot create Auto MR. {ex.Message}";
+            FlashMessageType = "error";
+            return RedirectToPage("./Index");
+        }
+    }
+
     private async Task LoadFiltersAsync(CancellationToken cancellationToken)
     {
         var stores = await _materialRequestService.GetStoreGroupsAsync(cancellationToken);
@@ -286,7 +358,7 @@ public class IndexModel : PageModel
         var scopedStoreGroup = StoreGroupLocked
             ? (_dataScope.StoreGroup ?? NoScopeStoreGroup)
             : StoreGroup;
-        var isStoremanMode = IsStoremanConditionMode;
+        var isStoremanMode = CanShowStoreCondition && IsStoremanConditionMode;
 
         return new MaterialRequestFilterCriteria
         {
@@ -307,6 +379,24 @@ public class IndexModel : PageModel
 
     private void NormalizeConditionMode()
     {
+        if (CanShowStoreCondition && !CanShowPcCondition)
+        {
+            ConditionMode = ConditionModeStoreman;
+            return;
+        }
+
+        if (!CanShowStoreCondition && CanShowPcCondition)
+        {
+            ConditionMode = ConditionModeAllUsers;
+            return;
+        }
+
+        if (!CanShowStoreCondition && !CanShowPcCondition)
+        {
+            ConditionMode = ConditionModeAllUsers;
+            return;
+        }
+
         if (!string.Equals(ConditionMode, ConditionModeStoreman, StringComparison.OrdinalIgnoreCase))
         {
             ConditionMode = ConditionModeAllUsers;

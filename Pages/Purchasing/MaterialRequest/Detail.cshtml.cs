@@ -60,12 +60,14 @@ public class DetailModel : PageModel
 
     public bool IsEdit => Id.HasValue && Id.Value > 0;
     public bool CanShowAll => _isAdminRole || HasPermission(PermissionShowAll);
-    public bool CanSave => IsEdit ? HasPermission(PermissionEdit) : (HasPermission(PermissionCreate) || HasPermission(PermissionShowCreate));
+    public bool CanSave => IsEdit
+        ? HasPermission(PermissionEdit) && CurrentStatusId == StatusJustCreated
+        : (HasPermission(PermissionCreate) || HasPermission(PermissionShowCreate));
     public bool StoreGroupLocked => !CanShowAll;
     public int CurrentStatusId => Input.MaterialStatusId ?? StatusJustCreated;
-    public bool CanSubmit => IsEdit && CanSave && CurrentStatusId == StatusJustCreated;
-    public bool CanApprove => IsEdit && CanSave && CanApproveStatus(CurrentStatusId);
-    public bool CanReject => IsEdit && CanSave && CanRejectStatus(CurrentStatusId);
+    public bool CanSubmit => IsEdit && HasPermission(PermissionEdit) && CurrentStatusId == StatusJustCreated;
+    public bool CanApprove => IsEdit && CanApproveStatus(CurrentStatusId);
+    public bool CanReject => IsEdit && CanRejectStatus(CurrentStatusId);
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -125,11 +127,6 @@ public class DetailModel : PageModel
             return Forbid();
         }
 
-        if (!CanSave)
-        {
-            return Forbid();
-        }
-
         await LoadDropdownsAsync(cancellationToken);
 
         if (StoreGroupLocked)
@@ -149,12 +146,24 @@ public class DetailModel : PageModel
             }
 
             // Giá»¯ nguyÃªn tráº¡ng thÃ¡i workflow khi ngÆ°á»i dÃ¹ng chá»‰ save cÃ¡c trÆ°á»ng form.
+            var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
+            if (!HasPermission(PermissionEdit) || currentStatus != StatusJustCreated)
+            {
+                FlashMessage = "You cannot edit this Material Request at current status.";
+                FlashMessageType = "warning";
+                return RedirectToPage("./Detail", new { id = Id });
+            }
+
             Input.MaterialStatusId = existing.MaterialStatusId;
             Input.Approval = existing.Approval;
             Input.ApprovalEnd = existing.ApprovalEnd;
             Input.PostPr = existing.PostPr;
             Input.FromDate ??= existing.FromDate;
             Input.ToDate ??= existing.ToDate;
+        }
+        else if (!(HasPermission(PermissionCreate) || HasPermission(PermissionShowCreate)))
+        {
+            return Forbid();
         }
 
         if (Input.FromDate.HasValue && Input.ToDate.HasValue && Input.FromDate.Value.Date > Input.ToDate.Value.Date)
@@ -163,6 +172,7 @@ public class DetailModel : PageModel
         }
 
         var lines = ResolvePostedLines();
+        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken);
 
         if (lines.Count == 0)
         {
@@ -211,11 +221,6 @@ public class DetailModel : PageModel
             return Forbid();
         }
 
-        if (!CanSave)
-        {
-            return Forbid();
-        }
-
         if (!IsEdit)
         {
             FlashMessage = "Please save Material Request first.";
@@ -238,41 +243,52 @@ public class DetailModel : PageModel
             return RedirectToPage("./Index");
         }
 
-        var lines = ResolvePostedLines();
-        if (lines.Count == 0)
-        {
-            ModelState.AddModelError(string.Empty, "At least one item line is required.");
-        }
-        ValidateLines(lines);
-
-        if (!ModelState.IsValid)
-        {
-            Input = MergeEditableInput(existing, Input);
-            Lines = lines;
-            return Page();
-        }
-
         var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
         var transition = ResolveTransition(action, currentStatus);
         if (transition is null)
         {
-            SetMessage("Invalid workflow action for current status.", "warning");
-            Input = MergeEditableInput(existing, Input);
-            Lines = lines;
-            return Page();
+            FlashMessage = "Invalid workflow action for current status.";
+            FlashMessageType = "warning";
+            return RedirectToPage("./Detail", new { id = Id });
         }
 
         if (!CanExecuteTransition(action, currentStatus))
         {
-            SetMessage("You do not have permission for this workflow action.", "warning");
-            Input = MergeEditableInput(existing, Input);
-            Lines = lines;
-            return Page();
+            FlashMessage = "You do not have permission for this workflow action.";
+            FlashMessageType = "warning";
+            return RedirectToPage("./Detail", new { id = Id });
+        }
+
+        List<MaterialRequestLineDto> lines;
+        MaterialRequestDetailDto toSave;
+
+        if (action == MaterialRequestWorkflowAction.Submit)
+        {
+            lines = ResolvePostedLines();
+            await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken);
+            if (lines.Count == 0)
+            {
+                ModelState.AddModelError(string.Empty, "At least one item line is required.");
+            }
+            ValidateLines(lines);
+
+            if (!ModelState.IsValid)
+            {
+                FlashMessage = GetFirstModelErrorMessage("Cannot process workflow action.");
+                FlashMessageType = "warning";
+                return RedirectToPage("./Detail", new { id = Id });
+            }
+
+            toSave = MergeEditableInput(existing, Input);
+        }
+        else
+        {
+            lines = (await _materialRequestService.GetLinesAsync(Id!.Value, cancellationToken)).ToList();
+            toSave = CloneHeader(existing);
         }
 
         try
         {
-            var toSave = MergeEditableInput(existing, Input);
             toSave.MaterialStatusId = transition.NextStatusId;
             if (transition.Approval.HasValue) toSave.Approval = transition.Approval.Value;
             if (transition.ApprovalEnd.HasValue) toSave.ApprovalEnd = transition.ApprovalEnd.Value;
@@ -286,10 +302,11 @@ public class DetailModel : PageModel
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[MaterialRequest][WorkflowAction:{action}] {ex}");
-            Input = MergeEditableInput(existing, Input);
-            Lines = lines;
-            SetMessage(ex is InvalidOperationException ? ex.Message : $"Cannot process workflow action. {ex.Message}", "error");
-            return Page();
+            FlashMessage = ex is InvalidOperationException
+                ? ex.Message
+                : $"Cannot process workflow action. {ex.Message}";
+            FlashMessageType = "error";
+            return RedirectToPage("./Detail", new { id = Id });
         }
     }
 
@@ -310,7 +327,26 @@ public class DetailModel : PageModel
     {
         LoadPagePermissions();
         await LoadUserScopeAsync(cancellationToken);
-        if (!CanAccessPage() || !CanSave)
+        if (!CanAccessPage())
+        {
+            return new JsonResult(new { success = false, message = "Access denied." });
+        }
+
+        if (IsEdit)
+        {
+            var existing = await _materialRequestService.GetDetailAsync(Id!.Value, cancellationToken);
+            if (existing is null)
+            {
+                return new JsonResult(new { success = false, message = "Material Request not found." });
+            }
+
+            var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
+            if (!HasPermission(PermissionEdit) || currentStatus != StatusJustCreated)
+            {
+                return new JsonResult(new { success = false, message = "You cannot add item at current status." });
+            }
+        }
+        else if (!(HasPermission(PermissionCreate) || HasPermission(PermissionShowCreate)))
         {
             return new JsonResult(new { success = false, message = "Access denied." });
         }
@@ -382,6 +418,66 @@ public class DetailModel : PageModel
         return NormalizeLines(Lines);
     }
 
+    /// <summary>
+    /// Khoa cac cot khong cho sua o backend: Unit, NotRec, In, Acc.In, Buy.
+    /// Nguoi dung chi duoc sua Order va Note.
+    /// </summary>
+    private async Task ApplyReadonlyLineRulesAsync(List<MaterialRequestLineDto> lines, long? requestNo, CancellationToken cancellationToken)
+    {
+        if (lines.Count == 0)
+        {
+            return;
+        }
+
+        var itemCodes = lines
+            .Select(x => (x.ItemCode ?? string.Empty).Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var itemUnits = await _materialRequestService.GetItemUnitsAsync(itemCodes, cancellationToken);
+        var existingSnapshots = requestNo.HasValue
+            ? await _materialRequestService.GetLineReadonlySnapshotsAsync(requestNo.Value, cancellationToken)
+            : new Dictionary<string, MaterialRequestLineReadonlySnapshotDto>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var line in lines)
+        {
+            var itemCode = (line.ItemCode ?? string.Empty).Trim();
+            line.ItemCode = itemCode;
+            line.ItemName = (line.ItemName ?? string.Empty).Trim();
+            line.Note = (line.Note ?? string.Empty).Trim();
+            line.Selected = true;
+
+            if (string.IsNullOrWhiteSpace(itemCode))
+            {
+                continue;
+            }
+
+            if (existingSnapshots.TryGetValue(itemCode, out var snapshot))
+            {
+                line.NotReceipt = snapshot.NotReceipt;
+                line.InStock = snapshot.InStock;
+                line.AccIn = snapshot.AccIn;
+                line.Buy = snapshot.Buy;
+                line.Unit = snapshot.Unit;
+            }
+            else
+            {
+                line.NotReceipt = 0m;
+                line.InStock = 0m;
+                line.AccIn = 0m;
+                line.Buy = 0m;
+            }
+
+            if (itemUnits.TryGetValue(itemCode, out var unitFromMaster) && !string.IsNullOrWhiteSpace(unitFromMaster))
+            {
+                line.Unit = unitFromMaster;
+            }
+
+            line.Unit = (line.Unit ?? string.Empty).Trim();
+        }
+    }
+
     private static List<MaterialRequestLineDto> NormalizeLines(IEnumerable<MaterialRequestLineDto> lines)
     {
         var result = new List<MaterialRequestLineDto>();
@@ -439,6 +535,11 @@ public class DetailModel : PageModel
             if (string.IsNullOrWhiteSpace(line.ItemCode))
             {
                 ModelState.AddModelError(string.Empty, $"{prefix}: Item Code is required.");
+            }
+
+            if (!line.OrderQty.HasValue || line.OrderQty.Value <= 0)
+            {
+                ModelState.AddModelError(string.Empty, $"{prefix}: Order quantity is required and must be greater than 0.");
             }
 
             if (line.Buy.HasValue && line.Buy.Value < 0)
@@ -535,6 +636,26 @@ public class DetailModel : PageModel
         };
     }
 
+    private static MaterialRequestDetailDto CloneHeader(MaterialRequestDetailDto source)
+    {
+        return new MaterialRequestDetailDto
+        {
+            RequestNo = source.RequestNo,
+            StoreGroup = source.StoreGroup,
+            DateCreate = source.DateCreate,
+            AccordingTo = source.AccordingTo,
+            Approval = source.Approval,
+            ApprovalEnd = source.ApprovalEnd,
+            PostPr = source.PostPr,
+            IsAuto = source.IsAuto,
+            FromDate = source.FromDate,
+            ToDate = source.ToDate,
+            MaterialStatusId = source.MaterialStatusId,
+            PrNo = source.PrNo,
+            NoIssue = source.NoIssue
+        };
+    }
+
     private bool CanApproveStatus(int statusId)
     {
         if (_isAdminRole) return true;
@@ -563,7 +684,7 @@ public class DetailModel : PageModel
     {
         return action switch
         {
-            MaterialRequestWorkflowAction.Submit => currentStatus == StatusJustCreated,
+            MaterialRequestWorkflowAction.Submit => HasPermission(PermissionEdit) && currentStatus == StatusJustCreated,
             MaterialRequestWorkflowAction.Approve => CanApproveStatus(currentStatus),
             MaterialRequestWorkflowAction.Reject => CanRejectStatus(currentStatus),
             _ => false
@@ -615,6 +736,16 @@ public class DetailModel : PageModel
     {
         Message = message;
         MessageType = type;
+    }
+
+    private string GetFirstModelErrorMessage(string fallback)
+    {
+        var first = ModelState.Values
+            .SelectMany(x => x.Errors)
+            .Select(x => x.ErrorMessage)
+            .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+
+        return string.IsNullOrWhiteSpace(first) ? fallback : first;
     }
 }
 

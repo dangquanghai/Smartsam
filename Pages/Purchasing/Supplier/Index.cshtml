@@ -215,7 +215,13 @@
                                                 data-status="@r.Status"
                                                 data-is-submitted="@(r.Status == 1 ? "1" : "0")"
                                                 onclick="window.toggleSupplierRowSelection && window.toggleSupplierRowSelection(event, this)">
-                                                <td class="selector-cell"><input type="checkbox" class="supplier-selector" aria-label="Select supplier" onchange="window.syncSupplierSelection && window.syncSupplierSelection()" /></td>
+                                                <td class="selector-cell">
+                                                    <input type="radio"
+                                                           name="supplierSelect"
+                                                           class="supplier-selector"
+                                                           aria-label="Select supplier"
+                                                           onchange="window.syncSupplierSelection && window.syncSupplierSelection()" />
+                                                </td>
                                                 <td>
                                                     @if (Model.CanViewDetail && !string.IsNullOrWhiteSpace(detailUrl))
                                                     {

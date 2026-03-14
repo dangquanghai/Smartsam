@@ -4,9 +4,11 @@
     ViewData["Title"] = "Material Request";
     var messageType = (Model.MessageType ?? "info").ToLowerInvariant();
     var useInlineAlert = !string.IsNullOrWhiteSpace(Model.Message);
+    var canAllUsersCondition = Model.CanShowPcCondition;
+    var canStoremanCondition = Model.CanShowStoreCondition;
     var isStoremanMode = Model.IsStoremanConditionMode;
-    var allUsersDisabledAttr = isStoremanMode ? "disabled" : null;
-    var storemanDisabledAttr = isStoremanMode ? null : "disabled";
+    var allUsersDisabledAttr = (!canAllUsersCondition || isStoremanMode) ? "disabled" : null;
+    var storemanDisabledAttr = (!canStoremanCondition || !isStoremanMode) ? "disabled" : null;
     var currentPage = Model.PageIndex <= 0 ? 1 : Model.PageIndex;
     var totalPages = Model.TotalPages <= 0 ? 1 : Model.TotalPages;
     var pageStart = Model.TotalRecords == 0 ? 0 : ((currentPage - 1) * Model.PageSize) + 1;
@@ -104,10 +106,10 @@
                         </div>
 
                         <div class="mr-condition-search-row mt-2">
-                            <fieldset class="mr-condition-box @(isStoremanMode ? "mr-condition-group-disabled" : string.Empty)" data-condition-group="allUsers">
+                            <fieldset class="mr-condition-box @(isStoremanMode ? "mr-condition-group-disabled" : string.Empty) @(canAllUsersCondition ? string.Empty : "d-none")" data-condition-group="allUsers">
                                 <legend>
                                     <span class="mr-condition-legend">
-                                        <input type="radio" id="conditionModeAllUsers" name="ConditionMode" value="allUsers" @(!isStoremanMode ? "checked" : null) />
+                                        <input type="radio" id="conditionModeAllUsers" name="ConditionMode" value="allUsers" @(!isStoremanMode ? "checked" : null) disabled="@(canAllUsersCondition ? null : "disabled")" />
                                         <label for="conditionModeAllUsers" class="mb-0">Condition for all users</label>
                                     </span>
                                 </legend>
@@ -157,10 +159,10 @@
                                 </div>
                             </fieldset>
 
-                            <fieldset class="mr-condition-box @(!isStoremanMode ? "mr-condition-group-disabled" : string.Empty)" data-condition-group="storeman">
+                            <fieldset class="mr-condition-box @(!isStoremanMode ? "mr-condition-group-disabled" : string.Empty) @(canStoremanCondition ? string.Empty : "d-none")" data-condition-group="storeman">
                                 <legend>
                                     <span class="mr-condition-legend">
-                                        <input type="radio" id="conditionModeStoreman" name="ConditionMode" value="storeman" @(isStoremanMode ? "checked" : null) />
+                                        <input type="radio" id="conditionModeStoreman" name="ConditionMode" value="storeman" @(isStoremanMode ? "checked" : null) disabled="@(canStoremanCondition ? null : "disabled")" />
                                         <label for="conditionModeStoreman" class="mb-0">Condition for storeman</label>
                                     </span>
                                 </legend>
@@ -267,7 +269,10 @@
                     </div>
                 </div>
                 <div class="card-footer py-2 module-action-bar text-center">
-                    <button type="button" class="btn btn-sm btn-action-copy mx-1 my-1" disabled>CreateAT</button>
+                    @if (Model.CanCreateAuto)
+                    {
+                        <button type="button" id="openCreateAutoMrPopupBtn" class="btn btn-sm btn-action-copy mx-1 my-1">CreateAT</button>
+                    }
                     @if (Model.CanCreate)
                     {
                         <button type="button" id="openCreateMrPopupBtn" class="btn btn-sm btn-action-add mx-1 my-1">Create MR</button>
@@ -295,7 +300,7 @@
                 </div>
                 <div class="modal-body pt-2 pb-1">
                     <div class="row create-mr-modal-row">
-                        <div class="col-md-5 create-mr-column">
+                        <div class="col-md-5 create-mr-column create-mr-side-col">
                             <div class="create-mr-header-block">
                                 <div class="form-group mb-2">
                                     <label class="mb-1">Item Code / Name</label>
@@ -317,9 +322,9 @@
                                     <thead class="thead-light">
                                         <tr>
                                             <th style="width:28px"></th>
-                                            <th style="width:140px">Item Code</th>
+                                            <th style="width:120px">Item Code</th>
                                             <th>Item Name</th>
-                                            <th style="width:80px">Unit</th>
+                                            <th style="width:70px">Unit</th>
                                         </tr>
                                     </thead>
                                     <tbody id="createMrSearchResultBody">
@@ -328,13 +333,13 @@
                                 </table>
                             </div>
                         </div>
-                        <div class="col-md-2 d-flex align-items-center justify-content-center py-3">
+                        <div class="col-md-2 d-flex align-items-center justify-content-center py-3 create-mr-middle-col">
                             <div class="d-flex flex-column">
                                 <button type="button" id="createMrMoveRightBtn" class="btn btn-outline-primary btn-sm mb-2">&gt;</button>
                                 <button type="button" id="createMrMoveLeftBtn" class="btn btn-outline-secondary btn-sm">&lt;</button>
                             </div>
                         </div>
-                        <div class="col-md-5 create-mr-column">
+                        <div class="col-md-5 create-mr-column create-mr-side-col">
                             <form id="createMrSubmitForm" method="post" asp-page-handler="CreateMr" class="d-none">
                                 @Html.AntiForgeryToken()
                                 <input type="hidden" name="CreateDescription" id="createMrDescriptionInput" />
@@ -358,9 +363,9 @@
                                     <thead class="thead-light">
                                         <tr>
                                             <th style="width:28px"></th>
-                                            <th style="width:140px">Item Code</th>
+                                            <th style="width:120px">Item Code</th>
                                             <th>Item Name</th>
-                                            <th style="width:80px">Unit</th>
+                                            <th style="width:70px">Unit</th>
                                         </tr>
                                     </thead>
                                     <tbody id="createMrSelectedBody">
@@ -373,6 +378,51 @@
                     </div>
                 </div>
                 <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (Model.CanCreateAuto)
+{
+    <div class="modal fade" id="createAutoMrModal" tabindex="-1" role="dialog" aria-labelledby="createAutoMrModalLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title" id="createAutoMrModalLabel">Create Auto MR</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body pt-2 pb-1">
+                    <form id="createAutoMrForm" method="post" asp-page-handler="CreateAuto">
+                        @Html.AntiForgeryToken()
+                        <div class="form-group mb-2">
+                            <label class="mb-1">Store Group</label>
+                            <select id="createAutoStoreGroup"
+                                    name="CreateAutoStoreGroup"
+                                    class="form-control form-control-sm"
+                                    disabled="@Model.StoreGroupLocked">
+                                @foreach (var option in Model.StoreGroups)
+                                {
+                                    <option value="@option.Value">@option.Text</option>
+                                }
+                            </select>
+                            @if (Model.StoreGroupLocked)
+                            {
+                                <input type="hidden" name="CreateAutoStoreGroup" value="@Model.StoreGroup" />
+                            }
+                        </div>
+                        <div class="form-group mb-0">
+                            <label class="mb-1">Description</label>
+                            <textarea id="createAutoDescription" name="CreateAutoDescription" class="form-control form-control-sm" rows="2"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="submit" form="createAutoMrForm" class="btn btn-sm btn-primary">Create AT</button>
                     <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Close</button>
                 </div>
             </div>

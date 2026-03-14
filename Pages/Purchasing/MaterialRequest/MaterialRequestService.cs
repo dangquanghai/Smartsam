@@ -8,7 +8,6 @@ namespace SmartSam.Pages.Purchasing.MaterialRequest;
 public class MaterialRequestService
 {
     private readonly string _connectionString;
-
     public MaterialRequestService(IConfiguration configuration)
     {
         _connectionString = configuration.GetConnectionString("DefaultConnection")
@@ -88,20 +87,6 @@ public class MaterialRequestService
 
     public async Task<IReadOnlyList<MaterialRequestLookupOptionDto>> GetStatusesAsync(CancellationToken cancellationToken = default)
     {
-        static string NormalizeStatusName(int id, string currentName)
-        {
-            return id switch
-            {
-                0 => "Just Created",
-                1 => "Submitted by Owner",
-                2 => "Head Dept Approved",
-                3 => "Purchaser Checked",
-                4 => "Approved by Chief Accounting",
-                5 => "Rejected",
-                _ => currentName
-            };
-        }
-
         const string sql = @"
             SELECT MaterialStatusID, MaterialStatusName
             FROM dbo.MaterialStatus
@@ -113,25 +98,12 @@ public class MaterialRequestService
             rd => new MaterialRequestLookupOptionDto
             {
                 Id = rd.GetInt32(0),
-                Name = NormalizeStatusName(rd.GetInt32(0), rd[1]?.ToString() ?? string.Empty)
+                Name = rd[1]?.ToString() ?? string.Empty
             },
             null,
             cancellationToken);
 
-        if (rows.Count > 0)
-        {
-            return rows;
-        }
-
-        return
-        [
-            new MaterialRequestLookupOptionDto { Id = 0, Name = "Just Created" },
-            new MaterialRequestLookupOptionDto { Id = 1, Name = "Submitted by Owner" },
-            new MaterialRequestLookupOptionDto { Id = 2, Name = "Head Dept Approved" },
-            new MaterialRequestLookupOptionDto { Id = 3, Name = "Purchaser Checked" },
-            new MaterialRequestLookupOptionDto { Id = 4, Name = "Approved by Chief Accounting" },
-            new MaterialRequestLookupOptionDto { Id = 5, Name = "Rejected" }
-        ];
+        return rows;
     }
 
     public async Task<MaterialRequestSearchResultDto> SearchPagedAsync(MaterialRequestFilterCriteria criteria, CancellationToken cancellationToken = default)
@@ -326,6 +298,103 @@ public class MaterialRequestService
             cancellationToken);
 
         return rows;
+    }
+
+    public async Task<Dictionary<string, MaterialRequestLineReadonlySnapshotDto>> GetLineReadonlySnapshotsAsync(long requestNo, CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+            SELECT
+                ITEMCODE,
+                ISNULL(UNIT, '') AS UNIT,
+                ISNULL(NOT_RECEIPT, 0) AS NOT_RECEIPT,
+                ISNULL(INSTOCK, 0) AS INSTOCK,
+                ISNULL(acctualyInventory, 0) AS acctualyInventory,
+                ISNULL(BUY, 0) AS BUY
+            FROM dbo.MATERIAL_REQUEST_DETAIL
+            WHERE REQUEST_NO = @RequestNo
+            ORDER BY ID";
+
+        var rows = await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd => new MaterialRequestLineReadonlySnapshotDto
+            {
+                ItemCode = rd[0]?.ToString() ?? string.Empty,
+                Unit = rd[1]?.ToString() ?? string.Empty,
+                NotReceipt = rd.IsDBNull(2) ? 0m : Convert.ToDecimal(rd[2]),
+                InStock = rd.IsDBNull(3) ? 0m : Convert.ToDecimal(rd[3]),
+                AccIn = rd.IsDBNull(4) ? 0m : Convert.ToDecimal(rd[4]),
+                Buy = rd.IsDBNull(5) ? 0m : Convert.ToDecimal(rd[5])
+            },
+            cmd => AddNumeric18_0Param(cmd, "@RequestNo", requestNo),
+            cancellationToken);
+
+        var snapshots = new Dictionary<string, MaterialRequestLineReadonlySnapshotDto>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            var itemCode = (row.ItemCode ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(itemCode) || snapshots.ContainsKey(itemCode))
+            {
+                continue;
+            }
+
+            row.ItemCode = itemCode;
+            row.Unit = (row.Unit ?? string.Empty).Trim();
+            snapshots[itemCode] = row;
+        }
+
+        return snapshots;
+    }
+
+    public async Task<Dictionary<string, string>> GetItemUnitsAsync(IEnumerable<string> itemCodes, CancellationToken cancellationToken = default)
+    {
+        var normalizedCodes = itemCodes
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (normalizedCodes.Count == 0)
+        {
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var inParams = normalizedCodes.Select((_, idx) => $"@Code{idx}").ToList();
+        var sql = $@"
+            SELECT ItemCode, ISNULL(Unit, '') AS Unit
+            FROM dbo.INV_ItemList
+            WHERE ItemCode IN ({string.Join(", ", inParams)})";
+
+        var rows = await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd => new MaterialRequestItemLookupDto
+            {
+                ItemCode = rd[0]?.ToString() ?? string.Empty,
+                Unit = rd[1]?.ToString() ?? string.Empty
+            },
+            cmd =>
+            {
+                for (var i = 0; i < normalizedCodes.Count; i++)
+                {
+                    Helper.AddParameter(cmd, $"@Code{i}", normalizedCodes[i], SqlDbType.VarChar, 20);
+                }
+            },
+            cancellationToken);
+
+        var unitMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            var itemCode = (row.ItemCode ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(itemCode))
+            {
+                continue;
+            }
+
+            unitMap[itemCode] = (row.Unit ?? string.Empty).Trim();
+        }
+
+        return unitMap;
     }
 
     public async Task<long> SaveAsync(long? requestNo, MaterialRequestDetailDto header, IReadOnlyList<MaterialRequestLineDto> lines, CancellationToken cancellationToken = default)
@@ -620,6 +689,54 @@ public class MaterialRequestService
         }
 
         throw new InvalidOperationException("Cannot generate Item Code. Please retry.");
+    }
+
+    public async Task<IReadOnlyList<MaterialRequestLineDto>> BuildAutoLinesAsync(int storeGroup, CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+            SELECT
+                i.ItemCode,
+                i.ItemName,
+                ISNULL(i.Unit, '') AS Unit,
+                CAST(ISNULL(NULLIF(i.StoreNormInMain, 0), NULLIF(i.ReOrderPoint, 0), 1) AS decimal(18,2)) AS OrderQty
+            FROM dbo.INV_ItemList i
+            WHERE
+                (i.IsActive = 1 OR i.IsActive IS NULL)
+                AND (i.IsPurchase = 1 OR i.IsPurchase IS NULL)
+                AND i.KPGroupItem = @StoreGroup
+            ORDER BY i.ItemCode";
+
+        var rows = await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd =>
+            {
+                var orderQty = rd.IsDBNull(3) ? 1m : Convert.ToDecimal(rd[3]);
+                if (orderQty <= 0)
+                {
+                    orderQty = 1m;
+                }
+
+                return new MaterialRequestLineDto
+                {
+                    ItemCode = rd[0]?.ToString() ?? string.Empty,
+                    ItemName = rd[1]?.ToString() ?? string.Empty,
+                    Unit = rd[2]?.ToString() ?? string.Empty,
+                    OrderQty = orderQty,
+                    NotReceipt = 0,
+                    InStock = 0,
+                    AccIn = 0,
+                    Buy = 0,
+                    Price = 0,
+                    Note = string.Empty,
+                    NewItem = false,
+                    Selected = true
+                };
+            },
+            cmd => Helper.AddParameter(cmd, "@StoreGroup", storeGroup, SqlDbType.Int),
+            cancellationToken);
+
+        return rows;
     }
 
     /// <summary>

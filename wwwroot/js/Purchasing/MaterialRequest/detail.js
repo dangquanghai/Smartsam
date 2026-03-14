@@ -56,18 +56,39 @@
         const tr = document.createElement("tr");
         tr.className = "mr-line-row";
         tr.innerHTML = `
-            <td><input type="text" class="form-control form-control-sm mr-line-itemcode" value="${rowData.itemCode || ""}" /></td>
-            <td><input type="text" class="form-control form-control-sm mr-line-itemname" value="${rowData.itemName || ""}" /></td>
-            <td><input type="text" class="form-control form-control-sm mr-line-unit" value="${rowData.unit || ""}" /></td>
-            <td><input type="number" step="0.01" class="form-control form-control-sm mr-line-order" value="${rowData.orderQty ?? 0}" /></td>
-            <td><input type="number" step="0.01" class="form-control form-control-sm mr-line-notrec" value="${rowData.notReceipt ?? 0}" /></td>
-            <td><input type="number" step="0.01" class="form-control form-control-sm mr-line-in" value="${rowData.inStock ?? 0}" /></td>
-            <td><input type="number" step="0.01" class="form-control form-control-sm mr-line-accin" value="${rowData.accIn ?? 0}" /></td>
-            <td><input type="number" step="0.01" class="form-control form-control-sm mr-line-buy" value="${rowData.buy ?? 0}" /></td>
+            <td>
+                <span class="mr-readonly-cell-text">${rowData.itemCode || ""}</span>
+                <input type="hidden" class="mr-line-itemcode" value="${rowData.itemCode || ""}" />
+            </td>
+            <td>
+                <span class="mr-readonly-cell-text">${rowData.itemName || ""}</span>
+                <input type="hidden" class="mr-line-itemname" value="${rowData.itemName || ""}" />
+            </td>
+            <td>
+                <span class="mr-readonly-cell-text">${rowData.unit || ""}</span>
+                <input type="hidden" class="mr-line-unit" value="${rowData.unit || ""}" />
+            </td>
+            <td><input type="number" min="0.01" step="0.01" class="form-control form-control-sm mr-line-order" value="${rowData.orderQty ?? 0}" /></td>
+            <td>
+                <span class="mr-readonly-cell-text">${rowData.notReceipt ?? 0}</span>
+                <input type="hidden" class="mr-line-notrec" value="${rowData.notReceipt ?? 0}" />
+            </td>
+            <td>
+                <span class="mr-readonly-cell-text">${rowData.inStock ?? 0}</span>
+                <input type="hidden" class="mr-line-in" value="${rowData.inStock ?? 0}" />
+            </td>
+            <td>
+                <span class="mr-readonly-cell-text">${rowData.accIn ?? 0}</span>
+                <input type="hidden" class="mr-line-accin" value="${rowData.accIn ?? 0}" />
+            </td>
+            <td>
+                <span class="mr-readonly-cell-text">${rowData.buy ?? 0}</span>
+                <input type="hidden" class="mr-line-buy" value="${rowData.buy ?? 0}" />
+            </td>
             <td>
                 <input type="text" class="form-control form-control-sm mr-line-note" value="${rowData.note || ""}" />
                 <input type="hidden" class="mr-line-price" value="${rowData.price ?? 0}" />
-                <input type="hidden" class="mr-line-new-item" value="${rowData.newItem ? "1" : "0"}" />
+                <input type="hidden" class="mr-line-new-item" value="${rowData.newItem ? "true" : "false"}" />
             </td>
         `;
         return tr;
@@ -92,7 +113,7 @@
                 buy: toNumber(row.querySelector(".mr-line-buy")?.value),
                 price: toNumber(row.querySelector(".mr-line-price")?.value),
                 note: row.querySelector(".mr-line-note")?.value?.trim() || "",
-                newItem: (row.querySelector(".mr-line-new-item")?.value || "0") === "1",
+                newItem: ["1", "true"].includes((row.querySelector(".mr-line-new-item")?.value || "").trim().toLowerCase()),
                 selected: true
             });
         });
@@ -145,7 +166,7 @@
             const existed = Array.from(tableBody.querySelectorAll(".mr-line-row"))
                 .find((row) => (row.querySelector(".mr-line-itemcode")?.value || "").trim().toLowerCase() === itemCode);
             if (existed) {
-                existed.querySelector(".mr-line-buy")?.focus();
+                existed.querySelector(".mr-line-order")?.focus();
                 return;
             }
         }

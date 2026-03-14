@@ -110,6 +110,16 @@ public class MaterialRequestLineDto
     public bool Selected { get; set; }
 }
 
+public class MaterialRequestLineReadonlySnapshotDto
+{
+    public string ItemCode { get; set; } = string.Empty;
+    public string Unit { get; set; } = string.Empty;
+    public decimal NotReceipt { get; set; }
+    public decimal InStock { get; set; }
+    public decimal AccIn { get; set; }
+    public decimal Buy { get; set; }
+}
+
 public class EmployeeMaterialScopeDto
 {
     public int? StoreGroup { get; set; }

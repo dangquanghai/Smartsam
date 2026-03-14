@@ -336,7 +336,7 @@
             syncConfirmState();
         });
 
-        confirmBtn?.addEventListener("click", (event) => {
+    confirmBtn?.addEventListener("click", (event) => {
             const selectedItems = Array.from(selectedMap.values());
             const description = (descriptionInput?.value || "").trim();
 
@@ -363,8 +363,43 @@
                 const storeGroupValue = getCurrentStoreGroupValue();
                 storeGroupPostInput.value = storeGroupValue === null ? "" : String(storeGroupValue);
             }
-            showValidation("");
-            syncConfirmState();
+        showValidation("");
+        syncConfirmState();
+    });
+}
+
+    /**
+     * Popup CreateAT (Auto MR) - tạo MR theo Store Group hiện tại.
+     */
+    function initCreateAutoMrPopup() {
+        const openBtn = document.getElementById("openCreateAutoMrPopupBtn");
+        const modal = document.getElementById("createAutoMrModal");
+        const storeGroupSelect = document.getElementById("createAutoStoreGroup");
+        const filterStoreGroup = document.getElementById("StoreGroup");
+        const descInput = document.getElementById("createAutoDescription");
+        if (!openBtn || !modal) return;
+
+        const setDefaults = () => {
+            if (filterStoreGroup && storeGroupSelect) {
+                storeGroupSelect.value = filterStoreGroup.value;
+            }
+
+            if (descInput && !descInput.value) {
+                const now = new Date();
+                const month = String(now.getMonth() + 1).padStart(2, "0");
+                descInput.value = `Auto MR ${month}/${now.getFullYear()}`;
+            }
+        };
+
+        openBtn.addEventListener("click", () => {
+            if (typeof window.$ === "function") {
+                window.$(modal).modal({
+                    backdrop: "static",
+                    keyboard: false,
+                    show: true
+                });
+            }
+            setDefaults();
         });
     }
 
@@ -386,10 +421,11 @@
             });
         }
 
-        initConditionModeSwitcher();
-        initStatusCheckboxDropdown();
-        initCreateMrPopup();
-    }
+    initConditionModeSwitcher();
+    initStatusCheckboxDropdown();
+    initCreateMrPopup();
+    initCreateAutoMrPopup();
+}
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", initMaterialRequestIndexPage);

@@ -356,11 +356,9 @@ public class IndexModel : PageModel
 
     private List<int> ParseSelectedSupplierIds()
     {
-        var ids = new HashSet<int>();
-
         if (SelectedSupplierId > 0)
         {
-            ids.Add(SelectedSupplierId);
+            return [SelectedSupplierId];
         }
 
         if (!string.IsNullOrWhiteSpace(SelectedSupplierIdsCsv))
@@ -369,12 +367,12 @@ public class IndexModel : PageModel
             {
                 if (int.TryParse(part, out var id) && id > 0)
                 {
-                    ids.Add(id);
+                    return [id];
                 }
             }
         }
 
-        return ids.ToList();
+        return [];
     }
 
     private static string BuildSubmitMessage(int successCount, int notFoundCount, int noAccessCount, int alreadyPreparingCount, int totalSelected)

@@ -125,8 +125,8 @@
      */
     function getSelectedRows(rows) {
         return rows.filter((row) => {
-            const checkbox = row.querySelector(".supplier-selector");
-            return !!checkbox && checkbox.checked;
+            const radio = row.querySelector(".supplier-selector");
+            return !!radio && radio.checked;
         });
     }
 
@@ -166,8 +166,7 @@
             const hasAnySelected = count > 0;
             setSubmitButtonState(submitBtn, !hasAnySelected);
 
-            const isMultiSelectMode = count > 1;
-            setUiDisabled(addBtn, isMultiSelectMode);
+            setUiDisabled(addBtn, false);
             setUiDisabled(copyBtn, !hasAnySelected);
         }
 
@@ -179,9 +178,9 @@
                 return;
             }
 
-            const checkbox = row.querySelector(".supplier-selector");
-            if (!checkbox) return;
-            checkbox.checked = !checkbox.checked;
+            const radio = row.querySelector(".supplier-selector");
+            if (!radio) return;
+            radio.checked = true;
             syncSelectionState();
         };
 
@@ -292,4 +291,3 @@
         initSupplierIndexPage();
     }
 })();
-
