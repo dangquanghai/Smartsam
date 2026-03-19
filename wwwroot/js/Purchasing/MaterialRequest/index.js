@@ -1,399 +1,627 @@
-(() => {
-    "use strict";
+﻿(function () {
+    'use strict';
+    // Tracking comment: keep Material Request index script marked as touched for current work.
 
-    /**
-     * Đồng bộ trạng thái chọn row ở grid list.
-     */
-    /**
-     * Hiá»ƒn thá»‹ summary cho Status checkbox multiselect.
-     */
+    let pageSize = typeof defaultPageSize !== 'undefined' ? defaultPageSize : 10;
+    let selectedRequestNo = null;
+    let currentPage = 1;
+    let currentDataRows = [];
+
+    // ========== SEARCH FUNCTION ==========
+    function performSearch(page = 1) {
+        currentPage = page;
+        const token = $('input[name="__RequestVerificationToken"]').val();
+
+        const statusIds = $('.mr-status-checkbox:checked')
+            .map(function () { return Number.parseInt(this.value, 10); })
+            .get()
+            .filter((x) => Number.isFinite(x));
+
+        const requestNoRaw = ($('#Filter_RequestNo').val() || '').toString().trim();
+        const requestNo = requestNoRaw === '' ? null : Number(requestNoRaw);
+
+        const storeGroupRaw = ($('#Filter_StoreGroup').val() || '').toString().trim();
+        const storeGroup = storeGroupRaw === '' ? null : Number(storeGroupRaw);
+
+        const fromDateRaw = ($('#Filter_FromDate').val() || '').toString().trim();
+        const toDateRaw = ($('#Filter_ToDate').val() || '').toString().trim();
+
+        const filter = {
+            requestNo: Number.isFinite(requestNo) ? requestNo : null,
+            storeGroup: Number.isFinite(storeGroup) ? storeGroup : null,
+            statusIds: statusIds,
+            itemCode: ($('#Filter_ItemCode').val() || '').toString().trim() || null,
+            issueLessThanOrder: $('#Filter_IssueLessThanOrder').is(':checked'),
+            buyGreaterThanZero: $('#Filter_BuyGreaterThanZero').is(':checked'),
+            autoOnly: $('#Filter_AutoOnly').is(':checked'),
+            fromDate: fromDateRaw || null,
+            toDate: toDateRaw || null,
+            accordingToKeyword: ($('#Filter_AccordingToKeyword').val() || '').toString().trim() || null,
+            conditionMode: $('input[name="Filter.ConditionMode"]:checked').val() || 'allUsers',
+            page: currentPage,
+            pageSize: pageSize
+        };
+
+        showLoading(true);
+
+        $.ajax({
+            url: '?handler=Search',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'RequestVerificationToken': token },
+            data: JSON.stringify(filter),
+            success: function (response) {
+                if (response && response.success) {
+                    currentDataRows = response.data || [];
+                    renderContracts(response.data);
+                    updatePagination(response.total, response.page, response.pageSize, response.totalPages);
+                    resetActions();
+                } else {
+                    showError('Search failed: ' + (response && response.message ? response.message : ''));
+                }
+            },
+            error: function (xhr, status, error) {
+                showError('Error: ' + error);
+            },
+            complete: function () {
+                showLoading(false);
+            }
+        });
+    }
+
+    // ========== RENDER BẢNG ==========
+    function renderContracts(items) {
+        const tbody = $('#mrTable tbody');
+        tbody.empty();
+
+        if (!items || items.length === 0) {
+            tbody.append('<tr><td colspan="8" class="text-center py-4">No requests found</td></tr>');
+            return;
+        }
+
+        items.forEach(function (item, index) {
+            const r = item.data || {};
+            const requestNo = r.requestNo ?? r.RequestNo;
+            const row = `
+            <tr data-id="${requestNo || ''}" data-index="${index}" style="cursor:pointer">
+                <td><input type="radio" name="selectedMr" value="${index}"></td>
+                <td style="white-space:nowrap">
+                    <a href="javascript:void(0)" class="mr-request-link text-primary font-weight-bold" style="text-decoration:underline">
+                        ${requestNo || ''}
+                    </a>
+                </td>
+                <td>${r.dateCreateDisplay || r.DateCreateDisplay || ''}</td>
+                <td style="white-space:nowrap">${r.accordingTo || r.AccordingTo || ''}</td>
+                <td style="white-space:nowrap">${r.kPGroupName || r.KPGroupName || ''}</td>
+                <td>${r.materialStatusName || r.MaterialStatusName || ''}</td>
+                <td>${r.prNo || r.PrNo || ''}</td>
+                <td style="display:none">${r.materialStatusId || r.MaterialStatusId || ''}</td>
+            </tr>`;
+            tbody.append(row);
+        });
+    }
+
+    function openDetailByRowIndex(rowIndex) {
+        const item = currentDataRows[rowIndex];
+        if (!item || !item.actions) {
+            console.error('This request does not exist !');
+            return;
+        }
+
+        const perms = item.actions;
+        const requestNo = item.data.requestNo || item.data.RequestNo;
+
+        if (perms.canAccess === true) {
+            const mode = perms.accessMode || 'view';
+            window.location.href = `/Purchasing/MaterialRequest/MaterialRequestDetail?id=${requestNo}&mode=${mode}`;
+        } else {
+            alert('You have no right to view this request.');
+        }
+    }
+
+    // Sử dụng delegation để bắt sự kiện cho link được tạo động
+    $(document).on('click', '.mr-request-link', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const rowIndex = $(this).closest('tr').data('index');
+        openDetailByRowIndex(rowIndex);
+    });
+
+    // Double click vào dòng cũng mở detail, nhưng vẫn check quyền giống click Request No.
+    $(document).on('dblclick', '#mrTable tbody tr', function (e) {
+        const $row = $(this);
+        const rowIndex = $row.data('index');
+        if (rowIndex === undefined || rowIndex === null) return;
+
+        // Không xử lý double click trên dòng trạng thái No data / Loading...
+        if ($row.find('td').length <= 1) return;
+
+        const $radio = $row.find("input[name='selectedMr']");
+        if ($radio.length > 0) {
+            $radio.prop('checked', true).trigger('change');
+        }
+
+        e.preventDefault();
+        openDetailByRowIndex(rowIndex);
+    });
+
+    // ========== BẮT SỰ KIỆN THAY ĐỔI RADIO (QUAN TRỌNG NHẤT) ==========
+    $(document).on('change', "input[name='selectedMr']", function () {
+        const index = $(this).val();
+        const item = currentDataRows[index];
+
+        if (!item) return;
+
+        selectedRequestNo = item.data.requestNo || item.data.RequestNo;
+        $('#mrTable tbody tr').removeClass('selected');
+        $(this).closest('tr').addClass('selected');
+    });
+
+    function resetActions() {
+        selectedRequestNo = null;
+        $('#mrTable tbody tr').removeClass('selected');
+        $('input[name="selectedMr"]').prop('checked', false);
+    }
+
+    // ========== PAGINATION (ĐÃ SỬA LỖI) ==========
+    function updatePagination(total, page, pageSize, totalPages) {
+        const $totalBadge = $('#total-records-badge');
+        const $paginationInfo = $('#pagination-info');
+        const $pagination = $('#pagination');
+
+        $totalBadge.text(`${total} records`).addClass('badge-success');
+
+        if (total === 0) {
+            $paginationInfo.html('<small>No records</small>');
+            $pagination.empty();
+            return;
+        }
+
+        const start = ((page - 1) * pageSize) + 1;
+        const end = Math.min(page * pageSize, total);
+        $paginationInfo.html(`<small>Showing ${start}-${end} of ${total}</small>`);
+
+        let html = '';
+        html += `<li class="page-item ${page <= 1 ? 'disabled' : ''}">
+                    <a class="page-link" href="#" data-page="${page - 1}">&laquo;</a>
+                 </li>`;
+
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) {
+                html += `<li class="page-item ${i === page ? 'active' : ''}">
+                            <a class="page-link" href="#" data-page="${i}">${i}</a>
+                         </li>`;
+            } else if (i === page - 3 || i === page + 3) {
+                html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+        }
+
+        html += `<li class="page-item ${page >= totalPages ? 'disabled' : ''}">
+                    <a class="page-link" href="#" data-page="${page + 1}">&raquo;</a>
+                 </li>`;
+
+        $pagination.html(html).show();
+
+        $pagination.find('a.page-link').click(function (e) {
+            e.preventDefault();
+            const p = $(this).data('page');
+            if (p) performSearch(p);
+        });
+    }
+
+    // ========== INITIALIZE ==========
+    function initializePage() {
+        console.log('Initializing page components...');
+
+        initConditionModeSwitcher();
+        initStatusCheckboxDropdown();
+        initCreateMrPopup();
+        initCreateAutoMrPopup();
+
+        // 2. Đăng ký sự kiện nút bấm
+        $('#btnAdd').off('click').on('click', function () {
+            $('#createMrModal').modal({ backdrop: 'static', keyboard: false, show: true });
+        });
+
+        $('#btnCreateAuto').off('click').on('click', function () {
+            $('#createAutoMrModal').modal({ backdrop: 'static', keyboard: false, show: true });
+        });
+
+        $('#btnRefresh').off('click').on('click', function () {
+            performSearch(1);
+        });
+
+        $('#btnClose').off('click').on('click', function () {
+            window.location.href = '/Index';
+        });
+
+        // 3. Xử lý Form Search
+        $('#mrSearchForm').off('submit').on('submit', function (e) {
+            e.preventDefault();
+            performSearch(1);
+        });
+
+        // 4. Tự động Search lần đầu khi load trang
+        performSearch(1);
+    }
+
+    function showLoading(show) {
+        if (show) $('#mrTable tbody').html('<tr><td colspan="8" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div> Loading...</td></tr>');
+    }
+
+    function showError(m) {
+        $('#mrTable tbody').html(`<tr><td colspan="8" class="text-center text-danger py-4">${m}</td></tr>`);
+    }
+
+    $(document).ready(initializePage);
+
+
+
     function initStatusCheckboxDropdown() {
-        const dropdownBtn = document.getElementById("mrStatusDropdownBtn");
-        const menu = document.querySelector(".mr-status-menu");
-        const checkboxes = Array.from(document.querySelectorAll(".mr-status-checkbox"));
-        if (!dropdownBtn || !menu || checkboxes.length === 0) return;
+        const $dropdownBtn = $('#mrStatusDropdownBtn');
+        const $menu = $('.mr-status-menu');
+        const $checkboxes = $('.mr-status-checkbox');
+        if ($dropdownBtn.length === 0 || $menu.length === 0 || $checkboxes.length === 0) return;
 
-        const updateCaption = () => {
-            const selected = checkboxes
-                .filter((x) => x.checked)
-                .map((x) => x.getAttribute("data-label") || "")
+        function updateCaption() {
+            const selected = $checkboxes
+                .filter(':checked')
+                .map(function () { return ($(this).data('label') || '').toString(); })
+                .get()
                 .filter((x) => x.length > 0);
 
-            const fullCaption = selected.join("; ");
-            dropdownBtn.setAttribute("title", fullCaption || "All status");
+            const fullCaption = selected.join('; ');
+            $dropdownBtn.attr('title', fullCaption || 'All status');
 
             if (selected.length === 0) {
-                dropdownBtn.textContent = "All status";
+                $dropdownBtn.text('All status');
                 return;
             }
 
             if (selected.length === 1) {
-                dropdownBtn.textContent = selected[0];
+                $dropdownBtn.text(selected[0]);
                 return;
             }
 
-            dropdownBtn.textContent = `${selected.length} statuses selected`;
-        };
+            $dropdownBtn.text(`${selected.length} statuses selected`);
+        }
 
-        menu.addEventListener("click", (event) => {
+        $menu.off('click').on('click', function (event) {
             event.stopPropagation();
         });
 
-        checkboxes.forEach((checkbox) => {
-            checkbox.addEventListener("change", updateCaption);
-        });
-
+        $checkboxes.off('change').on('change', updateCaption);
         updateCaption();
     }
 
-    /**
-     * Chỉ cho phép chọn 1 group điều kiện search.
-     * Group không được chọn sẽ disable toàn bộ control bên trong.
-     */
     function initConditionModeSwitcher() {
-        const radios = Array.from(document.querySelectorAll('input[name="ConditionMode"]'));
-        const groups = Array.from(document.querySelectorAll("[data-condition-group]"));
-        if (radios.length === 0 || groups.length === 0) return;
+        const $radios = $('input[name="Filter.ConditionMode"]');
+        const $groups = $('[data-condition-group]');
+        if ($radios.length === 0 || $groups.length === 0) return;
 
-        const applyMode = () => {
-            const selectedMode = radios.find((x) => x.checked)?.value || "allUsers";
-            groups.forEach((group) => {
-                const groupMode = group.getAttribute("data-condition-group") || "";
+        function applyMode() {
+            const selectedMode = $radios.filter(':checked').val() || 'allUsers';
+
+            $groups.each(function () {
+                const groupMode = (this.getAttribute('data-condition-group') || '').toString();
                 const enabled = groupMode === selectedMode;
-                group.classList.toggle("mr-condition-group-disabled", !enabled);
+                this.classList.toggle('mr-condition-group-disabled', !enabled);
 
-                const controls = group.querySelectorAll("input, select, textarea, button");
-                controls.forEach((ctrl) => {
-                    if (ctrl.name === "ConditionMode") return;
+                const controls = this.querySelectorAll('input, select, textarea, button');
+                controls.forEach(function (ctrl) {
+                    if (ctrl.name === 'Filter.ConditionMode') return;
                     ctrl.disabled = !enabled;
                 });
             });
-        };
+        }
 
-        radios.forEach((radio) => {
-            radio.addEventListener("change", applyMode);
-        });
-
+        $radios.off('change').on('change', applyMode);
         applyMode();
     }
 
-    /**
-     * Render data cho table search item trong popup Create MR.
-     */
-    function renderSearchRows(body, items) {
-        body.innerHTML = "";
-        if (!items || items.length === 0) {
-            body.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No data</td></tr>';
-            return;
-        }
-
-        items.forEach((item) => {
-            const tr = document.createElement("tr");
-            tr.dataset.itemCode = item.itemCode || "";
-            tr.dataset.itemName = item.itemName || "";
-            tr.dataset.unit = item.unit || "";
-            tr.dataset.inStock = item.inStock || 0;
-            tr.dataset.storeGroupId = item.storeGroupId || 0;
-            tr.innerHTML = `
-                <td><input type="checkbox" class="create-mr-search-checkbox" /></td>
-                <td>${item.itemCode || ""}</td>
-                <td>${item.itemName || ""}</td>
-                <td>${item.unit || ""}</td>
-            `;
-            body.appendChild(tr);
-        });
-    }
-
-    /**
-     * Render list item đã chọn trong popup Create MR.
-     */
-    function renderSelectedRows(body, selectedItems) {
-        body.innerHTML = "";
-        if (!selectedItems || selectedItems.length === 0) {
-            body.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No selected item</td></tr>';
-            return;
-        }
-
-        selectedItems.forEach((item) => {
-            const tr = document.createElement("tr");
-            tr.dataset.itemCode = item.itemCode;
-            tr.innerHTML = `
-                <td><input type="checkbox" class="create-mr-selected-checkbox" /></td>
-                <td>${item.itemCode || ""}</td>
-                <td>${item.itemName || ""}</td>
-                <td>${item.unit || ""}</td>
-            `;
-            body.appendChild(tr);
-        });
-    }
-
-    /**
-     * Gọi handler SearchItems ở Index để tìm item.
-     */
-    async function searchItems(keyword, checkBalanceInStore, storeGroup) {
-        const url = new URL(window.location.href);
-        url.searchParams.set("handler", "SearchItems");
-        if (keyword) {
-            url.searchParams.set("keyword", keyword);
-        }
-        if (checkBalanceInStore) {
-            url.searchParams.set("checkBalanceInStore", "true");
-        }
-        if (storeGroup !== null && storeGroup !== undefined && Number.isFinite(storeGroup)) {
-            url.searchParams.set("storeGroup", String(storeGroup));
-        }
-
-        const response = await fetch(url.toString(), {
-            method: "GET",
-            headers: { "X-Requested-With": "XMLHttpRequest" }
-        });
-
-        if (!response.ok) {
-            throw new Error("Cannot load items.");
-        }
-
-        const json = await response.json();
-        if (!json.success) {
-            throw new Error(json.message || "Cannot load items.");
-        }
-
-        return json.data || [];
-    }
-
-    /**
-     * Khởi tạo popup Create MR theo flow tài liệu:
-     * Search -> chọn item -> '>' -> nhập Description -> Create MR.
-     */
     function initCreateMrPopup() {
-        const openBtn = document.getElementById("openCreateMrPopupBtn");
-        const modal = document.getElementById("createMrModal");
-        const searchBtn = document.getElementById("createMrSearchBtn");
-        const moveRightBtn = document.getElementById("createMrMoveRightBtn");
-        const moveLeftBtn = document.getElementById("createMrMoveLeftBtn");
-        const confirmBtn = document.getElementById("createMrConfirmBtn");
-        const keywordInput = document.getElementById("createMrKeyword");
-        const checkBalanceInput = document.getElementById("createMrCheckBalance");
-        const searchBody = document.getElementById("createMrSearchResultBody");
-        const selectedBody = document.getElementById("createMrSelectedBody");
-        const descriptionInput = document.getElementById("createMrDescription");
-        const descriptionPostInput = document.getElementById("createMrDescriptionInput");
-        const linesJsonInput = document.getElementById("createMrLinesJsonInput");
-        const storeGroupPostInput = document.getElementById("createMrStoreGroupInput");
-        const validation = document.getElementById("createMrValidation");
-        if (!openBtn || !modal || !searchBody || !selectedBody) return;
+        const $modal = $('#createMrModal');
+        if ($modal.length === 0) return;
+
+        const $searchBtn = $('#createMrSearchBtn');
+        const $moveRightBtn = $('#createMrMoveRightBtn');
+        const $moveLeftBtn = $('#createMrMoveLeftBtn');
+        const $confirmBtn = $('#createMrConfirmBtn');
+        const $keywordInput = $('#createMrKeyword');
+        const $checkBalanceInput = $('#createMrCheckBalance');
+        const $searchBody = $('#createMrSearchResultBody');
+        const $selectedBody = $('#createMrSelectedBody');
+        const $descriptionInput = $('#createMrDescription');
+        const $descriptionPostInput = $('#createMrDescriptionInput');
+        const $linesJsonInput = $('#createMrLinesJsonInput');
+        const $storeGroupPostInput = $('#createMrStoreGroupInput');
+        const $validation = $('#createMrValidation');
 
         const selectedMap = new Map();
 
-        const getCurrentStoreGroupValue = () => {
-            const storeGroupSelect = document.getElementById("StoreGroup");
-            if (!storeGroupSelect) {
-                return null;
-            }
-
-            const raw = (storeGroupSelect.value || "").trim();
-            if (!raw) {
-                return null;
-            }
-
+        function getCurrentStoreGroupValue() {
+            const raw = ($('#Filter_StoreGroup').val() || '').toString().trim();
+            if (!raw) return null;
             const parsed = Number.parseInt(raw, 10);
             return Number.isFinite(parsed) ? parsed : null;
-        };
+        }
 
-        const showValidation = (message) => {
-            if (!validation) return;
-            validation.textContent = message || "";
-            validation.classList.toggle("d-none", !message);
-        };
+        function showValidation(message) {
+            $validation.text(message || '');
+            $validation.toggleClass('d-none', !message);
+        }
 
-        const syncConfirmState = () => {
-            if (!confirmBtn) return;
+        function syncConfirmState() {
             const hasItems = selectedMap.size > 0;
-            const hasDescription = ((descriptionInput?.value || "").trim().length > 0);
-            confirmBtn.disabled = !(hasItems && hasDescription);
-        };
+            const hasDescription = (($descriptionInput.val() || '').toString().trim().length > 0);
+            $confirmBtn.prop('disabled', !(hasItems && hasDescription));
+        }
 
-        const redrawSelected = () => {
-            renderSelectedRows(selectedBody, Array.from(selectedMap.values()));
+        function redrawSelected() {
+            renderSelectedRows($selectedBody.get(0), Array.from(selectedMap.values()));
             syncConfirmState();
-        };
+        }
 
-        openBtn.addEventListener("click", async () => {
-            if (typeof window.$ === "function") {
-                window.$(modal).modal({
-                    backdrop: "static",
-                    keyboard: false,
-                    show: true
-                });
-            }
-
+        $modal.off('shown.bs.modal').on('shown.bs.modal', async function () {
             selectedMap.clear();
             redrawSelected();
-            showValidation("");
-            if (descriptionInput) {
-                descriptionInput.value = "";
-            }
-            if (storeGroupPostInput) {
-                const storeGroupValue = getCurrentStoreGroupValue();
-                storeGroupPostInput.value = storeGroupValue === null ? "" : String(storeGroupValue);
-            }
+            showValidation('');
+            $descriptionInput.val('');
+
+            const storeGroupValue = getCurrentStoreGroupValue();
+            $storeGroupPostInput.val(storeGroupValue === null ? '' : String(storeGroupValue));
             syncConfirmState();
 
             try {
-                const items = await searchItems("", !!checkBalanceInput?.checked, getCurrentStoreGroupValue());
-                renderSearchRows(searchBody, items);
+                const items = await searchItems('', $checkBalanceInput.is(':checked'), storeGroupValue);
+                renderSearchRows($searchBody.get(0), items);
             } catch (err) {
                 console.error(err);
-                renderSearchRows(searchBody, []);
+                renderSearchRows($searchBody.get(0), []);
             }
         });
 
-        searchBtn?.addEventListener("click", async () => {
-            showValidation("");
+        $searchBtn.off('click').on('click', async function () {
+            showValidation('');
             try {
                 const items = await searchItems(
-                    (keywordInput?.value || "").trim(),
-                    !!checkBalanceInput?.checked,
+                    ($keywordInput.val() || '').toString().trim(),
+                    $checkBalanceInput.is(':checked'),
                     getCurrentStoreGroupValue()
                 );
-                renderSearchRows(searchBody, items);
+                renderSearchRows($searchBody.get(0), items);
             } catch (err) {
                 console.error(err);
-                showValidation("Cannot load item list.");
-                renderSearchRows(searchBody, []);
+                showValidation('Cannot load item list.');
+                renderSearchRows($searchBody.get(0), []);
             }
         });
 
-        searchBody.addEventListener("click", (event) => {
-            const tr = event.target.closest("tr");
+        $searchBody.off('click', 'tr').on('click', 'tr', function (event) {
+            const tr = event.currentTarget;
             if (!tr || !tr.dataset.itemCode) return;
-            const checkbox = tr.querySelector(".create-mr-search-checkbox");
-            if (checkbox && !event.target.closest("input")) {
-                checkbox.checked = !checkbox.checked;
-            }
+            const checkbox = tr.querySelector('.create-mr-search-checkbox');
+            if (checkbox && !event.target.closest('input')) checkbox.checked = !checkbox.checked;
         });
 
-        searchBody.addEventListener("dblclick", (event) => {
-            const tr = event.target.closest("tr");
+        $searchBody.off('dblclick', 'tr').on('dblclick', 'tr', function (event) {
+            const tr = event.currentTarget;
             if (!tr || !tr.dataset.itemCode) return;
-            const itemCode = tr.dataset.itemCode || "";
+            const itemCode = tr.dataset.itemCode || '';
+
             selectedMap.set(itemCode, {
-                itemCode,
-                itemName: tr.dataset.itemName || "",
-                unit: tr.dataset.unit || "",
-                inStock: Number.parseFloat(tr.dataset.inStock || "0") || 0,
-                storeGroupId: Number.parseInt(tr.dataset.storeGroupId || "0", 10) || 0
+                itemCode: itemCode,
+                itemName: tr.dataset.itemName || '',
+                unit: tr.dataset.unit || '',
+                inStock: Number.parseFloat(tr.dataset.inStock || '0') || 0,
+                storeGroupId: Number.parseInt(tr.dataset.storeGroupId || '0', 10) || 0
             });
-            showValidation("");
+
+            showValidation('');
             redrawSelected();
         });
 
-        moveRightBtn?.addEventListener("click", () => {
-            const checkedRows = Array.from(searchBody.querySelectorAll(".create-mr-search-checkbox:checked"))
-                .map((x) => x.closest("tr"))
-                .filter((x) => !!x);
+        $moveRightBtn.off('click').on('click', function () {
+            const checkedRows = Array.from($searchBody.get(0).querySelectorAll('.create-mr-search-checkbox:checked'))
+                .map(function (x) { return x.closest('tr'); })
+                .filter(function (x) { return !!x; });
+
             if (checkedRows.length === 0) {
-                showValidation("Please choose item(s) from search result.");
+                showValidation('Please choose item(s) from search result.');
                 return;
             }
 
-            checkedRows.forEach((tr) => {
-                const itemCode = tr.dataset.itemCode || "";
+            checkedRows.forEach(function (tr) {
+                const itemCode = tr.dataset.itemCode || '';
                 if (!itemCode) return;
+
                 selectedMap.set(itemCode, {
-                    itemCode,
-                    itemName: tr.dataset.itemName || "",
-                    unit: tr.dataset.unit || "",
-                    inStock: Number.parseFloat(tr.dataset.inStock || "0") || 0,
-                    storeGroupId: Number.parseInt(tr.dataset.storeGroupId || "0", 10) || 0
+                    itemCode: itemCode,
+                    itemName: tr.dataset.itemName || '',
+                    unit: tr.dataset.unit || '',
+                    inStock: Number.parseFloat(tr.dataset.inStock || '0') || 0,
+                    storeGroupId: Number.parseInt(tr.dataset.storeGroupId || '0', 10) || 0
                 });
             });
 
-            showValidation("");
+            showValidation('');
             redrawSelected();
         });
 
-        moveLeftBtn?.addEventListener("click", () => {
-            const selectedChecks = selectedBody.querySelectorAll(".create-mr-selected-checkbox:checked");
-            selectedChecks.forEach((check) => {
-                const tr = check.closest("tr");
-                const itemCode = tr?.dataset.itemCode || "";
-                if (itemCode) {
-                    selectedMap.delete(itemCode);
-                }
+        $moveLeftBtn.off('click').on('click', function () {
+            const selectedChecks = $selectedBody.get(0).querySelectorAll('.create-mr-selected-checkbox:checked');
+            selectedChecks.forEach(function (check) {
+                const tr = check.closest('tr');
+                const itemCode = tr?.dataset.itemCode || '';
+                if (itemCode) selectedMap.delete(itemCode);
             });
             redrawSelected();
         });
 
-        selectedBody.addEventListener("dblclick", (event) => {
-            const tr = event.target.closest("tr");
-            const itemCode = tr?.dataset.itemCode || "";
+        $selectedBody.off('dblclick', 'tr').on('dblclick', 'tr', function (event) {
+            const tr = event.currentTarget;
+            const itemCode = tr?.dataset.itemCode || '';
             if (!itemCode) return;
             selectedMap.delete(itemCode);
             redrawSelected();
         });
 
-        descriptionInput?.addEventListener("input", () => {
+        $descriptionInput.off('input').on('input', function () {
             syncConfirmState();
         });
 
-        confirmBtn?.addEventListener("click", (event) => {
+        $confirmBtn.off('click').on('click', function (event) {
             const selectedItems = Array.from(selectedMap.values());
-            const description = (descriptionInput?.value || "").trim();
+            const description = ($descriptionInput.val() || '').toString().trim();
 
             if (selectedItems.length === 0) {
                 event.preventDefault();
-                showValidation("Please select at least one item.");
+                showValidation('Please select at least one item.');
                 return;
             }
 
             if (!description) {
                 event.preventDefault();
-                showValidation("Description is required.");
-                descriptionInput?.focus();
+                showValidation('Description is required.');
+                $descriptionInput.trigger('focus');
                 return;
             }
 
-            if (descriptionPostInput) {
-                descriptionPostInput.value = description;
+            $descriptionPostInput.val(description);
+            $linesJsonInput.val(JSON.stringify(selectedItems));
+
+            const storeGroupValue = getCurrentStoreGroupValue();
+            if (storeGroupValue !== null) {
+                $storeGroupPostInput.val(String(storeGroupValue));
+            } else {
+                const itemGroups = Array.from(new Set(
+                    selectedItems
+                        .map(function (x) { return Number.parseInt(x.storeGroupId || 0, 10); })
+                        .filter(function (x) { return Number.isFinite(x) && x > 0; })
+                ));
+
+                if (itemGroups.length === 1) {
+                    $storeGroupPostInput.val(String(itemGroups[0]));
+                } else {
+                    event.preventDefault();
+                    showValidation('Please choose Store Group before creating MR.');
+                    return;
+                }
             }
-            if (linesJsonInput) {
-                linesJsonInput.value = JSON.stringify(selectedItems);
-            }
-            if (storeGroupPostInput) {
-                const storeGroupValue = getCurrentStoreGroupValue();
-                storeGroupPostInput.value = storeGroupValue === null ? "" : String(storeGroupValue);
-            }
-            showValidation("");
+
+            showValidation('');
             syncConfirmState();
         });
     }
 
-    /**
-     * Khởi tạo trang Material Request Index.
-     */
-    function initMaterialRequestIndexPage() {
-        const table = document.getElementById("mrTable");
-        const rows = table ? Array.from(table.querySelectorAll(".mr-row")) : [];
+    function initCreateAutoMrPopup() {
+        const $modal = $('#createAutoMrModal');
+        if ($modal.length === 0) return;
 
-        if (table) {
-            rows.forEach((row) => {
-                row.addEventListener("dblclick", () => {
-                    const detailUrl = row.getAttribute("data-detail-url");
-                    if (detailUrl) {
-                        window.location.href = detailUrl;
-                    }
-                });
-            });
+        const $storeGroupSelect = $('#createAutoStoreGroup');
+        const $filterStoreGroup = $('#Filter_StoreGroup');
+        const $descInput = $('#createAutoDescription');
+        const $form = $('#createAutoMrForm');
+
+        function setDefaults() {
+            if ($filterStoreGroup.length > 0 && $storeGroupSelect.length > 0) {
+                $storeGroupSelect.val($filterStoreGroup.val());
+            }
+
+            if (($descInput.val() || '').toString().trim() === '') {
+                const now = new Date();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                $descInput.val(`Auto MR ${month}/${now.getFullYear()}`);
+            }
         }
 
-        initConditionModeSwitcher();
-        initStatusCheckboxDropdown();
-        initCreateMrPopup();
+        $modal.off('shown.bs.modal').on('shown.bs.modal', function () {
+            setDefaults();
+        });
+
+        $form.off('submit').on('submit', function (e) {
+            const raw = ($storeGroupSelect.val() || '').toString().trim();
+            if (!raw) {
+                e.preventDefault();
+                alert('Please choose Store Group before creating Auto MR.');
+                $storeGroupSelect.trigger('focus');
+            }
+        });
     }
 
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", initMaterialRequestIndexPage);
-    } else {
-        initMaterialRequestIndexPage();
+    function searchItems(keyword, checkBalanceInStore, storeGroup) {
+        return new Promise(function (resolve, reject) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('handler', 'SearchItems');
+            if (keyword) url.searchParams.set('keyword', keyword);
+            if (checkBalanceInStore) url.searchParams.set('checkBalanceInStore', 'true');
+            if (storeGroup !== null && storeGroup !== undefined && Number.isFinite(storeGroup)) {
+                url.searchParams.set('storeGroup', String(storeGroup));
+            }
+
+            $.ajax({
+                url: url.toString(),
+                type: 'GET',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                success: function (json) {
+                    if (json && json.success) {
+                        resolve(json.data || []);
+                    } else {
+                        reject(new Error((json && json.message) ? json.message : 'Cannot load items.'));
+                    }
+                },
+                error: function () {
+                    reject(new Error('Cannot load items.'));
+                }
+            });
+        });
+    }
+
+    function renderSearchRows(body, items) {
+        body.innerHTML = '';
+        if (!items || items.length === 0) {
+            body.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No data</td></tr>';
+            return;
+        }
+
+        items.forEach(function (item) {
+            const tr = document.createElement('tr');
+            tr.dataset.itemCode = item.itemCode || '';
+            tr.dataset.itemName = item.itemName || '';
+            tr.dataset.unit = item.unit || '';
+            tr.dataset.inStock = item.inStock || 0;
+            tr.dataset.storeGroupId = item.storeGroupId || 0;
+            tr.innerHTML = `
+                <td><input type="checkbox" class="create-mr-search-checkbox"></td>
+                <td>${item.itemCode || ''}</td>
+                <td>${item.itemName || ''}</td>
+                <td>${item.unit || ''}</td>`;
+            body.appendChild(tr);
+        });
+    }
+
+    function renderSelectedRows(body, selectedItems) {
+        body.innerHTML = '';
+        if (!selectedItems || selectedItems.length === 0) {
+            body.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No selected item</td></tr>';
+            return;
+        }
+
+        selectedItems.forEach(function (item) {
+            const tr = document.createElement('tr');
+            tr.dataset.itemCode = item.itemCode;
+            tr.innerHTML = `
+                <td><input type="checkbox" class="create-mr-selected-checkbox"></td>
+                <td>${item.itemCode || ''}</td>
+                <td>${item.itemName || ''}</td>
+                <td>${item.unit || ''}</td>`;
+            body.appendChild(tr);
+        });
     }
 })();
+
+
+
+
+
