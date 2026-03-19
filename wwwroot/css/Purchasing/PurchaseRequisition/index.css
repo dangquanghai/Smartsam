@@ -1,0 +1,164 @@
+.prq-table-wrap {
+    max-height: 62vh;
+    overflow: auto;
+    position: relative;
+}
+
+.prq-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #f8f9fa;
+    box-shadow: inset 0 -1px 0 #dee2e6;
+}
+
+.prq-row {
+    cursor: pointer;
+}
+
+.prq-row.selected {
+    background-color: #dff0ff !important;
+}
+
+.prq-selector-cell {
+    width: 32px;
+    min-width: 32px;
+}
+
+.prq-select-all,
+.prq-selector {
+    margin: 0;
+}
+
+.prq-center {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.prq-table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.prq-table-header-left {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.prq-table-header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.prq-page-size-form {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.prq-page-size-label {
+    margin-bottom: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.prq-page-size-select {
+    width: 74px;
+    min-width: 74px;
+}
+
+.prq-pager-link {
+    min-width: 34px;
+    text-align: center;
+}
+
+.prq-table-paging-info {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.55rem;
+    border-radius: 0.25rem;
+    background: transparent;
+    white-space: nowrap;
+    color: inherit;
+    font-weight: 600;
+}
+
+.prq-action-bar .btn {
+    min-width: 110px;
+}
+
+.prq-action-bar .btn-action-add,
+.btn-action-add {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: #fff;
+}
+
+.prq-action-bar .btn-action-copy {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: #fff;
+}
+
+.prq-action-bar .btn-action-submit {
+    background-color: #343a40;
+    border-color: #343a40;
+    color: #fff;
+}
+
+.prq-action-bar .btn-action-export,
+.btn-action-save,
+.prq-action-bar .btn-action-save {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: #fff;
+}
+
+.btn-action-close,
+.prq-action-bar .btn-action-close {
+    background-color: #f8f9fa;
+    border-color: #ced4da;
+    color: #495057;
+}
+
+.prq-action-bar .btn:hover,
+.prq-action-bar .btn:focus,
+.btn-action-add:hover,
+.btn-action-add:focus,
+.btn-action-save:hover,
+.btn-action-save:focus,
+.btn-action-close:hover,
+.btn-action-close:focus {
+    color: inherit;
+}
+
+.prq-add-at-table-wrap {
+    max-height: 45vh;
+    overflow: auto;
+}
+
+.prq-add-at-table-wrap thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #f8f9fa;
+}
+
+@media (max-width: 767.98px) {
+    .prq-table-wrap {
+        max-height: 52vh;
+    }
+
+    .prq-table-header-right {
+        width: 100%;
+    }
+}

@@ -1,0 +1,67 @@
+.prq-detail-grid {
+    display: grid;
+    grid-template-columns: max-content minmax(120px, 1fr) max-content minmax(100px, 1fr) max-content minmax(120px, 1fr) max-content minmax(120px, 1fr);
+    column-gap: 0.5rem;
+    row-gap: 0.5rem;
+    align-items: center;
+}
+
+.prq-detail-title {
+    font-weight: 700;
+}
+
+.prq-detail-grid label {
+    margin: 0;
+    font-weight: 600;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.prq-detail-span-full {
+    grid-column: 2 / 9;
+}
+
+.prq-detail-table-wrap {
+    max-height: 55vh;
+    overflow: auto;
+}
+
+.prq-detail-table-wrap thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #f8f9fa;
+}
+
+.prq-center {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.btn-action-add {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: #fff;
+}
+
+.btn-action-save {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: #fff;
+}
+
+.btn-action-close {
+    background-color: #f8f9fa;
+    border-color: #ced4da;
+    color: #495057;
+}
+
+@media (max-width: 1199.98px) {
+    .prq-detail-grid {
+        grid-template-columns: 130px minmax(0, 1fr);
+    }
+
+    .prq-detail-span-full {
+        grid-column: auto;
+    }
+}
