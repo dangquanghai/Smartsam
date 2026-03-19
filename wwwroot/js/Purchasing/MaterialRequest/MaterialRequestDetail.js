@@ -1,5 +1,4 @@
 ﻿$(document).ready(function () {
-    // Tracking comment: keep Material Request detail script marked as touched for current work.
     // 1. Lấy mode và quyền thao tác của người dùng
     const urlParams = new URLSearchParams(window.location.search);
     const mode = urlParams.get('mode')?.toLowerCase() || 'add';
@@ -48,7 +47,7 @@ function initializePage(mode, actionPerm) {
 
     // Khóa/mở input theo mode + quyền
     $form.find('input, textarea, select')
-        .not('[type="hidden"], #mrSaveBtn, #mrSubmitBtn, #mrApproveBtn, #mrRejectBtn, #addMrLineBtn, #removeMrLineBtn, #createNewItemBtn, #calculateBtn, #mrPrintBtn')
+        .not('[type="hidden"], #mrSaveBtn, #mrSubmitBtn, #mrApproveBtn, #mrRejectBtn, #addMrLineBtn, #removeMrLineBtn, #createNewItemBtn, #calculateBtn')
         .prop('disabled', disableEditFields);
 
     if (toBoolData($form.data('store-group-locked'))) {
@@ -176,11 +175,6 @@ function initializePage(mode, actionPerm) {
         if (event.key !== 'Enter') return;
         event.preventDefault();
         runItemLookupSearch();
-    });
-
-    // Nút Print xử lý bằng JS
-    $('#mrPrintBtn').off('click').on('click', function () {
-        window.print();
     });
 
     // Đồng bộ dữ liệu line ban đầu

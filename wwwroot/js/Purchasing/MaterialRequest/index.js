@@ -1,6 +1,5 @@
 ﻿(function () {
     'use strict';
-    // Tracking comment: keep Material Request index script marked as touched for current work.
 
     let pageSize = typeof defaultPageSize !== 'undefined' ? defaultPageSize : 10;
     let selectedRequestNo = null;

@@ -5,14 +5,15 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
 using SmartSam.Pages;
 using SmartSam.Services;
+using SmartSam.Services.Interfaces;
 using System.Data;
 
 namespace SmartSam.Pages.Purchasing.MaterialRequest;
 
 public class MaterialRequestDetailModel : BasePageModel
 {
-    // Tracking comment: keep Material Request detail page model marked as touched for current work.
     private readonly MaterialRequestService _materialRequestService;
+    private readonly ISecurityService _securityService;
     private readonly PermissionService _permissionService;
 
     private const int MaterialRequestFunctionId = 104;
@@ -31,9 +32,10 @@ public class MaterialRequestDetailModel : BasePageModel
     private bool _isAdminRole;
 
     // Khởi tạo model detail và nạp các service cần dùng.
-    public MaterialRequestDetailModel(IConfiguration configuration, PermissionService permissionService) : base(configuration)
+    public MaterialRequestDetailModel(ISecurityService securityService, IConfiguration configuration, PermissionService permissionService) : base(configuration)
     {
         _materialRequestService = new MaterialRequestService(configuration);
+        _securityService = securityService;
         _permissionService = permissionService;
     }
 
@@ -61,7 +63,8 @@ public class MaterialRequestDetailModel : BasePageModel
     [TempData]
     public string? ErrorMessage { get; set; }
 
-    public PagePermissions PagePerm { get; private set; } = new PagePermissions();
+    [BindProperty]
+    public PagePermissions PagePerm { get; set; } = new PagePermissions();
     public List<SelectListItem> StoreGroups { get; set; } = new List<SelectListItem>();
     public List<SelectListItem> Statuses { get; set; } = new List<SelectListItem>();
 
@@ -119,9 +122,11 @@ public class MaterialRequestDetailModel : BasePageModel
     }
 
     // Tải trang detail: kiểm tra quyền, nạp dropdown, rồi nạp dữ liệu nếu đang edit.
-    public async Task<IActionResult> OnGet(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
-        PagePerm = GetUserPermissions();
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
+        PagePerm = new PagePermissions();
+        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
         await LoadUserScopeAsync(cancellationToken);
         if (!CanAccessPage())
         {
@@ -159,13 +164,16 @@ public class MaterialRequestDetailModel : BasePageModel
 
         Input = detail;
         Lines = (await _materialRequestService.GetLinesAsync(Id.Value, cancellationToken)).ToList();
+        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, CurrentStatusId);
         return Page();
     }
 
     // Lưu form detail (tạo mới/cập nhật) sau khi validate dữ liệu.
     public async Task<IActionResult> OnPostSave(CancellationToken cancellationToken)
     {
-        PagePerm = GetUserPermissions();
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
+        PagePerm = new PagePermissions();
+        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
         await LoadUserScopeAsync(cancellationToken);
         if (!CanAccessPage())
         {
@@ -191,6 +199,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
             // Giữ nguyên trạng thái workflow khi người dùng chỉ save thông tin trên form.
             var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
+            PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, currentStatus);
             if (!HasPermission(PermissionEdit) || currentStatus != StatusJustCreated)
             {
                 WarningMessage = "You cannot edit this Material Request at current status.";
@@ -261,7 +270,9 @@ public class MaterialRequestDetailModel : BasePageModel
     // Xử lý chung cho các thao tác workflow: Submit/Approve/Reject.
     private async Task<IActionResult> HandleWorkflowActionAsync(MaterialRequestWorkflowAction action, CancellationToken cancellationToken)
     {
-        PagePerm = GetUserPermissions();
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
+        PagePerm = new PagePermissions();
+        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
         await LoadUserScopeAsync(cancellationToken);
         if (!CanAccessPage())
         {
@@ -289,6 +300,7 @@ public class MaterialRequestDetailModel : BasePageModel
         }
 
         var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
+        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, currentStatus);
         var transition = ResolveTransition(action, currentStatus);
         if (transition is null)
         {
@@ -341,7 +353,9 @@ public class MaterialRequestDetailModel : BasePageModel
     // API lookup item cho popup Add Detail.
     public async Task<IActionResult> OnGetSearchItems(string? keyword, bool checkBalanceInStore = false, CancellationToken cancellationToken = default)
     {
-        PagePerm = GetUserPermissions();
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
+        PagePerm = new PagePermissions();
+        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
         await LoadUserScopeAsync(cancellationToken);
         if (!CanAccessPage())
         {
@@ -355,7 +369,9 @@ public class MaterialRequestDetailModel : BasePageModel
     // API tạo nhanh item mới khi item chưa có trong danh mục.
     public async Task<IActionResult> OnPostCreateItem([FromForm] string? itemName, [FromForm] string? unit, CancellationToken cancellationToken)
     {
-        PagePerm = GetUserPermissions();
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
+        PagePerm = new PagePermissions();
+        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
         await LoadUserScopeAsync(cancellationToken);
         if (!CanAccessPage())
         {
@@ -613,19 +629,24 @@ public class MaterialRequestDetailModel : BasePageModel
     // Nạp permission number của user cho function Material Request.
     private PagePermissions GetUserPermissions()
     {
-        bool isAdmin = IsAdminUser();
-        int roleId = int.TryParse(User.FindFirst("RoleID")?.Value, out var roleValue) ? roleValue : 0;
+        bool isAdmin = User.FindFirst("IsAdminRole")?.Value == "True";
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
+        // 1. Khởi tạo đối tượng PagePermissions mới
         var permsObj = new PagePermissions();
-        _isAdminRole = isAdmin;
 
         if (isAdmin)
         {
-            permsObj.AllowedNos = Enumerable.Range(1, 10).ToList();
-            return permsObj;
+            // Admin: Gán danh sách quyền giả lập
+            permsObj.AllowedNos = Enumerable.Range(1, 20).ToList();
+        }
+        else
+        {
+            // 2. Lấy danh sách List<int> từ Service và gán vào thuộc tính AllowedNos của Object
+            permsObj.AllowedNos = _permissionService.GetPermissionsForPage(roleId, MaterialRequestFunctionId);
         }
 
-        permsObj.AllowedNos = _permissionService.GetPermissionsForPage(roleId, MaterialRequestFunctionId);
+        // 3. Trả về đối tượng (Object) chứa danh sách đó
         return permsObj;
     }
 

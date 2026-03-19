@@ -1,7 +1,6 @@
 ﻿@page
 @model SmartSam.Pages.Purchasing.MaterialRequest.IndexModel
 @{
-    @* Tracking comment: keep Material Request index file marked as touched for current work. *@
     ViewData["Title"] = "Material Request";
     var canAllUsersCondition = (bool?)ViewData["CanShowPcCondition"] ?? false;
     var canStoremanCondition = (bool?)ViewData["CanShowStoreCondition"] ?? false;
@@ -210,7 +209,6 @@
                             </button>
                         }
                         <button type="button" id="btnRefresh" class="btn btn-primary btn-sm">RefreshList</button>
-                        <button type="button" class="btn btn-primary btn-sm" id="btnExcel" disabled><i class="fas fa-file-export"></i> Excel</button>
                         <button type="button" id="btnClose" class="btn btn-secondary btn-sm">Close</button>
                     </div>
                 </div>

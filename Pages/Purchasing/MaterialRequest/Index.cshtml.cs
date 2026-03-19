@@ -11,13 +11,14 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Data.SqlClient;
 using SmartSam.Helpers;
 using SmartSam.Pages;
+using SmartSam.Services.Interfaces;
 
 namespace SmartSam.Pages.Purchasing.MaterialRequest;
 
 public class IndexModel : BasePageModel
 {
-    // Tracking comment: keep Material Request index page model marked as touched for current work.
     private readonly MaterialRequestService _materialRequestService;
+    private readonly ISecurityService _securityService;
     private readonly PermissionService _permissionService;
 
     // ID của chức năng trong bảng SYS_Function
@@ -36,9 +37,10 @@ public class IndexModel : BasePageModel
     private EmployeeMaterialScopeDto _dataScope = new EmployeeMaterialScopeDto();
     private bool _isAdminRole;
 
-    public IndexModel(IConfiguration configuration, PermissionService permissionService) : base(configuration)
+    public IndexModel(ISecurityService securityService, IConfiguration configuration, PermissionService permissionService) : base(configuration)
     {
         _materialRequestService = new MaterialRequestService(configuration);
+        _securityService = securityService;
         _permissionService = permissionService;
     }
 
@@ -74,7 +76,7 @@ public class IndexModel : BasePageModel
     [TempData]
     public string? ErrorMessage { get; set; }
 
-    public PagePermissions PagePerm { get; set; } = new PagePermissions();
+    public PagePermissions PagePerm { get; private set; } = new PagePermissions();
     public List<SelectListItem> StoreGroups { get; set; } = new List<SelectListItem>();
     public List<SelectListItem> Statuses { get; set; } = new List<SelectListItem>();
     public List<MaterialRequestListRowDto> Rows { get; set; } = new List<MaterialRequestListRowDto>();
@@ -109,8 +111,10 @@ public class IndexModel : BasePageModel
     public void OnGet()
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
-        PagePerm = GetUserPermissions();
+        PagePerm = new PagePermissions();
+        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
         LoadUserScopeAsync(cancellationToken).GetAwaiter().GetResult();
         if (!CanAccessPage())
         {
@@ -149,8 +153,10 @@ public class IndexModel : BasePageModel
     public IActionResult OnPostSearch([FromBody] MaterialRequestSearchRequest request)
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
-        PagePerm = GetUserPermissions();
+        PagePerm = new PagePermissions();
+        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
         LoadUserScopeAsync(cancellationToken).GetAwaiter().GetResult();
         if (!CanAccessPage())
         {
@@ -189,9 +195,10 @@ public class IndexModel : BasePageModel
         var dataWithActions = result.Rows.Select(r =>
         {
             var statusId = r.MaterialStatusId ?? 0;
+            var effectivePerms = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, statusId);
 
             // Quyền thực tế trên từng dòng dữ liệu theo trạng thái hiện tại.
-            var canEditRow = AllowEdit() && statusId == 0;
+            var canEditRow = effectivePerms.Contains(PermissionEdit) && statusId == 0;
             var canApprove = CanApproveStatus(statusId);
             var canReject = CanRejectStatus(statusId);
 
@@ -201,8 +208,8 @@ public class IndexModel : BasePageModel
                 actions = new
                 {
                     // Chế độ truy cập khi click vào số chứng từ.
-                    canAccess = true,
-                    accessMode = (canEditRow || canApprove || canReject) ? "edit" : "view",
+                    canAccess = effectivePerms.Count > 0,
+                    accessMode = canEditRow ? "edit" : "view",
 
                     // Các nút chức năng theo quyền + trạng thái của dòng.
                     canEdit = canEditRow,
@@ -227,8 +234,10 @@ public class IndexModel : BasePageModel
     public IActionResult OnGetSearchItems(string? keyword, bool checkBalanceInStore = false, int? storeGroup = null)
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
-        PagePerm = GetUserPermissions();
+        PagePerm = new PagePermissions();
+        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
         LoadUserScopeAsync(cancellationToken).GetAwaiter().GetResult();
         if (!CanAccessPage())
         {
@@ -250,8 +259,10 @@ public class IndexModel : BasePageModel
     public IActionResult OnPostCreateMr()
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
-        PagePerm = GetUserPermissions();
+        PagePerm = new PagePermissions();
+        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
         LoadUserScopeAsync(cancellationToken).GetAwaiter().GetResult();
         if (!CanAccessPage() || !AllowCreate())
         {
@@ -324,8 +335,10 @@ public class IndexModel : BasePageModel
     public IActionResult OnPostCreateAuto()
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
-        PagePerm = GetUserPermissions();
+        PagePerm = new PagePermissions();
+        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
         LoadUserScopeAsync(cancellationToken).GetAwaiter().GetResult();
         if (!CanAccessPage() || !AllowCreateAuto())
         {
@@ -555,19 +568,24 @@ public class IndexModel : BasePageModel
 
     private PagePermissions GetUserPermissions()
     {
-        bool isAdmin = IsAdminUser();
-        int roleId = int.TryParse(User.FindFirst("RoleID")?.Value, out var roleValue) ? roleValue : 0;
+        bool isAdmin = User.FindFirst("IsAdminRole")?.Value == "True";
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
+        // 1. Khởi tạo đối tượng PagePermissions mới
         var permsObj = new PagePermissions();
-        _isAdminRole = isAdmin;
 
         if (isAdmin)
         {
-            permsObj.AllowedNos = Enumerable.Range(1, 10).ToList();
-            return permsObj;
+            // Admin: Gán danh sách quyền giả lập
+            permsObj.AllowedNos = Enumerable.Range(1, 20).ToList();
+        }
+        else
+        {
+            // 2. Lấy danh sách List<int> từ Service và gán vào thuộc tính AllowedNos của Object
+            permsObj.AllowedNos = _permissionService.GetPermissionsForPage(roleId, MaterialRequestFunctionId);
         }
 
-        permsObj.AllowedNos = _permissionService.GetPermissionsForPage(roleId, MaterialRequestFunctionId);
+        // 3. Trả về đối tượng (Object) chứa danh sách đó
         return permsObj;
     }
 
