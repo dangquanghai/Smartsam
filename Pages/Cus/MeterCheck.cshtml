@@ -1,0 +1,208 @@
+﻿@page 
+@model MeterCheckModel
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    ViewData["Title"] = "Meter Check";
+
+    var userCode = User?.FindFirst("EmployeeCode")?.Value?.ToUpper()
+        ?? User?.Identity?.Name?.ToUpper() ?? "";
+    bool canRecognize = userCode == "ADMIN" || userCode == "TD019";
+}
+
+<section class="content">
+    <div class="container-fluid">
+
+        <!-- Top action bar -->
+        <div class="row align-items-center mb-3">
+            <!-- Left: Recognize -->
+            <div class="col-md-4 col-12 mb-2 mb-md-0">
+                @if (canRecognize)
+                {
+                    <button id="btnRecognize"
+                            type="button"
+                            onclick="recognizeSelected()"
+                            class="btn btn-warning">
+                        <i class="fas fa-search"></i> Recognize
+                    </button>
+                }
+                else
+                {
+                    <button class="btn btn-warning" disabled>
+                        <i class="fas fa-search"></i>Recognize
+                    </button>
+                }
+            </div>
+
+            <!-- Center: Summary -->
+            <div class="col-md-4 col-12 text-center mb-2 mb-md-0">
+                <span class="badge badge-info p-2">
+                    Tổng số bản ghi: @Model.Records.Count
+                </span>
+            </div>
+
+            <!-- Right: Logout -->
+            <div class="col-md-4 col-12 text-right">
+                <form method="post" asp-page="/Logout" class="d-inline">
+                    <button class="btn btn-outline-danger btn-sm">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </button>
+                </form>
+            </div>
+        </div>
+
+
+        <!-- Message -->
+        @if (!string.IsNullOrEmpty(Model.AccessMessage))
+        {
+            <div class="alert alert-danger">
+                @Model.AccessMessage
+            </div>
+        }
+
+        @if (TempData["Message"] != null)
+        {
+            <div class="alert alert-success">
+                @TempData["Message"]
+            </div>
+        }
+
+        <div id="reconizeStatus"
+             class="text-primary font-weight-bold mb-3"
+             style="display:none;">
+            <i class="fas fa-spinner fa-spin"></i>
+            Hệ thống đang nhận dạng, vui lòng đợi...
+        </div>
+
+        <!-- Table -->
+        <div class="card card-primary">
+            <div class="card-header">
+                <h3 class="card-title">Danh sách công tơ</h3>
+            </div>
+
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th style="width:220px">Ảnh</th>
+                                <th style="width:160px">Mã căn hộ</th>
+                                <th style="width:160px">Chỉ số điện</th>
+                                <th style="width:160px">Người tạo</th>
+                                <th>OCR gốc</th>
+                                <th style="width:180px">Ngày tạo</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @for (int i = 0; i < Model.Records.Count; i++)
+                            {
+                                <tr>
+                                    <td>
+                                        <img src="@($"/uploads/{Model.TheYear}-{Model.TheMonth}/{Model.Records[i].FileName}")"
+                                             class="zoomable img-thumbnail"
+                                             style="width:200px; cursor:pointer;" />
+                                    </td>
+
+                                    <td>
+                                        <input class="form-control"
+                                               name="Records[@i].ApartmentCode"
+                                               value="@Model.Records[i].ApartmentCode" />
+                                    </td>
+
+                                    <td>
+                                        <input class="form-control"
+                                               name="Records[@i].ElectricIndex"
+                                               value="@Model.Records[i].ElectricIndex" />
+                                    </td>
+
+                                    <td>
+                                        <input class="form-control"
+                                               name="Records[@i].UserCode"
+                                               value="@Model.Records[i].UserCode" />
+                                    </td>
+
+                                    <td>
+                                        <textarea class="form-control"
+                                                  rows="3"
+                                                  name="Records[@i].RawText">@Model.Records[i].RawText</textarea>
+                                    </td>
+
+                                    <td>
+                                        @Model.Records[i].CreatedAt.ToString("yyyy-MM-dd HH:mm")
+                                    </td>
+
+                                    <input type="hidden" name="Records[@i].Id" value="@Model.Records[i].Id" />
+                                    <input type="hidden" name="Records[@i].FileName" value="@Model.Records[i].FileName" />
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card-footer text-right">
+                <button id="btnUpdateAll" class="btn btn-success btn-lg">
+                    <i class="fas fa-save"></i> Update All
+                </button>
+            </div>
+        </div>
+
+        <div id="statusMessageEnd"
+             class="text-primary font-weight-bold mt-2"
+             style="display:none;"></div>
+
+        <!-- Image zoom overlay -->
+        <div id="imgZoomOverlay">
+            <img id="zoomTarget" />
+        </div>
+
+        <!-- Email popup -->
+        <div id="emailPopup"
+             class="card"
+             style="display:none;
+                    position:fixed;
+                    top:50%; left:50%;
+                    transform:translate(-50%, -50%);
+                    z-index:9999;
+                    width:350px;">
+
+            <div class="card-header bg-primary">
+                <h3 class="card-title">
+                    <i class="fas fa-envelope"></i> Send Email
+                </h3>
+            </div>
+
+            <div class="card-body">
+                <input type="hidden" id="popupFileName" />
+                <input type="hidden" id="popupApartment" />
+
+                <div class="form-group">
+                    <label>Recipient Email</label>
+                    <input id="emailInput"
+                           type="email"
+                           class="form-control"
+                           placeholder="example@mail.com" />
+                </div>
+            </div>
+
+            <div class="card-footer text-right">
+                <button class="btn btn-secondary" onclick="closeEmailPopup()">
+                    Cancel
+                </button>
+                <button class="btn btn-success" onclick="sendEmail()">
+                    Send
+                </button>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Cus/MeterCheck.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script src="~/js/Cus/MeterCheck.js" asp-append-version="true"></script>
+}

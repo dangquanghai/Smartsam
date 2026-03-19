@@ -1,0 +1,40 @@
+﻿@model List<SmartSam.Models.UserMenuDto>
+@using System.Linq
+
+@{
+    // Lấy URL hiện tại để xử lý trạng thái Active
+    var currentPath = ViewContext.HttpContext.Request.Path.Value ?? "";
+}
+
+<ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
+
+    @foreach (var moduleGroup in Model.GroupBy(x => x.ModuleName))
+    {
+        // Kiểm tra xem trong module này có trang con nào đang được mở không
+        var isModuleActive = moduleGroup.Any(f => currentPath.StartsWith(f.Url, StringComparison.OrdinalIgnoreCase));
+
+        <li class="nav-item @(isModuleActive ? "menu-open" : "")">
+            <a href="#" class="nav-link @(isModuleActive ? "active" : "")">
+                <i class="nav-icon fas fa-folder"></i>
+                <p>
+                    @moduleGroup.Key
+                    <i class="right fas fa-angle-left"></i>
+                </p>
+            </a>
+
+            <ul class="nav nav-treeview">
+                @foreach (var function in moduleGroup)
+                {
+                    var isFunctionActive = currentPath.Equals(function.Url, StringComparison.OrdinalIgnoreCase);
+
+                    <li class="nav-item">
+                        <a href="@function.Url" class="nav-link @(isFunctionActive ? "active" : "")">
+                            <i class="far fa-circle nav-icon"></i>
+                            <p>@function.FunctionName</p>
+                        </a>
+                    </li>
+                }
+            </ul>
+        </li>
+    }
+</ul>

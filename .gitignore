@@ -1,0 +1,36 @@
+**/Pages/Infor/
+
+# Build artifacts
+bin/
+obj/
+
+# User/machine-specific files
+.vs/
+*.user
+*.suo
+*.cache
+.DS_Store
+
+# Local runtime secrets/config
+appsettings*.json
+.env
+.env.*
+!.env.example
+
+# Local Docker-only files
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+.vscode/
+Documents/
+db/
+!db/
+db/*
+db/migrations/**
+scripts/use-db-local.sh
+scripts/use-db-remote.sh
+
+# Local change tracking (do not commit)
+CHANGE_TRACKING.md
+user.md
+run.log
