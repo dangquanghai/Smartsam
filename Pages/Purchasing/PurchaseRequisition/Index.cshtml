@@ -1,0 +1,349 @@
+@page
+@model SmartSam.Pages.Purchasing.PurchaseRequisition.IndexModel
+@{
+    ViewData["Title"] = "Purchase Requisition";
+    var currentPage = Model.Filter.Page <= 0 ? 1 : Model.Filter.Page;
+    var totalPages = Model.TotalPages <= 0 ? 1 : Model.TotalPages;
+    Func<int, string> pageUrl = (page) => Url.Page("./Index", new
+    {
+        RequestNo = Model.Filter.RequestNo,
+        Description = Model.Filter.Description,
+        UseDateRange = Model.Filter.UseDateRange,
+        FromDate = Model.Filter.UseDateRange ? Model.Filter.FromDate?.ToString("yyyy-MM-dd") : null,
+        ToDate = Model.Filter.UseDateRange && Model.Filter.FromDate.HasValue ? Model.Filter.ToDate?.ToString("yyyy-MM-dd") : null,
+        Page = page,
+        PageSize = Model.Filter.PageSize
+    }) ?? "#";
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @if (!string.IsNullOrWhiteSpace(Model.Message))
+        {
+            var alertClass = Model.MessageType switch
+            {
+                "success" => "alert-success",
+                "warning" => "alert-warning",
+                "error" => "alert-danger",
+                _ => "alert-info"
+            };
+            <div class="alert @alertClass alert-dismissible fade show mb-2" role="alert">
+                @Model.Message
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-md-2">
+                <div class="card card-info">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-search"></i> Search</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" id="prqSearchForm">
+                            <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
+                            <input type="hidden" name="Filter.Page" value="1" />
+                            <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+
+                            <div class="form-group mb-2">
+                                <label>Request No.</label>
+                                <input asp-for="Filter.RequestNo" class="form-control form-control-sm" />
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>Description</label>
+                                <input asp-for="Filter.Description" class="form-control form-control-sm" />
+                            </div>
+
+                            <div class="form-group mb-1">
+                                <div class="custom-control custom-checkbox">
+                                    <input asp-for="Filter.UseDateRange" class="custom-control-input" />
+                                    <label asp-for="Filter.UseDateRange" class="custom-control-label">Use Date Range</label>
+                                </div>
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>From Date</label>
+                                <input asp-for="Filter.FromDate" type="date" class="form-control form-control-sm" />
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label>To Date</label>
+                                <input asp-for="Filter.ToDate" type="date" class="form-control form-control-sm" />
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-block btn-sm border mb-2">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                            <button type="button" id="btnPrintList" class="btn btn-outline-secondary btn-block btn-sm border">
+                                <i class="fas fa-print"></i> Print List
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-10">
+                <div class="card card-primary">
+                    <div class="card-header prq-table-header">
+                        <div class="prq-table-header-left">
+                            <h3 class="card-title">Purchase Requisitions</h3>
+                        </div>
+                        <div class="prq-table-header-right app-paging-white">
+                            <small class="prq-table-paging-info">
+                                @if (Model.TotalRecords == 0)
+                                {
+                                    <text>Showing 0 to 0 of 0 entries</text>
+                                }
+                                else
+                                {
+                                    <text>Showing @Model.PageStart to @Model.PageEnd of @Model.TotalRecords entries</text>
+                                }
+                            </small>
+                            <div class="prq-page-size-form m-0">
+                                <label class="mb-0 prq-page-size-label" for="prqPageSize">Show</label>
+                                <select id="prqPageSize" class="form-control form-control-sm prq-page-size-select">
+                                    <option value="10" selected="@(Model.Filter.PageSize == 10 ? "selected" : null)">10</option>
+                                    <option value="20" selected="@(Model.Filter.PageSize == 20 ? "selected" : null)">20</option>
+                                    <option value="50" selected="@(Model.Filter.PageSize == 50 ? "selected" : null)">50</option>
+                                    <option value="100" selected="@(Model.Filter.PageSize == 100 ? "selected" : null)">100</option>
+                                    <option value="200" selected="@(Model.Filter.PageSize == 200 ? "selected" : null)">200</option>
+                                </select>
+                            </div>
+                            <ul class="pagination pagination-sm m-0">
+                                <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+                                    <a class="page-link prq-pager-link" href="@(Model.HasPreviousPage ? pageUrl(currentPage - 1) : "#")"><i class="fas fa-angle-left"></i></a>
+                                </li>
+                                @for (var p = Math.Max(1, currentPage - 2); p <= Math.Min(totalPages, currentPage + 2); p++)
+                                {
+                                    <li class="page-item @(p == currentPage ? "active" : "")">
+                                        <a class="page-link prq-pager-link" href="@pageUrl(p)">@p</a>
+                                    </li>
+                                }
+                                <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+                                    <a class="page-link prq-pager-link" href="@(Model.HasNextPage ? pageUrl(currentPage + 1) : "#")"><i class="fas fa-angle-right"></i></a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-0">
+                        <div class="table-responsive prq-table-wrap">
+                            <table class="table table-hover table-bordered mb-0 text-nowrap prq-table" id="prqTable">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width: 32px;"></th>
+                                        <th style="width: 120px;">No.</th>
+                                        <th style="width: 120px;">Date</th>
+                                        <th>Description</th>
+                                        <th style="width: 100px;">Status</th>
+                                        <th style="width: 90px;">Purchaser</th>
+                                        <th style="width: 90px;">Chief_A</th>
+                                        <th style="width: 90px;">G.Director</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (Model.Rows.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="8" class="text-center text-muted">No data</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        foreach (var row in Model.Rows)
+                                        {
+                                            <tr class="prq-row" data-prid="@row.Id" data-request-no="@row.RequestNo">
+                                                <td>
+                                                    <input type="radio" class="prq-selector" name="selectedPurchaseRequisition" aria-label="Select row" />
+                                                </td>
+                                                <td>
+                                                    <a href="#" class="prq-row-link text-bold" data-id="@row.Id">@row.RequestNo</a>
+                                                </td>
+                                                <td>@row.RequestDate.ToString("dd/MM/yyyy")</td>
+                                                <td>@row.Description</td>
+                                                <td>@row.StatusName</td>
+                                                <td>@row.PurchaserCode</td>
+                                                <td>@row.ChiefACode</td>
+                                                <td>@row.GDirectorCode</td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-outline card-primary">
+                    <div class="card-footer p-2 text-center module-action-bar prq-action-bar">
+                        <button type="button" id="prqAddAtBtn" class="btn btn-sm btn-action-copy border mx-1 my-1" disabled data-toggle="modal" data-target="#prqAddAtModal"><i class="fas fa-file-signature"></i> Add AT</button>
+                        @if (Model.PagePerm.HasPermission(3))
+                        {
+                            <a asp-page="./PurchaseRequisitionDetail" asp-route-mode="add" class="btn btn-sm btn-action-add border mx-1 my-1"><i class="fas fa-plus"></i> Add New</a>
+                        }
+                        <button type="button" id="btnEdit" class="btn btn-sm btn-action-submit border mx-1 my-1" disabled><i class="fas fa-edit"></i> Edit</button>
+                        <button type="button" id="btnView" class="btn btn-sm btn-action-save border mx-1 my-1" disabled><i class="fas fa-eye"></i> View</button>
+                        <button type="button" id="btnViewDetail" class="btn btn-sm btn-action-export border mx-1 my-1" disabled><i class="fas fa-list-alt"></i> View Detail</button>
+                        <button type="button" id="btnExportExcel" class="btn btn-sm btn-action-export border mx-1 my-1"><i class="fas fa-file-excel"></i> Export Excel</button>
+                        <button type="button" id="btnDisapproval" class="btn btn-sm btn-action-copy border mx-1 my-1" disabled><i class="fas fa-ban"></i> Disapproval</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="modal fade" id="prqAddAtModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <form method="post" asp-page="./Index" asp-page-handler="AddAt" id="prqAddAtForm">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title font-weight-bold">No. <span id="prqAddAtRequestNo">-</span></h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body pb-2">
+                    <div asp-validation-summary="All" class="text-danger small mb-2"></div>
+
+                    <input asp-for="SelectedPrId" type="hidden" id="SelectedPrId" />
+                    <input asp-for="AddAtDetailsJson" type="hidden" id="AddAtDetailsJson" />
+                    <input type="hidden" name="Filter.RequestNo" value="@Model.Filter.RequestNo" />
+                    <input type="hidden" name="Filter.Description" value="@Model.Filter.Description" />
+                    <input type="hidden" name="Filter.UseDateRange" value="@Model.Filter.UseDateRange" />
+                    <input type="hidden" name="Filter.FromDate" value="@(Model.Filter.FromDate?.ToString("yyyy-MM-dd"))" />
+                    <input type="hidden" name="Filter.ToDate" value="@(Model.Filter.ToDate?.ToString("yyyy-MM-dd"))" />
+                    <input type="hidden" name="Filter.Page" value="@Model.Filter.Page" />
+                    <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+
+                    <div class="mb-2">
+                        <button type="button" class="btn btn-sm btn-action-add border mr-2" data-toggle="modal" data-target="#prqAddAtDetailModal">
+                            <i class="fas fa-plus"></i> Add Detail
+                        </button>
+                        <button type="submit" class="btn btn-sm btn-action-save border mr-2">
+                            <i class="fas fa-save"></i> Save
+                        </button>
+                        <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
+                            <i class="fas fa-times"></i> Close
+                        </button>
+                    </div>
+
+                    <div class="table-responsive prq-add-at-table-wrap">
+                        <table class="table table-sm table-bordered table-hover mb-0 text-nowrap">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th style="width:140px;">Item Code</th>
+                                    <th>Item Name</th>
+                                    <th style="width:80px;" class="prq-center">Unit</th>
+                                    <th style="width:90px;" class="prq-center">QtyFromM</th>
+                                    <th style="width:90px;" class="prq-center">QtyPur</th>
+                                    <th style="width:100px;" class="prq-center">U.Price</th>
+                                    <th style="width:120px;" class="prq-center">Amount</th>
+                                    <th style="width:220px;" class="prq-center">Remark</th>
+                                    <th style="width:180px;">Supplier</th>
+                                    <th style="width:60px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="prqAddAtDetailRows">
+                                <tr id="prqAddAtDetailEmptyRow">
+                                    <td colspan="10" class="text-center text-muted">No detail rows</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="prqAddAtDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title font-weight-bold">Add Detail</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body pb-2">
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label class="mb-1">Item</label>
+                        <select id="addAtDetailItemId" class="form-control form-control-sm">
+                            <option value="">-- Select item --</option>
+                            @foreach (var item in Model.ItemList)
+                            {
+                                <option value="@item.Id" data-code="@item.ItemCode" data-name="@item.ItemName" data-unit="@item.Unit">@item.ItemCode - @item.ItemName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group col-md-2">
+                        <label class="mb-1">Unit</label>
+                        <input id="addAtDetailUnit" class="form-control form-control-sm" readonly />
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label class="mb-1">Supplier</label>
+                        <select id="addAtDetailSupplierId" class="form-control form-control-sm">
+                            <option value="">-- Select supplier --</option>
+                            @foreach (var supplier in Model.SupplierList)
+                            {
+                                <option value="@supplier.Id">@supplier.SupplierCode - @supplier.SupplierName</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col-md-3">
+                        <label class="mb-1">QtyFromM</label>
+                        <input id="addAtDetailQtyFromM" type="number" min="0" step="0.01" class="form-control form-control-sm" value="0" />
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label class="mb-1">QtyPur</label>
+                        <input id="addAtDetailQtyPur" type="number" min="0" step="0.01" class="form-control form-control-sm" value="0" />
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label class="mb-1">U.Price</label>
+                        <input id="addAtDetailUnitPrice" type="number" min="0" step="0.01" class="form-control form-control-sm" value="0" />
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label class="mb-1">Amount</label>
+                        <input id="addAtDetailAmount" class="form-control form-control-sm" readonly />
+                    </div>
+                </div>
+
+                <div class="form-group mb-1">
+                    <label class="mb-1">Remark</label>
+                    <input id="addAtDetailRemark" class="form-control form-control-sm" maxlength="500" />
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-action-add border mr-2" id="btnAddAtDetailConfirm">
+                    <i class="fas fa-plus"></i> Add
+                </button>
+                <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Purchasing/PurchaseRequisition/index.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script>
+        window.purchaseRequisitionPage = {
+            canView: @(Model.PagePerm.HasPermission(2) ? "true" : "false"),
+            canEdit: @(Model.PagePerm.HasPermission(4) ? "true" : "false"),
+            canAddAt: @(Model.PagePerm.HasPermission(4) ? "true" : "false"),
+            canDisapproval: @(Model.PagePerm.HasPermission(6) ? "true" : "false"),
+            detailUrlBase: '@Url.Page("./PurchaseRequisitionDetail")'
+        };
+    </script>
+    <script src="~/js/Purchasing/PurchaseRequisition/index.js" asp-append-version="true"></script>
+}

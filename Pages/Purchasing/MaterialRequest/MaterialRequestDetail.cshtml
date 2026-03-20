@@ -1,0 +1,284 @@
+@page
+@model SmartSam.Pages.Purchasing.MaterialRequest.MaterialRequestDetailModel
+@{
+    ViewData["Title"] = "Material Request Detail";
+    var statusText = Model.Statuses.FirstOrDefault(x => x.Value == (Model.Input.MaterialStatusId ?? 0).ToString())?.Text
+        ?? (Model.Input.MaterialStatusId?.ToString() ?? "0");
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <form method="post"
+              id="materialRequestDetailForm"
+              data-can-save="@Model.CanSave.ToString().ToLowerInvariant()"
+              data-can-submit="@Model.CanSubmit.ToString().ToLowerInvariant()"
+              data-can-approve="@Model.CanApprove.ToString().ToLowerInvariant()"
+              data-can-reject="@Model.CanReject.ToString().ToLowerInvariant()"
+              data-store-group-locked="@Model.StoreGroupLocked.ToString().ToLowerInvariant()">
+            <input type="hidden" asp-for="LinesJson" id="linesJsonInput" />
+            <input type="hidden" asp-for="ReturnUrl" />
+
+            <div class="card card-primary card-outline">
+                <div class="card-header p-2">
+                    <h3 class="card-title">Material Request Detail</h3>
+                </div>
+                <div class="card-body p-2">
+                    @if (TempData["SuccessMessage"] != null)
+                    {
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            <strong><i class="fas fa-check-circle"></i> Thông báo:</strong> @TempData["SuccessMessage"]
+                            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                    }
+                    @if (!ViewData.ModelState.IsValid)
+                    {
+                        <div class="alert alert-danger">
+                            <div asp-validation-summary="All" class="text-danger"></div>
+                        </div>
+                    }
+
+                    <div class="mr-detail-header-box">
+                        <div class="form-horizontal mr-detail-form">
+                            <div class="form-group row mb-2 align-items-center">
+                                <label class="col-sm-1 col-form-label col-form-label-sm text-sm-right">Request No</label>
+                                <div class="col-sm-2">
+                                    <input class="form-control form-control-sm" value="@(Model.IsEdit ? Model.Input.RequestNo.ToString() : "(auto)")" readonly />
+                                </div>
+
+                                <label class="col-sm-1 col-form-label col-form-label-sm text-sm-right">Date Create</label>
+                                <div class="col-sm-2">
+                                    <input asp-for="Input.DateCreate" type="date" class="form-control form-control-sm" />
+                                    <span asp-validation-for="Input.DateCreate" class="text-danger small"></span>
+                                </div>
+
+                                <label class="col-sm-1 col-form-label col-form-label-sm text-sm-right">Status</label>
+                                <div class="col-sm-3">
+                                    <input type="text" class="form-control form-control-sm" value="@statusText" readonly />
+                                </div>
+
+                                <div class="col-sm-2">
+                                    <div class="custom-control custom-checkbox mr-detail-check-inline">
+                                        <input asp-for="Input.IsAuto" type="checkbox" id="Input_IsAuto" class="custom-control-input" />
+                                        <label for="Input_IsAuto" class="custom-control-label">Auto</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group row mb-0 align-items-center">
+                                <label class="col-sm-1 col-form-label col-form-label-sm text-sm-right">Store Group</label>
+                                <div class="col-sm-2">
+                                    <select asp-for="Input.StoreGroup"
+                                            asp-items="Model.StoreGroups"
+                                            class="form-control form-control-sm"
+                                            disabled="@Model.StoreGroupLocked"></select>
+                                    @if (Model.StoreGroupLocked)
+                                    {
+                                        <input type="hidden" asp-for="Input.StoreGroup" />
+                                    }
+                                    <span asp-validation-for="Input.StoreGroup" class="text-danger small"></span>
+                                </div>
+
+                                <label class="col-sm-1 col-form-label col-form-label-sm text-sm-right">Description</label>
+                                <div class="col-sm-6">
+                                    <input asp-for="Input.AccordingTo" class="form-control form-control-sm" maxlength="300" />
+                                    <span asp-validation-for="Input.AccordingTo" class="text-danger small"></span>
+                                </div>
+
+                                <div class="col-sm-2">
+                                    <div class="custom-control custom-checkbox mr-detail-check-inline">
+                                        <input type="checkbox" id="NoIssueCheck" class="custom-control-input" @(Model.Input.NoIssue.GetValueOrDefault() == 1 ? "checked" : "") />
+                                        <label for="NoIssueCheck" class="custom-control-label">Not issue</label>
+                                        <input type="hidden" asp-for="Input.NoIssue" id="Input_NoIssue" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered mb-0" id="mrLineTable">
+                            <colgroup>
+                                <col class="mr-col-itemcode" />
+                                <col class="mr-col-itemname" />
+                                <col class="mr-col-unit" />
+                                <col class="mr-col-order" />
+                                <col class="mr-col-notrec" />
+                                <col class="mr-col-in" />
+                                <col class="mr-col-accin" />
+                                <col class="mr-col-buy" />
+                                <col class="mr-col-note" />
+                            </colgroup>
+                            <thead class="thead-light">
+                                <tr>
+                                    <th>ITEMCODE</th>
+                                    <th>ITEMNAME</th>
+                                    <th>Unit</th>
+                                    <th>Order</th>
+                                    <th>NotRec</th>
+                                    <th>In</th>
+                                    <th>Acc.In</th>
+                                    <th>Buy</th>
+                                    <th>Note</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mrLineTableBody">
+                                @if (Model.Lines.Count == 0)
+                                {
+                                    <tr class="mr-line-empty"><td colspan="9" class="text-center text-muted">No line items.</td></tr>
+                                }
+                                else
+                                {
+                                    for (var i = 0; i < Model.Lines.Count; i++)
+                                    {
+                                        var line = Model.Lines[i];
+                                        <tr class="mr-line-row">
+                                            <td>
+                                                <span class="mr-readonly-cell-text">@(line.ItemCode ?? string.Empty)</span>
+                                                <input type="hidden" class="mr-line-itemcode" value="@line.ItemCode" />
+                                            </td>
+                                            <td>
+                                                <span class="mr-readonly-cell-text">@(line.ItemName ?? string.Empty)</span>
+                                                <input type="hidden" class="mr-line-itemname" value="@line.ItemName" />
+                                            </td>
+                                            <td>
+                                                <span class="mr-readonly-cell-text">@(line.Unit ?? string.Empty)</span>
+                                                <input type="hidden" class="mr-line-unit" value="@line.Unit" />
+                                            </td>
+                                            <td><input type="number" min="0.01" step="0.01" class="form-control form-control-sm mr-line-order" value="@(line.OrderQty?.ToString("0.##") ?? "0")" /></td>
+                                            <td>
+                                                <span class="mr-readonly-cell-text">@(line.NotReceipt?.ToString("0.##") ?? "0")</span>
+                                                <input type="hidden" class="mr-line-notrec" value="@(line.NotReceipt?.ToString("0.##") ?? "0")" />
+                                            </td>
+                                            <td>
+                                                <span class="mr-readonly-cell-text">@(line.InStock?.ToString("0.##") ?? "0")</span>
+                                                <input type="hidden" class="mr-line-in" value="@(line.InStock?.ToString("0.##") ?? "0")" />
+                                            </td>
+                                            <td>
+                                                <span class="mr-readonly-cell-text">@(line.AccIn?.ToString("0.##") ?? "0")</span>
+                                                <input type="hidden" class="mr-line-accin" value="@(line.AccIn?.ToString("0.##") ?? "0")" />
+                                            </td>
+                                            <td>
+                                                <span class="mr-readonly-cell-text">@(line.Buy?.ToString("0.##") ?? "0")</span>
+                                                <input type="hidden" class="mr-line-buy" value="@(line.Buy?.ToString("0.##") ?? "0")" />
+                                            </td>
+                                            <td>
+                                                <input type="text" class="form-control form-control-sm mr-line-note" value="@line.Note" />
+                                                <input type="hidden" class="mr-line-price" value="@(line.Price?.ToString("0.##") ?? "0")" />
+                                                <input type="hidden" class="mr-line-new-item" value="@(line.NewItem ? "true" : "false")" />
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer py-2">
+                    <div class="float-left">
+                        <button type="button" class="btn btn-success btn-sm mx-1 my-1" id="addMrLineBtn"><i class="fas fa-plus"></i> Add Detail</button>
+                        <button type="button" class="btn btn-danger btn-sm mx-1 my-1" id="removeMrLineBtn"><i class="fas fa-trash-alt"></i> Remove Item</button>
+                        <button type="button" class="btn btn-primary btn-sm mx-1 my-1" id="createNewItemBtn"><i class="fas fa-box-open"></i> Create new item</button>
+                        <button type="button" class="btn btn-info btn-sm mx-1 my-1" id="calculateBtn"><i class="fas fa-calculator"></i> Calculate</button>
+                        <button type="submit" asp-page-handler="Save" id="mrSaveBtn" class="btn btn-primary btn-sm mx-1 my-1"><i class="fas fa-save"></i> Save</button>
+                        <button type="submit" asp-page-handler="Submit" id="mrSubmitBtn" class="btn btn-dark btn-sm mx-1 my-1"><i class="fas fa-paper-plane"></i> Submit</button>
+                        <button type="submit" asp-page-handler="Approve" id="mrApproveBtn" class="btn btn-success btn-sm mx-1 my-1"><i class="fas fa-check"></i> Approve</button>
+                        <button type="submit" asp-page-handler="Reject" id="mrRejectBtn" class="btn btn-danger btn-sm mx-1 my-1"><i class="fas fa-times"></i> Reject</button>
+                        <a href="@Model.BackToListUrl" class="btn btn-default btn-sm mx-1 my-1">Back to List</a>
+                    </div>
+                    <div class="float-right">
+                        <span id="mrTotalItemText">Total Item @Model.Lines.Count</span>
+                    </div>
+                </div>
+            </div>
+        </form>
+
+        <div class="modal fade" id="mrItemLookupModal" tabindex="-1" role="dialog" aria-labelledby="mrItemLookupModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="mrItemLookupModalLabel">Add / Edit Item</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-row align-items-end mr-item-lookup-toolbar">
+                            <div class="form-group col-lg-5 col-md-12 mb-2">
+                                <label class="mb-1">Item Code or Name</label>
+                                <input type="text" class="form-control form-control-sm" id="lookupKeyword" />
+                            </div>
+                            <div class="form-group col-lg-4 col-md-8 mb-2">
+                                <label class="mb-1 d-block">Check Balance in Store</label>
+                                <div class="custom-control custom-checkbox mr-item-lookup-check">
+                                    <input type="checkbox" id="lookupCheckStore" class="custom-control-input" />
+                                    <label for="lookupCheckStore" class="custom-control-label">Only show available item</label>
+                                </div>
+                            </div>
+                            <div class="form-group col-lg-3 col-md-4 mb-2 text-md-right text-left">
+                                <button type="button" class="btn btn-sm btn-primary mr-item-lookup-search-btn" id="lookupSearchBtn"><i class="fas fa-search"></i> Search</button>
+                            </div>
+                        </div>
+                        <div class="table-responsive border">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width:130px;">Item Code</th>
+                                        <th>Item Name</th>
+                                        <th style="width:90px;">Unit</th>
+                                        <th style="width:70px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="lookupResultBody">
+                                    <tr><td colspan="4" class="text-center text-muted">No data</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer py-2">
+                        <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="mrNewItemModal" tabindex="-1" role="dialog" aria-labelledby="mrNewItemModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="mrNewItemModalLabel">Create New Item</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>Item Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="newItemName" maxlength="150" />
+                        </div>
+                        <div class="form-group mb-0">
+                            <label>Unit</label>
+                            <input type="text" class="form-control form-control-sm" id="newItemUnit" maxlength="10" />
+                        </div>
+                        <div class="text-danger small mt-2 d-none" id="newItemError"></div>
+                    </div>
+                    <div class="modal-footer py-2">
+                        <button type="button" class="btn btn-sm btn-primary" id="createNewItemConfirmBtn">Create</button>
+                        <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Purchasing/MaterialRequest/index.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script src="~/js/Purchasing/MaterialRequest/MaterialRequestDetail.js" asp-append-version="true"></script>
+}
+
