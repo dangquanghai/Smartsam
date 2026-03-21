@@ -105,9 +105,9 @@
                 <td>${escapeHtml(s.phone || s.Phone || '')}</td>
                 <td>${escapeHtml(s.mobile || s.Mobile || '')}</td>
                 <td>${escapeHtml(s.fax || s.Fax || '')}</td>
-                <td>${buildTruncatedCell(contactText, 26)}</td>
-                <td>${escapeHtml(s.position || s.Position || '')}</td>
-                <td>${buildTruncatedCell(businessText, 30)}</td>
+                <td class="vni-font">${buildTruncatedCell(contactText, 26)}</td>
+                <td class="vni-font">${escapeHtml(s.position || s.Position || '')}</td>
+                <td class="vni-font">${buildTruncatedCell(businessText, 30)}</td>
                 <td>${escapeHtml(s.supplierStatusName || s.SupplierStatusName || '')}</td>
                 <td style="display: none;">${escapeHtml(supplierStatusId)}</td>
                 <td>${escapeHtml(s.deptCode || s.DeptCode || '')}</td>
@@ -146,13 +146,20 @@
 
         const canCopy = item.actions && item.actions.canCopy === true;
         const canSubmit = item.actions && item.actions.canSubmit === true;
+        const updateVisibility = (selector, hasPermission) => {
+            if (hasPermission) {
+                $(selector).removeClass('d-none');
+            } else {
+                $(selector).addClass('d-none');
+            }
+        };
 
         $('#selectedSupplierIdInput').val(selectedSupplierId);
         $('#selectedSupplierIdsCsvInput').val(selectedSupplierId);
         $('#copySelectedSupplierIdsCsvInput').val(selectedSupplierId);
 
-        $('#btnCopy').prop('disabled', !canCopy);
-        $('#btnSubmit').prop('disabled', !canSubmit);
+        updateVisibility("#btnCopy", canCopy);
+        updateVisibility("#btnSubmit", canSubmit);
 
         $('#supplierTable tbody tr').removeClass('selected');
         $(this).closest('tr').addClass('selected');
@@ -216,8 +223,8 @@
         $('#selectedSupplierIdInput').val('');
         $('#selectedSupplierIdsCsvInput').val('');
         $('#copySelectedSupplierIdsCsvInput').val('');
-        $('#btnCopy').prop('disabled', true);
-        $('#btnSubmit').prop('disabled', true);
+        $('#btnCopy').addClass('d-none');
+        $('#btnSubmit').addClass('d-none');
     }
 
     // ========== PAGINATION ==========
@@ -391,10 +398,6 @@
 
         $('#btnExcel').off('click').on('click', function () {
             window.location.href = buildExportExcelUrl();
-        });
-
-        $('#btnPrintList').off('click').on('click', function () {
-            window.print();
         });
 
         // 2. Xu ly mode current/byyear

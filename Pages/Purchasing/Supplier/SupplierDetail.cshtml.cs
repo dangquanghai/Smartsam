@@ -106,7 +106,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         public bool IsDisapproved => (Input.Status ?? 0) == 9;
         public bool IsSubmitted => IsWorkflowSubmitted(Input);
         public bool CanSubmit => !IsViewMode && !IsAnnualView && IsEdit && _effectivePerms.Contains(PermissionSubmit) && !IsSubmitted;
-        public bool CanReuse => !IsViewMode && !IsAnnualView && IsEdit && _effectivePerms.Contains(PermissionEdit) && IsDisapproved && (_isAdminRole || IsReuseOwner());
+        public bool CanReuse => !IsAnnualView && IsEdit && _effectivePerms.Contains(PermissionEdit) && IsDisapproved && (_isAdminRole || IsReuseOwner());
 
         private void LoadSupplierData(int id)
         {
@@ -497,12 +497,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
             LoadUserDataScope();
 
-            if (IsViewMode || IsAnnualView)
-            {
-                return Forbid();
-            }
-
-            var normalizedAction = ((string?)Request.Form["action"]).Trim();
+            var normalizedAction = ((string?)Request.Form["action"] ?? string.Empty).Trim();
             normalizedAction = string.IsNullOrWhiteSpace(normalizedAction) ? "save" : normalizedAction.ToLowerInvariant();
 
             if (normalizedAction == "submit")
@@ -510,9 +505,9 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 return SubmitApprovalCore();
             }
 
-            if (normalizedAction == "reuse")
+            if (IsViewMode || IsAnnualView)
             {
-                return ReuseCore();
+                return Forbid();
             }
 
             int statusToCheck = 0;
@@ -707,6 +702,12 @@ namespace SmartSam.Pages.Purchasing.Supplier
 
             SetFlashMessage("Supplier submitted successfully.", "success");
             return RedirectToPage("./SupplierDetail", BuildDetailRouteValues(Id.Value));
+        }
+
+        public IActionResult OnPostReuse()
+        {
+            ModelState.Clear();
+            return ReuseCore();
         }
 
         private IActionResult ReuseCore()

@@ -92,9 +92,6 @@
                             <button type="submit" class="btn btn-primary btn-block">
                                 <i class="fas fa-search"></i> Search
                             </button>
-                            <button type="button" id="btnPrintList" class="btn btn-outline-secondary btn-block">
-                                <i class="fas fa-print"></i> Print List
-                            </button>
                         </form>
                     </div>
                 </div>
@@ -180,10 +177,10 @@
                             </button>
                         }
                         @* Nút Copy/Submit mặc định tắt; JS sẽ bật theo dòng được chọn và trạng thái hợp lệ. *@
-                        <button id="btnCopy" type="button" class="btn btn-primary btn-sm" disabled>
+                        <button id="btnCopy" type="button" class="btn btn-primary btn-sm d-none">
                             <i class="fas fa-copy"></i> Copy
                         </button>
-                        <button id="btnSubmit" type="button" class="btn btn-dark btn-sm" disabled>
+                        <button id="btnSubmit" type="button" class="btn btn-dark btn-sm d-none">
                             <i class="fas fa-paper-plane"></i> Submit
                         </button>
                         @* Excel luôn hiển thị; handler vẫn kiểm tra quyền khi gọi trực tiếp. *@
