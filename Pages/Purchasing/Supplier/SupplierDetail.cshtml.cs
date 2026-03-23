@@ -710,6 +710,72 @@ namespace SmartSam.Pages.Purchasing.Supplier
             return ReuseCore();
         }
 
+        public IActionResult OnPostReuseAjax(int id, string? viewMode, int? year)
+        {
+            ModelState.Clear();
+            Id = id;
+            ViewMode = viewMode;
+            Year = year;
+            LoadUserDataScope();
+
+            if (!Id.HasValue || Id.Value <= 0)
+            {
+                return new JsonResult(new { success = false, message = "Invalid request." });
+            }
+
+            int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
+
+            LoadAllDropdowns();
+
+            var current = GetDetail(Id.Value);
+            if (current == null)
+            {
+                return new JsonResult(new { success = false, message = "Supplier not found." });
+            }
+
+            int statusToCheck = GetSupplierPermissionStatus(current, isAnnualView: false);
+            var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, statusToCheck);
+            if (!currentPerms.Contains(PermissionEdit))
+            {
+                return new JsonResult(new { success = false, message = "You do not have permission to do it." })
+                {
+                    StatusCode = StatusCodes.Status403Forbidden
+                };
+            }
+
+            Input = current;
+            if (!CanAccessDepartment(Input.DeptID))
+            {
+                return new JsonResult(new { success = false, message = "Current user cannot access this supplier department." })
+                {
+                    StatusCode = StatusCodes.Status403Forbidden
+                };
+            }
+
+            if (!IsDisapproved)
+            {
+                return new JsonResult(new { success = false, message = "Only disapproved supplier can Re Use." });
+            }
+
+            if (!_isAdminRole && !IsReuseOwner())
+            {
+                return new JsonResult(new { success = false, message = "Only purchaser submitter can Re Use." })
+                {
+                    StatusCode = StatusCodes.Status403Forbidden
+                };
+            }
+
+            ResetForReuse(Id.Value);
+            SetFlashMessage("Reset re-use success. Supplier is reset to draft (status 0).", "success");
+
+            return new JsonResult(new
+            {
+                success = true,
+                message = "Reset re-use success. Supplier is reset to draft (status 0).",
+                redirectUrl = Url.Page("./SupplierDetail", BuildDetailRouteValues(Id.Value))
+            });
+        }
+
         private IActionResult ReuseCore()
         {
             int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");

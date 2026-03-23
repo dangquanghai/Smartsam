@@ -1,6 +1,7 @@
-﻿let supplierCurrentId = '';
+let supplierCurrentId = '';
 let supplierPageViewMode = '';
 let supplierPageYear = '';
+let supplierLastAction = 'save';
 // Tracking comment: keep Supplier detail script marked as touched for current work.
 
 $(document).ready(function () {
@@ -16,6 +17,14 @@ $(document).ready(function () {
     // 2. Chạy khởi tạo trang
     initializePage(mode);
 
+    $('#btnSave').on('click', function () {
+        supplierLastAction = 'save';
+    });
+
+    $('#btnSubmit').on('click', function () {
+        supplierLastAction = 'submit';
+    });
+
     // 3. Xử lý sự kiện SUBMIT Form chính
     $('form').on('submit', async function (e) {
         if (mode === 'view') return true;
@@ -25,7 +34,11 @@ $(document).ready(function () {
         if (validateMainForm()) {
             const isAvailable = await checkSupplierCodeDuplicate(supplierCurrentId);
             if (isAvailable) {
-                $(this).off('submit').submit();
+                const $form = $(this);
+                const $action = $('<input type="hidden" name="action" />').val(supplierLastAction || 'save');
+                $form.append($action);
+                this.submit();
+                $action.remove();
             } else {
                 alert('Supplier code already exists.');
                 focusErrorField($('#Input_SupplierCode'));

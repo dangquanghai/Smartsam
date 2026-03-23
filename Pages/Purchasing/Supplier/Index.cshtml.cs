@@ -196,6 +196,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                             canSubmit = effectivePerms.Contains(PermissionSubmit)
                                 && canAccessDepartment
                                 && !string.Equals(viewMode, "byyear", StringComparison.OrdinalIgnoreCase)
+                                && !r.PurchaserPreparedDate.HasValue
                         }
                     };
                 });
