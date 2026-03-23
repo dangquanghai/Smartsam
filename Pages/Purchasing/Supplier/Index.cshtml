@@ -7,6 +7,17 @@
 
 <section class="content">
     <div class="container-fluid">
+        @if (!string.IsNullOrWhiteSpace(Model.FlashMessage))
+        {
+            <div class="alert alert-@(string.IsNullOrWhiteSpace(Model.FlashMessageType) ? "info" : Model.FlashMessageType) alert-dismissible fade show mb-3" role="alert">
+                <strong><i class="fas fa-check-circle"></i> Notification:</strong> @Model.FlashMessage
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+        <div id="supplierAjaxMessageHost" class="mb-3 d-none"></div>
+
         <div class="row">
             <!-- SEARCH PANEL (LEFT) -->
             <div class="col-md-2">

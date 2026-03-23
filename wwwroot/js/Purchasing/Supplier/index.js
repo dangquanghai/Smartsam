@@ -8,7 +8,7 @@
     let currentDataRows = [];
 
     // ========== SEARCH FUNCTION ==========
-    function performSearch(page = 1) {
+    function performSearch(page = 1, options = {}) {
         currentPage = page;
         const token = $('input[name="__RequestVerificationToken"]').val();
 
@@ -51,6 +51,9 @@
                     renderSuppliers(currentDataRows);
                     updatePagination(total, current, size, pages);
                     resetActions();
+                    if (options && options.reselectSupplierId) {
+                        restoreSelectionBySupplierId(options.reselectSupplierId);
+                    }
                 } else {
                     const message = (response && (response.message || response.Message))
                         || 'Search failed.';
@@ -390,10 +393,7 @@
 
         $('#btnSubmit').off('click').on('click', function () {
             if (!selectedSupplierId) return;
-            syncListStateToPostForms();
-            $('#selectedSupplierIdInput').val(selectedSupplierId);
-            $('#selectedSupplierIdsCsvInput').val(selectedSupplierId);
-            $('#submitSupplierForm').trigger('submit');
+            submitSelectedSupplierAjax();
         });
 
         $('#btnExcel').off('click').on('click', function () {
@@ -449,6 +449,43 @@
         return `?${query.toString()}`;
     }
 
+    function submitSelectedSupplierAjax() {
+        const token = $('input[name="__RequestVerificationToken"]').val();
+        if (!token) {
+            showPageMessage('warning', 'Cannot submit because request token is missing.');
+            return;
+        }
+
+        syncListStateToPostForms();
+        $('#selectedSupplierIdInput').val(selectedSupplierId);
+        $('#selectedSupplierIdsCsvInput').val(selectedSupplierId);
+
+        const reselectSupplierId = selectedSupplierId;
+        const formData = $('#submitSupplierForm').serialize();
+
+        $.ajax({
+            url: '?handler=SubmitAjax',
+            type: 'POST',
+            data: formData,
+            headers: { RequestVerificationToken: token },
+            success: function (response) {
+                const isSuccess = !!(response && (response.success === true || response.Success === true));
+                const message = (response && (response.message || response.Message)) || 'Submit completed.';
+                const messageType = ((response && (response.messageType || response.MessageType)) || (isSuccess ? 'success' : 'info')).toString().toLowerCase();
+
+                showPageMessage(messageType, message);
+                if (isSuccess) {
+                    performSearch(currentPage, { reselectSupplierId: reselectSupplierId });
+                }
+            },
+            error: function (xhr) {
+                const message = (xhr && xhr.responseJSON && (xhr.responseJSON.message || xhr.responseJSON.Message))
+                    || 'Cannot submit selected supplier.';
+                showPageMessage('warning', message);
+            }
+        });
+    }
+
     // Dong bo state bo loc hien tai vao cac form POST (Submit/Copy)
     // de sau redirect van giu dung filter/page user dang xem.
     function syncListStateToPostForms() {
@@ -486,6 +523,54 @@
             PageIndex: currentPage.toString(),
             PageSize: pageSize.toString()
         };
+    }
+
+    function restoreSelectionBySupplierId(supplierId) {
+        if (!supplierId) return;
+
+        const rowIndex = currentDataRows.findIndex(function (item) {
+            const data = item && item.data ? item.data : {};
+            const currentId = data.supplierID || data.SupplierID;
+            return Number(currentId) === Number(supplierId);
+        });
+
+        if (rowIndex < 0) return;
+
+        const $radio = $(`#supplierTable tbody tr[data-index="${rowIndex}"] input[name="selectedSupplier"]`);
+        if ($radio.length > 0) {
+            $radio.prop('checked', true).trigger('change');
+        }
+    }
+
+    function showPageMessage(type, message) {
+        const $host = $('#supplierAjaxMessageHost');
+        if ($host.length === 0) return;
+
+        const normalizedType = (type || 'info').toString().toLowerCase();
+        const alertClass = normalizedType === 'success'
+            ? 'alert-success'
+            : normalizedType === 'warning'
+                ? 'alert-warning'
+                : normalizedType === 'error'
+                    ? 'alert-danger'
+                    : 'alert-info';
+        const iconClass = normalizedType === 'success'
+            ? 'fa-check-circle'
+            : normalizedType === 'warning'
+                ? 'fa-exclamation-triangle'
+                : normalizedType === 'error'
+                    ? 'fa-ban'
+                    : 'fa-info-circle';
+
+        const html = `
+            <div class="alert ${alertClass} alert-dismissible fade show mb-0" role="alert">
+                <strong><i class="fas ${iconClass}"></i> Notification:</strong> ${escapeHtml(message || '')}
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>`;
+
+        $host.html(html).removeClass('d-none');
     }
 
     function setHiddenFieldValue($form, name, value) {

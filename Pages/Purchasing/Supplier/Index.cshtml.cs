@@ -359,19 +359,58 @@ namespace SmartSam.Pages.Purchasing.Supplier
 
         public async Task<IActionResult> OnPostSubmitAsync(CancellationToken cancellationToken)
         {
+            var result = await ExecuteSubmitWorkflowAsync(cancellationToken);
+            if (result.IsForbidden)
+            {
+                return Forbid();
+            }
+
+            SetFlashMessage(result.Message, result.MessageType);
+            return RedirectToCurrentList();
+        }
+
+        public async Task<IActionResult> OnPostSubmitAjaxAsync(CancellationToken cancellationToken)
+        {
+            var result = await ExecuteSubmitWorkflowAsync(cancellationToken);
+            if (result.IsForbidden)
+            {
+                return new JsonResult(new
+                {
+                    success = false,
+                    message = result.Message,
+                    messageType = result.MessageType
+                })
+                {
+                    StatusCode = StatusCodes.Status403Forbidden
+                };
+            }
+
+            return new JsonResult(new
+            {
+                success = result.Success,
+                message = result.Message,
+                messageType = result.MessageType,
+                selectedSupplierId = result.PrimarySupplierId,
+                selectedSupplierCode = result.PrimarySupplierCode,
+                submittedSupplierIds = result.SubmittedSupplierIds,
+                submittedSupplierCodes = result.SubmittedSupplierCodes
+            });
+        }
+
+        private async Task<SubmitWorkflowResult> ExecuteSubmitWorkflowAsync(CancellationToken cancellationToken)
+        {
             PagePerm = GetUserPermissions();
             await LoadUserDataScopeAsync(cancellationToken);
             if (!PagePerm.HasPermission(PermissionSubmit))
             {
-                return Forbid();
+                return SubmitWorkflowResult.ForbiddenResult("You do not have permission to submit suppliers.");
             }
 
             int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
 
             if (string.Equals(ViewMode, "byyear", StringComparison.OrdinalIgnoreCase))
             {
-                SetFlashMessage("Submit is available only in Current List mode.", "warning");
-                return RedirectToCurrentList();
+                return SubmitWorkflowResult.Warning("Submit is available only in Current List mode.");
             }
 
             LoadDepartments();
@@ -380,16 +419,14 @@ namespace SmartSam.Pages.Purchasing.Supplier
             var selectedIds = ParseSelectedSupplierIds();
             if (selectedIds.Count == 0)
             {
-                SetFlashMessage("Select at least one supplier.", "warning");
-                return RedirectToCurrentList();
+                return SubmitWorkflowResult.Warning("Select at least one supplier.");
             }
 
-            var submittedCount = 0;
-            var notFoundCount = 0;
-            var noAccessCount = 0;
-            var noPermissionCount = 0;
-            var notDraftCount = 0;
-            var alreadySubmittedCount = 0;
+            var result = new SubmitWorkflowResult
+            {
+                TotalSelected = selectedIds.Count
+            };
+
             var operatorCode = User.Identity?.Name ?? "SYSTEM";
 
             foreach (var supplierId in selectedIds)
@@ -397,25 +434,25 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 var supplier = await GetSupplierSubmitInfoAsync(supplierId, cancellationToken);
                 if (supplier is null)
                 {
-                    notFoundCount++;
+                    result.NotFoundCount++;
                     continue;
                 }
 
                 if (!CanAccessDepartment(supplier.DeptID))
                 {
-                    noAccessCount++;
+                    result.NoAccessCount++;
                     continue;
                 }
 
                 if ((supplier.Status ?? 0) != 0)
                 {
-                    notDraftCount++;
+                    result.NotDraftCount++;
                     continue;
                 }
 
                 if (supplier.PurchaserPreparedDate.HasValue)
                 {
-                    alreadySubmittedCount++;
+                    result.AlreadySubmittedCount++;
                     continue;
                 }
 
@@ -424,18 +461,20 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 var effectivePerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, effectiveStatus);
                 if (!effectivePerms.Contains(PermissionSubmit))
                 {
-                    noPermissionCount++;
+                    result.NoPermissionCount++;
                     continue;
                 }
 
                 await SubmitSupplierWorkflowAsync(supplierId, operatorCode, cancellationToken);
-                submittedCount++;
+                result.SubmittedCount++;
+                result.SubmittedSupplierIds.Add(supplierId);
+                result.SubmittedSupplierCodes.Add(supplier.SupplierCode?.Trim() ?? string.Empty);
             }
 
-            SetFlashMessage(
-                BuildSubmitMessage(submittedCount, notFoundCount, noAccessCount, noPermissionCount, notDraftCount, alreadySubmittedCount, selectedIds.Count),
-                submittedCount > 0 ? "success" : "info");
-            return RedirectToCurrentList();
+            result.Success = result.SubmittedCount > 0;
+            result.MessageType = result.Success ? "success" : "info";
+            result.Message = BuildSubmitAjaxMessage(result);
+            return result;
         }
 
         private static int GetSupplierPermissionStatus(SupplierRow row)
@@ -456,6 +495,40 @@ namespace SmartSam.Pages.Purchasing.Supplier
             }
 
             return supplier.Status ?? 0;
+        }
+
+        private sealed class SubmitWorkflowResult
+        {
+            public bool Success { get; set; }
+            public bool IsForbidden { get; set; }
+            public string Message { get; set; } = string.Empty;
+            public string MessageType { get; set; } = "info";
+            public int TotalSelected { get; set; }
+            public int SubmittedCount { get; set; }
+            public int NotFoundCount { get; set; }
+            public int NoAccessCount { get; set; }
+            public int NoPermissionCount { get; set; }
+            public int NotDraftCount { get; set; }
+            public int AlreadySubmittedCount { get; set; }
+            public List<int> SubmittedSupplierIds { get; } = [];
+            public List<string> SubmittedSupplierCodes { get; } = [];
+            public int? PrimarySupplierId => SubmittedSupplierIds.Count > 0 ? SubmittedSupplierIds[0] : null;
+            public string? PrimarySupplierCode => SubmittedSupplierCodes.FirstOrDefault();
+
+            public static SubmitWorkflowResult ForbiddenResult(string message)
+                => new()
+                {
+                    IsForbidden = true,
+                    Message = message,
+                    MessageType = "warning"
+                };
+
+            public static SubmitWorkflowResult Warning(string message)
+                => new()
+                {
+                    Message = message,
+                    MessageType = "warning"
+                };
         }
 
         private (List<SupplierRow> rows, int totalRecords, int page, int pageSize) SearchSuppliers(SearchRequest request)
@@ -687,6 +760,38 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 : $"Submit completed. {string.Join(", ", parts)}.";
         }
 
+        private static string BuildSubmitAjaxMessage(SubmitWorkflowResult result)
+        {
+            var submittedCodes = result.SubmittedSupplierCodes
+                .Where(code => !string.IsNullOrWhiteSpace(code))
+                .Select(code => code.Trim())
+                .ToList();
+
+            if (result.Success && submittedCodes.Count == 1)
+            {
+                return $"Supplier code {submittedCodes[0]} submitted successfully.";
+            }
+
+            if (result.Success && submittedCodes.Count > 1)
+            {
+                return $"Suppliers submitted successfully: {string.Join(", ", submittedCodes)}.";
+            }
+
+            if (result.IsForbidden)
+            {
+                return result.Message;
+            }
+
+            return BuildSubmitMessage(
+                result.SubmittedCount,
+                result.NotFoundCount,
+                result.NoAccessCount,
+                result.NoPermissionCount,
+                result.NotDraftCount,
+                result.AlreadySubmittedCount,
+                result.TotalSelected);
+        }
+
         // Lay data scope user (DeptID + SeeDataAllDept).
         // Supplier co data scope theo phong ban nen can ham rieng.
         private async Task<EmployeeDataScope> GetEmployeeDataScopeAsync(string? employeeCode, CancellationToken cancellationToken)
@@ -753,7 +858,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         private async Task<SupplierSubmitInfo?> GetSupplierSubmitInfoAsync(int supplierId, CancellationToken cancellationToken)
         {
             const string sql = @"
-                SELECT TOP 1 DeptID, [Status], PurchaserPreparedDate
+                SELECT TOP 1 SupplierCode, DeptID, [Status], PurchaserPreparedDate
                 FROM dbo.PC_Suppliers
                 WHERE SupplierID = @SupplierID";
 
@@ -770,20 +875,21 @@ namespace SmartSam.Pages.Purchasing.Supplier
 
             return new SupplierSubmitInfo
             {
-                DeptID = rd.IsDBNull(0) ? null : Convert.ToInt32(rd[0]),
-                Status = rd.IsDBNull(1) ? null : Convert.ToInt32(rd[1]),
-                PurchaserPreparedDate = rd.IsDBNull(2) ? null : Convert.ToDateTime(rd[2])
+                SupplierCode = rd[0]?.ToString(),
+                DeptID = rd.IsDBNull(1) ? null : Convert.ToInt32(rd[1]),
+                Status = rd.IsDBNull(2) ? null : Convert.ToInt32(rd[2]),
+                PurchaserPreparedDate = rd.IsDBNull(3) ? null : Convert.ToDateTime(rd[3])
             };
         }
 
         // Submit supplier vao workflow:
-        // - Dua supplier vao step cho level 1 xu ly (Status = 0)
+        // - Dua supplier vao step da duoc level 1 xac nhan (Status = 1)
         // - Ghi nhan nguoi submit + thoi gian submit.
         private async Task SubmitSupplierWorkflowAsync(int supplierId, string operatorCode, CancellationToken cancellationToken)
         {
             const string sql = @"
                 UPDATE dbo.PC_Suppliers
-                SET [Status] = 0,
+                SET [Status] = 1,
                     ApprovedDate = NULL,
                     PurchaserCode = @OperatorCode,
                     PurchaserPreparedDate = GETDATE(),
@@ -1243,11 +1349,12 @@ namespace SmartSam.Pages.Purchasing.Supplier
         public bool SeeDataAllDept { get; set; }
     }
 
-    public class SupplierSubmitInfo
-    {
-        public int? DeptID { get; set; }
-        public int? Status { get; set; }
-        public DateTime? PurchaserPreparedDate { get; set; }
-    }
+        public class SupplierSubmitInfo
+        {
+            public string? SupplierCode { get; set; }
+            public int? DeptID { get; set; }
+            public int? Status { get; set; }
+            public DateTime? PurchaserPreparedDate { get; set; }
+        }
 
 }

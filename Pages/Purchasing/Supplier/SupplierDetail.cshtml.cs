@@ -1211,7 +1211,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         {
             const string sql = @"
                 UPDATE dbo.PC_Suppliers
-                SET [Status]=0,
+                SET [Status]=1,
                     ApprovedDate=NULL,
                     PurchaserCode=@OperatorCode,
                     PurchaserPreparedDate=GETDATE(),
