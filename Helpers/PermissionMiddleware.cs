@@ -23,11 +23,12 @@ namespace SmartSam.Helpers
         {
             string path = context.Request.Path.Value ?? "";
 
-            // 1. Bỏ qua các trang công khai và tài nguyên tĩnh
+            // 1. Bỏ qua các trang công khai, tài nguyên tĩnh và API Lookup
             if (path.StartsWith("/Login") || path.StartsWith("/Logout") ||
                 path.StartsWith("/dist") || path.StartsWith("/plugins") || path.StartsWith("/hangfire") ||
                 path == "/" || path.Equals("/Index", StringComparison.OrdinalIgnoreCase) ||
-                path == "/AccessDenied")
+                path == "/AccessDenied" ||
+                path.StartsWith("/api/Lookup", StringComparison.OrdinalIgnoreCase)) // THÊM DÒNG NÀY
             {
                 await _next(context);
                 return;

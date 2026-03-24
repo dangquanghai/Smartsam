@@ -1,7 +1,7 @@
 ﻿(function () {
     'use strict';
 
-    let pageSize = typeof defaultPageSize !== 'undefined' ? defaultPageSize : 12;
+    let pageSize = typeof defaultPageSize !== 'undefined' ? defaultPageSize : 13;
     let selectedContractId = null;
     let currentPage = 1;
     let currentDataRows = []; // Lưu trữ dữ liệu và quyền của trang hiện tại
