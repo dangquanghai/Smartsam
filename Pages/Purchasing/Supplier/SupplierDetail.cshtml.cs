@@ -1035,6 +1035,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         // Sinh mã supplier gợi ý (SP + số lớn nhất + 1).
         private string GetSuggestedSupplierCode()
         {
+            /*
             const string sql = @"
                 SELECT
                     ISNULL(MAX(TRY_CONVERT(int, SUBSTRING(LTRIM(RTRIM(SupplierCode)), 3, 50))), 0) AS MaxNo,
@@ -1055,8 +1056,9 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 maxNo = rd.IsDBNull(0) ? 0 : Convert.ToInt32(rd[0]);
                 numWidth = rd.IsDBNull(1) ? 3 : Convert.ToInt32(rd[1]);
             }
-
-            return $"SP{(maxNo + 1).ToString().PadLeft(Math.Max(3, numWidth), '0')}";
+            */
+            //return $"SP{(maxNo + 1).ToString().PadLeft(Math.Max(3, numWidth), '0')}";
+            return "";
         }
 
         // Save chinh:

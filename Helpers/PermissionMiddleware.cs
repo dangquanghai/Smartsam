@@ -116,8 +116,8 @@ namespace SmartSam.Helpers
                 INNER JOIN SYS_FuncPermission fp ON rp.FunctionID = fp.FunctionID
                 INNER JOIN MS_Employee e ON rm.Operator = e.EmployeeID
                 WHERE e.EmployeeCode = @EmpCode 
-                AND fp.Url IS NOT NULL AND fp.Url <> ''
-                AND (',' + rp.Permission + ',') LIKE ('%,' + CAST(fp.PermissionNo AS VARCHAR) + ',%')";
+                AND fp.Url IS NOT NULL AND fp.Url <> ''";
+                //AND (',' + rp.Permission + ',') LIKE ('%,' + CAST(fp.PermissionNo AS VARCHAR) + ',%')";
 
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@EmpCode", empCode);

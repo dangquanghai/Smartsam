@@ -118,3 +118,8 @@ label.form-label {
     color: #fff !important;
     opacity: 0.75;
 }
+
+.vni-font {
+    font-family: "VNI-Times", "VNI-Helve", sans-serif !important;
+    font-size: 14px;
+}
