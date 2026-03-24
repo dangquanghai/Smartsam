@@ -100,7 +100,7 @@
             const supplierStatusId = s.status ?? s.Status ?? '';
 
             const row = `
-            <tr data-id="${s.supplierID || s.SupplierID || 0}" data-index="${index}" style="cursor:pointer">
+            <tr data-id="${s.supplierID || s.SupplierID || 0}" data-supplier-id="${s.supplierID || s.SupplierID || 0}" data-index="${index}" style="cursor:pointer">
                 <td><input type="radio" name="selectedSupplier" value="${index}"></td>
                 <td>${supplierCodeHtml}</td>
                 <td class="vni-font">${buildTruncatedCell(supplierNameText, 30)}</td>
@@ -116,8 +116,34 @@
                 <td>${escapeHtml(s.deptCode || s.DeptCode || '')}</td>
             </tr>`;
 
-            tbody.append(row);
+        tbody.append(row);
         });
+    }
+
+    function getSupplierRowData($row) {
+        if (!$row || $row.length === 0) return null;
+        const supplierId = getSupplierIdFromRow($row);
+        if (supplierId === null) return null;
+
+        return findSupplierItemById(supplierId);
+    }
+
+    function getSupplierIdFromRow($row) {
+        if (!$row || $row.length === 0) return null;
+
+        const rawSupplierId = $row.data('supplier-id') || $row.data('id') || $row.attr('data-supplier-id') || $row.attr('data-id');
+        const supplierId = Number.parseInt((rawSupplierId || '').toString(), 10);
+        return Number.isFinite(supplierId) ? supplierId : null;
+    }
+
+    function findSupplierItemById(supplierId) {
+        if (!Number.isFinite(supplierId)) return null;
+
+        return currentDataRows.find(function (item) {
+            const data = item && item.data ? item.data : {};
+            const currentId = data.supplierID ?? data.SupplierID;
+            return Number.parseInt((currentId || '').toString(), 10) === supplierId;
+        }) || null;
     }
 
     // ========== BAT SU KIEN LINK SUPPLIER CODE ==========
@@ -125,14 +151,23 @@
         e.preventDefault();
         e.stopPropagation();
 
-        const rowIndex = $(this).closest('tr').data('index');
-        const item = currentDataRows[rowIndex];
-        if (!item || !item.actions) return;
+        const $row = $(this).closest('tr');
+        const supplierId = getSupplierIdFromRow($row);
+        const item = Number.isFinite(supplierId) ? findSupplierItemById(supplierId) : null;
+
+        if (!item || !item.actions) {
+            if (supplierId) {
+                window.location.href = buildDetailUrl(supplierId, 'view');
+            }
+            return;
+        }
 
         if (item.actions.canAccess === true) {
-            const supplierId = item.data.supplierID || item.data.SupplierID;
+            const resolvedSupplierId = item.data.supplierID || item.data.SupplierID || supplierId;
             const accessMode = (item.actions.accessMode || 'view').toString().toLowerCase();
-            window.location.href = buildDetailUrl(supplierId, accessMode);
+            if (resolvedSupplierId) {
+                window.location.href = buildDetailUrl(resolvedSupplierId, accessMode);
+            }
         } else {
             alert('You have no right to view this supplier.');
         }
@@ -140,15 +175,18 @@
 
     // ========== BAT SU KIEN THAY DOI RADIO (QUAN TRONG NHAT) ==========
     $(document).on('change', 'input[name="selectedSupplier"]', function () {
-        const index = parseInt($(this).val(), 10);
-        const item = currentDataRows[index];
-        if (!item) return;
+        const $row = $(this).closest('tr');
+        const supplierIdFromRow = getSupplierIdFromRow($row);
+        const item = Number.isFinite(supplierIdFromRow) ? findSupplierItemById(supplierIdFromRow) : null;
+        if (!item && !supplierIdFromRow) return;
 
-        const supplierId = item.data.supplierID || item.data.SupplierID;
+        const supplierId = item
+            ? (item.data.supplierID || item.data.SupplierID || supplierIdFromRow)
+            : supplierIdFromRow;
         selectedSupplierId = supplierId;
 
-        const canCopy = item.actions && item.actions.canCopy === true;
-        const canSubmit = item.actions && item.actions.canSubmit === true;
+        const canCopy = item && item.actions ? item.actions.canCopy === true : false;
+        const canSubmit = item && item.actions ? item.actions.canSubmit === true : false;
         const updateVisibility = (selector, hasPermission) => {
             if (hasPermission) {
                 $(selector).removeClass('d-none');
@@ -177,14 +215,22 @@
     });
 
     $(document).on('dblclick', '#supplierTable tbody tr', function () {
-        const rowIndex = $(this).data('index');
-        const item = currentDataRows[rowIndex];
-        if (!item || !item.actions) return;
+        const $row = $(this);
+        const supplierId = getSupplierIdFromRow($row);
+        const item = Number.isFinite(supplierId) ? findSupplierItemById(supplierId) : null;
+        if (!item || !item.actions) {
+            if (supplierId) {
+                window.location.href = buildDetailUrl(supplierId, 'view');
+            }
+            return;
+        }
         if (item.actions.canAccess !== true) return;
 
-        const supplierId = item.data.supplierID || item.data.SupplierID;
+        const resolvedSupplierId = item.data.supplierID || item.data.SupplierID || supplierId;
         const accessMode = (item.actions.accessMode || 'view').toString().toLowerCase();
-        window.location.href = buildDetailUrl(supplierId, accessMode);
+        if (resolvedSupplierId) {
+            window.location.href = buildDetailUrl(resolvedSupplierId, accessMode);
+        }
     });
 
     function buildDetailUrl(supplierId, accessMode) {

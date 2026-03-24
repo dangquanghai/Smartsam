@@ -1,8 +1,9 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
+using SmartSam.Helpers;
 using SmartSam.Pages;
 using SmartSam.Services;
 using SmartSam.Services.Interfaces;
@@ -103,10 +104,8 @@ namespace SmartSam.Pages.Purchasing.Supplier
         public bool IsAnnualView => string.Equals(ViewMode, "byyear", StringComparison.OrdinalIgnoreCase) && Year.HasValue;
         public bool HasSubmitPermission => _effectivePerms.Contains(PermissionSubmit);
         public bool CanSave => !IsViewMode && !IsAnnualView && (IsEdit ? _effectivePerms.Contains(PermissionEdit) : _effectivePerms.Contains(PermissionAdd));
-        public bool IsDisapproved => (Input.Status ?? 0) == 9;
-        public bool IsSubmitted => IsWorkflowSubmitted(Input);
-        public bool CanSubmit => !IsViewMode && !IsAnnualView && IsEdit && _effectivePerms.Contains(PermissionSubmit) && !IsSubmitted;
-        public bool CanReuse => !IsAnnualView && IsEdit && _effectivePerms.Contains(PermissionEdit) && IsDisapproved && (_isAdminRole || IsReuseOwner());
+        public bool CanSubmit => !IsViewMode && !IsAnnualView && IsEdit && _effectivePerms.Contains(PermissionSubmit);
+        public bool CanReuse => !IsAnnualView && IsEdit && _effectivePerms.Contains(PermissionEdit);
 
         private void LoadSupplierData(int id)
         {
@@ -115,6 +114,21 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 : GetDetail(id);
 
             Input = detail;
+        }
+
+        private int GetSupplierPermissionStatus(SupplierViewModel? supplier)
+        {
+            return supplier?.Status ?? 0;
+        }
+
+        private int GetSupplierPermissionStatus(int supplierId, string? viewMode, int? year)
+        {
+            var isAnnual = string.Equals(viewMode, "byyear", StringComparison.OrdinalIgnoreCase) && year.HasValue;
+            var detail = isAnnual
+                ? GetAnnualDetail(supplierId, year!.Value)
+                : GetDetail(supplierId);
+
+            return detail?.Status ?? 0;
         }
 
         public async Task<IActionResult> OnGetAsync(int? id, string mode = "view")
@@ -143,10 +157,9 @@ namespace SmartSam.Pages.Purchasing.Supplier
                     return Forbid();
                 }
 
-                // 3. BIỆN LUẬN BẢO MẬT GIAI ĐOẠN 3: Giao thoa Quyền hệ thống & Trạng thái đối tượng
-                // Gọi Service để lấy tập quyền "thực tế" (đã giao thoa permission + status)
-                var effectiveStatus = GetSupplierPermissionStatus(Input, IsAnnualView);
-                _effectivePerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, effectiveStatus);
+                // Lấy tập quyền thực tế cho bản ghi hiện tại (theo cùng pattern với STContract).
+                // Function 71 hiện vẫn static nên behavior chưa đổi.
+                _effectivePerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, Input.Status ?? 0);
 
                 // Bước A: Kiểm tra quyền truy cập bản ghi (Mã 2: View)
                 if (!_effectivePerms.Contains(PermissionViewDetail))
@@ -154,14 +167,8 @@ namespace SmartSam.Pages.Purchasing.Supplier
                     return RedirectToPage("./Index", new { msg = "Record does not exist or you have no permission to access." });
                 }
 
-                // Bước B: Ép Mode dựa trên trạng thái (Mã 4: Edit)
-                // Nếu yêu cầu sửa (mode=edit) nhưng tập quyền thực tế không cho phép (do trạng thái hoặc do role)
+                // Bước B: Ép Mode dựa trên quyền edit
                 if (Mode == "edit" && !_effectivePerms.Contains(PermissionEdit))
-                {
-                    Mode = "view";
-                }
-
-                if (IsAnnualView || IsWorkflowSubmitted(Input))
                 {
                     Mode = "view";
                 }
@@ -181,7 +188,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 Mode = "add";
                 Input.Status = 0;
 
-                if (!_isAdminRole && !_dataScope.SeeDataAllDept)
+                if (!CanLoadAllDepartments())
                 {
                     if (!_dataScope.DeptID.HasValue)
                     {
@@ -205,39 +212,17 @@ namespace SmartSam.Pages.Purchasing.Supplier
             return Page();
         }
 
-        private static int GetSupplierPermissionStatus(SupplierViewModel supplier, bool isAnnualView)
-        {
-            if (isAnnualView)
-            {
-                return 99;
-            }
-
-            if (supplier.PurchaserPreparedDate.HasValue)
-            {
-                return 1;
-            }
-
-            return supplier.Status ?? 0;
-        }
-
         // AJAX kiểm tra trùng SupplierCode khi user nhập.
-        // Kiểm tra thêm quyền add/edit và phạm vi dữ liệu (scope) theo phòng ban.
+        // Kiểm tra quyền add/edit và phạm vi dữ liệu (scope) theo phòng ban.
         public JsonResult OnGetCheckSupplierCode(string? supplierCode, int? id)
         {
             int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
             LoadUserDataScope();
 
-            int statusToCheck = 0;
-            if (id.HasValue && id.Value > 0)
-            {
-                var current = GetDetail(id.Value);
-                if (current != null)
-                {
-                    statusToCheck = GetSupplierPermissionStatus(current, isAnnualView: false);
-                }
-            }
-
-            var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, statusToCheck);
+            var permissionStatus = id.HasValue && id.Value > 0
+                ? GetSupplierPermissionStatus(id.Value, "current", null)
+                : 0;
+            var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, permissionStatus);
             bool canAccess = (id.HasValue && id.Value > 0) ? currentPerms.Contains(PermissionEdit) : currentPerms.Contains(PermissionAdd);
             if (!canAccess)
             {
@@ -294,22 +279,8 @@ namespace SmartSam.Pages.Purchasing.Supplier
             int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
             LoadUserDataScope();
 
-            int statusToCheck = 0;
             var isAnnual = string.Equals(viewMode, "byyear", StringComparison.OrdinalIgnoreCase) && year.HasValue;
-            if (isAnnual)
-            {
-                statusToCheck = 99;
-            }
-            else
-            {
-                var current = GetDetail(supplierId);
-                if (current != null)
-                {
-                    statusToCheck = GetSupplierPermissionStatus(current, isAnnualView: false);
-                }
-            }
-
-            var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, statusToCheck);
+            var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, GetSupplierPermissionStatus(supplierId, viewMode, year));
             if (!currentPerms.Contains(PermissionViewDetail))
             {
                 return new JsonResult(new { success = false, message = "Forbidden" })
@@ -364,13 +335,13 @@ namespace SmartSam.Pages.Purchasing.Supplier
             return permsObj;
         }
 
-        // Nạp data scope của user login hiện tại (Dept + SeeDataAllDept).
+        // Nạp data scope của user login hiện tại (Dept + LevelCheckSupplier).
         private void LoadUserDataScope()
         {
             _isAdminRole = IsAdminUser();
             if (_isAdminRole)
             {
-                _dataScope = new EmployeeDataScopeViewModel { SeeDataAllDept = true };
+                _dataScope = new EmployeeDataScopeViewModel();
                 return;
             }
 
@@ -387,7 +358,8 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 return true;
             }
 
-            if (!int.TryParse(User.FindFirst("RoleID")?.Value, out var roleId) || roleId <= 0)
+            var employeeCode = User.Identity?.Name?.Trim();
+            if (string.IsNullOrWhiteSpace(employeeCode))
             {
                 return false;
             }
@@ -395,8 +367,8 @@ namespace SmartSam.Pages.Purchasing.Supplier
             try
             {
                 using var conn = new SqlConnection(_connectionString);
-                using var cmd = new SqlCommand("SELECT TOP 1 IsAdminRole FROM SYS_Role WHERE RoleID = @RoleID", conn);
-                cmd.Parameters.Add("@RoleID", SqlDbType.Int).Value = roleId;
+                using var cmd = new SqlCommand("SELECT TOP 1 IsAdminUser FROM MS_Employee WHERE EmployeeCode = @EmployeeCode AND IsActive = 1", conn);
+                cmd.Parameters.Add("@EmployeeCode", SqlDbType.NVarChar, 50).Value = employeeCode;
                 conn.Open();
                 var value = cmd.ExecuteScalar();
                 if (value == null || value == DBNull.Value)
@@ -421,7 +393,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             }
 
             const string sql = @"
-                                SELECT TOP 1 DeptID, ISNULL(SeeDataAllDept, 0) AS SeeDataAllDept
+                                SELECT TOP 1 DeptID, ISNULL(LevelCheckSupplier, 0) AS LevelCheckSupplier
                                 FROM dbo.MS_Employee
                                 WHERE EmployeeCode = @EmployeeCode";
 
@@ -441,16 +413,21 @@ namespace SmartSam.Pages.Purchasing.Supplier
                     return new EmployeeDataScopeViewModel
                     {
                         DeptID = rd.IsDBNull(0) ? null : Convert.ToInt32(rd[0]),
-                        SeeDataAllDept = !rd.IsDBNull(1) && Convert.ToBoolean(rd[1])
+                        LevelCheckSupplier = rd.IsDBNull(1) ? 0 : Convert.ToInt32(rd[1])
                     };
                 }
             }
         }
 
         // Kiểm tra record supplier có nằm trong phạm vi dept user được thao tác không.
+        private bool CanLoadAllDepartments()
+        {
+            return _isAdminRole || _dataScope.LevelCheckSupplier is 1 or 3 or 4;
+        }
+
         private bool CanAccessDepartment(int? supplierDeptId)
         {
-            if (_isAdminRole || _dataScope.SeeDataAllDept)
+            if (CanLoadAllDepartments())
             {
                 return true;
             }
@@ -510,29 +487,12 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 return Forbid();
             }
 
-            int statusToCheck = 0;
-            if (IsEdit)
-            {
-                var current = GetDetail(Id!.Value);
-                if (current != null)
-                {
-                    statusToCheck = GetSupplierPermissionStatus(current, isAnnualView: false);
-                }
-            }
-
-            var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, statusToCheck);
-            bool hasPermission = IsEdit ? currentPerms.Contains(PermissionEdit) : currentPerms.Contains(PermissionAdd);
-            if (!hasPermission)
-            {
-                return Forbid();
-            }
-
             LoadAllDropdowns();
             SupplierViewModel? currentDetail = null;
 
             if (!IsEdit)
             {
-                if (!_isAdminRole && !_dataScope.SeeDataAllDept)
+                if (!CanLoadAllDepartments())
                 {
                     if (!_dataScope.DeptID.HasValue)
                     {
@@ -558,20 +518,22 @@ namespace SmartSam.Pages.Purchasing.Supplier
                     return Forbid();
                 }
 
-                if (!_isAdminRole && !_dataScope.SeeDataAllDept)
+                if (!CanLoadAllDepartments())
                 {
                     Input.DeptID = currentDetail.DeptID;
                 }
 
-                if (IsWorkflowSubmitted(currentDetail))
-                {
-                    Input = currentDetail;
-                    Histories = GetApprovalHistory(Id.Value);
-                    SetMessage("Supplier is in approval workflow and is read-only.", "warning");
-                    return Page();
-                }
-
                 Input.Status = currentDetail.Status;
+            }
+
+            var currentPerms = _securityService.GetEffectivePermissions(
+                FUNCTION_ID,
+                roleId,
+                GetSupplierPermissionStatus(currentDetail ?? Input));
+            bool hasPermission = IsEdit ? currentPerms.Contains(PermissionEdit) : currentPerms.Contains(PermissionAdd);
+            if (!hasPermission)
+            {
+                return Forbid();
             }
 
             var code = (Input.SupplierCode ?? string.Empty).Trim();
@@ -677,8 +639,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 return Page();
             }
 
-            int statusToCheck = GetSupplierPermissionStatus(current, isAnnualView: false);
-            var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, statusToCheck);
+            var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, GetSupplierPermissionStatus(current));
             if (!currentPerms.Contains(PermissionSubmit))
             {
                 return Forbid();
@@ -688,13 +649,6 @@ namespace SmartSam.Pages.Purchasing.Supplier
             if (!CanAccessDepartment(Input.DeptID))
             {
                 return Forbid();
-            }
-
-            if (IsSubmitted)
-            {
-                Histories = GetApprovalHistory(Id.Value);
-                SetMessage("Supplier has already been submitted.", "warning");
-                return Page();
             }
 
             var operatorCode = User.Identity?.Name ?? "SYSTEM";
@@ -723,8 +677,6 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 return new JsonResult(new { success = false, message = "Invalid request." });
             }
 
-            int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
-
             LoadAllDropdowns();
 
             var current = GetDetail(Id.Value);
@@ -733,8 +685,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 return new JsonResult(new { success = false, message = "Supplier not found." });
             }
 
-            int statusToCheck = GetSupplierPermissionStatus(current, isAnnualView: false);
-            var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, statusToCheck);
+            var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, int.Parse(User.FindFirst("RoleID")?.Value ?? "0"), GetSupplierPermissionStatus(current));
             if (!currentPerms.Contains(PermissionEdit))
             {
                 return new JsonResult(new { success = false, message = "You do not have permission to do it." })
@@ -747,19 +698,6 @@ namespace SmartSam.Pages.Purchasing.Supplier
             if (!CanAccessDepartment(Input.DeptID))
             {
                 return new JsonResult(new { success = false, message = "Current user cannot access this supplier department." })
-                {
-                    StatusCode = StatusCodes.Status403Forbidden
-                };
-            }
-
-            if (!IsDisapproved)
-            {
-                return new JsonResult(new { success = false, message = "Only disapproved supplier can Re Use." });
-            }
-
-            if (!_isAdminRole && !IsReuseOwner())
-            {
-                return new JsonResult(new { success = false, message = "Only purchaser submitter can Re Use." })
                 {
                     StatusCode = StatusCodes.Status403Forbidden
                 };
@@ -778,8 +716,6 @@ namespace SmartSam.Pages.Purchasing.Supplier
 
         private IActionResult ReuseCore()
         {
-            int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
-
             if (!IsEdit)
             {
                 return RedirectToPage("./Index", BuildListRouteValues());
@@ -794,8 +730,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 return Page();
             }
 
-            int statusToCheck = GetSupplierPermissionStatus(current, isAnnualView: false);
-            var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, statusToCheck);
+            var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, int.Parse(User.FindFirst("RoleID")?.Value ?? "0"), GetSupplierPermissionStatus(current));
             if (!currentPerms.Contains(PermissionEdit))
             {
                 return Forbid();
@@ -803,18 +738,6 @@ namespace SmartSam.Pages.Purchasing.Supplier
 
             Input = current;
             if (!CanAccessDepartment(Input.DeptID))
-            {
-                return Forbid();
-            }
-
-            if (!IsDisapproved)
-            {
-                Histories = GetApprovalHistory(Id.Value);
-                SetMessage("Only disapproved supplier can Re Use.", "warning");
-                return Page();
-            }
-
-            if (!_isAdminRole && !IsReuseOwner())
             {
                 return Forbid();
             }
@@ -861,7 +784,20 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 "SupplierStatusID",
                 "SupplierStatusName");
 
-            if (!_isAdminRole && !_dataScope.SeeDataAllDept)
+            var departmentOptions = departments
+                .Select(x => int.TryParse(x.Value, out var deptId)
+                    ? (Id: deptId, Name: x.Text)
+                    : (Id: 0, Name: string.Empty))
+                .Where(x => x.Id > 0)
+                .ToList();
+
+            Departments = Helper.BuildIntSelectList(
+                departmentOptions,
+                x => x.Id,
+                x => x.Name,
+                showAll: false);
+
+            if (!CanLoadAllDepartments())
             {
                 if (!_dataScope.DeptID.HasValue)
                 {
@@ -870,15 +806,11 @@ namespace SmartSam.Pages.Purchasing.Supplier
                     return;
                 }
 
-                Departments = departments
+                Departments = Departments
                     .Where(x => int.TryParse(x.Value, out var deptId) && deptId == _dataScope.DeptID.Value)
                     .ToList();
 
                 Input.DeptID = _dataScope.DeptID.Value;
-            }
-            else
-            {
-                Departments = departments;
             }
 
             Statuses = statuses;
@@ -1264,23 +1196,6 @@ namespace SmartSam.Pages.Purchasing.Supplier
             cmd.ExecuteNonQuery();
         }
 
-        // Owner duoc phep Re Use theo du lieu hien co:
-        // he thong hien tai khong co cot creator rieng trong PC_Suppliers,
-        // nen owner cua luong Re Use duoc xac dinh boi PurchaserCode (submitter).
-        private bool IsReuseOwner()
-        {
-            return IsSubmitOwner();
-        }
-
-        // User submitter cua workflow: duoc xac dinh boi PurchaserCode.
-        private bool IsSubmitOwner()
-        {
-            var currentUser = User.Identity?.Name?.Trim();
-            if (string.IsNullOrWhiteSpace(currentUser)) return false;
-            if (string.IsNullOrWhiteSpace(Input.PurchaserCode)) return false;
-            return string.Equals(Input.PurchaserCode.Trim(), currentUser, StringComparison.OrdinalIgnoreCase);
-        }
-
         // Bind parameter dung chung cho insert/update supplier.
         private static void AddSupplierParameters(SqlCommand cmd, SupplierViewModel supplier)
         {
@@ -1300,15 +1215,6 @@ namespace SmartSam.Pages.Purchasing.Supplier
             cmd.Parameters.AddWithValue("@IsNew", supplier.IsNew);
             cmd.Parameters.AddWithValue("@CodeOfAcc", (object?)supplier.CodeOfAcc ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@DeptID", (object?)supplier.DeptID ?? DBNull.Value);
-        }
-
-        // Da submit vao workflow khi co thong tin nguoi submit/thoi gian submit
-        // hoac trang thai da qua cac buoc duyet tiep theo.
-        private static bool IsWorkflowSubmitted(SupplierViewModel? supplier)
-        {
-            if (supplier == null) return false;
-            if (supplier.PurchaserPreparedDate.HasValue) return true;
-            return (supplier.Status ?? 0) >= 1;
         }
 
         // Gan flash message vao message hien thi trong trang hien tai.
@@ -1406,11 +1312,11 @@ namespace SmartSam.Pages.Purchasing.Supplier
             public DateTime? ActionDate { get; set; }
         }
 
-        // Vùng phụ: scope dữ liệu của user đăng nhập (Dept/SeeDataAllDept)
+        // Vùng phụ: scope dữ liệu của user đăng nhập (Dept/LevelCheckSupplier)
         public class EmployeeDataScopeViewModel
         {
             public int? DeptID { get; set; }
-            public bool SeeDataAllDept { get; set; }
+            public int LevelCheckSupplier { get; set; }
         }
     }
 }
