@@ -3,7 +3,46 @@
 @{
     ViewData["Title"] = "Short Term Contract";
 }
+@section Styles {
+    <style>
+        /* 1. Ép Select2 và nút bấm nằm trên cùng 1 hàng */
+        .input-group > .select2-container--default {
+            flex: 1 1 auto; /* Chiếm toàn bộ không gian còn lại */
+            width: 1% !important; /* Mẹo để không bị nhảy xuống dòng */
+        }
 
+        /* 2. Fix chiều cao và bo góc cho Select2 khi đi cùng Group */
+        .input-group .select2-container--default .select2-selection--single {
+            height: 38px !important; /* Chiều cao chuẩn Bootstrap 4 */
+            border-top-right-radius: 0 !important;
+            border-bottom-right-radius: 0 !important;
+            display: flex;
+            align-items: center;
+            border-color: #ced4da;
+        }
+
+        /* 3. Tùy chỉnh nút Xóa (nút x) */
+        .btn-clear-select2 {
+            border-top-left-radius: 0 !important;
+            border-bottom-left-radius: 0 !important;
+            border-left: none !important; /* Bỏ viền giữa để trông như một khối */
+            background-color: #fff;
+            color: #999;
+            border-color: #ced4da;
+            z-index: 10; /* Đảm bảo nút luôn nằm trên cùng để click */
+        }
+
+            .btn-clear-select2:hover {
+                color: #dc3545; /* Di chuột vào hiện màu đỏ xóa */
+                background-color: #f8f9fa;
+            }
+
+        /* 4. Tránh bôi đen văn bản khi click chọn dòng liên tục */
+        .contract-row {
+            user-select: none;
+        }
+    </style>
+}
 <section class="content">
     <div class="container-fluid">
         <div class="row">
@@ -57,21 +96,26 @@
                             <!-- Row 5 -->
                             <div class="form-group">
                                 <label>Company</label>
-                                <select id="CompanyId"
-                                        name="Filter.CompanyId"
-                                        class="form-control select2"
-                                        style="width:100%">
-                                </select>
+                                <div class="input-group">
+                                    <select id="CompanyId" name="Filter.CompanyId" class="form-control select2"></select>
+                                    <div class="input-group-append">
+                                        <button class="btn btn-outline-secondary btn-clear-select2" type="button" data-target="#CompanyId">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-
-                              <!-- Row 6 -->
+                            <!-- Row 6 -->
                             <div class="form-group">
                                 <label>Agent Company</label>
-                                <select id="AgentCompanyId"
-                                        name="Filter.AgentCompanyId"
-                                        class="form-control select2"
-                                        style="width:100%">
-                                </select>
+                                <div class="input-group">
+                                    <select id="AgentCompanyId" name="Filter.AgentCompanyId" class="form-control select2"></select>
+                                    <div class="input-group-append">
+                                        <button class="btn btn-outline-secondary btn-clear-select2" type="button" data-target="#AgentCompanyId">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Row 7 -->
