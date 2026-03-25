@@ -1,45 +1,36 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Net;
 using System.Net.Mail;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
 using SmartSam.Pages;
 using SmartSam.Pages.Purchasing.Supplier;
 using SmartSam.Services;
+using SmartSam.Services.Interfaces;
 
 namespace SmartSam.Pages.Purchasing.ApproveSupplier
 {
     public class ApproveSupplierDetailModel : BasePageModel
     {
         private readonly ILogger<ApproveSupplierDetailModel> _logger;
-        private readonly PermissionService _permissionService;
+        private readonly ISecurityService _securityService;
         private const int NoDepartmentScopeValue = -1;
         private const int NoStatusScopeValue = -999;
         private const int PermissionViewList = 1;
-        private const int PermissionApprove = 4;
+        private const int PermissionApprove = 2;
 
         private ApproveEmployeeDataScopeViewModel _dataScope = new ApproveEmployeeDataScopeViewModel();
         private bool _isAdminRole;
 
-        public ApproveSupplierDetailModel(IConfiguration config, ILogger<ApproveSupplierDetailModel> logger, PermissionService permissionService) : base(config)
+        public ApproveSupplierDetailModel(ISecurityService securityService, IConfiguration config, ILogger<ApproveSupplierDetailModel> logger) : base(config)
         {
+            _securityService = securityService;
             _logger = logger;
-            _permissionService = permissionService;
         }
         // ID chức năng trong bảng SYS_Function
-        private const int FUNCTION_ID = 71;
-
-        [BindProperty(SupportsGet = true)]
-        public int? DeptId { get; set; }
-
-        [BindProperty(SupportsGet = true)]
-        public int PageIndex { get; set; } = 1;
-
-        [BindProperty(SupportsGet = true)]
-        public int PageSize { get; set; } = 25;
+        private const int FUNCTION_ID = 145;
 
         [BindProperty(SupportsGet = true)]
         public int? CurrentSupplierId { get; set; }
@@ -58,15 +49,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
         public string? Message { get; set; }
         public string MessageType { get; set; } = "info";
-        public PagePermissions PagePerm { get; set; } = new PagePermissions();
-        public List<SelectListItem> Departments { get; set; } = new List<SelectListItem>();
+        public PagePermissions PagePerm { get; private set; } = new PagePermissions();
         public List<ApproveListRowViewModel> Rows { get; set; } = new List<ApproveListRowViewModel>();
-        public int TotalRecords { get; set; }
-        public int TotalPages => 1;
-        public bool HasPreviousPage => false;
-        public bool HasNextPage => false;
-        public bool CanApprove => HasPermission(PermissionApprove);
-        public bool IsDepartmentFilterLocked => !CanViewAllDepartments();
         public ApproveSupplierDetailViewModel? CurrentSupplierDetail { get; set; }
         public int CurrentSupplierPosition { get; set; }
         public int CurrentPageSupplierCount => Rows.Count;
@@ -87,15 +71,14 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public bool CanApproveByLevel => _dataScope.LevelCheckSupplier.HasValue && _dataScope.LevelCheckSupplier.Value is >= 1 and <= 4;
         public bool CanDisapproveByLevel => _dataScope.LevelCheckSupplier.HasValue && _dataScope.LevelCheckSupplier.Value is >= 2 and <= 4;
 
-        public void OnGet()
+        public IActionResult OnGet()
         {
-            // 1. Lấy quyền được admin cấp cho role login
+            // 1. Lấy tập quyền thực tế của role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
             if (!HasPermission(PermissionViewList))
             {
-                Response.StatusCode = 403;
-                return;
+                return Redirect("/");
             }
 
             if (!string.IsNullOrWhiteSpace(FlashMessage))
@@ -105,19 +88,19 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             }
 
             // 2. Load dữ liệu màn hình theo đúng phạm vi quyền
-            LoadDepartments();
             LoadSupplierRows();
             LoadCurrentSupplierDetailData();
+            return Page();
         }
 
         public IActionResult OnPostSave()
         {
-            // 1. Lấy quyền được admin cấp cho role login
+            // 1. Lấy tập quyền thực tế của role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
             if (!HasPermission(PermissionViewList))
             {
-                return Forbid();
+                return Redirect("/");
             }
 
             var supplierId = EditSupplier.SupplierID;
@@ -165,12 +148,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
         public IActionResult OnPostGoTo()
         {
-            // 1. Lấy quyền được admin cấp cho role login
+            // 1. Lấy tập quyền thực tế của role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
             if (!HasPermission(PermissionViewList))
             {
-                return Forbid();
+                return Redirect("/");
             }
 
             LoadSupplierRows();
@@ -192,9 +175,13 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
         public IActionResult OnPostApprove()
         {
-            // 1. Lấy quyền được admin cấp cho role login
+            // 1. Lấy tập quyền thực tế của role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
+            if (!HasPermission(PermissionApprove))
+            {
+                return Redirect("/");
+            }
 
             if (!_dataScope.LevelCheckSupplier.HasValue || _dataScope.LevelCheckSupplier.Value is < 1 or > 4)
             {
@@ -272,9 +259,13 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
         public IActionResult OnPostDisapprove()
         {
-            // 1. Lấy quyền được admin cấp cho role login
+            // 1. Lấy tập quyền thực tế của role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
+            if (!HasPermission(PermissionApprove))
+            {
+                return Redirect("/");
+            }
 
             if (!_dataScope.LevelCheckSupplier.HasValue || _dataScope.LevelCheckSupplier.Value is < 2 or > 4)
             {
@@ -338,12 +329,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
         public IActionResult OnPostSaveMoreComment()
         {
-            // 1. Lấy quyền được admin cấp cho role login
+            // 1. Lấy tập quyền thực tế của role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
             if (!HasPermission(PermissionViewList))
             {
-                return Forbid();
+                return Redirect("/");
             }
 
             var supplierId = EditSupplier.SupplierID;
@@ -376,53 +367,11 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return RedirectToCurrentList();
         }
 
-        private void LoadDepartments()
-        {
-            var list = new List<SelectListItem>();
-
-            using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
-            using var cmd = new SqlCommand(@"
-                SELECT DeptID, DeptCode
-                FROM MS_Department
-                ORDER BY DeptCode", conn);
-
-            conn.Open();
-            using var rd = cmd.ExecuteReader();
-            while (rd.Read())
-            {
-                list.Add(new SelectListItem
-                {
-                    Value = Convert.ToString(rd[0]),
-                    Text = Convert.ToString(rd[1])
-                });
-            }
-
-            if (CanViewAllDepartments())
-            {
-                Departments = new List<SelectListItem>
-                {
-                    new SelectListItem { Value = string.Empty, Text = "--- All ---" }
-                };
-                Departments.AddRange(list);
-                return;
-            }
-
-            var scopedDepartments = list
-                .Where(x => _dataScope.DeptID.HasValue && x.Value == _dataScope.DeptID.Value.ToString())
-                .ToList();
-
-            Departments = scopedDepartments;
-            DeptId = _dataScope.DeptID ?? NoDepartmentScopeValue;
-        }
-
         private void LoadSupplierRows()
         {
-            // 1. Build điều kiện và lấy toàn bộ danh sách theo phạm vi quyền
-            var criteria = BuildCriteria(includePaging: true);
-            var (rows, totalRecords) = SearchPaged(criteria);
-            TotalRecords = totalRecords;
-
-            Rows = rows;
+            // 1. Build điều kiện tìm kiếm theo đúng phạm vi quyền
+            var criteria = BuildCriteria();
+            Rows = SearchSupplierRows(criteria);
         }
 
         private void LoadCurrentSupplierDetailData()
@@ -460,7 +409,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             PrevSupplierId = selectedIndex > 0 ? Rows[selectedIndex - 1].SupplierID : null;
             NextSupplierId = selectedIndex < Rows.Count - 1 ? Rows[selectedIndex + 1].SupplierID : null;
 
-            // 3. Load chi tiết + thông tin PO + lịch sử service
+            // 3. Load chi tiết, thông tin PO và lịch sử service
             CurrentSupplierDetail = GetSupplierDetail(Rows[selectedIndex].SupplierID);
             EditSupplier = CurrentSupplierDetail is null ? new ApproveSupplierDetailViewModel() : CloneForEdit(CurrentSupplierDetail);
 
@@ -471,26 +420,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             }
         }
 
-        private (List<ApproveListRowViewModel> rows, int totalRecords) SearchPaged(ApproveFilterCriteria criteria)
+        private List<ApproveListRowViewModel> SearchSupplierRows(ApproveFilterCriteria criteria)
         {
             var rows = new List<ApproveListRowViewModel>();
-            var totalRecords = 0;
 
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
             conn.Open();
-
-            using (var countCmd = new SqlCommand(@"
-                SELECT COUNT(1)
-                FROM dbo.PC_Suppliers s
-                LEFT JOIN dbo.PC_SupplierStatus st ON s.[Status] = st.SupplierStatusID
-                LEFT JOIN dbo.MS_Department d ON s.DeptID = d.DeptID
-                WHERE (@DeptID IS NULL OR s.DeptID = @DeptID)
-                  AND (@StatusID IS NULL OR s.[Status] = @StatusID)
-                  AND (@MaxStatusExclusive IS NULL OR ISNULL(s.[Status], 0) < @MaxStatusExclusive)", conn))
-            {
-                BindSearchParams(countCmd, criteria);
-                totalRecords = Convert.ToInt32(countCmd.ExecuteScalar() ?? 0);
-            }
 
             using var cmd = new SqlCommand(@"
                 SELECT
@@ -540,7 +475,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 });
             }
 
-            return (rows, totalRecords);
+            return rows;
         }
 
         private ApproveSupplierDetailViewModel? GetSupplierDetail(int supplierId)
@@ -716,7 +651,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             _isAdminRole = string.Equals(User.FindFirst("IsAdminRole")?.Value, "True", StringComparison.OrdinalIgnoreCase);
             _dataScope = new ApproveEmployeeDataScopeViewModel();
 
-            // 2. Lấy mã nhân viên để đọc phạm vi phòng ban + cấp duyệt
+            // 2. Lấy mã nhân viên để đọc phạm vi phòng ban và cấp duyệt
             var employeeCode = User.Identity?.Name?.Trim();
             if (string.IsNullOrWhiteSpace(employeeCode))
             {
@@ -725,7 +660,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
             using var cmd = new SqlCommand(@"
-                SELECT TOP 1 DeptID, ISNULL(CanAsk, 0) AS CanAsk, LevelCheckSupplier
+                SELECT TOP 1 DeptID, LevelCheckSupplier
                 FROM dbo.MS_Employee
                 WHERE EmployeeCode = @EmployeeCode", conn);
 
@@ -735,43 +670,32 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             if (rd.Read())
             {
                 _dataScope.DeptID = rd.IsDBNull(0) ? null : Convert.ToInt32(rd[0]);
-                _dataScope.CanAsk = !rd.IsDBNull(1) && Convert.ToBoolean(rd[1]);
-                _dataScope.LevelCheckSupplier = rd.IsDBNull(2) ? null : Convert.ToInt32(rd[2]);
+                _dataScope.LevelCheckSupplier = rd.IsDBNull(1) ? null : Convert.ToInt32(rd[1]);
             }
 
-            if (_isAdminRole)
-            {
-                // Admin luôn có thể xem toàn bộ danh sách
-                _dataScope.CanAsk = true;
-            }
-
-            if (!_dataScope.CanAsk)
-            {
-                // User không có quyền xem toàn cục thì khóa theo DeptID
-                DeptId = _dataScope.DeptID ?? NoDepartmentScopeValue;
-            }
         }
 
         private PagePermissions GetUserPermissions()
         {
-            bool isAdmin = User.FindFirst("IsAdminRole")?.Value == "True";
-            int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
+            bool isAdmin = string.Equals(User.FindFirst("IsAdminRole")?.Value, "True", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(User.FindFirst("IsAdminRole")?.Value, "1", StringComparison.OrdinalIgnoreCase);
+            int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
             // 1. Khởi tạo đối tượng PagePermissions mới
             var permsObj = new PagePermissions();
 
             if (isAdmin)
             {
-                // Admin: Gán danh sách quyền đầy đủ
+                // 2. Nếu là admin thì cấp đầy đủ quyền để đồng bộ với cách hiển thị menu
                 permsObj.AllowedNos = Enumerable.Range(1, 20).ToList();
             }
             else
             {
-                // 2. Lấy danh sách quyền từ Service rồi gán vào object
-                permsObj.AllowedNos = _permissionService.GetPermissionsForPage(roleId, FUNCTION_ID);
+                // 3. User thường lấy tập quyền thực tế của role theo đúng FunctionID
+                permsObj.AllowedNos = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, 1);
             }
 
-            // 3. Trả về object chứa tập quyền của người dùng
+            // 4. Trả về object chứa tập quyền của người dùng
             return permsObj;
         }
 
@@ -800,15 +724,13 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return _dataScope.DeptID.Value == supplierDeptId.Value;
         }
 
-        private ApproveFilterCriteria BuildCriteria(bool includePaging = true)
+        private ApproveFilterCriteria BuildCriteria()
         {
             return new ApproveFilterCriteria
             {
                 DeptId = ResolveDepartmentFilter(),
                 StatusId = ResolveStatusFilterByLevel(),
-                MaxStatusExclusive = null,
-                PageIndex = includePaging ? PageIndex : null,
-                PageSize = includePaging ? PageSize : null
+                MaxStatusExclusive = null
             };
         }
 
@@ -816,7 +738,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         {
             if (CanViewAllDepartments())
             {
-                return DeptId;
+                return null;
             }
 
             return _dataScope.DeptID ?? NoDepartmentScopeValue;
@@ -997,9 +919,10 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                     BODCode = CASE WHEN @LevelCheck = 4 THEN @OperatorCode ELSE BODCode END,
                     BODApproveDate = CASE WHEN @LevelCheck = 4 THEN GETDATE() ELSE BODApproveDate END,
                     IsApproved = 0,
-                    [Status] = 9
+                    [Status] = 5
                 WHERE SupplierID = @SupplierID
-                  AND @LevelCheck IN (2, 3, 4)", conn);
+                  AND @LevelCheck IN (2, 3, 4)
+                  AND ISNULL([Status], 0) + 1 = @LevelCheck", conn);
 
             cmd.Parameters.AddWithValue("@SupplierID", supplierId);
             cmd.Parameters.AddWithValue("@LevelCheck", levelCheckSupplier);
@@ -1071,7 +994,6 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
             var detailUrl = Url.Page("/Purchasing/ApproveSupplierAnnualy/Index", values: new
             {
-                DeptId,
                 CurrentSupplierId = supplier.SupplierID
             });
 
@@ -1133,7 +1055,6 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         {
             return RedirectToPage("./Index", new
             {
-                DeptId,
                 CurrentSupplierId
             });
         }
@@ -1287,8 +1208,6 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public int? DeptId { get; set; }
         public int? StatusId { get; set; }
         public int? MaxStatusExclusive { get; set; }
-        public int? PageIndex { get; set; }
-        public int? PageSize { get; set; }
     }
 
     public class ApproveListRowViewModel
@@ -1337,7 +1256,6 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
     public class ApproveEmployeeDataScopeViewModel
     {
         public int? DeptID { get; set; }
-        public bool CanAsk { get; set; }
         public int? LevelCheckSupplier { get; set; }
     }
 
@@ -1421,4 +1339,6 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public int? Status { get; set; }
     }
 }
+
+
 
