@@ -1,6 +1,7 @@
-﻿let supplierCurrentId = '';
+let supplierCurrentId = '';
 let supplierPageViewMode = '';
 let supplierPageYear = '';
+let supplierLastAction = 'save';
 // Tracking comment: keep Supplier detail script marked as touched for current work.
 
 $(document).ready(function () {
@@ -16,6 +17,18 @@ $(document).ready(function () {
     // 2. Chạy khởi tạo trang
     initializePage(mode);
 
+    $('#btnSave').on('click', function () {
+        supplierLastAction = 'save';
+    });
+
+    $('#btnSubmit').on('click', function () {
+        supplierLastAction = 'submit';
+    });
+
+    $('#btnReuse').on('click', function () {
+        reuseSupplierAjax();
+    });
+
     // 3. Xử lý sự kiện SUBMIT Form chính
     $('form').on('submit', async function (e) {
         if (mode === 'view') return true;
@@ -25,7 +38,11 @@ $(document).ready(function () {
         if (validateMainForm()) {
             const isAvailable = await checkSupplierCodeDuplicate(supplierCurrentId);
             if (isAvailable) {
-                $(this).off('submit').submit();
+                const $form = $(this);
+                const $action = $('<input type="hidden" name="action" />').val(supplierLastAction || 'save');
+                $form.append($action);
+                this.submit();
+                $action.remove();
             } else {
                 alert('Supplier code already exists.');
                 focusErrorField($('#Input_SupplierCode'));
@@ -41,11 +58,6 @@ $(document).ready(function () {
 function initializePage(mode) {
     // Load approval history 
     loadApprovalHistory(supplierCurrentId, supplierPageViewMode, supplierPageYear);
-
-    // Add mode thì gợi ý mã Supplier.
-    if (mode === 'add') {
-        loadSuggestedSupplierCode();
-    }
 }
 
 function validateMainForm() {
@@ -100,24 +112,6 @@ async function checkSupplierCodeDuplicate(currentId) {
     }
 }
 
-function loadSuggestedSupplierCode() {
-    const $supplierCode = $('#Input_SupplierCode');
-    if ($supplierCode.length === 0) return;
-    if (($supplierCode.val() || '').toString().trim().length > 0) return;
-
-    $.ajax({
-        url: '?handler=SuggestSupplierCode',
-        type: 'GET',
-        success: function (res) {
-            const suggestedCode = (res && res.supplierCode ? res.supplierCode : '').trim();
-            if (!suggestedCode) return;
-            if (($supplierCode.val() || '').toString().trim().length > 0) return;
-
-            $supplierCode.val(suggestedCode);
-        }
-    });
-}
-
 function loadApprovalHistory(currentId, pageViewMode, pageYear) {
     const $tbody = $('#approvalHistoryBody');
     if ($tbody.length === 0) return;
@@ -165,6 +159,50 @@ function loadApprovalHistory(currentId, pageViewMode, pageYear) {
         },
         error: function () {
             $tbody.html(noHistoryHtml);
+        }
+    });
+}
+
+function reuseSupplierAjax() {
+    const token = $('input[name="__RequestVerificationToken"]').val();
+    if (!token) {
+        alert('Cannot reuse supplier because request token is missing.');
+        return;
+    }
+
+    if (!supplierCurrentId || !Number.isFinite(Number(supplierCurrentId))) {
+        alert('Invalid supplier.');
+        return;
+    }
+
+    if (!confirm('Reset this disapproved supplier to draft?')) {
+        return;
+    }
+
+    $.ajax({
+        url: '?handler=ReuseAjax',
+        type: 'POST',
+        data: {
+            id: Number(supplierCurrentId),
+            viewMode: supplierPageViewMode || null,
+            year: supplierPageYear || null
+        },
+        headers: { RequestVerificationToken: token },
+        success: function (res) {
+            const isSuccess = !!(res && (res.success === true || res.Success === true));
+            const message = (res && (res.message || res.Message)) || 'Re Use completed.';
+
+            if (!isSuccess) {
+                alert(message);
+                return;
+            }
+
+            window.location.href = (res && (res.redirectUrl || res.RedirectUrl)) || window.location.href;
+        },
+        error: function (xhr) {
+            const message = (xhr && xhr.responseJSON && (xhr.responseJSON.message || xhr.responseJSON.Message))
+                || 'Cannot reuse supplier.';
+            alert(message);
         }
     });
 }

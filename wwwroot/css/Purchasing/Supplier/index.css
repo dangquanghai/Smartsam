@@ -1,7 +1,33 @@
-﻿.supplier-table-wrap {
-    max-height: 62vh;
+﻿#supplierResultPanelContainer {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 100px);
+    min-height: 520px;
+    overflow: visible;
+}
+
+#supplierResultPanelContainer > .card.card-primary {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#supplierResultPanelContainer > .card.card-outline.card-primary {
+    flex: 0 0 auto;
+}
+
+#supplierResultPanelContainer > .card.card-primary > .card-body {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#supplierResultPanelContainer > .card.card-primary > .card-body > .table-responsive {
+    flex: 1 1 auto;
+    min-height: 0;
     overflow: auto;
-    position: relative;
 }
 
 /* Khai báo font VNI nếu máy client đã cài */
@@ -9,7 +35,8 @@
     font-family: "VNI-Times", "VNI-Helve", sans-serif !important;
     font-size: 14px;
 }
-.supplier-table thead th {
+
+#supplierTable thead th {
     position: sticky;
     top: 0;
     z-index: 3;
@@ -125,9 +152,10 @@
 }
 
 @media (max-width: 767.98px) {
-    .supplier-table-wrap {
-        max-height: 52vh;
-        overflow: auto;
+    #supplierResultPanelContainer {
+        height: auto;
+        min-height: 0;
+        overflow: visible;
     }
 
     .supplier-table-header-right {
@@ -181,6 +209,53 @@
 
 .supplier-inline-field-mobile .supplier-inline-label {
     width: 52px;
+}
+
+.supplier-detail-form .col-form-label {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.supplier-required-mark {
+    color: #dc3545;
+    margin-left: 2px;
+}
+
+.supplier-checkbox-wrap {
+    min-height: calc(1.5em + 0.5rem + 2px);
+    display: flex;
+    align-items: center;
+}
+
+.supplier-cert-dept-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.supplier-cert-input {
+    flex: 1 1 52%;
+    min-width: 0;
+}
+
+.supplier-dept-label {
+    white-space: nowrap;
+    margin: 0;
+}
+
+.supplier-dept-select {
+    flex: 1 1 48%;
+    min-width: 140px;
+}
+
+.supplier-status-dept-align .supplier-isnew-cell {
+    justify-content: flex-start;
+    padding-left: 2px;
+}
+
+.supplier-status-readonly {
+    background-color: #e9ecef;
 }
 
 .supplier-detail-grid {

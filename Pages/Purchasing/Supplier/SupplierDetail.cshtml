@@ -37,7 +37,7 @@
         @if (!ViewData.ModelState.IsValid)
         {
             <div class="alert alert-danger">
-                <div asp-validation-summary="All" class="text-danger"></div>
+                <div asp-validation-summary="All" class="text-white"></div>
             </div>
         }
 
@@ -81,7 +81,7 @@
                                             <input asp-for="Input.Phone" class="form-control form-control-sm" tabindex="4" />
                                         </div>
                                         <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Fax</label></div>
-                                        <div class="col-3">
+                                        <div class="col-5">
                                             <input asp-for="Input.Fax" class="form-control form-control-sm" tabindex="5" />
                                         </div>
                                     </div>
@@ -92,7 +92,7 @@
                                             <input asp-for="Input.Contact" class="form-control form-control-sm" tabindex="6" />
                                         </div>
                                         <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Position</label></div>
-                                        <div class="col-3">
+                                        <div class="col-5">
                                             <input asp-for="Input.Position" class="form-control form-control-sm" tabindex="7" />
                                         </div>
                                     </div>
@@ -169,13 +169,9 @@
                                 {
                                     <button type="submit" id="btnSubmit" name="action" value="submit" class="btn btn-dark btn-sm px-4 ml-2"><i class="fas fa-paper-plane"></i> Submit</button>
                                 }
-                                else if (Model.IsEdit && Model.HasSubmitPermission && Model.IsSubmitted)
-                                {
-                                    <button type="button" id="btnSubmit" class="btn btn-dark btn-sm px-4 ml-2" disabled title="Already submitted"><i class="fas fa-paper-plane"></i> Submit</button>
-                                }
                                 @if (Model.CanReuse)
                                 {
-                                    <button type="submit" id="btnReuse" name="action" value="reuse" class="btn btn-warning btn-sm px-4 ml-2"><i class="fas fa-redo"></i> Re Use</button>
+                                    <button type="button" id="btnReuse" class="btn btn-warning btn-sm px-4 ml-2"><i class="fas fa-redo"></i> Re Use</button>
                                 }
                             </div>
                             <a asp-page="./Index"

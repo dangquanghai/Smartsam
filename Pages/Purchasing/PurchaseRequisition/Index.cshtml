@@ -47,12 +47,12 @@
 
                             <div class="form-group mb-2">
                                 <label>Request No.</label>
-                                <input asp-for="Filter.RequestNo" class="form-control form-control-sm" />
+                                <input asp-for="Filter.RequestNo" class="form-control form-control-sm vni-font" />
                             </div>
 
                             <div class="form-group mb-2">
                                 <label>Description</label>
-                                <input asp-for="Filter.Description" class="form-control form-control-sm" />
+                                <input asp-for="Filter.Description" class="form-control form-control-sm vni-font" />
                             </div>
 
                             <div class="form-group mb-1">
@@ -281,7 +281,7 @@
                     </div>
                     <div class="form-group col-md-2">
                         <label class="mb-1">Unit</label>
-                        <input id="addAtDetailUnit" class="form-control form-control-sm" readonly />
+                        <input id="addAtDetailUnit" class="form-control form-control-sm vni-font" readonly />
                     </div>
                     <div class="form-group col-md-4">
                         <label class="mb-1">Supplier</label>
@@ -310,13 +310,13 @@
                     </div>
                     <div class="form-group col-md-3">
                         <label class="mb-1">Amount</label>
-                        <input id="addAtDetailAmount" class="form-control form-control-sm" readonly />
+                        <input id="addAtDetailAmount" class="form-control form-control-sm vni-font" readonly />
                     </div>
                 </div>
 
                 <div class="form-group mb-1">
                     <label class="mb-1">Remark</label>
-                    <input id="addAtDetailRemark" class="form-control form-control-sm" maxlength="500" />
+                    <input id="addAtDetailRemark" class="form-control form-control-sm vni-font" maxlength="500" />
                 </div>
             </div>
             <div class="modal-footer py-2">
@@ -332,6 +332,7 @@
 </div>
 
 @section Styles {
+    <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Purchasing/PurchaseRequisition/index.css" asp-append-version="true" />
 }
 

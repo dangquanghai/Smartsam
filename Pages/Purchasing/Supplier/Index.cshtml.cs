@@ -118,7 +118,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         public bool HasPreviousPage => PageIndex > 1;
         public bool HasNextPage => PageIndex < TotalPages;
 
-        public bool CanSearchAllDepartments => _isAdminRole || _dataScope.SeeDataAllDept;
+        public bool CanSearchAllDepartments => CanLoadAllDepartments();
         public string SelectedDeptText { get; private set; } = string.Empty;
 
         // ==========================================
@@ -129,7 +129,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             // Lấy quyền được admin cấp cho role login
             PagePerm = GetUserPermissions();
 
-            // Load scope dữ liệu (Dept/SeeDataAllDept)
+            // Load scope dữ liệu (Dept/LevelCheckSupplier)
             LoadUserDataScope();
 
             // Khởi tạo các giá trị mặc định cho paging
@@ -155,7 +155,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 // 1. Lấy thông tin Role của người dùng hiện tại
                 int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
 
-                // 2. Load scope dữ liệu (Dept/SeeDataAllDept)
+                // 2. Load scope dữ liệu (Dept/LevelCheckSupplier)
                 LoadUserDataScope();
 
                 // 3. Gọi Database lấy dữ liệu thô
@@ -164,18 +164,12 @@ namespace SmartSam.Pages.Purchasing.Supplier
                     ? 1
                     : Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
 
-                // 4. Sử dụng SecurityService để "phán quyết" quyền cho từng dòng dữ liệu
+                
                 var viewMode = string.IsNullOrWhiteSpace(request.ViewMode) ? "current" : request.ViewMode.Trim();
                 var dataWithActions = rows.Select(r => {
                     var canAccessDepartment = CanAccessDepartment(r.DeptID);
-                    var effectiveStatus = GetSupplierPermissionStatus(r);
-                    if (string.Equals(viewMode, "byyear", StringComparison.OrdinalIgnoreCase))
-                    {
-                        effectiveStatus = 99;
-                    }
-
                     // Lấy tập quyền thực tế cho bản ghi này (đã giao thoa Quyền + Trạng thái)
-                    var effectivePerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, effectiveStatus);
+                    var effectivePerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, r.Status ?? 0);
 
                     return new
                     {
@@ -191,7 +185,6 @@ namespace SmartSam.Pages.Purchasing.Supplier
                                     ? "edit"
                                     : "view",
 
-                            // Các nút chức năng dựa trên danh sách mã quyền thực tế trả về từ Service
                             canCopy = effectivePerms.Contains(PermissionCopy) && canAccessDepartment,
                             canSubmit = effectivePerms.Contains(PermissionSubmit)
                                 && canAccessDepartment
@@ -229,8 +222,6 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 return Forbid();
             }
 
-            int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
-
             LoadDepartments();
             LoadSupplierStatuses();
 
@@ -244,10 +235,8 @@ namespace SmartSam.Pages.Purchasing.Supplier
             var accessibleIds = new List<int>();
             var noAccessCount = 0;
             var notFoundCount = 0;
-            var noPermissionCount = 0;
             foreach (var supplierId in selectedIds)
             {
-                // Ver2: backend phải re-check quyền thực tế theo từng record (permission + status)
                 var supplier = await GetSupplierSubmitInfoAsync(supplierId, cancellationToken);
                 if (supplier is null)
                 {
@@ -258,14 +247,6 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 if (!CanAccessDepartment(supplier.DeptID))
                 {
                     noAccessCount++;
-                    continue;
-                }
-
-                var effectiveStatus = GetSupplierPermissionStatus(supplier);
-                var effectivePerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, effectiveStatus);
-                if (!effectivePerms.Contains(PermissionCopy))
-                {
-                    noPermissionCount++;
                     continue;
                 }
 
@@ -291,7 +272,6 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 var skippedParts = new List<string>();
                 if (notFoundCount > 0) skippedParts.Add($"not found: {notFoundCount}");
                 if (noAccessCount > 0) skippedParts.Add($"no access: {noAccessCount}");
-                if (noPermissionCount > 0) skippedParts.Add($"no permission: {noPermissionCount}");
 
                 var message = skippedParts.Count > 0
                     ? $"Copy completed for {accessibleIds.Count} supplier(s). Skipped ({string.Join(", ", skippedParts)})."
@@ -358,19 +338,56 @@ namespace SmartSam.Pages.Purchasing.Supplier
 
         public async Task<IActionResult> OnPostSubmitAsync(CancellationToken cancellationToken)
         {
-            PagePerm = GetUserPermissions();
-            await LoadUserDataScopeAsync(cancellationToken);
-            if (!PagePerm.HasPermission(PermissionSubmit))
+            var result = await ExecuteSubmitWorkflowAsync(cancellationToken);
+            if (result.IsForbidden)
             {
                 return Forbid();
             }
 
-            int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
+            SetFlashMessage(result.Message, result.MessageType);
+            return RedirectToCurrentList();
+        }
+
+        public async Task<IActionResult> OnPostSubmitAjaxAsync(CancellationToken cancellationToken)
+        {
+            var result = await ExecuteSubmitWorkflowAsync(cancellationToken);
+            if (result.IsForbidden)
+            {
+                return new JsonResult(new
+                {
+                    success = false,
+                    message = result.Message,
+                    messageType = result.MessageType
+                })
+                {
+                    StatusCode = StatusCodes.Status403Forbidden
+                };
+            }
+
+            return new JsonResult(new
+            {
+                success = result.Success,
+                message = result.Message,
+                messageType = result.MessageType,
+                selectedSupplierId = result.PrimarySupplierId,
+                selectedSupplierCode = result.PrimarySupplierCode,
+                submittedSupplierIds = result.SubmittedSupplierIds,
+                submittedSupplierCodes = result.SubmittedSupplierCodes
+            });
+        }
+
+        private async Task<SubmitWorkflowResult> ExecuteSubmitWorkflowAsync(CancellationToken cancellationToken)
+        {
+            PagePerm = GetUserPermissions();
+            await LoadUserDataScopeAsync(cancellationToken);
+            if (!PagePerm.HasPermission(PermissionSubmit))
+            {
+                return SubmitWorkflowResult.ForbiddenResult("You do not have permission to submit suppliers.");
+            }
 
             if (string.Equals(ViewMode, "byyear", StringComparison.OrdinalIgnoreCase))
             {
-                SetFlashMessage("Submit is available only in Current List mode.", "warning");
-                return RedirectToCurrentList();
+                return SubmitWorkflowResult.Warning("Submit is available only in Current List mode.");
             }
 
             LoadDepartments();
@@ -379,16 +396,14 @@ namespace SmartSam.Pages.Purchasing.Supplier
             var selectedIds = ParseSelectedSupplierIds();
             if (selectedIds.Count == 0)
             {
-                SetFlashMessage("Select at least one supplier.", "warning");
-                return RedirectToCurrentList();
+                return SubmitWorkflowResult.Warning("Select at least one supplier.");
             }
 
-            var submittedCount = 0;
-            var notFoundCount = 0;
-            var noAccessCount = 0;
-            var noPermissionCount = 0;
-            var notDraftCount = 0;
-            var alreadySubmittedCount = 0;
+            var result = new SubmitWorkflowResult
+            {
+                TotalSelected = selectedIds.Count
+            };
+
             var operatorCode = User.Identity?.Name ?? "SYSTEM";
 
             foreach (var supplierId in selectedIds)
@@ -396,65 +411,60 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 var supplier = await GetSupplierSubmitInfoAsync(supplierId, cancellationToken);
                 if (supplier is null)
                 {
-                    notFoundCount++;
+                    result.NotFoundCount++;
                     continue;
                 }
 
                 if (!CanAccessDepartment(supplier.DeptID))
                 {
-                    noAccessCount++;
-                    continue;
-                }
-
-                if ((supplier.Status ?? 0) != 0)
-                {
-                    notDraftCount++;
-                    continue;
-                }
-
-                if (supplier.PurchaserPreparedDate.HasValue)
-                {
-                    alreadySubmittedCount++;
-                    continue;
-                }
-
-                // Ver2: backend phải re-check quyền thực tế theo từng record (permission + status)
-                var effectiveStatus = GetSupplierPermissionStatus(supplier);
-                var effectivePerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, effectiveStatus);
-                if (!effectivePerms.Contains(PermissionSubmit))
-                {
-                    noPermissionCount++;
+                    result.NoAccessCount++;
                     continue;
                 }
 
                 await SubmitSupplierWorkflowAsync(supplierId, operatorCode, cancellationToken);
-                submittedCount++;
+                result.SubmittedCount++;
+                result.SubmittedSupplierIds.Add(supplierId);
+                result.SubmittedSupplierCodes.Add(supplier.SupplierCode?.Trim() ?? string.Empty);
             }
 
-            SetFlashMessage(
-                BuildSubmitMessage(submittedCount, notFoundCount, noAccessCount, noPermissionCount, notDraftCount, alreadySubmittedCount, selectedIds.Count),
-                submittedCount > 0 ? "success" : "info");
-            return RedirectToCurrentList();
+            result.Success = result.SubmittedCount > 0;
+            result.MessageType = result.Success ? "success" : "info";
+            result.Message = BuildSubmitAjaxMessage(result);
+            return result;
         }
 
-        private static int GetSupplierPermissionStatus(SupplierRow row)
+        private sealed class SubmitWorkflowResult
         {
-            if (row.PurchaserPreparedDate.HasValue)
-            {
-                return 1;
-            }
+            public bool Success { get; set; }
+            public bool IsForbidden { get; set; }
+            public string Message { get; set; } = string.Empty;
+            public string MessageType { get; set; } = "info";
+            public int TotalSelected { get; set; }
+            public int SubmittedCount { get; set; }
+            public int NotFoundCount { get; set; }
+            public int NoAccessCount { get; set; }
+            public int NoPermissionCount { get; set; }
+            public int NotDraftCount { get; set; }
+            public int AlreadySubmittedCount { get; set; }
+            public List<int> SubmittedSupplierIds { get; } = [];
+            public List<string> SubmittedSupplierCodes { get; } = [];
+            public int? PrimarySupplierId => SubmittedSupplierIds.Count > 0 ? SubmittedSupplierIds[0] : null;
+            public string? PrimarySupplierCode => SubmittedSupplierCodes.FirstOrDefault();
 
-            return row.Status ?? 0;
-        }
+            public static SubmitWorkflowResult ForbiddenResult(string message)
+                => new()
+                {
+                    IsForbidden = true,
+                    Message = message,
+                    MessageType = "warning"
+                };
 
-        private static int GetSupplierPermissionStatus(SupplierSubmitInfo supplier)
-        {
-            if (supplier.PurchaserPreparedDate.HasValue)
-            {
-                return 1;
-            }
-
-            return supplier.Status ?? 0;
+            public static SubmitWorkflowResult Warning(string message)
+                => new()
+                {
+                    Message = message,
+                    MessageType = "warning"
+                };
         }
 
         private (List<SupplierRow> rows, int totalRecords, int page, int pageSize) SearchSuppliers(SearchRequest request)
@@ -465,7 +475,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             var page = request.Page <= 0 ? 1 : request.Page;
             var pageSize = request.PageSize <= 0 ? DefaultPageSize : Math.Min(request.PageSize, 200);
 
-            var restrictedDeptId = (!_isAdminRole && !_dataScope.SeeDataAllDept)
+            var restrictedDeptId = !CanLoadAllDepartments()
                 ? (_dataScope.DeptID ?? NoDepartmentScopeValue)
                 : request.DeptId;
 
@@ -493,12 +503,12 @@ namespace SmartSam.Pages.Purchasing.Supplier
             _isAdminRole = IsAdminUser();
             if (_isAdminRole)
             {
-                _dataScope = new EmployeeDataScope { SeeDataAllDept = true };
+                _dataScope = new EmployeeDataScope();
                 return;
             }
 
             _dataScope = GetEmployeeDataScope(User.Identity?.Name);
-            if (!_dataScope.SeeDataAllDept)
+            if (!CanLoadAllDepartments())
             {
                 DeptId = _dataScope.DeptID ?? NoDepartmentScopeValue;
             }
@@ -512,7 +522,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             }
 
             const string sql = @"
-            SELECT TOP 1 DeptID, ISNULL(SeeDataAllDept, 0) AS SeeDataAllDept
+            SELECT TOP 1 DeptID, ISNULL(LevelCheckSupplier, 0) AS LevelCheckSupplier
             FROM dbo.MS_Employee
             WHERE EmployeeCode = @EmployeeCode";
 
@@ -527,11 +537,16 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 return new EmployeeDataScope();
             }
 
-            return new EmployeeDataScope
-            {
-                DeptID = rd.IsDBNull(0) ? null : Convert.ToInt32(rd[0]),
-                SeeDataAllDept = !rd.IsDBNull(1) && Convert.ToBoolean(rd[1])
-            };
+        return new EmployeeDataScope
+        {
+            DeptID = rd.IsDBNull(0) ? null : Convert.ToInt32(rd[0]),
+            LevelCheckSupplier = rd.IsDBNull(1) ? 0 : Convert.ToInt32(rd[1])
+        };
+    }
+
+        private bool CanLoadAllDepartments()
+        {
+            return _isAdminRole || _dataScope.LevelCheckSupplier is 1 or 3 or 4;
         }
 
         private void LoadDepartments()
@@ -548,9 +563,9 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 }
             }
 
-            var departments = Helper.BuildIntSelectList(list, x => x.Id, x => x.Name, showAll: false);
+            var departments = Helper.BuildIntSelectList(list, x => x.Id, x => x.Name, showAll: CanLoadAllDepartments());
 
-            if (!_isAdminRole && !_dataScope.SeeDataAllDept)
+            if (!CanLoadAllDepartments())
             {
                 if (_dataScope.DeptID.HasValue)
                 {
@@ -565,8 +580,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             }
             else
             {
-                Departments = new List<SelectListItem> { new SelectListItem { Value = string.Empty, Text = "--- All ---" } };
-                Departments.AddRange(departments);
+                Departments = departments;
             }
 
             var selectedDeptValue = DeptId?.ToString() ?? string.Empty;
@@ -587,9 +601,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 }
             }
 
-            var statuses = Helper.BuildIntSelectList(list, x => x.Id, x => x.Name, showAll: false);
-            Statuses = new List<SelectListItem> { new SelectListItem { Value = string.Empty, Text = "--- All ---" } };
-            Statuses.AddRange(statuses);
+            Statuses = Helper.BuildIntSelectList(list, x => x.Id, x => x.Name, showAll: true);
         }
 
         // Nap du lieu grid theo paging hien tai.
@@ -613,7 +625,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         // Gom toan bo gia tri filter tren man hinh ve 1 object criteria.
         private SupplierFilterInput BuildCriteria(bool includePaging = true)
         {
-            var restrictedDeptId = (!_isAdminRole && !_dataScope.SeeDataAllDept)
+            var restrictedDeptId = !CanLoadAllDepartments()
                 ? (_dataScope.DeptID ?? NoDepartmentScopeValue)
                 : DeptId;
 
@@ -686,7 +698,39 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 : $"Submit completed. {string.Join(", ", parts)}.";
         }
 
-        // Lay data scope user (DeptID + SeeDataAllDept).
+        private static string BuildSubmitAjaxMessage(SubmitWorkflowResult result)
+        {
+            var submittedCodes = result.SubmittedSupplierCodes
+                .Where(code => !string.IsNullOrWhiteSpace(code))
+                .Select(code => code.Trim())
+                .ToList();
+
+            if (result.Success && submittedCodes.Count == 1)
+            {
+                return $"Supplier code {submittedCodes[0]} submitted successfully.";
+            }
+
+            if (result.Success && submittedCodes.Count > 1)
+            {
+                return $"Suppliers submitted successfully: {string.Join(", ", submittedCodes)}.";
+            }
+
+            if (result.IsForbidden)
+            {
+                return result.Message;
+            }
+
+            return BuildSubmitMessage(
+                result.SubmittedCount,
+                result.NotFoundCount,
+                result.NoAccessCount,
+                result.NoPermissionCount,
+                result.NotDraftCount,
+                result.AlreadySubmittedCount,
+                result.TotalSelected);
+        }
+
+        // Lay data scope user (DeptID + LevelCheckSupplier).
         // Supplier co data scope theo phong ban nen can ham rieng.
         private async Task<EmployeeDataScope> GetEmployeeDataScopeAsync(string? employeeCode, CancellationToken cancellationToken)
         {
@@ -696,7 +740,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             }
 
             const string sql = @"
-                SELECT TOP 1 DeptID, ISNULL(SeeDataAllDept, 0) AS SeeDataAllDept
+                SELECT TOP 1 DeptID, ISNULL(LevelCheckSupplier, 0) AS LevelCheckSupplier
                 FROM dbo.MS_Employee
                 WHERE EmployeeCode = @EmployeeCode";
 
@@ -714,7 +758,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             return new EmployeeDataScope
             {
                 DeptID = rd.IsDBNull(0) ? null : Convert.ToInt32(rd[0]),
-                SeeDataAllDept = !rd.IsDBNull(1) && Convert.ToBoolean(rd[1])
+                LevelCheckSupplier = rd.IsDBNull(1) ? 0 : Convert.ToInt32(rd[1])
             };
         }
 
@@ -752,7 +796,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         private async Task<SupplierSubmitInfo?> GetSupplierSubmitInfoAsync(int supplierId, CancellationToken cancellationToken)
         {
             const string sql = @"
-                SELECT TOP 1 DeptID, [Status], PurchaserPreparedDate
+                SELECT TOP 1 SupplierCode, DeptID, [Status], PurchaserPreparedDate
                 FROM dbo.PC_Suppliers
                 WHERE SupplierID = @SupplierID";
 
@@ -769,20 +813,21 @@ namespace SmartSam.Pages.Purchasing.Supplier
 
             return new SupplierSubmitInfo
             {
-                DeptID = rd.IsDBNull(0) ? null : Convert.ToInt32(rd[0]),
-                Status = rd.IsDBNull(1) ? null : Convert.ToInt32(rd[1]),
-                PurchaserPreparedDate = rd.IsDBNull(2) ? null : Convert.ToDateTime(rd[2])
+                SupplierCode = rd[0]?.ToString(),
+                DeptID = rd.IsDBNull(1) ? null : Convert.ToInt32(rd[1]),
+                Status = rd.IsDBNull(2) ? null : Convert.ToInt32(rd[2]),
+                PurchaserPreparedDate = rd.IsDBNull(3) ? null : Convert.ToDateTime(rd[3])
             };
         }
 
         // Submit supplier vao workflow:
-        // - Dua supplier vao step cho level 1 xu ly (Status = 0)
+        // - Dua supplier vao step da duoc level 1 xac nhan (Status = 1)
         // - Ghi nhan nguoi submit + thoi gian submit.
         private async Task SubmitSupplierWorkflowAsync(int supplierId, string operatorCode, CancellationToken cancellationToken)
         {
             const string sql = @"
                 UPDATE dbo.PC_Suppliers
-                SET [Status] = 0,
+                SET [Status] = 1,
                     ApprovedDate = NULL,
                     PurchaserCode = @OperatorCode,
                     PurchaserPreparedDate = GETDATE(),
@@ -1055,12 +1100,12 @@ namespace SmartSam.Pages.Purchasing.Supplier
             _isAdminRole = IsAdminUser();
             if (_isAdminRole)
             {
-                _dataScope = new EmployeeDataScope { SeeDataAllDept = true };
+                _dataScope = new EmployeeDataScope();
                 return;
             }
 
             _dataScope = await GetEmployeeDataScopeAsync(User.Identity?.Name, cancellationToken);
-            if (!_dataScope.SeeDataAllDept)
+            if (!CanLoadAllDepartments())
             {
                 DeptId = _dataScope.DeptID ?? NoDepartmentScopeValue;
             }
@@ -1069,7 +1114,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         // Kiem tra record co nam trong pham vi phong ban user duoc xem/lam hay khong.
         private bool CanAccessDepartment(int? supplierDeptId)
         {
-            if (_isAdminRole || _dataScope.SeeDataAllDept)
+            if (CanLoadAllDepartments())
             {
                 return true;
             }
@@ -1105,7 +1150,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             return permsObj;
         }
 
-        // Check admin role theo claim moi ("True"/"1"), co fallback DB theo RoleID.
+        // Check admin role theo claim moi ("True"/"1"), co fallback DB theo IsAdminUser cua employee.
         private bool IsAdminUser()
         {
             var adminClaim = (User.FindFirst("IsAdminRole")?.Value ?? string.Empty).Trim();
@@ -1115,7 +1160,8 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 return true;
             }
 
-            if (!int.TryParse(User.FindFirst("RoleID")?.Value, out var roleId) || roleId <= 0)
+            var employeeCode = User.Identity?.Name?.Trim();
+            if (string.IsNullOrWhiteSpace(employeeCode))
             {
                 return false;
             }
@@ -1123,8 +1169,8 @@ namespace SmartSam.Pages.Purchasing.Supplier
             try
             {
                 using var conn = new SqlConnection(_connectionString);
-                using var cmd = new SqlCommand("SELECT TOP 1 IsAdminRole FROM SYS_Role WHERE RoleID = @RoleID", conn);
-                cmd.Parameters.Add("@RoleID", SqlDbType.Int).Value = roleId;
+                using var cmd = new SqlCommand("SELECT TOP 1 IsAdminUser FROM MS_Employee WHERE EmployeeCode = @EmployeeCode AND IsActive = 1", conn);
+                cmd.Parameters.Add("@EmployeeCode", SqlDbType.NVarChar, 50).Value = employeeCode;
                 conn.Open();
                 var value = cmd.ExecuteScalar();
                 if (value == null || value == DBNull.Value)
@@ -1239,14 +1285,15 @@ namespace SmartSam.Pages.Purchasing.Supplier
     public class EmployeeDataScope
     {
         public int? DeptID { get; set; }
-        public bool SeeDataAllDept { get; set; }
+        public int LevelCheckSupplier { get; set; }
     }
 
-    public class SupplierSubmitInfo
-    {
-        public int? DeptID { get; set; }
-        public int? Status { get; set; }
-        public DateTime? PurchaserPreparedDate { get; set; }
-    }
+        public class SupplierSubmitInfo
+        {
+            public string? SupplierCode { get; set; }
+            public int? DeptID { get; set; }
+            public int? Status { get; set; }
+            public DateTime? PurchaserPreparedDate { get; set; }
+        }
 
 }

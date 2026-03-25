@@ -8,7 +8,7 @@
     let currentDataRows = [];
 
     // ========== SEARCH FUNCTION ==========
-    function performSearch(page = 1) {
+    function performSearch(page = 1, options = {}) {
         currentPage = page;
         const token = $('input[name="__RequestVerificationToken"]').val();
 
@@ -51,6 +51,9 @@
                     renderSuppliers(currentDataRows);
                     updatePagination(total, current, size, pages);
                     resetActions();
+                    if (options && options.reselectSupplierId) {
+                        restoreSelectionBySupplierId(options.reselectSupplierId);
+                    }
                 } else {
                     const message = (response && (response.message || response.Message))
                         || 'Search failed.';
@@ -97,7 +100,7 @@
             const supplierStatusId = s.status ?? s.Status ?? '';
 
             const row = `
-            <tr data-id="${s.supplierID || s.SupplierID || 0}" data-index="${index}" style="cursor:pointer">
+            <tr data-id="${s.supplierID || s.SupplierID || 0}" data-supplier-id="${s.supplierID || s.SupplierID || 0}" data-index="${index}" style="cursor:pointer">
                 <td><input type="radio" name="selectedSupplier" value="${index}"></td>
                 <td>${supplierCodeHtml}</td>
                 <td class="vni-font">${buildTruncatedCell(supplierNameText, 30)}</td>
@@ -105,16 +108,42 @@
                 <td>${escapeHtml(s.phone || s.Phone || '')}</td>
                 <td>${escapeHtml(s.mobile || s.Mobile || '')}</td>
                 <td>${escapeHtml(s.fax || s.Fax || '')}</td>
-                <td>${buildTruncatedCell(contactText, 26)}</td>
-                <td>${escapeHtml(s.position || s.Position || '')}</td>
-                <td>${buildTruncatedCell(businessText, 30)}</td>
+                <td class="vni-font">${buildTruncatedCell(contactText, 26)}</td>
+                <td class="vni-font">${escapeHtml(s.position || s.Position || '')}</td>
+                <td class="vni-font">${buildTruncatedCell(businessText, 30)}</td>
                 <td>${escapeHtml(s.supplierStatusName || s.SupplierStatusName || '')}</td>
                 <td style="display: none;">${escapeHtml(supplierStatusId)}</td>
                 <td>${escapeHtml(s.deptCode || s.DeptCode || '')}</td>
             </tr>`;
 
-            tbody.append(row);
+        tbody.append(row);
         });
+    }
+
+    function getSupplierRowData($row) {
+        if (!$row || $row.length === 0) return null;
+        const supplierId = getSupplierIdFromRow($row);
+        if (supplierId === null) return null;
+
+        return findSupplierItemById(supplierId);
+    }
+
+    function getSupplierIdFromRow($row) {
+        if (!$row || $row.length === 0) return null;
+
+        const rawSupplierId = $row.data('supplier-id') || $row.data('id') || $row.attr('data-supplier-id') || $row.attr('data-id');
+        const supplierId = Number.parseInt((rawSupplierId || '').toString(), 10);
+        return Number.isFinite(supplierId) ? supplierId : null;
+    }
+
+    function findSupplierItemById(supplierId) {
+        if (!Number.isFinite(supplierId)) return null;
+
+        return currentDataRows.find(function (item) {
+            const data = item && item.data ? item.data : {};
+            const currentId = data.supplierID ?? data.SupplierID;
+            return Number.parseInt((currentId || '').toString(), 10) === supplierId;
+        }) || null;
     }
 
     // ========== BAT SU KIEN LINK SUPPLIER CODE ==========
@@ -122,14 +151,23 @@
         e.preventDefault();
         e.stopPropagation();
 
-        const rowIndex = $(this).closest('tr').data('index');
-        const item = currentDataRows[rowIndex];
-        if (!item || !item.actions) return;
+        const $row = $(this).closest('tr');
+        const supplierId = getSupplierIdFromRow($row);
+        const item = Number.isFinite(supplierId) ? findSupplierItemById(supplierId) : null;
+
+        if (!item || !item.actions) {
+            if (supplierId) {
+                window.location.href = buildDetailUrl(supplierId, 'view');
+            }
+            return;
+        }
 
         if (item.actions.canAccess === true) {
-            const supplierId = item.data.supplierID || item.data.SupplierID;
+            const resolvedSupplierId = item.data.supplierID || item.data.SupplierID || supplierId;
             const accessMode = (item.actions.accessMode || 'view').toString().toLowerCase();
-            window.location.href = buildDetailUrl(supplierId, accessMode);
+            if (resolvedSupplierId) {
+                window.location.href = buildDetailUrl(resolvedSupplierId, accessMode);
+            }
         } else {
             alert('You have no right to view this supplier.');
         }
@@ -137,22 +175,32 @@
 
     // ========== BAT SU KIEN THAY DOI RADIO (QUAN TRONG NHAT) ==========
     $(document).on('change', 'input[name="selectedSupplier"]', function () {
-        const index = parseInt($(this).val(), 10);
-        const item = currentDataRows[index];
-        if (!item) return;
+        const $row = $(this).closest('tr');
+        const supplierIdFromRow = getSupplierIdFromRow($row);
+        const item = Number.isFinite(supplierIdFromRow) ? findSupplierItemById(supplierIdFromRow) : null;
+        if (!item && !supplierIdFromRow) return;
 
-        const supplierId = item.data.supplierID || item.data.SupplierID;
+        const supplierId = item
+            ? (item.data.supplierID || item.data.SupplierID || supplierIdFromRow)
+            : supplierIdFromRow;
         selectedSupplierId = supplierId;
 
-        const canCopy = item.actions && item.actions.canCopy === true;
-        const canSubmit = item.actions && item.actions.canSubmit === true;
+        const canCopy = item && item.actions ? item.actions.canCopy === true : false;
+        const canSubmit = item && item.actions ? item.actions.canSubmit === true : false;
+        const updateVisibility = (selector, hasPermission) => {
+            if (hasPermission) {
+                $(selector).removeClass('d-none');
+            } else {
+                $(selector).addClass('d-none');
+            }
+        };
 
         $('#selectedSupplierIdInput').val(selectedSupplierId);
         $('#selectedSupplierIdsCsvInput').val(selectedSupplierId);
         $('#copySelectedSupplierIdsCsvInput').val(selectedSupplierId);
 
-        $('#btnCopy').prop('disabled', !canCopy);
-        $('#btnSubmit').prop('disabled', !canSubmit);
+        updateVisibility("#btnCopy", canCopy);
+        updateVisibility("#btnSubmit", canSubmit);
 
         $('#supplierTable tbody tr').removeClass('selected');
         $(this).closest('tr').addClass('selected');
@@ -167,14 +215,22 @@
     });
 
     $(document).on('dblclick', '#supplierTable tbody tr', function () {
-        const rowIndex = $(this).data('index');
-        const item = currentDataRows[rowIndex];
-        if (!item || !item.actions) return;
+        const $row = $(this);
+        const supplierId = getSupplierIdFromRow($row);
+        const item = Number.isFinite(supplierId) ? findSupplierItemById(supplierId) : null;
+        if (!item || !item.actions) {
+            if (supplierId) {
+                window.location.href = buildDetailUrl(supplierId, 'view');
+            }
+            return;
+        }
         if (item.actions.canAccess !== true) return;
 
-        const supplierId = item.data.supplierID || item.data.SupplierID;
+        const resolvedSupplierId = item.data.supplierID || item.data.SupplierID || supplierId;
         const accessMode = (item.actions.accessMode || 'view').toString().toLowerCase();
-        window.location.href = buildDetailUrl(supplierId, accessMode);
+        if (resolvedSupplierId) {
+            window.location.href = buildDetailUrl(resolvedSupplierId, accessMode);
+        }
     });
 
     function buildDetailUrl(supplierId, accessMode) {
@@ -216,8 +272,8 @@
         $('#selectedSupplierIdInput').val('');
         $('#selectedSupplierIdsCsvInput').val('');
         $('#copySelectedSupplierIdsCsvInput').val('');
-        $('#btnCopy').prop('disabled', true);
-        $('#btnSubmit').prop('disabled', true);
+        $('#btnCopy').addClass('d-none');
+        $('#btnSubmit').addClass('d-none');
     }
 
     // ========== PAGINATION ==========
@@ -383,18 +439,11 @@
 
         $('#btnSubmit').off('click').on('click', function () {
             if (!selectedSupplierId) return;
-            syncListStateToPostForms();
-            $('#selectedSupplierIdInput').val(selectedSupplierId);
-            $('#selectedSupplierIdsCsvInput').val(selectedSupplierId);
-            $('#submitSupplierForm').trigger('submit');
+            submitSelectedSupplierAjax();
         });
 
         $('#btnExcel').off('click').on('click', function () {
             window.location.href = buildExportExcelUrl();
-        });
-
-        $('#btnPrintList').off('click').on('click', function () {
-            window.print();
         });
 
         // 2. Xu ly mode current/byyear
@@ -446,6 +495,43 @@
         return `?${query.toString()}`;
     }
 
+    function submitSelectedSupplierAjax() {
+        const token = $('input[name="__RequestVerificationToken"]').val();
+        if (!token) {
+            showPageMessage('warning', 'Cannot submit because request token is missing.');
+            return;
+        }
+
+        syncListStateToPostForms();
+        $('#selectedSupplierIdInput').val(selectedSupplierId);
+        $('#selectedSupplierIdsCsvInput').val(selectedSupplierId);
+
+        const reselectSupplierId = selectedSupplierId;
+        const formData = $('#submitSupplierForm').serialize();
+
+        $.ajax({
+            url: '?handler=SubmitAjax',
+            type: 'POST',
+            data: formData,
+            headers: { RequestVerificationToken: token },
+            success: function (response) {
+                const isSuccess = !!(response && (response.success === true || response.Success === true));
+                const message = (response && (response.message || response.Message)) || 'Submit completed.';
+                const messageType = ((response && (response.messageType || response.MessageType)) || (isSuccess ? 'success' : 'info')).toString().toLowerCase();
+
+                showPageMessage(messageType, message);
+                if (isSuccess) {
+                    performSearch(currentPage, { reselectSupplierId: reselectSupplierId });
+                }
+            },
+            error: function (xhr) {
+                const message = (xhr && xhr.responseJSON && (xhr.responseJSON.message || xhr.responseJSON.Message))
+                    || 'Cannot submit selected supplier.';
+                showPageMessage('warning', message);
+            }
+        });
+    }
+
     // Dong bo state bo loc hien tai vao cac form POST (Submit/Copy)
     // de sau redirect van giu dung filter/page user dang xem.
     function syncListStateToPostForms() {
@@ -483,6 +569,54 @@
             PageIndex: currentPage.toString(),
             PageSize: pageSize.toString()
         };
+    }
+
+    function restoreSelectionBySupplierId(supplierId) {
+        if (!supplierId) return;
+
+        const rowIndex = currentDataRows.findIndex(function (item) {
+            const data = item && item.data ? item.data : {};
+            const currentId = data.supplierID || data.SupplierID;
+            return Number(currentId) === Number(supplierId);
+        });
+
+        if (rowIndex < 0) return;
+
+        const $radio = $(`#supplierTable tbody tr[data-index="${rowIndex}"] input[name="selectedSupplier"]`);
+        if ($radio.length > 0) {
+            $radio.prop('checked', true).trigger('change');
+        }
+    }
+
+    function showPageMessage(type, message) {
+        const $host = $('#supplierAjaxMessageHost');
+        if ($host.length === 0) return;
+
+        const normalizedType = (type || 'info').toString().toLowerCase();
+        const alertClass = normalizedType === 'success'
+            ? 'alert-success'
+            : normalizedType === 'warning'
+                ? 'alert-warning'
+                : normalizedType === 'error'
+                    ? 'alert-danger'
+                    : 'alert-info';
+        const iconClass = normalizedType === 'success'
+            ? 'fa-check-circle'
+            : normalizedType === 'warning'
+                ? 'fa-exclamation-triangle'
+                : normalizedType === 'error'
+                    ? 'fa-ban'
+                    : 'fa-info-circle';
+
+        const html = `
+            <div class="alert ${alertClass} alert-dismissible fade show mb-0" role="alert">
+                <strong><i class="fas ${iconClass}"></i> Notification:</strong> ${escapeHtml(message || '')}
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>`;
+
+        $host.html(html).removeClass('d-none');
     }
 
     function setHiddenFieldValue($form, name, value) {

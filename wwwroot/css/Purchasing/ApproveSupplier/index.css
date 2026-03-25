@@ -78,7 +78,7 @@
     white-space: nowrap;
 }
 
-.approve-form-table .required-mark {
+.required-mark {
     color: #dc3545;
     margin-left: 2px;
 }
@@ -141,11 +141,6 @@
 
 .approve-detail-empty {
     min-height: 1px;
-}
-
-.approve-detail-grid .required-mark {
-    color: #dc3545;
-    margin-left: 2px;
 }
 
 @media (max-width: 1199.98px) {

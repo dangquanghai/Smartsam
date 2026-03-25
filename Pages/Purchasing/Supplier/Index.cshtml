@@ -7,6 +7,17 @@
 
 <section class="content">
     <div class="container-fluid">
+        @if (!string.IsNullOrWhiteSpace(Model.FlashMessage))
+        {
+            <div class="alert alert-@(string.IsNullOrWhiteSpace(Model.FlashMessageType) ? "info" : Model.FlashMessageType) alert-dismissible fade show mb-3" role="alert">
+                <strong><i class="fas fa-check-circle"></i> Notification:</strong> @Model.FlashMessage
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+        <div id="supplierAjaxMessageHost" class="mb-3 d-none"></div>
+
         <div class="row">
             <!-- SEARCH PANEL (LEFT) -->
             <div class="col-md-2">
@@ -92,9 +103,6 @@
                             <button type="submit" class="btn btn-primary btn-block">
                                 <i class="fas fa-search"></i> Search
                             </button>
-                            <button type="button" id="btnPrintList" class="btn btn-outline-secondary btn-block">
-                                <i class="fas fa-print"></i> Print List
-                            </button>
                         </form>
                     </div>
                 </div>
@@ -141,9 +149,10 @@
 	                                    </tr>
 	                                </thead>
 	                                <tbody>
-	                                    @foreach (var s in Model.Rows)
+	                                    @for (var supplierRowIndex = 0; supplierRowIndex < Model.Rows.Count; supplierRowIndex++)
 	                                    {
-	                                        <tr data-id="@s.SupplierID">
+	                                        var s = Model.Rows[supplierRowIndex];
+	                                        <tr data-id="@s.SupplierID" data-supplier-id="@s.SupplierID" data-index="@supplierRowIndex">
 	                                            <td>
 	                                                <input type="radio" name="selectedSupplier">
 	                                            </td>
@@ -157,7 +166,7 @@
 	                                            <td>@s.Phone</td>
 	                                            <td>@s.Mobile</td>
 	                                            <td>@s.Fax</td>
-	                                            <td style="white-space: nowrap;">@s.Contact</td>
+	                                            <td class="vni-font" style="white-space: nowrap;">@s.Contact</td>
 	                                            <td>@s.Position</td>
 	                                            <td class="vni-font" style="white-space: nowrap;">@s.Business</td>
 	                                            <td>@s.SupplierStatusName</td>
@@ -180,10 +189,10 @@
                             </button>
                         }
                         @* Nút Copy/Submit mặc định tắt; JS sẽ bật theo dòng được chọn và trạng thái hợp lệ. *@
-                        <button id="btnCopy" type="button" class="btn btn-primary btn-sm" disabled>
+                        <button id="btnCopy" type="button" class="btn btn-primary btn-sm d-none">
                             <i class="fas fa-copy"></i> Copy
                         </button>
-                        <button id="btnSubmit" type="button" class="btn btn-dark btn-sm" disabled>
+                        <button id="btnSubmit" type="button" class="btn btn-dark btn-sm d-none">
                             <i class="fas fa-paper-plane"></i> Submit
                         </button>
                         @* Excel luôn hiển thị; handler vẫn kiểm tra quyền khi gọi trực tiếp. *@
