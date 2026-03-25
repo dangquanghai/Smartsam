@@ -192,9 +192,6 @@
                         <button id="btnCopy" type="button" class="btn btn-primary btn-sm d-none">
                             <i class="fas fa-copy"></i> Copy
                         </button>
-                        <button id="btnSubmit" type="button" class="btn btn-dark btn-sm d-none">
-                            <i class="fas fa-paper-plane"></i> Submit
-                        </button>
                         @* Excel luôn hiển thị; handler vẫn kiểm tra quyền khi gọi trực tiếp. *@
                         <button id="btnExcel" type="button" class="btn btn-secondary btn-sm">
                             <i class="fas fa-file-export"></i> Excel
@@ -202,11 +199,6 @@
                         <a href="/Index" class="btn btn-secondary btn-sm">
                             <i class="fas fa-times"></i> Close
                         </a>
-
-                        <form id="submitSupplierForm" method="post" asp-page-handler="Submit" class="d-none">
-                            <input type="hidden" asp-for="SelectedSupplierId" id="selectedSupplierIdInput" />
-                            <input type="hidden" asp-for="SelectedSupplierIdsCsv" id="selectedSupplierIdsCsvInput" />
-                        </form>
                     </div>
                 </div>
             </div>
