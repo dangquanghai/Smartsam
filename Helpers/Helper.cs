@@ -281,4 +281,27 @@ namespace SmartSam.Helpers
         }
         #endregion
     }
+
+    public static class EmailTemplateHelper
+    {
+        public static string WrapInNotifyTemplate(string title, string color, DateTime date, string messageBody)
+        {
+            return $@"
+                <div style='font-family: ""Segoe UI"", Arial, sans-serif; max-width: 700px; margin: auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); background-color: #ffffff;'>
+                    <div style='background-color: {color}; color: white; padding: 25px; text-align: center;'>
+                        <h2 style='margin: 0; font-size: 22px; text-transform: uppercase; letter-spacing: 1px;'>{title}</h2>
+                        <p style='margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;'>Notification Date: {date:dd/MM/yyyy}</p>
+                    </div>
+                    <div style='padding: 30px; line-height: 1.6;'>
+                        <div style='color: #333; font-size: 15px;'>
+                            {messageBody}
+                        </div>
+                        <div style='margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #888; text-align: center;'>
+                            <p style='margin: 0;'>This is an automated message from <b>New SmartSam System</b>.</p>
+                            <p style='margin: 5px 0 0 0;'>Please do not reply to this email.</p>
+                        </div>
+                    </div>
+                </div>";
+        }
+    }
 }
