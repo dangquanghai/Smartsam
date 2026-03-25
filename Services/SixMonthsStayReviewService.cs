@@ -110,8 +110,7 @@ namespace SmartSam.Services
                 <p>Please <b>print it out</b>, check it carefully, and send it to your long-term customers to request their feedback.</p>";
 
                 //"#3498db": Màu xanh làm nền cho thông báo email
-                string htmlBody = EmailTemplateHelper.WrapInNotifyTemplate("06 MONTHS STAY REVIEW","#3498db",DateTime.Now,message);
-
+                string htmlBody = EmailTemplateHelper.WrapInNotifyTemplate("06 MONTHS STAY REVIEW"," #3498db",DateTime.Now,message);
 
                 await SendEmailWithAttachment(htmlBody, wordFile);
 
