@@ -30,6 +30,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         private const int PermissionAdd = 3;
         private const int PermissionEdit = 4;
         private const int PermissionSubmit = 5;
+        private const int StatusDisapproved = 9;
 
         private EmployeeDataScopeViewModel _dataScope = new EmployeeDataScopeViewModel();
         private bool _isAdminRole;
@@ -102,10 +103,11 @@ namespace SmartSam.Pages.Purchasing.Supplier
         public bool IsEdit => Id.HasValue && Id.Value > 0;
         public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
         public bool IsAnnualView => string.Equals(ViewMode, "byyear", StringComparison.OrdinalIgnoreCase) && Year.HasValue;
+        public int CurrentStatusId => Input.Status ?? 0;
         public bool HasSubmitPermission => _effectivePerms.Contains(PermissionSubmit);
         public bool CanSave => !IsViewMode && !IsAnnualView && (IsEdit ? _effectivePerms.Contains(PermissionEdit) : _effectivePerms.Contains(PermissionAdd));
         public bool CanSubmit => !IsViewMode && !IsAnnualView && IsEdit && _effectivePerms.Contains(PermissionSubmit);
-        public bool CanReuse => !IsAnnualView && IsEdit && _effectivePerms.Contains(PermissionEdit);
+        public bool CanReuse => !IsAnnualView && IsEdit && CurrentStatusId == StatusDisapproved;
 
         private void LoadSupplierData(int id)
         {
@@ -252,25 +254,6 @@ namespace SmartSam.Pages.Purchasing.Supplier
 
             var exists = SupplierCodeExists(code, id);
             return new JsonResult(new { ok = true, exists = exists });
-        }
-
-        // AJAX gợi ý mã Supplier mới theo quy tắc SP + số tăng dần.
-        public JsonResult OnGetSuggestSupplierCode()
-        {
-            int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
-            LoadUserDataScope();
-
-            var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, 0);
-            if (!currentPerms.Contains(PermissionAdd))
-            {
-                return new JsonResult(new { ok = false, message = "Forbidden" })
-                {
-                    StatusCode = StatusCodes.Status403Forbidden
-                };
-            }
-
-            var suggestion = GetSuggestedSupplierCode();
-            return new JsonResult(new { ok = true, supplierCode = suggestion });
         }
 
         // AJAX tải lịch sử phê duyệt; tbody render bằng JS.
@@ -685,12 +668,11 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 return new JsonResult(new { success = false, message = "Supplier not found." });
             }
 
-            var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, int.Parse(User.FindFirst("RoleID")?.Value ?? "0"), GetSupplierPermissionStatus(current));
-            if (!currentPerms.Contains(PermissionEdit))
+            if ((current.Status ?? 0) != StatusDisapproved)
             {
-                return new JsonResult(new { success = false, message = "You do not have permission to do it." })
+                return new JsonResult(new { success = false, message = "Re Use is only available for disapproved suppliers." })
                 {
-                    StatusCode = StatusCodes.Status403Forbidden
+                    StatusCode = StatusCodes.Status400BadRequest
                 };
             }
 
@@ -730,10 +712,10 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 return Page();
             }
 
-            var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, int.Parse(User.FindFirst("RoleID")?.Value ?? "0"), GetSupplierPermissionStatus(current));
-            if (!currentPerms.Contains(PermissionEdit))
+            if ((current.Status ?? 0) != StatusDisapproved)
             {
-                return Forbid();
+                SetMessage("Re Use is only available for disapproved suppliers.", "warning");
+                return RedirectToPage("./SupplierDetail", BuildDetailRouteValues(Id.Value));
             }
 
             Input = current;
@@ -1029,33 +1011,6 @@ namespace SmartSam.Pages.Purchasing.Supplier
 
             var result = cmd.ExecuteScalar();
             return Convert.ToInt32(result) > 0;
-        }
-
-        // Sinh mã supplier gợi ý (SP + số lớn nhất + 1).
-        private string GetSuggestedSupplierCode()
-        {
-            const string sql = @"
-                SELECT
-                    ISNULL(MAX(TRY_CONVERT(int, SUBSTRING(LTRIM(RTRIM(SupplierCode)), 3, 50))), 0) AS MaxNo,
-                    ISNULL(MAX(LEN(LTRIM(RTRIM(SupplierCode))) - 2), 3) AS NumWidth
-                FROM dbo.PC_Suppliers
-                WHERE LEFT(UPPER(LTRIM(RTRIM(SupplierCode))), 2) = 'SP'
-                  AND TRY_CONVERT(int, SUBSTRING(LTRIM(RTRIM(SupplierCode)), 3, 50)) IS NOT NULL;";
-
-            using var conn = new SqlConnection(_connectionString);
-            using var cmd = new SqlCommand(sql, conn);
-            conn.Open();
-
-            using var rd = cmd.ExecuteReader();
-            var maxNo = 0;
-            var numWidth = 3;
-            if (rd.Read())
-            {
-                maxNo = rd.IsDBNull(0) ? 0 : Convert.ToInt32(rd[0]);
-                numWidth = rd.IsDBNull(1) ? 3 : Convert.ToInt32(rd[1]);
-            }
-
-            return $"SP{(maxNo + 1).ToString().PadLeft(Math.Max(3, numWidth), '0')}";
         }
 
         // Save chinh:
