@@ -6,8 +6,6 @@
     Func<int, string> navUrl = (supplierId) => Url.Page("./Index", new
     {
         DeptId = Model.DeptId,
-        PageIndex = Model.PageIndex,
-        PageSize = Model.PageSize,
         CurrentSupplierId = supplierId
     }) ?? "#";
 
@@ -46,94 +44,102 @@
                     <form method="post" id="approveSupplierForm">
                         <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
                         <input type="hidden" asp-for="DeptId" />
-                        <input type="hidden" asp-for="PageIndex" />
-                        <input type="hidden" asp-for="PageSize" />
                         <input type="hidden" asp-for="CurrentSupplierId" />
                         <input type="hidden" asp-for="EditSupplier.SupplierID" />
 
-                        <div class="approve-detail-grid mb-2">
-                            <label class="approve-detail-label">Supplier Code<span class="required-mark">*</span></label>
-                            <div class="approve-detail-control">
-                                <input asp-for="EditSupplier.SupplierCode" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" required="@(editAll ? "required" : null)" />
-                                <span asp-validation-for="EditSupplier.SupplierCode" class="text-danger small"></span>
+                        <div class="mb-2">
+                            <div class="row no-gutters align-items-start mb-2">
+                                <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">Supplier Code<span class="required-mark">*</span></label></div>
+                                <div class="col-2 pr-3">
+                                    <input asp-for="EditSupplier.SupplierCode" class="form-control form-control-sm vni-font" readonly="@(editAll ? null : "readonly")" required="@(editAll ? "required" : null)" />
+                                    <span asp-validation-for="EditSupplier.SupplierCode" class="text-danger small"></span>
+                                </div>
+                                <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">Supplier Name<span class="required-mark">*</span></label></div>
+                                <div class="col-8">
+                                    <input asp-for="EditSupplier.SupplierName" class="form-control form-control-sm vni-font" readonly="@(editAll ? null : "readonly")" required="@(editAll ? "required" : null)" />
+                                    <span asp-validation-for="EditSupplier.SupplierName" class="text-danger small"></span>
+                                </div>
                             </div>
 
-                            <label class="approve-detail-label">Supplier Name<span class="required-mark">*</span></label>
-                            <div class="approve-detail-control">
-                                <input asp-for="EditSupplier.SupplierName" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" required="@(editAll ? "required" : null)" />
-                                <span asp-validation-for="EditSupplier.SupplierName" class="text-danger small"></span>
+                            <div class="row no-gutters align-items-center mb-2">
+                                <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">Business</label></div>
+                                <div class="col-8 pr-3">
+                                    <input asp-for="EditSupplier.Business" class="form-control form-control-sm vni-font" readonly="@(editAll ? null : "readonly")" />
+                                </div>
+                                <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">IsNew</label></div>
+                                <div class="col-2 d-flex align-items-center">
+                                    <input asp-for="EditSupplier.IsNew" type="checkbox" disabled="@(editAll ? null : "disabled")" />
+                                </div>
                             </div>
 
-                            <label class="approve-detail-label">Business</label>
-                            <div class="approve-detail-control">
-                                <input asp-for="EditSupplier.Business" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
+                            <div class="row no-gutters align-items-center mb-2">
+                                <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">Certificate</label></div>
+                                <div class="col-8 pr-3">
+                                    <input asp-for="EditSupplier.Certificate" class="form-control form-control-sm vni-font" readonly="@(editAll ? null : "readonly")" />
+                                </div>
+                                <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">Document</label></div>
+                                <div class="col-2 d-flex align-items-center">
+                                    <input asp-for="EditSupplier.Document" type="checkbox" disabled="@(editAll ? null : "disabled")" />
+                                </div>
                             </div>
 
-                            <label class="approve-detail-label approve-detail-label-right">IsNew</label>
-                            <div class="approve-detail-check">
-                                <input asp-for="EditSupplier.IsNew" type="checkbox" disabled="@(editAll ? null : "disabled")" />
+                            <div class="row no-gutters align-items-start mb-2">
+                                <div class="col-1 text-left pr-2"><label class="col-form-label-sm mt-1">Address<span class="required-mark">*</span></label></div>
+                                <div class="col-11">
+                                    <textarea asp-for="EditSupplier.Address" class="form-control form-control-sm vni-font" rows="2" readonly="@(editAll ? null : "readonly")" required="@(editAll ? "required" : null)"></textarea>
+                                    <span asp-validation-for="EditSupplier.Address" class="text-danger small"></span>
+                                </div>
                             </div>
 
-                            <label class="approve-detail-label">Address<span class="required-mark">*</span></label>
-                            <div class="approve-detail-control approve-detail-span-7">
-                                <textarea asp-for="EditSupplier.Address" class="form-control form-control-sm" rows="2" readonly="@(editAll ? null : "readonly")" required="@(editAll ? "required" : null)"></textarea>
-                                <span asp-validation-for="EditSupplier.Address" class="text-danger small"></span>
+                            <div class="row no-gutters align-items-center mb-2">
+                                <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">Phone</label></div>
+                                <div class="col-4 pr-3">
+                                    <input asp-for="EditSupplier.Phone" class="form-control form-control-sm vni-font" readonly="@(editAll ? null : "readonly")" />
+                                </div>
+                                <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">Fax</label></div>
+                                <div class="col-4">
+                                    <input asp-for="EditSupplier.Fax" class="form-control form-control-sm vni-font" readonly="@(editAll ? null : "readonly")" />
+                                </div>
                             </div>
 
-                            <label class="approve-detail-label">Phone</label>
-                            <div class="approve-detail-control">
-                                <input asp-for="EditSupplier.Phone" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
+                            <div class="row no-gutters align-items-center mb-2">
+                                <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">Contact</label></div>
+                                <div class="col-4 pr-3">
+                                    <input asp-for="EditSupplier.Contact" class="form-control form-control-sm vni-font" readonly="@(editAll ? null : "readonly")" />
+                                </div>
+                                <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">Position</label></div>
+                                <div class="col-4">
+                                    <input asp-for="EditSupplier.Position" class="form-control form-control-sm vni-font" readonly="@(editAll ? null : "readonly")" />
+                                </div>
                             </div>
 
-                            <label class="approve-detail-label">Fax</label>
-                            <div class="approve-detail-control">
-                                <input asp-for="EditSupplier.Fax" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
+                            <div class="row no-gutters align-items-center mb-2">
+                                <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">Mobile</label></div>
+                                <div class="col-4 pr-3">
+                                    <input asp-for="EditSupplier.Mobile" class="form-control form-control-sm vni-font" readonly="@(editAll ? null : "readonly")" />
+                                </div>
                             </div>
 
-                            <label class="approve-detail-label">Certificate</label>
-                            <div class="approve-detail-control">
-                                <input asp-for="EditSupplier.Certificate" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
+                            <div class="row no-gutters align-items-start mb-2">
+                                <div class="col-1 text-left pr-2"><label class="col-form-label-sm mt-1">Service</label></div>
+                                <div class="col-11">
+                                    <textarea asp-for="EditSupplier.Service" class="form-control form-control-sm vni-font" rows="2" readonly="@(editAll ? null : "readonly")"></textarea>
+                                </div>
                             </div>
 
-                            <label class="approve-detail-label approve-detail-label-right">Document</label>
-                            <div class="approve-detail-check">
-                                <input asp-for="EditSupplier.Document" type="checkbox" disabled="@(editAll ? null : "disabled")" />
-                            </div>
-
-                            <label class="approve-detail-label">Contact</label>
-                            <div class="approve-detail-control">
-                                <input asp-for="EditSupplier.Contact" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
-                            </div>
-
-                            <label class="approve-detail-label">Position</label>
-                            <div class="approve-detail-control">
-                                <input asp-for="EditSupplier.Position" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
-                            </div>
-
-                            <label class="approve-detail-label">Mobile</label>
-                            <div class="approve-detail-control">
-                                <input asp-for="EditSupplier.Mobile" class="form-control form-control-sm" readonly="@(editAll ? null : "readonly")" />
-                            </div>
-
-                            <div class="approve-detail-empty"></div>
-                            <div class="approve-detail-empty"></div>
-
-                            <label class="approve-detail-label">Service</label>
-                            <div class="approve-detail-control approve-detail-span-7">
-                                <textarea asp-for="EditSupplier.Service" class="form-control form-control-sm" rows="2" readonly="@(editAll ? null : "readonly")"></textarea>
-                            </div>
-
-                            <label class="approve-detail-label">Comment</label>
-                            <div class="approve-detail-control approve-detail-span-7">
-                                <div class="d-flex align-items-start">
-                                    <textarea asp-for="EditSupplier.Comment" class="form-control form-control-sm mr-2" rows="2" readonly="@((editAll || commentOnly) ? null : "readonly")"></textarea>
-                                    <button
-                                        type="submit"
-                                        formaction="?handler=SaveMoreComment"
-                                        class="btn btn-sm btn-secondary text-nowrap"
-                                        disabled="@(!Model.CanEditComment ? "disabled" : null)">
-                                        More Comment
-                                    </button>
+                            <div class="row no-gutters align-items-start mb-0">
+                                <div class="col-1 text-left pr-2"><label class="col-form-label-sm mt-1">Comment</label></div>
+                                <div class="col-11">
+                                    <div class="d-flex align-items-start">
+                                        <textarea asp-for="EditSupplier.Comment" class="form-control form-control-sm vni-font mr-2" rows="2" readonly="@((editAll || commentOnly) ? null : "readonly")"></textarea>
+                                        <button
+                                            type="submit"
+                                            formaction="?handler=SaveMoreComment"
+                                            class="btn btn-sm btn-secondary text-nowrap"
+                                            disabled="@(!Model.CanEditComment ? "disabled" : null)">
+                                            More Comment
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -309,6 +315,7 @@
 </section>
 
 @section Styles {
+    <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Purchasing/ApproveSupplier/index.css" asp-append-version="true" />
 }
 

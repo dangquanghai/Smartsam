@@ -32,7 +32,7 @@
                     <div class="prq-detail-grid mb-3">
                         <label>No.</label>
                         <div>
-                            <input asp-for="Requisition.RequestNo" class="form-control form-control-sm" readonly="@(Model.IsViewMode ? "readonly" : null)" />
+                            <input asp-for="Requisition.RequestNo" class="form-control form-control-sm vni-font" readonly="@(Model.IsViewMode ? "readonly" : null)" />
                             <span asp-validation-for="Requisition.RequestNo" class="text-danger small"></span>
                         </div>
 
@@ -55,7 +55,7 @@
 
                         <label>Description</label>
                         <div class="prq-detail-span-full">
-                            <textarea asp-for="Requisition.Description" rows="2" class="form-control form-control-sm" readonly="@(Model.IsViewMode ? "readonly" : null)"></textarea>
+                            <textarea asp-for="Requisition.Description" rows="2" class="form-control form-control-sm vni-font" readonly="@(Model.IsViewMode ? "readonly" : null)"></textarea>
                         </div>
                     </div>
 
@@ -128,7 +128,7 @@
                         </div>
                         <div class="form-group col-md-2">
                             <label class="mb-1">Unit</label>
-                            <input id="detailUnit" class="form-control form-control-sm" readonly />
+                            <input id="detailUnit" class="form-control form-control-sm vni-font" readonly />
                         </div>
                         <div class="form-group col-md-4">
                             <label class="mb-1">Supplier</label>
@@ -157,13 +157,13 @@
                         </div>
                         <div class="form-group col-md-3">
                             <label class="mb-1">Amount</label>
-                            <input id="detailAmount" class="form-control form-control-sm" readonly />
+                            <input id="detailAmount" class="form-control form-control-sm vni-font" readonly />
                         </div>
                     </div>
 
                     <div class="form-group mb-1">
                         <label class="mb-1">Remark</label>
-                        <input id="detailRemark" class="form-control form-control-sm" maxlength="500" />
+                        <input id="detailRemark" class="form-control form-control-sm vni-font" maxlength="500" />
                     </div>
                 </div>
                 <div class="modal-footer py-2">
@@ -180,6 +180,7 @@
 }
 
 @section Styles {
+    <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Purchasing/PurchaseRequisition/PurchaseRequisitionDetail.css" asp-append-version="true" />
 }
 
