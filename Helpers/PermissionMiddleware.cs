@@ -23,11 +23,12 @@ namespace SmartSam.Helpers
         {
             string path = context.Request.Path.Value ?? "";
 
-            // 1. Bỏ qua các trang công khai và tài nguyên tĩnh
+            // 1. Bỏ qua các trang công khai, tài nguyên tĩnh và API Lookup
             if (path.StartsWith("/Login") || path.StartsWith("/Logout") ||
                 path.StartsWith("/dist") || path.StartsWith("/plugins") || path.StartsWith("/hangfire") ||
                 path == "/" || path.Equals("/Index", StringComparison.OrdinalIgnoreCase) ||
-                path == "/AccessDenied")
+                path == "/AccessDenied" ||
+                path.StartsWith("/api/Lookup", StringComparison.OrdinalIgnoreCase)) // THÊM DÒNG NÀY
             {
                 await _next(context);
                 return;
@@ -116,8 +117,8 @@ namespace SmartSam.Helpers
                 INNER JOIN SYS_FuncPermission fp ON rp.FunctionID = fp.FunctionID
                 INNER JOIN MS_Employee e ON rm.Operator = e.EmployeeID
                 WHERE e.EmployeeCode = @EmpCode 
-                AND fp.Url IS NOT NULL AND fp.Url <> ''
-                AND (',' + rp.Permission + ',') LIKE ('%,' + CAST(fp.PermissionNo AS VARCHAR) + ',%')";
+                AND fp.Url IS NOT NULL AND fp.Url <> ''";
+                //AND (',' + rp.Permission + ',') LIKE ('%,' + CAST(fp.PermissionNo AS VARCHAR) + ',%')";
 
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@EmpCode", empCode);

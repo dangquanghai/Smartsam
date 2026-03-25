@@ -30,7 +30,7 @@ namespace SmartSam.Services.Implementations
 
             if (raw == null || !raw.Any()) return new List<int>();
 
-            // 2. Nếu là 1 page index mà các quyền không phụ thuộc vào trạng thái dữ liệu thì tra về chính raw đã có ở bước trên
+            // 2. Nếu là 1 page index mà các quyền không phụ thuộc vào trạng thái dữ liệu thì trả về chính raw đã có ở bước trên
             if (StaticFunctionIds.Contains(functionId))
             {
                 return raw;
@@ -188,9 +188,24 @@ namespace SmartSam.Services.Implementations
             (mặc nhiên có view , view list)
             1: Create
             2: Create Auto
-            3: Edit
+            3: Edit  (sửa Description, thêm item, thêm new item, check/uncheck Not Issue)
+            4: Reject Item
+            5: Submit/ Approve
             Purchaer, CFO,BOD,ADMIN được xem MR của tất cả các bộ phận ==> Không lock select Bộ phận với các user này
+
+            có các trạng thái 
+            -1  Just Createed
+            0	Submited To Head
+            1	Head Approved
+            2	Purchaser checked
+            3	CFO Approved
+            4	Collected to PR
+            5	Rejected
+            6	ISSUED
+             
+             Chỉ có trạng thái -1 là được edit, Reject Item 
              */
+
             var validActions = new List<int> { 1, 2 };
             return raw.Where(p => validActions.Contains(p)).ToList();
         }

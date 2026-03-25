@@ -3,6 +3,7 @@ using Dapper;
 using System.Net;
 using System.Net.Mail;
 using System.Data.SqlClient;
+using SmartSam.Helpers;
 
 namespace SmartSam.Services
 {
@@ -32,7 +33,7 @@ namespace SmartSam.Services
                     {
                         string subject = $"[New-Smartsam] Receiving Vouchers Confirmed - {yesterday:dd/MM/yyyy}";
                         // Bọc template màu xanh dương cho Receiving
-                        string finalHtml = WrapInTemplate("Receiving Vouchers", "#3498db", yesterday, bodyReceive);
+                        string finalHtml = EmailTemplateHelper.WrapInNotifyTemplate("Receiving Vouchers", "#3498db", yesterday, bodyReceive);
                         await SendNotifyEmail("thao.ltt@saigonskygarden.com.vn", subject, finalHtml, "hai.dq@saigonskygarden.com.vn", "nga.ctn@saigonskygarden.com.vn");
                     }
 
@@ -42,7 +43,7 @@ namespace SmartSam.Services
                     {
                         string subject = $"[New-Smartsam] Issue Vouchers Confirmed - {yesterday:dd/MM/yyyy}";
                         // Bọc template màu cam cho Issue
-                        string finalHtml = WrapInTemplate("Issue Vouchers", "#e67e22", yesterday, bodyIssue);
+                        string finalHtml = EmailTemplateHelper.WrapInNotifyTemplate("Issue Vouchers", "#e67e22", yesterday, bodyIssue);
                         await SendNotifyEmail("trinh.thv@saigonskygarden.com.vn", subject, finalHtml, "hai.dq@saigonskygarden.com.vn", "nga.ctn@saigonskygarden.com.vn");
                     }
 
@@ -54,6 +55,7 @@ namespace SmartSam.Services
         }
 
         // Hàm bổ trợ để trang trí HTML
+        /*
         private string WrapInTemplate(string title, string color, DateTime date, string tableContent)
         {
             return $@"
@@ -83,7 +85,7 @@ namespace SmartSam.Services
         </div>
     </div>";
         }
-
+        */
         private async Task SendNotifyEmail(string to, string subject, string body, params string[] ccList)
         {
             string senderEmail = _config.GetValue<string>("EmailSettings:SenderEmail");
