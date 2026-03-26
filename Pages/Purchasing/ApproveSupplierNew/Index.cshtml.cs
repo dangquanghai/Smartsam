@@ -5,16 +5,17 @@ using System.Net.Mail;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Data.SqlClient;
+using SmartSam.Helpers;
 using SmartSam.Pages;
 using SmartSam.Pages.Purchasing.Supplier;
 using SmartSam.Services;
 using SmartSam.Services.Interfaces;
 
-namespace SmartSam.Pages.Purchasing.ApproveSupplier
+namespace SmartSam.Pages.Purchasing.ApproveSupplierNew
 {
-    public class ApproveSupplierDetailModel : BasePageModel
+    public class ApproveSupplierNewDetailModel : BasePageModel
     {
-        private readonly ILogger<ApproveSupplierDetailModel> _logger;
+        private readonly ILogger<ApproveSupplierNewDetailModel> _logger;
         private readonly ISecurityService _securityService;
         private const int NoDepartmentScopeValue = -1;
         private const int NoStatusScopeValue = -999;
@@ -24,13 +25,13 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         private ApproveEmployeeDataScopeViewModel _dataScope = new ApproveEmployeeDataScopeViewModel();
         private bool _isAdminRole;
 
-        public ApproveSupplierDetailModel(ISecurityService securityService, IConfiguration config, ILogger<ApproveSupplierDetailModel> logger) : base(config)
+        public ApproveSupplierNewDetailModel(ISecurityService securityService, IConfiguration config, ILogger<ApproveSupplierNewDetailModel> logger) : base(config)
         {
             _securityService = securityService;
             _logger = logger;
         }
         // ID chức năng trong bảng SYS_Function
-        private const int FUNCTION_ID = 145;
+        private const int FUNCTION_ID = 146;
 
         [BindProperty(SupportsGet = true)]
         public int? CurrentSupplierId { get; set; }
@@ -62,7 +63,6 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public bool HasLastSupplier => LastSupplierId.HasValue && CurrentSupplierPosition < CurrentPageSupplierCount;
         public bool HasPrevSupplier => PrevSupplierId.HasValue;
         public bool HasNextSupplier => NextSupplierId.HasValue;
-        public ApprovePurchaseOrderInfoViewModel PurchaseOrderInfo { get; set; } = new ApprovePurchaseOrderInfoViewModel();
         public List<ApproveSupplierServiceRowViewModel> SupplierServiceRows { get; set; } = new List<ApproveSupplierServiceRowViewModel>();
         public int? LevelCheckSupplier => _dataScope.LevelCheckSupplier;
         public bool CanEditAllSupplierFields => _isAdminRole || _dataScope.LevelCheckSupplier == 1;
@@ -378,7 +378,6 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         {
             // 1. Reset dữ liệu chi tiết trước khi load record mới
             CurrentSupplierDetail = null;
-            PurchaseOrderInfo = new ApprovePurchaseOrderInfoViewModel();
             SupplierServiceRows = new List<ApproveSupplierServiceRowViewModel>();
             CurrentSupplierPosition = 0;
             FirstSupplierId = null;
@@ -415,7 +414,6 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
             if (CurrentSupplierDetail is not null)
             {
-                PurchaseOrderInfo = GetPurchaseOrderInfo(CurrentSupplierDetail.SupplierID, DateTime.Now.Year);
                 SupplierServiceRows = GetSupplierServiceRows(CurrentSupplierDetail.SupplierID);
             }
         }
@@ -449,7 +447,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 WHERE (@DeptID IS NULL OR s.DeptID = @DeptID)
                   AND (@StatusID IS NULL OR s.[Status] = @StatusID)
                   AND (@MaxStatusExclusive IS NULL OR ISNULL(s.[Status], 0) < @MaxStatusExclusive)
-                  AND ISNULL(s.IsNew, 0) = 0
+                  AND ISNULL(s.IsNew, 0) = 1
                 ORDER BY s.SupplierID DESC", conn);
 
             BindSearchParams(cmd, criteria);
@@ -509,7 +507,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 LEFT JOIN dbo.PC_SupplierStatus st ON s.[Status] = st.SupplierStatusID
                 LEFT JOIN dbo.MS_Department d ON s.DeptID = d.DeptID
                 WHERE s.SupplierID = @SupplierID
-                  AND ISNULL(s.IsNew, 0) = 0", conn);
+                  AND ISNULL(s.IsNew, 0) = 1", conn);
 
             cmd.Parameters.AddWithValue("@SupplierID", supplierId);
             conn.Open();
@@ -543,78 +541,6 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 Status = rd.IsDBNull(19) ? null : Convert.ToInt32(rd[19]),
                 SupplierStatusName = Convert.ToString(rd[20]) ?? string.Empty
             };
-        }
-
-        private ApprovePurchaseOrderInfoViewModel GetPurchaseOrderInfo(int supplierId, int currentYear)
-        {
-            var result = new ApprovePurchaseOrderInfoViewModel
-            {
-                Year = currentYear - 1
-            };
-
-            using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
-            conn.Open();
-
-            using (var cmd = new SqlCommand(@"
-                SELECT COUNT(1)
-                FROM dbo.PC_PO
-                WHERE SupplierID = @SupplierID
-                  AND YEAR(PODate) = @TheYear", conn))
-            {
-                cmd.Parameters.AddWithValue("@SupplierID", supplierId);
-                cmd.Parameters.AddWithValue("@TheYear", result.Year);
-                result.CountPO = Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
-            }
-
-            using (var cmd = new SqlCommand(@"
-                SELECT ISNULL(SUM(
-                    CASE
-                        WHEN p.Currency = 1 THEN d.POAmount
-                        ELSE d.POAmount * p.ExRate
-                    END
-                ), 0)
-                FROM dbo.PC_PO p
-                INNER JOIN dbo.PC_PODetail d ON p.POID = d.POID
-                WHERE YEAR(p.PODate) = @TheYear
-                  AND p.SupplierID = @SupplierID", conn))
-            {
-                cmd.Parameters.AddWithValue("@SupplierID", supplierId);
-                cmd.Parameters.AddWithValue("@TheYear", result.Year);
-                result.TotalCost = Convert.ToDecimal(cmd.ExecuteScalar() ?? 0m);
-            }
-
-            using var cmd2 = new SqlCommand(@"
-                SELECT
-                    e.PO_IndexDetailID,
-                    i.PO_IndexName AS IndexName,
-                    id.PO_IndexDetailName AS SubIndex,
-                    COUNT(p.POID) AS TheTime,
-                    e.Point
-                FROM dbo.PC_PO p
-                INNER JOIN dbo.PO_Estimate e ON p.POID = e.POID
-                INNER JOIN dbo.PO_IndexDetail id ON e.PO_IndexDetailID = id.PO_IndexDetailID
-                INNER JOIN dbo.PO_Index i ON id.PO_Index = i.PO_Index
-                WHERE YEAR(e.TheDate) = @TheYear
-                  AND p.SupplierID = @SupplierID
-                GROUP BY e.PO_IndexDetailID, i.PO_IndexName, id.PO_IndexDetailName, e.Point
-                ORDER BY e.PO_IndexDetailID", conn);
-            cmd2.Parameters.AddWithValue("@SupplierID", supplierId);
-            cmd2.Parameters.AddWithValue("@TheYear", result.Year);
-
-            using var rd = cmd2.ExecuteReader();
-            while (rd.Read())
-            {
-                result.Rows.Add(new ApprovePurchaseOrderRowViewModel
-                {
-                    PO_IndexDetailID = rd.IsDBNull(0) ? 0 : Convert.ToInt32(rd[0]),
-                    IndexName = Convert.ToString(rd[1]) ?? string.Empty,
-                    SubIndex = Convert.ToString(rd[2]) ?? string.Empty,
-                    TheTime = rd.IsDBNull(3) ? 0 : Convert.ToInt32(rd[3]),
-                    Point = rd.IsDBNull(4) ? 0m : Convert.ToDecimal(rd[4])
-                });
-            }
-
-            return result;
         }
 
         private List<ApproveSupplierServiceRowViewModel> GetSupplierServiceRows(int supplierId)
@@ -994,7 +920,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             var supplierCode = string.IsNullOrWhiteSpace(supplier.SupplierCode) ? supplier.SupplierID.ToString() : supplier.SupplierCode;
             var supplierName = string.IsNullOrWhiteSpace(supplier.SupplierName) ? "-" : supplier.SupplierName;
 
-            var detailUrl = Url.Page("/Purchasing/ApproveSupplierAnnualy/Index", values: new
+            var detailUrl = Url.Page("/Purchasing/ApproveSupplierNew/Index", values: new
             {
                 CurrentSupplierId = supplier.SupplierID
             });
@@ -1003,7 +929,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 ? string.Empty
                 : $"{Request.Scheme}://{Request.Host}{detailUrl}";
 
-            var subject = $"[Supplier Approval] Last supplier processed at level {currentLevel}";
+            var subject = $"[Approve Supplier New] Last supplier processed at level {currentLevel}";
             var body = $@"
 <p>Dear Approver Level {nextLevel},</p>
 <p>The last supplier in current approval list has been <b>{action}</b> at level {currentLevel}.</p>
@@ -1013,8 +939,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
   <li>Action by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
   <li>Action time: <b>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</b></li>
 </ul>
-{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Approve Supplier Annualy</a></p>")}
-<p>SmartSam System</p>";
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Approve Supplier New</a></p>")}";
+            var htmlBody = EmailTemplateHelper.WrapInNotifyTemplate("APPROVE SUPPLIER NEW", "#17a2b8", DateTime.Now, body);
 
             try
             {
@@ -1022,7 +948,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 {
                     From = new MailAddress(senderEmail, "SmartSam System"),
                     Subject = subject,
-                    Body = body,
+                    Body = htmlBody,
                     IsBodyHtml = true
                 };
 
@@ -1259,23 +1185,6 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
     {
         public int? DeptID { get; set; }
         public int? LevelCheckSupplier { get; set; }
-    }
-
-    public class ApprovePurchaseOrderInfoViewModel
-    {
-        public int Year { get; set; }
-        public int CountPO { get; set; }
-        public decimal TotalCost { get; set; }
-        public List<ApprovePurchaseOrderRowViewModel> Rows { get; set; } = new List<ApprovePurchaseOrderRowViewModel>();
-    }
-
-    public class ApprovePurchaseOrderRowViewModel
-    {
-        public int PO_IndexDetailID { get; set; }
-        public string IndexName { get; set; } = string.Empty;
-        public string SubIndex { get; set; } = string.Empty;
-        public int TheTime { get; set; }
-        public decimal Point { get; set; }
     }
 
     public class ApproveSupplierServiceRowViewModel
