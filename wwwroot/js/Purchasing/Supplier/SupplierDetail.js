@@ -175,7 +175,7 @@ function reuseSupplierAjax() {
         return;
     }
 
-    if (!confirm('Reset this disapproved supplier to draft?')) {
+    if (!confirm('Reset this disapproved supplier ?')) {
         return;
     }
 

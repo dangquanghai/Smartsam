@@ -30,7 +30,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         private const int PermissionAdd = 3;
         private const int PermissionEdit = 4;
         private const int PermissionSubmit = 5;
-        private const int StatusDisapproved = 9;
+        private const int StatusDisapproved = 5;
 
         private EmployeeDataScopeViewModel _dataScope = new EmployeeDataScopeViewModel();
         private bool _isAdminRole;
@@ -686,12 +686,12 @@ namespace SmartSam.Pages.Purchasing.Supplier
             }
 
             ResetForReuse(Id.Value);
-            SetFlashMessage("Reset re-use success. Supplier is reset to draft (status 0).", "success");
+            SetFlashMessage("Supplier reset successfully.", "success");
 
             return new JsonResult(new
             {
                 success = true,
-                message = "Reset re-use success. Supplier is reset to draft (status 0).",
+                message = "Supplier reset successfully.",
                 redirectUrl = Url.Page("./SupplierDetail", BuildDetailRouteValues(Id.Value))
             });
         }
@@ -725,7 +725,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             }
 
             ResetForReuse(Id.Value);
-            SetFlashMessage("Re Use successful. Supplier is reset to draft (status 0).", "success");
+            SetFlashMessage("Supplier reset successfully.", "success");
             return RedirectToPage("./SupplierDetail", BuildDetailRouteValues(Id.Value));
         }
 
@@ -1127,21 +1127,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         {
             const string sql = @"
                 UPDATE dbo.PC_Suppliers
-                SET [Status]=0,
-                    ApprovedDate=NULL,
-                    PurchaserCode=NULL,
-                    PurchaserPreparedDate=NULL,
-                    PurchaserCPT = NULL,
-                    DepartmentCode = NULL,
-                    DepartmentApproveDate = NULL,
-                    DepartmentCPT = NULL,
-                    FinancialCode = NULL,
-                    FinancialApproveDate = NULL,
-                    FinancialCPT = NULL,
-                    BODCode = NULL,
-                    BODApproveDate = NULL,
-                    BODCPT = NULL,
-                    IsApproved = 0
+                SET [Status] = 0
                 WHERE SupplierID=@SupplierID";
 
             using var conn = new SqlConnection(_connectionString);

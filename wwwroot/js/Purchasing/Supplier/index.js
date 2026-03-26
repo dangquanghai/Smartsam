@@ -186,7 +186,6 @@
         selectedSupplierId = supplierId;
 
         const canCopy = item && item.actions ? item.actions.canCopy === true : false;
-        const canSubmit = item && item.actions ? item.actions.canSubmit === true : false;
         const updateVisibility = (selector, hasPermission) => {
             if (hasPermission) {
                 $(selector).removeClass('d-none');
@@ -195,12 +194,9 @@
             }
         };
 
-        $('#selectedSupplierIdInput').val(selectedSupplierId);
-        $('#selectedSupplierIdsCsvInput').val(selectedSupplierId);
         $('#copySelectedSupplierIdsCsvInput').val(selectedSupplierId);
 
         updateVisibility("#btnCopy", canCopy);
-        updateVisibility("#btnSubmit", canSubmit);
 
         $('#supplierTable tbody tr').removeClass('selected');
         $(this).closest('tr').addClass('selected');
@@ -269,11 +265,8 @@
 
     function resetActions() {
         selectedSupplierId = null;
-        $('#selectedSupplierIdInput').val('');
-        $('#selectedSupplierIdsCsvInput').val('');
         $('#copySelectedSupplierIdsCsvInput').val('');
         $('#btnCopy').addClass('d-none');
-        $('#btnSubmit').addClass('d-none');
     }
 
     // ========== PAGINATION ==========
@@ -437,11 +430,6 @@
             $('#copyYearModal').modal('show');
         });
 
-        $('#btnSubmit').off('click').on('click', function () {
-            if (!selectedSupplierId) return;
-            submitSelectedSupplierAjax();
-        });
-
         $('#btnExcel').off('click').on('click', function () {
             window.location.href = buildExportExcelUrl();
         });
@@ -495,52 +483,13 @@
         return `?${query.toString()}`;
     }
 
-    function submitSelectedSupplierAjax() {
-        const token = $('input[name="__RequestVerificationToken"]').val();
-        if (!token) {
-            showPageMessage('warning', 'Cannot submit because request token is missing.');
-            return;
-        }
-
-        syncListStateToPostForms();
-        $('#selectedSupplierIdInput').val(selectedSupplierId);
-        $('#selectedSupplierIdsCsvInput').val(selectedSupplierId);
-
-        const reselectSupplierId = selectedSupplierId;
-        const formData = $('#submitSupplierForm').serialize();
-
-        $.ajax({
-            url: '?handler=SubmitAjax',
-            type: 'POST',
-            data: formData,
-            headers: { RequestVerificationToken: token },
-            success: function (response) {
-                const isSuccess = !!(response && (response.success === true || response.Success === true));
-                const message = (response && (response.message || response.Message)) || 'Submit completed.';
-                const messageType = ((response && (response.messageType || response.MessageType)) || (isSuccess ? 'success' : 'info')).toString().toLowerCase();
-
-                showPageMessage(messageType, message);
-                if (isSuccess) {
-                    performSearch(currentPage, { reselectSupplierId: reselectSupplierId });
-                }
-            },
-            error: function (xhr) {
-                const message = (xhr && xhr.responseJSON && (xhr.responseJSON.message || xhr.responseJSON.Message))
-                    || 'Cannot submit selected supplier.';
-                showPageMessage('warning', message);
-            }
-        });
-    }
-
-    // Dong bo state bo loc hien tai vao cac form POST (Submit/Copy)
+    // Dong bo state bo loc hien tai vao cac form POST (Copy)
     // de sau redirect van giu dung filter/page user dang xem.
     function syncListStateToPostForms() {
         const state = collectListState();
-        const $submitForm = $('#submitSupplierForm');
         const $copyForm = $('#copyYearForm');
 
         Object.keys(state).forEach(function (key) {
-            setHiddenFieldValue($submitForm, key, state[key]);
             setHiddenFieldValue($copyForm, key, state[key]);
         });
     }
