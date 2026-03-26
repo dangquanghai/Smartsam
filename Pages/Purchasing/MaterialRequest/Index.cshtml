@@ -41,80 +41,90 @@
                             </div>
 
                             <div class="form-group">
-                                <label>From Date</label>
-                                <input asp-for="Filter.FromDate" type="date" class="form-control" />
+                                <label>From Date - To Date</label>
+                                <div class="mr-date-range-control">
+                                    <input type="text"
+                                           id="MrDateRange"
+                                           class="form-control form-control-sm"
+                                           readonly />
+                                </div>
+                                <input asp-for="Filter.FromDate" type="hidden" />
+                                <input asp-for="Filter.ToDate" type="hidden" />
                             </div>
 
-                            <div class="form-group">
-                                <label>To Date</label>
-                                <input asp-for="Filter.ToDate" type="date" class="form-control" />
-                            </div>
+                            <fieldset class="mr-condition-box @(canAllUsersCondition ? string.Empty : "d-none") mr-condition-group @(isStoremanMode ? "mr-condition-group-disabled" : string.Empty)" data-condition-group="allUsers">
+                                <legend class="mr-condition-legend">
+                                    <div class="mr-condition-legend-control">
+                                        <input type="radio" id="conditionModeAllUsers" name="Filter.ConditionMode" value="allUsers" class="mr-condition-mode-radio" @(!isStoremanMode ? "checked" : null) @(canAllUsersCondition ? null : "disabled") />
+                                        <label for="conditionModeAllUsers">Condition for all users</label>
+                                    </div>
+                                </legend>
 
-                            <div class="form-group @(canAllUsersCondition ? string.Empty : "d-none") mr-condition-group @(isStoremanMode ? "mr-condition-group-disabled" : string.Empty)" data-condition-group="allUsers">
-                                <div class="custom-control custom-radio mb-2">
-                                    <input type="radio" id="conditionModeAllUsers" name="Filter.ConditionMode" value="allUsers" class="custom-control-input" @(!isStoremanMode ? "checked" : null) disabled="@(canAllUsersCondition ? null : "disabled")" />
-                                    <label for="conditionModeAllUsers" class="custom-control-label">Condition for all users</label>
-                                </div>
+                                <div class="mr-condition-grid">
+                                    <div class="form-group">
+                                        <label>Request No</label>
+                                        <input asp-for="Filter.RequestNo" type="text" class="form-control mr-request-no-input" disabled="@allUsersDisabledAttr" />
+                                    </div>
 
-                                <div class="form-group">
-                                    <label>Request No</label>
-                                    <input asp-for="Filter.RequestNo" class="form-control mr-request-no-input" disabled="@allUsersDisabledAttr" />
-                                </div>
-
-                                <div class="form-group">
-                                    <label>Status</label>
-                                    <div class="dropdown mr-status-dropdown">
-                                        <button class="btn btn-outline-secondary dropdown-toggle text-left w-100" type="button" id="mrStatusDropdownBtn" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" disabled="@allUsersDisabledAttr">
-                                            Select status
-                                        </button>
-                                        <div class="dropdown-menu p-2 mr-status-menu" aria-labelledby="mrStatusDropdownBtn">
-                                            @foreach (var status in Model.Statuses)
-                                            {
-                                                if (!int.TryParse(status.Value, out var statusValue))
+                                    <div class="form-group">
+                                        <label>Status</label>
+                                        <div class="dropdown mr-status-dropdown">
+                                            <button class="btn btn-outline-secondary dropdown-toggle text-left w-100" type="button" id="mrStatusDropdownBtn" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" disabled="@allUsersDisabledAttr">
+                                                Select status
+                                            </button>
+                                            <div class="dropdown-menu p-2 mr-status-menu" aria-labelledby="mrStatusDropdownBtn">
+                                                @foreach (var status in Model.Statuses)
                                                 {
-                                                    continue;
-                                                }
+                                                    if (!int.TryParse(status.Value, out var statusValue))
+                                                    {
+                                                        continue;
+                                                    }
 
-                                                var statusCheckboxId = $"mrStatus_{statusValue}";
-                                                var checkedAttr = Model.Filter.StatusIds.Contains(statusValue) ? "checked" : null;
-                                                <div class="custom-control custom-checkbox mr-status-option">
-                                                    <input class="custom-control-input mr-status-checkbox" type="checkbox" id="@statusCheckboxId" name="Filter.StatusIds" value="@statusValue" data-label="@status.Text" @checkedAttr disabled="@allUsersDisabledAttr" />
-                                                    <label class="custom-control-label" for="@statusCheckboxId">@status.Text</label>
-                                                </div>
-                                            }
+                                                    var statusCheckboxId = $"mrStatus_{statusValue}";
+                                                    var checkedAttr = Model.Filter.StatusIds.Contains(statusValue) ? "checked" : null;
+                                                    <div class="custom-control custom-checkbox mr-status-option">
+                                                        <input class="custom-control-input mr-status-checkbox" type="checkbox" id="@statusCheckboxId" name="Filter.StatusIds" value="@statusValue" data-label="@status.Text" @checkedAttr disabled="@allUsersDisabledAttr" />
+                                                        <label class="custom-control-label" for="@statusCheckboxId">@status.Text</label>
+                                                    </div>
+                                                }
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                <div class="custom-control custom-checkbox mb-1">
-                                    <input asp-for="Filter.BuyGreaterThanZero" class="custom-control-input" disabled="@allUsersDisabledAttr" />
-                                    <label asp-for="Filter.BuyGreaterThanZero" class="custom-control-label">Buy &gt; 0</label>
-                                </div>
+                                    <div class="custom-control custom-checkbox mb-1">
+                                        <input asp-for="Filter.BuyGreaterThanZero" class="custom-control-input" disabled="@allUsersDisabledAttr" />
+                                        <label asp-for="Filter.BuyGreaterThanZero" class="custom-control-label">Buy &gt; 0</label>
+                                    </div>
 
-                                <div class="custom-control custom-checkbox mb-1">
-                                    <input asp-for="Filter.AutoOnly" class="custom-control-input" disabled="@allUsersDisabledAttr" />
-                                    <label asp-for="Filter.AutoOnly" class="custom-control-label">Auto</label>
+                                    <div class="custom-control custom-checkbox mb-1">
+                                        <input asp-for="Filter.AutoOnly" class="custom-control-input" disabled="@allUsersDisabledAttr" />
+                                        <label asp-for="Filter.AutoOnly" class="custom-control-label">Auto</label>
+                                    </div>
                                 </div>
-                            </div>
+                            </fieldset>
 
-                            <div class="form-group @(canStoremanCondition ? string.Empty : "d-none") mr-condition-group @(!isStoremanMode ? "mr-condition-group-disabled" : string.Empty)" data-condition-group="storeman">
-                                <div class="custom-control custom-radio mb-2">
-                                    <input type="radio" id="conditionModeStoreman" name="Filter.ConditionMode" value="storeman" class="custom-control-input" @(isStoremanMode ? "checked" : null) disabled="@(canStoremanCondition ? null : "disabled")" />
-                                    <label for="conditionModeStoreman" class="custom-control-label">Condition for storeman</label>
+                            <fieldset class="mr-condition-box @(canStoremanCondition ? string.Empty : "d-none") mr-condition-group @(!isStoremanMode ? "mr-condition-group-disabled" : string.Empty)" data-condition-group="storeman">
+                                <legend class="mr-condition-legend">
+                                    <div class="mr-condition-legend-control">
+                                        <input type="radio" id="conditionModeStoreman" name="Filter.ConditionMode" value="storeman" class="mr-condition-mode-radio" @(isStoremanMode ? "checked" : null) @(canStoremanCondition ? null : "disabled") />
+                                        <label for="conditionModeStoreman">Condition for storeman</label>
+                                    </div>
+                                </legend>
+
+                                <div class="mr-condition-grid mr-condition-grid-store">
+                                    <div class="form-group">
+                                        <label class="mr-label-red">Item Code</label>
+                                        <input asp-for="Filter.ItemCode" class="form-control" disabled="@storemanDisabledAttr" />
+                                    </div>
+
+                                    <div class="custom-control custom-checkbox mb-1">
+                                        <input asp-for="Filter.IssueLessThanOrder" class="custom-control-input" disabled="@storemanDisabledAttr" />
+                                        <label asp-for="Filter.IssueLessThanOrder" class="custom-control-label mr-label-red">Issue &lt; Oder</label>
+                                    </div>
                                 </div>
+                            </fieldset>
 
-                                <div class="form-group">
-                                    <label class="mr-label-red">Item Code</label>
-                                    <input asp-for="Filter.ItemCode" class="form-control" disabled="@storemanDisabledAttr" />
-                                </div>
-
-                                <div class="custom-control custom-checkbox mb-1">
-                                    <input asp-for="Filter.IssueLessThanOrder" class="custom-control-input" disabled="@storemanDisabledAttr" />
-                                    <label asp-for="Filter.IssueLessThanOrder" class="custom-control-label mr-label-red">Issue &lt; Oder</label>
-                                </div>
-                            </div>
-
-                            <button class="btn btn-primary btn-block">
+                            <button class="btn btn-primary btn-block mr-search-submit">
                                 <i class="fas fa-search"></i> Search
                             </button>
                             <a href="@Url.Page("./Index")" class="btn btn-default btn-block mt-2">
@@ -163,11 +173,12 @@
                                 <tbody>
                                     @if (Model.Rows != null && Model.Rows.Count > 0)
                                     {
-                                        foreach (var r in Model.Rows)
+                                        for (var rowIndex = 0; rowIndex < Model.Rows.Count; rowIndex++)
                                         {
+                                            var r = Model.Rows[rowIndex];
                                             <tr data-id="@r.RequestNo">
                                                 <td>
-                                                    <input type="radio" name="selectedMr">
+                                                    <input type="radio" name="selectedMr" value="@rowIndex">
                                                 </td>
                                                 <td style="white-space: nowrap;">
                                                     <a href="javascript:void(0)" class="mr-request-link text-primary font-weight-bold" style="text-decoration: underline;">
@@ -175,8 +186,8 @@
                                                     </a>
                                                 </td>
                                                 <td>@r.DateCreateDisplay</td>
-                                                <td style="white-space: nowrap;">@r.AccordingTo</td>
-                                                <td style="white-space: nowrap;">@r.KPGroupName</td>
+                                                <td class="vni-font" style="white-space: nowrap;">@r.AccordingTo</td>
+                                                <td>@r.KPGroupName</td>
                                                 <td>@r.MaterialStatusName</td>
                                                 <td>@r.PrNo</td>
                                                 <td style="display: none;">@r.MaterialStatusId</td>
@@ -236,7 +247,7 @@
                                 <div class="form-group mb-2">
                                     <label class="mb-1">Item Code / Name</label>
                                     <div class="create-mr-input-row">
-                                        <input type="text" id="createMrKeyword" class="form-control form-control-sm create-mr-text-input" />
+                                        <input type="text" id="createMrKeyword" class="form-control form-control-sm create-mr-text-input vni-font" />
                                         <button type="button" id="createMrSearchBtn" class="btn btn-sm btn-primary create-mr-inline-btn">Search</button>
                                     </div>
                                 </div>
@@ -282,7 +293,7 @@
                                     <div class="mr-create-desc-wrap">
                                         <label class="mb-1">Description <span class="text-danger">*</span></label>
                                         <div class="create-mr-input-row create-mr-input-row-top">
-                                            <textarea id="createMrDescription" class="form-control form-control-sm create-mr-text-input create-mr-desc-textarea" rows="2"></textarea>
+                                            <textarea id="createMrDescription" class="form-control form-control-sm create-mr-text-input create-mr-desc-textarea vni-font" rows="2"></textarea>
                                             <button type="submit" form="createMrSubmitForm" class="btn btn-sm btn-primary create-mr-inline-btn" id="createMrConfirmBtn">Create MR</button>
                                         </div>
                                     </div>
@@ -348,7 +359,7 @@
                         </div>
                         <div class="form-group mb-0">
                             <label class="mb-1">Description</label>
-                            <textarea id="createAutoDescription" name="CreateAutoDescription" class="form-control" rows="2"></textarea>
+                            <textarea id="createAutoDescription" name="CreateAutoDescription" class="form-control vni-font" rows="2"></textarea>
                         </div>
                     </form>
                 </div>
@@ -371,6 +382,16 @@
     <script>
         $(function () {
             const defaultPageSize = @Model.DefaultPageSize;
+
+            window.initSimpleDateRange('MrDateRange', '#Filter_FromDate', '#Filter_ToDate', {
+                linkedCalendars: false
+            });
+
+            const fromDate = $('#Filter_FromDate').val();
+            const toDate = $('#Filter_ToDate').val();
+            if (fromDate && toDate) {
+                window.setDateRangeValue('MrDateRange', fromDate, toDate);
+            }
         });
     </script>
 }

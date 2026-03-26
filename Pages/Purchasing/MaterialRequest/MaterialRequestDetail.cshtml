@@ -82,7 +82,7 @@
 
                                 <label class="col-sm-1 col-form-label col-form-label-sm text-sm-right">Description</label>
                                 <div class="col-sm-6">
-                                    <input asp-for="Input.AccordingTo" class="form-control form-control-sm" maxlength="300" />
+                                    <input asp-for="Input.AccordingTo" class="form-control form-control-sm vni-font" maxlength="300" />
                                     <span asp-validation-for="Input.AccordingTo" class="text-danger small"></span>
                                 </div>
 
@@ -140,7 +140,7 @@
                                                 <input type="hidden" class="mr-line-itemcode" value="@line.ItemCode" />
                                             </td>
                                             <td>
-                                                <span class="mr-readonly-cell-text">@(line.ItemName ?? string.Empty)</span>
+                                                <span class="mr-readonly-cell-text vni-font">@(line.ItemName ?? string.Empty)</span>
                                                 <input type="hidden" class="mr-line-itemname" value="@line.ItemName" />
                                             </td>
                                             <td>
@@ -165,7 +165,7 @@
                                                 <input type="hidden" class="mr-line-buy" value="@(line.Buy?.ToString("0.##") ?? "0")" />
                                             </td>
                                             <td>
-                                                <input type="text" class="form-control form-control-sm mr-line-note" value="@line.Note" />
+                                                <input type="text" class="form-control form-control-sm mr-line-note vni-font" value="@line.Note" />
                                                 <input type="hidden" class="mr-line-price" value="@(line.Price?.ToString("0.##") ?? "0")" />
                                                 <input type="hidden" class="mr-line-new-item" value="@(line.NewItem ? "true" : "false")" />
                                             </td>
@@ -208,7 +208,7 @@
                         <div class="form-row align-items-end mr-item-lookup-toolbar">
                             <div class="form-group col-lg-5 col-md-12 mb-2">
                                 <label class="mb-1">Item Code or Name</label>
-                                <input type="text" class="form-control form-control-sm" id="lookupKeyword" />
+                                <input type="text" class="form-control form-control-sm vni-font" id="lookupKeyword" />
                             </div>
                             <div class="form-group col-lg-4 col-md-8 mb-2">
                                 <label class="mb-1 d-block">Check Balance in Store</label>
@@ -256,7 +256,7 @@
                     <div class="modal-body">
                         <div class="form-group">
                             <label>Item Name <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control form-control-sm" id="newItemName" maxlength="150" />
+                            <input type="text" class="form-control form-control-sm vni-font" id="newItemName" maxlength="150" />
                         </div>
                         <div class="form-group mb-0">
                             <label>Unit</label>

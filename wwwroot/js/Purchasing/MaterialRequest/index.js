@@ -17,7 +17,6 @@
             .filter((x) => Number.isFinite(x));
 
         const requestNoRaw = ($('#Filter_RequestNo').val() || '').toString().trim();
-        const requestNo = requestNoRaw === '' ? null : Number(requestNoRaw);
 
         const storeGroupRaw = ($('#Filter_StoreGroup').val() || '').toString().trim();
         const storeGroup = storeGroupRaw === '' ? null : Number(storeGroupRaw);
@@ -26,7 +25,7 @@
         const toDateRaw = ($('#Filter_ToDate').val() || '').toString().trim();
 
         const filter = {
-            requestNo: Number.isFinite(requestNo) ? requestNo : null,
+            requestNo: requestNoRaw || null,
             storeGroup: Number.isFinite(storeGroup) ? storeGroup : null,
             statusIds: statusIds,
             itemCode: ($('#Filter_ItemCode').val() || '').toString().trim() || null,
@@ -82,7 +81,7 @@
             const r = item.data || {};
             const requestNo = r.requestNo ?? r.RequestNo;
             const row = `
-            <tr data-id="${requestNo || ''}" data-index="${index}" style="cursor:pointer">
+            <tr data-id="${requestNo || ''}" data-index="${index}" tabindex="0" style="cursor:pointer">
                 <td><input type="radio" name="selectedMr" value="${index}"></td>
                 <td style="white-space:nowrap">
                     <a href="javascript:void(0)" class="mr-request-link text-primary font-weight-bold" style="text-decoration:underline">
@@ -98,6 +97,18 @@
             </tr>`;
             tbody.append(row);
         });
+    }
+
+    function selectRowByIndex(rowIndex) {
+        if (rowIndex === undefined || rowIndex === null) return;
+
+        const $row = $(`#mrTable tbody tr[data-index='${rowIndex}']`);
+        if ($row.length === 0) return;
+
+        const $radio = $row.find("input[name='selectedMr']");
+        if ($radio.length > 0) {
+            $radio.prop('checked', true).trigger('change');
+        }
     }
 
     function openDetailByRowIndex(rowIndex) {
@@ -155,6 +166,18 @@
         selectedRequestNo = item.data.requestNo || item.data.RequestNo;
         $('#mrTable tbody tr').removeClass('selected');
         $(this).closest('tr').addClass('selected');
+    });
+
+    $(document).on('click focusin', '#mrTable tbody tr', function (e) {
+        const $target = $(e.target);
+        if ($target.is('a, input, button, label, select, option, textarea, .dropdown-toggle, .dropdown-menu, .custom-control-label')) {
+            return;
+        }
+
+        const rowIndex = $(this).data('index');
+        if (rowIndex === undefined || rowIndex === null) return;
+
+        selectRowByIndex(rowIndex);
     });
 
     function resetActions() {
@@ -594,7 +617,7 @@
             tr.innerHTML = `
                 <td><input type="checkbox" class="create-mr-search-checkbox"></td>
                 <td>${item.itemCode || ''}</td>
-                <td>${item.itemName || ''}</td>
+                <td class="vni-font">${item.itemName || ''}</td>
                 <td>${item.unit || ''}</td>`;
             body.appendChild(tr);
         });
@@ -613,7 +636,7 @@
             tr.innerHTML = `
                 <td><input type="checkbox" class="create-mr-selected-checkbox"></td>
                 <td>${item.itemCode || ''}</td>
-                <td>${item.itemName || ''}</td>
+                <td class="vni-font">${item.itemName || ''}</td>
                 <td>${item.unit || ''}</td>`;
             body.appendChild(tr);
         });

@@ -31,7 +31,6 @@ public class MaterialRequestDetailModel : BasePageModel
     private EmployeeMaterialScopeDto _dataScope = new EmployeeMaterialScopeDto();
     private bool _isAdminRole;
 
-    // Khởi tạo model detail và nạp các service cần dùng.
     public MaterialRequestDetailModel(ISecurityService securityService, IConfiguration configuration, PermissionService permissionService) : base(configuration)
     {
         _materialRequestService = new MaterialRequestService(configuration);
@@ -75,7 +74,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
     public bool CanShowAll
     {
-        get { return _isAdminRole || HasPermission(PermissionShowAll) || _dataScope.SeeDataAllDept; }
+        get { return IsAdminUser() || HasPermission(PermissionShowAll) || _dataScope.ApprovalLevel >= 2; }
     }
 
     public bool CanSave
@@ -121,12 +120,14 @@ public class MaterialRequestDetailModel : BasePageModel
         get { return ResolveBackToListUrl(); }
     }
 
-    // Tải trang detail: kiểm tra quyền, nạp dropdown, rồi nạp dữ liệu nếu đang edit.
+    // ==========================================
+    // 1. PAGE LOAD AND INITIALIZATION
+    // ==========================================
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
         PagePerm = new PagePermissions();
-        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
+        PagePerm = GetUserPermissions();
         await LoadUserScopeAsync(cancellationToken);
         if (!CanAccessPage())
         {
@@ -164,16 +165,18 @@ public class MaterialRequestDetailModel : BasePageModel
 
         Input = detail;
         Lines = (await _materialRequestService.GetLinesAsync(Id.Value, cancellationToken)).ToList();
-        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, CurrentStatusId);
+        PagePerm = GetUserPermissions();
         return Page();
     }
 
-    // Lưu form detail (tạo mới/cập nhật) sau khi validate dữ liệu.
+    // ==========================================
+    // 2. SAVE AND WORKFLOW ACTIONS
+    // ==========================================
     public async Task<IActionResult> OnPostSave(CancellationToken cancellationToken)
     {
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
         PagePerm = new PagePermissions();
-        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
+        PagePerm = GetUserPermissions();
         await LoadUserScopeAsync(cancellationToken);
         if (!CanAccessPage())
         {
@@ -197,9 +200,8 @@ public class MaterialRequestDetailModel : BasePageModel
                 return RedirectToPage("./Index");
             }
 
-            // Giữ nguyên trạng thái workflow khi người dùng chỉ save thông tin trên form.
             var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
-            PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, currentStatus);
+            PagePerm = GetUserPermissions();
             if (!HasPermission(PermissionEdit) || currentStatus != StatusJustCreated)
             {
                 WarningMessage = "You cannot edit this Material Request at current status.";
@@ -242,37 +244,35 @@ public class MaterialRequestDetailModel : BasePageModel
         }
     }
 
-    // Handler POST mặc định: form không chỉ định handler thì đi vào Save.
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
         return await OnPostSave(cancellationToken);
     }
 
-    // Handler Submit: chuyển request sang bước workflow kế tiếp.
     public async Task<IActionResult> OnPostSubmit(CancellationToken cancellationToken)
     {
         return await HandleWorkflowActionAsync(MaterialRequestWorkflowAction.Submit, cancellationToken);
     }
 
-    // Handler Approve: duyệt request theo trạng thái hiện tại.
     public async Task<IActionResult> OnPostApprove(CancellationToken cancellationToken)
     {
         return await HandleWorkflowActionAsync(MaterialRequestWorkflowAction.Approve, cancellationToken);
     }
 
-    // Handler Reject: từ chối request theo trạng thái hiện tại.
     public async Task<IActionResult> OnPostReject(CancellationToken cancellationToken)
     {
         return await HandleWorkflowActionAsync(MaterialRequestWorkflowAction.Reject, cancellationToken);
     }
 
-    // Xử lý chung cho các thao tác workflow: Submit/Approve/Reject.
+    // ==========================================
+    // 3. ITEM LOOKUP AND QUICK ITEM ACTIONS
+    // ==========================================
     private async Task<IActionResult> HandleWorkflowActionAsync(MaterialRequestWorkflowAction action, CancellationToken cancellationToken)
     {
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
         PagePerm = new PagePermissions();
-        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
+        PagePerm = GetUserPermissions();
         await LoadUserScopeAsync(cancellationToken);
         if (!CanAccessPage())
         {
@@ -300,7 +300,7 @@ public class MaterialRequestDetailModel : BasePageModel
         }
 
         var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
-        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, currentStatus);
+        PagePerm = GetUserPermissions();
         var transition = ResolveTransition(action, currentStatus);
         if (transition is null)
         {
@@ -350,12 +350,11 @@ public class MaterialRequestDetailModel : BasePageModel
         }
     }
 
-    // API lookup item cho popup Add Detail.
     public async Task<IActionResult> OnGetSearchItems(string? keyword, bool checkBalanceInStore = false, CancellationToken cancellationToken = default)
     {
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
         PagePerm = new PagePermissions();
-        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
+        PagePerm = GetUserPermissions();
         await LoadUserScopeAsync(cancellationToken);
         if (!CanAccessPage())
         {
@@ -366,12 +365,11 @@ public class MaterialRequestDetailModel : BasePageModel
         return new JsonResult(new { success = true, data = rows });
     }
 
-    // API tạo nhanh item mới khi item chưa có trong danh mục.
     public async Task<IActionResult> OnPostCreateItem([FromForm] string? itemName, [FromForm] string? unit, CancellationToken cancellationToken)
     {
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
         PagePerm = new PagePermissions();
-        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
+        PagePerm = GetUserPermissions();
         await LoadUserScopeAsync(cancellationToken);
         if (!CanAccessPage())
         {
@@ -408,13 +406,23 @@ public class MaterialRequestDetailModel : BasePageModel
         }
     }
 
-    // Nạp dropdown Store Group và Status cho form detail.
+    // ==========================================
+    // 4. DROPDOWN LOADING
+    // ==========================================
     private void LoadDropdowns()
     {
         var stores = LoadListFromSql(
-            @"SELECT KPGroupID, KPGroupName
-              FROM dbo.INV_KPGroup
-              ORDER BY KPGroupID",
+            @"SELECT
+                    kp.KPGroupID,
+                    CONCAT(
+                        ISNULL(kp.KPGroupName, CONCAT('Store Group ', CAST(kp.KPGroupID AS varchar(20)))),
+                        ' (',
+                        ISNULL(dep.DeptCode, CONCAT('Dept ', CAST(kp.DepID AS varchar(20)))),
+                        ')'
+                    ) AS KPGroupName
+              FROM dbo.INV_KPGroup kp
+              LEFT JOIN dbo.MS_Department dep ON dep.DeptID = kp.DepID
+              ORDER BY kp.KPGroupID",
             "KPGroupID",
             "KPGroupName");
 
@@ -422,10 +430,18 @@ public class MaterialRequestDetailModel : BasePageModel
         {
             stores = LoadListFromSql(
                 @"SELECT DISTINCT
-                        CAST(StoreGR AS int) AS StoreGroup,
-                        CONCAT('Store Group ', CAST(StoreGR AS varchar(20))) AS StoreGroupName
-                  FROM dbo.MS_Employee
+                        CAST(e.StoreGR AS int) AS StoreGroup,
+                        CONCAT(
+                            'Store Group ',
+                            CAST(e.StoreGR AS varchar(20)),
+                            ' (',
+                            COALESCE(MIN(dep.DeptCode), CONCAT('Dept ', CAST(MIN(e.DeptID) AS varchar(20)))),
+                            ')'
+                        ) AS StoreGroupName
+                  FROM dbo.MS_Employee e
+                  LEFT JOIN dbo.MS_Department dep ON dep.DeptID = e.DeptID
                   WHERE StoreGR IS NOT NULL AND StoreGR > 0
+                  GROUP BY e.StoreGR
                   ORDER BY StoreGroup",
                 "StoreGroup",
                 "StoreGroupName");
@@ -446,12 +462,13 @@ public class MaterialRequestDetailModel : BasePageModel
         {
             if (_dataScope.StoreGroup.HasValue)
             {
+                var selectedStore = stores.FirstOrDefault(x => string.Equals(x.Value, _dataScope.StoreGroup.Value.ToString(), StringComparison.OrdinalIgnoreCase));
                 StoreGroups = new List<SelectListItem>
                 {
                     new SelectListItem
                     {
                         Value = _dataScope.StoreGroup.Value.ToString(),
-                        Text = $"Store Group {_dataScope.StoreGroup.Value}"
+                        Text = selectedStore?.Text ?? $"Store Group {_dataScope.StoreGroup.Value}"
                     }
                 };
             }
@@ -469,7 +486,9 @@ public class MaterialRequestDetailModel : BasePageModel
         }
     }
 
-    // Parse danh sách line từ JSON do JS gửi lên.
+    // ==========================================
+    // 5. INTERNAL HELPERS
+    // ==========================================
     private static List<MaterialRequestLineDto> ParseLinesFromJson(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
@@ -496,7 +515,6 @@ public class MaterialRequestDetailModel : BasePageModel
         }
     }
 
-    // Lấy line đã post: ưu tiên JSON, thiếu thì fallback sang model binding.
     private List<MaterialRequestLineDto> ResolvePostedLines()
     {
         var linesFromJson = ParseLinesFromJson(LinesJson);
@@ -508,7 +526,6 @@ public class MaterialRequestDetailModel : BasePageModel
         return NormalizeLines(Lines);
     }
 
-    // Ép các cột chỉ đọc ở backend để tránh sửa dữ liệu trái nghiệp vụ.
     private async Task ApplyReadonlyLineRulesAsync(List<MaterialRequestLineDto> lines, long? requestNo, CancellationToken cancellationToken)
     {
         if (lines.Count == 0)
@@ -565,7 +582,6 @@ public class MaterialRequestDetailModel : BasePageModel
         }
     }
 
-    // Chuẩn hóa line và loại bỏ các dòng trống trước khi lưu.
     private static List<MaterialRequestLineDto> NormalizeLines(IEnumerable<MaterialRequestLineDto> lines)
     {
         var result = new List<MaterialRequestLineDto>();
@@ -613,7 +629,6 @@ public class MaterialRequestDetailModel : BasePageModel
         return result;
     }
 
-    // Nạp data scope người dùng từ claim + bảng MS_Employee.
     private async Task LoadUserScopeAsync(CancellationToken cancellationToken)
     {
         _isAdminRole = IsAdminUser();
@@ -626,27 +641,22 @@ public class MaterialRequestDetailModel : BasePageModel
         _dataScope = await _materialRequestService.GetEmployeeScopeAsync(User.Identity?.Name, cancellationToken);
     }
 
-    // Nạp permission number của user cho function Material Request.
     private PagePermissions GetUserPermissions()
     {
-        bool isAdmin = User.FindFirst("IsAdminRole")?.Value == "True";
+        bool isAdmin = IsAdminUser();
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
-        // 1. Khởi tạo đối tượng PagePermissions mới
         var permsObj = new PagePermissions();
 
         if (isAdmin)
         {
-            // Admin: Gán danh sách quyền giả lập
             permsObj.AllowedNos = Enumerable.Range(1, 20).ToList();
         }
         else
         {
-            // 2. Lấy danh sách List<int> từ Service và gán vào thuộc tính AllowedNos của Object
             permsObj.AllowedNos = _permissionService.GetPermissionsForPage(roleId, MaterialRequestFunctionId);
         }
 
-        // 3. Trả về đối tượng (Object) chứa danh sách đó
         return permsObj;
     }
 
@@ -659,8 +669,8 @@ public class MaterialRequestDetailModel : BasePageModel
             return true;
         }
 
-        // Fallback: nếu claim chưa đúng, kiểm tra trực tiếp cờ IsAdminRole theo RoleID trong DB.
-        if (!int.TryParse(User.FindFirst("RoleID")?.Value, out var roleId) || roleId <= 0)
+        var employeeCode = User.Identity?.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(employeeCode))
         {
             return false;
         }
@@ -668,13 +678,30 @@ public class MaterialRequestDetailModel : BasePageModel
         try
         {
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
-            using var cmd = new SqlCommand("SELECT TOP 1 IsAdminRole FROM SYS_Role WHERE RoleID = @RoleID", conn);
-            cmd.Parameters.Add("@RoleID", SqlDbType.Int).Value = roleId;
+            using var cmd = new SqlCommand(@"
+                SELECT TOP 1 ISNULL(IsAdminUser, 0)
+                FROM dbo.MS_Employee
+                WHERE EmployeeCode = @EmployeeCode", conn);
+            cmd.Parameters.Add("@EmployeeCode", SqlDbType.VarChar, 50).Value = employeeCode;
             conn.Open();
             var value = cmd.ExecuteScalar();
             if (value == null || value == DBNull.Value)
             {
-                return false;
+                using var roleCmd = new SqlCommand(@"
+                    SELECT TOP 1 ISNULL(r.IsAdminRole, 0)
+                    FROM dbo.SYS_RoleMember rm
+                    INNER JOIN dbo.SYS_Role r ON r.RoleID = rm.RoleID
+                    INNER JOIN dbo.MS_Employee e ON e.EmployeeID = rm.Operator
+                    WHERE e.EmployeeCode = @EmployeeCode
+                    ORDER BY r.IsAdminRole DESC, rm.RoleID ASC", conn);
+                roleCmd.Parameters.Add("@EmployeeCode", SqlDbType.VarChar, 50).Value = employeeCode;
+                var roleValue = roleCmd.ExecuteScalar();
+                if (roleValue == null || roleValue == DBNull.Value)
+                {
+                    return false;
+                }
+
+                return Convert.ToBoolean(roleValue);
             }
 
             return Convert.ToBoolean(value);
@@ -685,19 +712,16 @@ public class MaterialRequestDetailModel : BasePageModel
         }
     }
 
-    // Kiểm tra user có quyền truy cập trang hay không.
     private bool CanAccessPage()
     {
-        return _isAdminRole || PagePerm.AllowedNos.Count > 0;
+        return IsAdminUser() || PagePerm.AllowedNos.Count > 0;
     }
 
-    // Wrapper kiểm tra một permission number cụ thể.
     private bool HasPermission(int permissionNo)
     {
         return PagePerm.HasPermission(permissionNo);
     }
 
-    // Gộp dữ liệu editable từ form vào header hiện tại, giữ nguyên cờ workflow.
     private static MaterialRequestDetailDto MergeEditableInput(MaterialRequestDetailDto existing, MaterialRequestDetailDto posted)
     {
         return new MaterialRequestDetailDto
@@ -718,7 +742,6 @@ public class MaterialRequestDetailModel : BasePageModel
         };
     }
 
-    // Clone header để xử lý workflow mà không làm bẩn object nguồn.
     private static MaterialRequestDetailDto CloneHeader(MaterialRequestDetailDto source)
     {
         return new MaterialRequestDetailDto
@@ -739,7 +762,6 @@ public class MaterialRequestDetailModel : BasePageModel
         };
     }
 
-    // Kiểm tra user có quyền approve ở trạng thái hiện tại không.
     private bool CanApproveStatus(int statusId)
     {
         if (_isAdminRole)
@@ -765,7 +787,6 @@ public class MaterialRequestDetailModel : BasePageModel
         return false;
     }
 
-    // Kiểm tra user có quyền reject ở trạng thái hiện tại không.
     private bool CanRejectStatus(int statusId)
     {
         if (_isAdminRole)
@@ -780,7 +801,6 @@ public class MaterialRequestDetailModel : BasePageModel
         return _dataScope.IsHeadDept || _dataScope.ApprovalLevel >= 2;
     }
 
-    // Kiểm tra action workflow có hợp lệ với quyền + trạng thái hiện tại không.
     private bool CanExecuteTransition(MaterialRequestWorkflowAction action, int currentStatus)
     {
         if (action == MaterialRequestWorkflowAction.Submit)
@@ -801,7 +821,6 @@ public class MaterialRequestDetailModel : BasePageModel
         return false;
     }
 
-    // Xác định bước chuyển trạng thái và thông điệp thành công tương ứng.
     private static MaterialRequestWorkflowTransition? ResolveTransition(MaterialRequestWorkflowAction action, int currentStatus)
     {
         if (action == MaterialRequestWorkflowAction.Submit && currentStatus == StatusJustCreated)
@@ -860,7 +879,6 @@ public class MaterialRequestDetailModel : BasePageModel
         return null;
     }
 
-    // Build route quay lại trang detail sau save/workflow và giữ returnUrl.
     private object BuildDetailRoute(long? requestNo)
     {
         return new
@@ -870,7 +888,6 @@ public class MaterialRequestDetailModel : BasePageModel
         };
     }
 
-    // Resolve URL quay về list và chặn URL không an toàn.
     private string ResolveBackToListUrl()
     {
         var defaultUrl = Url.Page("./Index") ?? "/Purchasing/MaterialRequest/Index";
@@ -896,7 +913,6 @@ public class MaterialRequestDetailModel : BasePageModel
         return trimmed;
     }
 
-    // Chuyển warning/error từ TempData sang ModelState để hiển thị trên form.
 
     private void ApplyTempDataMessagesToModelState()
     {
@@ -913,7 +929,6 @@ public class MaterialRequestDetailModel : BasePageModel
 
 }
 
-// Danh sách action workflow hỗ trợ ở màn hình detail.
 internal enum MaterialRequestWorkflowAction
 {
     Submit,
@@ -921,7 +936,6 @@ internal enum MaterialRequestWorkflowAction
     Reject
 }
 
-// Mô tả một bước chuyển trạng thái workflow.
 internal sealed class MaterialRequestWorkflowTransition
 {
     public int NextStatusId { get; set; }
@@ -930,7 +944,6 @@ internal sealed class MaterialRequestWorkflowTransition
     public bool? ApprovalEnd { get; set; }
     public bool? PostPr { get; set; }
 
-    // Khởi tạo dữ liệu cho một bước chuyển trạng thái.
     public MaterialRequestWorkflowTransition(
         int nextStatusId,
         string successMessage,
@@ -945,5 +958,6 @@ internal sealed class MaterialRequestWorkflowTransition
         PostPr = postPr;
     }
 }
+
 
 

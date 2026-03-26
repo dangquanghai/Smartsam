@@ -21,7 +21,6 @@ public class IndexModel : BasePageModel
     private readonly ISecurityService _securityService;
     private readonly PermissionService _permissionService;
 
-    // ID của chức năng trong bảng SYS_Function
     private const int MaterialRequestFunctionId = 104;
     private const int PermissionCreate = 1;
     private const int PermissionCreateAuto = 2;
@@ -106,7 +105,7 @@ public class IndexModel : BasePageModel
     }
 
     // ==========================================
-    // 1. GIAI ĐOẠN LOAD TRANG (GET)
+    // 1. PAGE LOAD (GET)
     // ==========================================
     public void OnGet()
     {
@@ -114,7 +113,7 @@ public class IndexModel : BasePageModel
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
         PagePerm = new PagePermissions();
-        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
+        PagePerm = GetUserPermissions();
         LoadUserScopeAsync(cancellationToken).GetAwaiter().GetResult();
         if (!CanAccessPage())
         {
@@ -141,22 +140,23 @@ public class IndexModel : BasePageModel
         ViewData["CanShowPcCondition"] = AllowShowPcCondition();
         ViewData["CanShowStoreCondition"] = AllowShowStoreCondition();
         ViewData["StoreGroupLocked"] = IsStoreGroupLocked();
-
         LoadFilters();
         LoadRowsAsync(cancellationToken).GetAwaiter().GetResult();
         ViewData["DefaultPageSize"] = DefaultPageSize;
     }
 
     // ==========================================
-    // 2. XỬ LÝ SEARCH AJAX (POST)
+    // 2. AJAX SEARCH AND ITEM ACTIONS
     // ==========================================
     public IActionResult OnPostSearch([FromBody] MaterialRequestSearchRequest request)
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
+        request ??= new MaterialRequestSearchRequest();
+        Filter ??= new MaterialRequestFilter();
 
         PagePerm = new PagePermissions();
-        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
+        PagePerm = GetUserPermissions();
         LoadUserScopeAsync(cancellationToken).GetAwaiter().GetResult();
         if (!CanAccessPage())
         {
@@ -166,7 +166,7 @@ public class IndexModel : BasePageModel
             };
         }
 
-        Filter.RequestNo = request.RequestNo;
+        Filter.RequestNo = string.IsNullOrWhiteSpace(request.RequestNo) ? null : request.RequestNo.Trim();
         Filter.StoreGroup = request.StoreGroup;
         if (request.StatusIds == null)
         {
@@ -195,9 +195,8 @@ public class IndexModel : BasePageModel
         var dataWithActions = result.Rows.Select(r =>
         {
             var statusId = r.MaterialStatusId ?? 0;
-            var effectivePerms = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, statusId);
+            var effectivePerms = PagePerm.AllowedNos;
 
-            // Quyền thực tế trên từng dòng dữ liệu theo trạng thái hiện tại.
             var canEditRow = effectivePerms.Contains(PermissionEdit) && statusId == 0;
             var canApprove = CanApproveStatus(statusId);
             var canReject = CanRejectStatus(statusId);
@@ -207,11 +206,9 @@ public class IndexModel : BasePageModel
                 data = r,
                 actions = new
                 {
-                    // Chế độ truy cập khi click vào số chứng từ.
                     canAccess = effectivePerms.Count > 0,
                     accessMode = canEditRow ? "edit" : "view",
 
-                    // Các nút chức năng theo quyền + trạng thái của dòng.
                     canEdit = canEditRow,
                     canSubmit = canEditRow,
                     canApprove = canApprove,
@@ -231,13 +228,16 @@ public class IndexModel : BasePageModel
         });
     }
 
+    // ==========================================
+    // 3. MATERIAL REQUEST CREATION ACTIONS
+    // ==========================================
     public IActionResult OnGetSearchItems(string? keyword, bool checkBalanceInStore = false, int? storeGroup = null)
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
         PagePerm = new PagePermissions();
-        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
+        PagePerm = GetUserPermissions();
         LoadUserScopeAsync(cancellationToken).GetAwaiter().GetResult();
         if (!CanAccessPage())
         {
@@ -247,7 +247,6 @@ public class IndexModel : BasePageModel
         var scopedStoreGroup = IsStoreGroupLocked() ? _dataScope.StoreGroup : (storeGroup ?? Filter.StoreGroup);
         var items = _materialRequestService.SearchItemsAsync(keyword, checkBalanceInStore, scopedStoreGroup, cancellationToken).GetAwaiter().GetResult();
 
-        // Legacy popup cho phép search rộng: nếu lọc theo store group mà rỗng thì fallback search all.
         if (items.Count == 0 && scopedStoreGroup.HasValue)
         {
             items = _materialRequestService.SearchItemsAsync(keyword, checkBalanceInStore, null, cancellationToken).GetAwaiter().GetResult();
@@ -262,7 +261,7 @@ public class IndexModel : BasePageModel
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
         PagePerm = new PagePermissions();
-        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
+        PagePerm = GetUserPermissions();
         LoadUserScopeAsync(cancellationToken).GetAwaiter().GetResult();
         if (!CanAccessPage() || !AllowCreate())
         {
@@ -338,7 +337,7 @@ public class IndexModel : BasePageModel
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
         PagePerm = new PagePermissions();
-        PagePerm.AllowedNos = _securityService.GetEffectivePermissions(MaterialRequestFunctionId, roleId, 0);
+        PagePerm = GetUserPermissions();
         LoadUserScopeAsync(cancellationToken).GetAwaiter().GetResult();
         if (!CanAccessPage() || !AllowCreateAuto())
         {
@@ -395,14 +394,22 @@ public class IndexModel : BasePageModel
     }
 
     // ==========================================
-    // 3. CÁC HÀM BỔ TRỢ (HELPER)
+    // 4. FILTER AND DROPDOWN HELPERS
     // ==========================================
     private void LoadFilters()
     {
         var stores = LoadListFromSql(
-            @"SELECT KPGroupID, KPGroupName
-              FROM dbo.INV_KPGroup
-              ORDER BY KPGroupID",
+            @"SELECT
+                    kp.KPGroupID,
+                    CONCAT(
+                        ISNULL(kp.KPGroupName, CONCAT('Store Group ', CAST(kp.KPGroupID AS varchar(20)))),
+                        ' (',
+                        ISNULL(dep.DeptCode, CONCAT('Dept ', CAST(kp.DepID AS varchar(20)))),
+                        ')'
+                    ) AS KPGroupName
+              FROM dbo.INV_KPGroup kp
+              LEFT JOIN dbo.MS_Department dep ON dep.DeptID = kp.DepID
+              ORDER BY kp.KPGroupID",
             "KPGroupID",
             "KPGroupName");
 
@@ -410,10 +417,18 @@ public class IndexModel : BasePageModel
         {
             stores = LoadListFromSql(
                 @"SELECT DISTINCT
-                        CAST(StoreGR AS int) AS StoreGroup,
-                        CONCAT('Store Group ', CAST(StoreGR AS varchar(20))) AS StoreGroupName
-                  FROM dbo.MS_Employee
+                        CAST(e.StoreGR AS int) AS StoreGroup,
+                        CONCAT(
+                            'Store Group ',
+                            CAST(e.StoreGR AS varchar(20)),
+                            ' (',
+                            COALESCE(MIN(dep.DeptCode), CONCAT('Dept ', CAST(MIN(e.DeptID) AS varchar(20)))),
+                            ')'
+                        ) AS StoreGroupName
+                  FROM dbo.MS_Employee e
+                  LEFT JOIN dbo.MS_Department dep ON dep.DeptID = e.DeptID
                   WHERE StoreGR IS NOT NULL AND StoreGR > 0
+                  GROUP BY e.StoreGR
                   ORDER BY StoreGroup",
                 "StoreGroup",
                 "StoreGroupName");
@@ -460,12 +475,13 @@ public class IndexModel : BasePageModel
             Filter.StoreGroup = _dataScope.StoreGroup ?? NoScopeStoreGroup;
             if (_dataScope.StoreGroup.HasValue)
             {
+                var selectedStore = stores.FirstOrDefault(x => string.Equals(x.Value, _dataScope.StoreGroup.Value.ToString(), StringComparison.OrdinalIgnoreCase));
                 StoreGroups = new List<SelectListItem>
                 {
                     new SelectListItem
                     {
                         Value = _dataScope.StoreGroup.Value.ToString(),
-                        Text = $"Store Group {_dataScope.StoreGroup.Value}"
+                        Text = selectedStore?.Text ?? $"Store Group {_dataScope.StoreGroup.Value}"
                     }
                 };
             }
@@ -483,6 +499,9 @@ public class IndexModel : BasePageModel
         }
     }
 
+    // ==========================================
+    // 5. SHARED DATA TRANSFORM HELPERS
+    // ==========================================
     private async Task LoadRowsAsync(CancellationToken cancellationToken)
     {
         if (Filter.PageSize <= 0) Filter.PageSize = DefaultPageSize;
@@ -510,7 +529,7 @@ public class IndexModel : BasePageModel
 
         return new MaterialRequestFilterCriteria
         {
-            RequestNo = isStoremanMode ? null : Filter.RequestNo,
+            RequestNo = isStoremanMode || string.IsNullOrWhiteSpace(Filter.RequestNo) ? null : Filter.RequestNo.Trim(),
             StoreGroup = scopedStoreGroup == NoScopeStoreGroup ? null : scopedStoreGroup,
             StatusIds = isStoremanMode ? new List<int>() : (Filter.StatusIds ?? new List<int>()),
             ItemCode = isStoremanMode && !string.IsNullOrWhiteSpace(Filter.ItemCode) ? Filter.ItemCode.Trim() : null,
@@ -568,24 +587,20 @@ public class IndexModel : BasePageModel
 
     private PagePermissions GetUserPermissions()
     {
-        bool isAdmin = User.FindFirst("IsAdminRole")?.Value == "True";
+        bool isAdmin = IsAdminUser();
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
-        // 1. Khởi tạo đối tượng PagePermissions mới
         var permsObj = new PagePermissions();
 
         if (isAdmin)
         {
-            // Admin: Gán danh sách quyền giả lập
             permsObj.AllowedNos = Enumerable.Range(1, 20).ToList();
         }
         else
         {
-            // 2. Lấy danh sách List<int> từ Service và gán vào thuộc tính AllowedNos của Object
             permsObj.AllowedNos = _permissionService.GetPermissionsForPage(roleId, MaterialRequestFunctionId);
         }
 
-        // 3. Trả về đối tượng (Object) chứa danh sách đó
         return permsObj;
     }
 
@@ -598,8 +613,8 @@ public class IndexModel : BasePageModel
             return true;
         }
 
-        // Fallback: nếu claim chưa đúng, kiểm tra trực tiếp cờ IsAdminRole theo RoleID trong DB.
-        if (!int.TryParse(User.FindFirst("RoleID")?.Value, out var roleId) || roleId <= 0)
+        var employeeCode = User.Identity?.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(employeeCode))
         {
             return false;
         }
@@ -607,13 +622,30 @@ public class IndexModel : BasePageModel
         try
         {
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
-            using var cmd = new SqlCommand("SELECT TOP 1 IsAdminRole FROM SYS_Role WHERE RoleID = @RoleID", conn);
-            cmd.Parameters.Add("@RoleID", SqlDbType.Int).Value = roleId;
+            using var cmd = new SqlCommand(@"
+                SELECT TOP 1 ISNULL(IsAdminUser, 0)
+                FROM dbo.MS_Employee
+                WHERE EmployeeCode = @EmployeeCode", conn);
+            cmd.Parameters.Add("@EmployeeCode", SqlDbType.VarChar, 50).Value = employeeCode;
             conn.Open();
             var value = cmd.ExecuteScalar();
             if (value == null || value == DBNull.Value)
             {
-                return false;
+                using var roleCmd = new SqlCommand(@"
+                    SELECT TOP 1 ISNULL(r.IsAdminRole, 0)
+                    FROM dbo.SYS_RoleMember rm
+                    INNER JOIN dbo.SYS_Role r ON r.RoleID = rm.RoleID
+                    INNER JOIN dbo.MS_Employee e ON e.EmployeeID = rm.Operator
+                    WHERE e.EmployeeCode = @EmployeeCode
+                    ORDER BY r.IsAdminRole DESC, rm.RoleID ASC", conn);
+                roleCmd.Parameters.Add("@EmployeeCode", SqlDbType.VarChar, 50).Value = employeeCode;
+                var roleValue = roleCmd.ExecuteScalar();
+                if (roleValue == null || roleValue == DBNull.Value)
+                {
+                    return false;
+                }
+
+                return Convert.ToBoolean(roleValue);
             }
 
             return Convert.ToBoolean(value);
@@ -626,7 +658,7 @@ public class IndexModel : BasePageModel
 
     private bool CanAccessPage()
     {
-        if (_isAdminRole)
+        if (IsAdminUser())
         {
             return true;
         }
@@ -656,17 +688,17 @@ public class IndexModel : BasePageModel
 
     private bool AllowShowAll()
     {
-        return _isAdminRole || HasPermission(PermissionShowAll) || _dataScope.SeeDataAllDept;
+        return IsAdminUser() || HasPermission(PermissionShowAll) || _dataScope.ApprovalLevel >= 2;
     }
 
     private bool AllowShowPcCondition()
     {
-        return _isAdminRole || HasPermission(PermissionShowPc) || AllowShowAll();
+        return IsAdminUser() || HasPermission(PermissionShowPc);
     }
 
     private bool AllowShowStoreCondition()
     {
-        return _isAdminRole || HasPermission(PermissionShowStore) || AllowShowAll();
+        return IsAdminUser() || HasPermission(PermissionShowStore);
     }
 
     private bool IsStoreGroupLocked()
@@ -674,7 +706,6 @@ public class IndexModel : BasePageModel
         return !AllowShowAll();
     }
 
-    // Chuyển warning/error từ TempData sang ModelState để hiển thị đúng chuẩn trang.
     private void ApplyTempDataMessagesToModelState()
     {
         if (!string.IsNullOrWhiteSpace(ErrorMessage))
@@ -792,7 +823,7 @@ public class IndexModel : BasePageModel
 
 public class MaterialRequestFilter
 {
-    public long? RequestNo { get; set; }
+    public string? RequestNo { get; set; }
     public int? StoreGroup { get; set; }
     public List<int> StatusIds { get; set; } = new List<int>();
     public string? ItemCode { get; set; }
@@ -809,7 +840,7 @@ public class MaterialRequestFilter
 
 public class MaterialRequestSearchRequest
 {
-    public long? RequestNo { get; set; }
+    public string? RequestNo { get; set; }
     public int? StoreGroup { get; set; }
     public List<int>? StatusIds { get; set; }
     public string? ItemCode { get; set; }
@@ -824,7 +855,6 @@ public class MaterialRequestSearchRequest
     public int PageSize { get; set; } = 10;
 }
 
-// ==================== Material Request DTOs ====================
 public class MaterialRequestLookupOptionDto
 {
     public int Id { get; set; }
@@ -833,7 +863,7 @@ public class MaterialRequestLookupOptionDto
 
 public class MaterialRequestFilterCriteria
 {
-    public long? RequestNo { get; set; }
+    public string? RequestNo { get; set; }
     public int? StoreGroup { get; set; }
     public IReadOnlyList<int>? StatusIds { get; set; }
     public string? ItemCode { get; set; }
@@ -960,7 +990,6 @@ public class MaterialRequestItemLookupDto
     public int? StoreGroupId { get; set; }
 }
 
-// ==================== Material Request Data Access ====================
 public class MaterialRequestService
 {
     private readonly string _connectionString;
@@ -1086,7 +1115,7 @@ public class MaterialRequestService
             LEFT JOIN dbo.MaterialStatus ms ON ms.MaterialStatusID = r.MATERIALSTATUSID
             LEFT JOIN dbo.INV_KPGroup kp ON kp.KPGroupID = r.STORE_GROUP
             WHERE
-                (@RequestNo IS NULL OR r.REQUEST_NO = @RequestNo)
+                (@RequestNo IS NULL OR CAST(r.REQUEST_NO AS varchar(50)) LIKE '%' + @RequestNo + '%')
                 AND (@StoreGroup IS NULL OR r.STORE_GROUP = @StoreGroup)
                 AND {statusFilterSql}
                 AND (@NoIssue IS NULL OR r.NO_ISSUE = @NoIssue)
@@ -1571,7 +1600,7 @@ public class MaterialRequestService
 
     private static void BindSearchParams(SqlCommand cmd, MaterialRequestFilterCriteria criteria, IReadOnlyList<int> statusIds)
     {
-        AddNumeric18_0Param(cmd, "@RequestNo", criteria.RequestNo);
+        Helper.AddParameter(cmd, "@RequestNo", string.IsNullOrWhiteSpace(criteria.RequestNo) ? null : criteria.RequestNo.Trim(), SqlDbType.VarChar, 50);
         AddNumeric18_0Param(cmd, "@StoreGroup", criteria.StoreGroup);
         Helper.AddParameter(cmd, "@NoIssue", criteria.NoIssue, SqlDbType.Int);
         Helper.AddParameter(cmd, "@IsAuto", criteria.IsAuto, SqlDbType.Bit);
@@ -1705,9 +1734,6 @@ public class MaterialRequestService
         return rows;
     }
 
-    /// <summary>
-    /// Thêm parameter numeric(18,0) đúng precision/scale để tránh lỗi ép kiểu khi chạy ADO.NET.
-    /// </summary>
     private static void AddNumeric18_0Param(SqlCommand cmd, string name, object? value)
     {
         var p = cmd.Parameters.Add(name, SqlDbType.Decimal);
@@ -1716,9 +1742,6 @@ public class MaterialRequestService
         p.Value = value is null ? DBNull.Value : Convert.ToDecimal(value);
     }
 
-    /// <summary>
-    /// Dùng cho các cột decimal có scale 2 ở dòng chi tiết MR.
-    /// </summary>
     private static void AddDecimal18_2Param(SqlCommand cmd, string name, object? value)
     {
         var p = cmd.Parameters.Add(name, SqlDbType.Decimal);
@@ -1727,4 +1750,5 @@ public class MaterialRequestService
         p.Value = value is null ? DBNull.Value : Convert.ToDecimal(value);
     }
 }
+
 
