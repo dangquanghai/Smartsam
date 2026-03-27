@@ -3,8 +3,8 @@
 
     function getConfig() {
         return window.purchaseRequisitionPage || {
-            canView: false,
             canEdit: false,
+            canViewDetail: false,
             canAddAt: false,
             canDisapproval: false,
             detailUrlBase: ""
@@ -23,6 +23,14 @@
     function buildDetailUrl(id, mode) {
         const base = getConfig().detailUrlBase || "";
         return `${base}/${id}?mode=${mode}`;
+    }
+
+    function canEditSelectedRow(row) {
+        return !!row && row.getAttribute("data-can-edit") === "true";
+    }
+
+    function canViewDetailSelectedRow(row) {
+        return !!row && row.getAttribute("data-can-view-detail") === "true";
     }
 
     function initSelection() {
@@ -53,8 +61,8 @@
                 ev.preventDefault();
                 const id = row.getAttribute("data-prid");
                 if (!id) return;
-                const mode = getConfig().canEdit ? "edit" : "view";
-                if (getConfig().canEdit || getConfig().canView) {
+                const mode = canEditSelectedRow(row) ? "edit" : "view";
+                if (canEditSelectedRow(row) || canViewDetailSelectedRow(row)) {
                     window.location.href = buildDetailUrl(id, mode);
                 }
             });
@@ -157,7 +165,6 @@
 
     function initActions() {
         const btnEdit = document.getElementById("btnEdit");
-        const btnView = document.getElementById("btnView");
         const btnViewDetail = document.getElementById("btnViewDetail");
         const btnPrintList = document.getElementById("btnPrintList");
         const btnExportExcel = document.getElementById("btnExportExcel");
@@ -172,27 +179,20 @@
         const syncState = () => {
             const selectedRow = getSelectedRow();
             const hasSelection = !!selectedRow;
-            if (btnEdit) btnEdit.disabled = !hasSelection || !config.canEdit;
-            if (btnView) btnView.disabled = !hasSelection || !config.canView;
-            if (btnViewDetail) btnViewDetail.disabled = !hasSelection || !config.canView;
+            if (btnEdit) btnEdit.disabled = !hasSelection || !config.canEdit || !canEditSelectedRow(selectedRow);
+            if (btnViewDetail) btnViewDetail.disabled = !hasSelection || !config.canViewDetail || !canViewDetailSelectedRow(selectedRow);
             if (btnDisapproval) btnDisapproval.disabled = !hasSelection || !config.canDisapproval;
         };
 
         btnEdit?.addEventListener("click", () => {
             const row = getSelectedRow();
-            if (!row) return;
+            if (!row || !canEditSelectedRow(row)) return;
             window.location.href = buildDetailUrl(row.getAttribute("data-prid"), "edit");
-        });
-
-        btnView?.addEventListener("click", () => {
-            const row = getSelectedRow();
-            if (!row) return;
-            window.location.href = buildDetailUrl(row.getAttribute("data-prid"), "view");
         });
 
         btnViewDetail?.addEventListener("click", () => {
             const row = getSelectedRow();
-            if (!row) return;
+            if (!row || !canViewDetailSelectedRow(row)) return;
             window.location.href = buildDetailUrl(row.getAttribute("data-prid"), "view");
         });
 

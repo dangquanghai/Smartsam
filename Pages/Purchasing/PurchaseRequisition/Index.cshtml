@@ -167,7 +167,7 @@
                                     {
                                         foreach (var row in Model.Rows)
                                         {
-                                            <tr class="prq-row" data-prid="@row.Id" data-request-no="@row.RequestNo">
+                                            <tr class="prq-row" data-prid="@row.Id" data-request-no="@row.RequestNo" data-can-edit="@(Model.CanEditRow(row.StatusId) ? "true" : "false")" data-can-view-detail="@(Model.CanViewDetailRow(row.StatusId) ? "true" : "false")">
                                                 <td>
                                                     <input type="radio" class="prq-selector" name="selectedPurchaseRequisition" aria-label="Select row" />
                                                 </td>
@@ -212,10 +212,12 @@
                         {
                             <a asp-page="./PurchaseRequisitionDetail" asp-route-mode="add" class="btn btn-sm btn-action-add border mx-1 my-1"><i class="fas fa-plus"></i> Add New</a>
                         }
-                        <button type="button" id="btnEdit" class="btn btn-sm btn-action-submit border mx-1 my-1" disabled><i class="fas fa-edit"></i> Edit</button>
-                        @if (Model.CanViewRequisition)
+                        @if (Model.CanEditRequisition)
                         {
-                            <button type="button" id="btnView" class="btn btn-sm btn-action-save border mx-1 my-1" disabled><i class="fas fa-eye"></i> View</button>
+                            <button type="button" id="btnEdit" class="btn btn-sm btn-action-submit border mx-1 my-1" disabled><i class="fas fa-edit"></i> Edit</button>
+                        }
+                        @if (Model.CanViewDetailRequisition)
+                        {
                             <button type="button" id="btnViewDetail" class="btn btn-sm btn-action-export border mx-1 my-1" disabled><i class="fas fa-list-alt"></i> View Detail</button>
                         }
                         <button type="button" id="btnExportExcel" class="btn btn-sm btn-action-export border mx-1 my-1"><i class="fas fa-file-excel"></i> Export Excel</button>
@@ -373,8 +375,8 @@
 @section Scripts {
     <script>
         window.purchaseRequisitionPage = {
-            canView: @(Model.CanViewRequisition ? "true" : "false"),
-            canEdit: @(Model.PagePerm.HasPermission(4) ? "true" : "false"),
+            canEdit: @(Model.CanEditRequisition ? "true" : "false"),
+            canViewDetail: @(Model.CanViewDetailRequisition ? "true" : "false"),
             canAddAt: @(Model.CanAddAt ? "true" : "false"),
             canDisapproval: @(Model.PagePerm.HasPermission(6) ? "true" : "false"),
             detailUrlBase: '@Url.Page("./PurchaseRequisitionDetail")'

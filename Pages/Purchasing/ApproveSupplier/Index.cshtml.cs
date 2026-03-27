@@ -251,7 +251,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 return RedirectToCurrentList();
             }
 
-            var notifyResult = isLastSupplier ? TryNotifyNextLevel(currentLevel, current, "approved") : null;
+            var notifyResult = isLastSupplier ? TryQueueNotifyNextLevel(currentLevel, current, "approved") : null;
             CurrentSupplierId = nextSupplierId;
             var approveMessage = "Approved supplier successfully.";
             if (!string.IsNullOrWhiteSpace(notifyResult))
@@ -321,7 +321,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 return RedirectToCurrentList();
             }
 
-            var notifyResult = isLastSupplier ? TryNotifyNextLevel(currentLevel, current, "disapproved") : null;
+            var notifyResult = isLastSupplier ? TryQueueNotifyNextLevel(currentLevel, current, "disapproved") : null;
             CurrentSupplierId = nextSupplierId;
             var disapproveMessage = "Disapproved supplier successfully.";
             if (!string.IsNullOrWhiteSpace(notifyResult))
@@ -978,7 +978,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return rows.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         }
 
-        private string? TryNotifyNextLevel(int currentLevel, ApproveSupplierDetailViewModel supplier, string action)
+        private string? TryQueueNotifyNextLevel(int currentLevel, ApproveSupplierDetailViewModel supplier, string action)
         {
             if (currentLevel >= 4)
             {
@@ -1011,7 +1011,6 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             // 1. Dùng chung một page duyệt supplier, chỉ phân biệt bằng tham số type=new
             var detailUrl = Url.Page("/Purchasing/ApproveSupplier/Index", values: new
             {
-                CurrentSupplierId = supplier.SupplierID,
                 Type = IsApproveSupplierNewMode ? "new" : null
             });
 
@@ -1035,36 +1034,54 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 <p>SmartSam System</p>";
             var htmlBody = IsApproveSupplierNewMode
                 ? EmailTemplateHelper.WrapInNotifyTemplate("APPROVE SUPPLIER NEW", "#17a2b8", DateTime.Now, body)
-                : body;
+                : EmailTemplateHelper.WrapInNotifyTemplate("APPROVE SUPPLIER", "#007bff", DateTime.Now, body);
 
+            // 2. Đẩy tác vụ gửi mail sang nền để người dùng không phải chờ SMTP phản hồi
+            var notifyRequest = new ApproveSupplierNotifyRequestViewModel
+            {
+                NextLevel = nextLevel,
+                SenderEmail = senderEmail,
+                Password = mailPass,
+                MailServer = mailServer,
+                MailPort = mailPort,
+                Subject = subject,
+                HtmlBody = htmlBody,
+                Recipients = recipients
+            };
+
+            _ = SendNotifyEmailAsync(notifyRequest);
+            return $"Notification email is being sent to level {nextLevel}.";
+        }
+
+        private async Task SendNotifyEmailAsync(ApproveSupplierNotifyRequestViewModel notifyRequest)
+        {
             try
             {
                 using var mail = new MailMessage
                 {
-                    From = new MailAddress(senderEmail, "SmartSam System"),
-                    Subject = subject,
-                    Body = htmlBody,
+                    From = new MailAddress(notifyRequest.SenderEmail, "SmartSam System"),
+                    Subject = notifyRequest.Subject,
+                    Body = notifyRequest.HtmlBody,
                     IsBodyHtml = true
                 };
 
-                foreach (var recipient in recipients)
+                foreach (var recipient in notifyRequest.Recipients)
                 {
                     mail.To.Add(recipient);
                 }
 
-                using var smtp = new SmtpClient(mailServer, mailPort)
+                using var smtp = new SmtpClient(notifyRequest.MailServer, notifyRequest.MailPort)
                 {
                     EnableSsl = true,
-                    Credentials = new NetworkCredential(senderEmail, mailPass)
+                    Credentials = new NetworkCredential(notifyRequest.SenderEmail, notifyRequest.Password)
                 };
 
-                smtp.Send(mail);
-                return $"Notification email sent to level {nextLevel}.";
+                await smtp.SendMailAsync(mail);
+                _logger.LogInformation("Notification email sent to level {NextLevel}.", notifyRequest.NextLevel);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Cannot send notification email.");
-                return $"Cannot send notification email to level {nextLevel}: {ex.Message}";
+                _logger.LogError(ex, "Cannot send notification email to level {NextLevel}.", notifyRequest.NextLevel);
             }
         }
 
@@ -1308,6 +1325,18 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public int? ThePoint { get; set; }
         public int? WarrantyOrService { get; set; }
         public string UserCode { get; set; } = string.Empty;
+    }
+
+    public class ApproveSupplierNotifyRequestViewModel
+    {
+        public int NextLevel { get; set; }
+        public string SenderEmail { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string MailServer { get; set; } = string.Empty;
+        public int MailPort { get; set; }
+        public string Subject { get; set; } = string.Empty;
+        public string HtmlBody { get; set; } = string.Empty;
+        public List<string> Recipients { get; set; } = new List<string>();
     }
 
     public class ApproveSupplierValidationViewModel
