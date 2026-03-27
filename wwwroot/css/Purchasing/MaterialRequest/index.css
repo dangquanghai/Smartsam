@@ -1,3 +1,7 @@
+.mr-search-panel .card-body {
+    padding: 15px;
+}
+
 .mr-table-wrap {
     max-height: 62vh;
     overflow: auto;
@@ -74,7 +78,8 @@
 }
 
 .mr-request-no-input {
-    max-width: 150px;
+    width: 100%;
+    max-width: none;
 }
 
 .mr-col-request-no {
@@ -114,6 +119,22 @@
     margin-bottom: 0.2rem;
 }
 
+.mr-date-range-control {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.mr-date-range-control > .form-control {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.mr-date-range-control .date-clear-btn {
+    flex: 0 0 auto;
+    margin-left: 0;
+}
+
 .mr-condition-search-row {
     display: grid;
     grid-template-columns: 1fr 1fr auto;
@@ -125,6 +146,7 @@
     border: 1px solid #d9dee5;
     margin: 0;
     padding: 0.45rem 0.55rem 0.35rem 0.55rem;
+    width: 100%;
 }
 
 .mr-condition-box > legend {
@@ -142,12 +164,74 @@
     gap: 0.3rem;
 }
 
-.mr-condition-legend input[type="radio"] {
+.mr-condition-legend-control {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0;
+    gap: 0.35rem;
+}
+
+.mr-condition-mode-radio {
+    margin: 0;
+}
+
+.mr-condition-legend-control label {
+    color: #212529;
+    font-weight: 600;
     margin: 0;
 }
 
 .mr-condition-group-disabled {
-    opacity: 0.72;
+    opacity: 1;
+}
+
+.mr-condition-box .custom-control-label {
+    color: #212529;
+    font-weight: 600;
+    opacity: 1;
+}
+
+.mr-condition-box .custom-control-input:not(:disabled) ~ .custom-control-label {
+    color: #212529;
+    opacity: 1;
+}
+
+.mr-condition-box .custom-control-input:not(:disabled) ~ .custom-control-label::before {
+    background-color: #ffffff !important;
+    border-color: #adb5bd !important;
+    opacity: 1 !important;
+}
+
+.mr-condition-box .custom-control-input:not(:disabled) ~ .custom-control-label::after {
+    opacity: 1 !important;
+}
+
+.mr-condition-box .custom-control-input:checked:not(:disabled) ~ .custom-control-label::before {
+    background-color: #007bff !important;
+    border-color: #007bff !important;
+}
+
+.mr-condition-box .custom-control-input:disabled ~ .custom-control-label {
+    color: #6c757d;
+    opacity: 1;
+}
+
+.mr-condition-box .custom-control-input:disabled ~ .custom-control-label::before {
+    background-color: #f8f9fa !important;
+    border-color: #ced4da !important;
+    opacity: 1 !important;
+}
+
+.mr-condition-box .custom-control-input:disabled ~ .custom-control-label::after {
+    opacity: 0.65 !important;
+}
+
+.mr-condition-box .custom-control-input:focus ~ .custom-control-label::before {
+    box-shadow: none;
+}
+
+.mr-search-submit {
+    margin-top: 5px;
 }
 
 .mr-condition-grid {

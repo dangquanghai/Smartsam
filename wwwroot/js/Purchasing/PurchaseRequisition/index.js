@@ -125,12 +125,33 @@
         if (!form || !pageSizeSelect) return;
 
         pageSizeSelect.addEventListener("change", () => {
-            const pageSizeInput = form.querySelector("input[name='Filter.PageSize']");
-            const pageInput = form.querySelector("input[name='Filter.Page']");
+            const pageSizeInput = form.querySelector("input[name='PageSize']");
+            const pageInput = form.querySelector("input[name='PageNumber']");
             if (!pageSizeInput || !pageInput) return;
             pageSizeInput.value = pageSizeSelect.value;
             pageInput.value = "1";
             form.submit();
+        });
+    }
+
+    function initDescriptionToggle() {
+        document.addEventListener("click", (ev) => {
+            const toggle = ev.target.closest(".prq-read-more");
+            if (!toggle) return;
+
+            const container = toggle.closest(".prq-description-cell");
+            if (!container) return;
+
+            const preview = container.querySelector(".prq-description-preview");
+            const full = container.querySelector(".prq-description-full");
+            if (!preview || !full) return;
+
+            const isExpanded = !full.classList.contains("d-none");
+            if (isExpanded) return;
+
+            preview.classList.add("d-none");
+            full.classList.remove("d-none");
+            toggle.remove();
         });
     }
 
@@ -368,6 +389,7 @@
         initSelection();
         initDateRangeToggle();
         initPageSizeSubmit();
+        initDescriptionToggle();
         initActions();
         initAddAt();
     }

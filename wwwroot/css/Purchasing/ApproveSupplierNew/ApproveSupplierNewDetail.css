@@ -1,0 +1,196 @@
+.module-action-bar .btn {
+    min-width: 110px;
+}
+
+.card-header .card-title {
+    font-weight: 700;
+}
+
+.module-action-bar .btn-action-add {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: #fff;
+}
+
+.module-action-bar .btn-action-copy {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: #fff;
+}
+
+.module-action-bar .btn-action-close {
+    background-color: #f8f9fa;
+    border-color: #ced4da;
+    color: #495057;
+}
+
+.module-action-bar .btn:hover,
+.module-action-bar .btn:focus {
+    color: inherit;
+}
+
+.approve-form-table {
+    table-layout: fixed;
+    border-collapse: separate;
+    width: 100%;
+}
+
+.approve-col-label {
+    width: 100px;
+}
+
+.approve-col-input {
+    width: 22%;
+}
+
+.approve-col-label-sm {
+    width: 88px;
+}
+
+.approve-col-check {
+    width: 56px;
+}
+
+.approve-form-table th {
+    white-space: nowrap;
+    vertical-align: middle;
+    background: transparent;
+    padding: .35rem .4rem;
+    text-align: left;
+}
+
+.approve-form-table td {
+    vertical-align: middle;
+    padding: .25rem .3rem;
+}
+
+.approve-form-table.table-borderless th,
+.approve-form-table.table-borderless td {
+    border: 0 !important;
+}
+
+.approve-form-table .form-control-sm {
+    margin: 0;
+}
+
+.approve-form-table .isnew-cell {
+    width: 56px;
+    white-space: nowrap;
+}
+
+.required-mark {
+    color: #dc3545;
+    margin-left: 2px;
+}
+
+.approve-detail-grid {
+    display: grid;
+    grid-template-columns: 100px minmax(180px, 1fr) 100px minmax(180px, 1fr) 100px minmax(180px, 1fr) 88px 56px;
+    column-gap: .5rem;
+    row-gap: .5rem;
+    align-items: center;
+}
+
+.approve-detail-label {
+    display: block;
+    width: 100%;
+    justify-self: stretch;
+    margin: 0;
+    font-size: .9rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    font-weight: 600;
+    text-align: right;
+    padding-right: .35rem;
+}
+
+.approve-detail-label-right {
+    text-align: right;
+}
+
+.approve-detail-control {
+    min-width: 0;
+}
+
+.approve-detail-control .form-control-sm {
+    margin: 0;
+}
+
+.approve-detail-control .text-danger {
+    display: block;
+    margin-top: .2rem;
+    line-height: 1.1;
+}
+
+.approve-detail-check {
+    min-height: 31px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.approve-detail-check input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+}
+
+.approve-detail-span-7 {
+    grid-column: span 7;
+}
+
+.approve-detail-empty {
+    min-height: 1px;
+}
+
+@media (max-width: 1199.98px) {
+    .approve-detail-grid {
+        grid-template-columns: 140px minmax(0, 1fr);
+    }
+
+    .approve-detail-label-right {
+        text-align: left;
+    }
+
+    .approve-detail-check {
+        justify-content: flex-start;
+    }
+
+    .approve-detail-span-7 {
+        grid-column: auto;
+    }
+
+    .approve-detail-empty {
+        display: none;
+    }
+}
+
+.nav-mini-btn {
+    min-width: 34px !important;
+    width: 34px;
+    padding-left: 0;
+    padding-right: 0;
+    text-align: center;
+}
+
+.goto-btn-compact {
+    min-width: auto !important;
+    padding-left: .5rem;
+    padding-right: .5rem;
+}
+
+#actionConfirmModal .modal-header {
+    color: #fff;
+}
+
+#actionConfirmModal .modal-header-primary {
+    background-color: #007bff;
+}
+
+#actionConfirmModal .modal-header-info {
+    background-color: #17a2b8;
+}
+
+#actionConfirmModal .modal-header-danger {
+    background-color: #dc3545;
+}

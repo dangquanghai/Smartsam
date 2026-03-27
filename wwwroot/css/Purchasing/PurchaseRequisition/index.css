@@ -81,6 +81,38 @@
     text-align: center;
 }
 
+.prq-description-column {
+    width: 320px;
+    min-width: 320px;
+    max-width: 320px;
+}
+
+.prq-description-cell {
+    white-space: normal !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+}
+
+.prq-description-preview,
+.prq-description-full {
+    white-space: normal !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+.prq-read-more {
+    font-size: inherit;
+    margin-left: 0.35rem;
+    vertical-align: baseline;
+    color: #007bff;
+    background: none;
+    border: 0;
+    padding: 0;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
 .prq-table-paging-info {
     display: inline-flex;
     align-items: center;

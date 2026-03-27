@@ -7,11 +7,12 @@
     Func<int, string> pageUrl = (page) => Url.Page("./Index", new
     {
         RequestNo = Model.Filter.RequestNo,
+        StatusId = Model.Filter.StatusId,
         Description = Model.Filter.Description,
         UseDateRange = Model.Filter.UseDateRange,
         FromDate = Model.Filter.UseDateRange ? Model.Filter.FromDate?.ToString("yyyy-MM-dd") : null,
         ToDate = Model.Filter.UseDateRange && Model.Filter.FromDate.HasValue ? Model.Filter.ToDate?.ToString("yyyy-MM-dd") : null,
-        Page = page,
+        PageNumber = page,
         PageSize = Model.Filter.PageSize
     }) ?? "#";
 }
@@ -42,34 +43,47 @@
                     <div class="card-body">
                         <form method="get" id="prqSearchForm">
                             <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
-                            <input type="hidden" name="Filter.Page" value="1" />
-                            <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+                            <input type="hidden" name="PageNumber" value="1" />
+                            <input type="hidden" name="PageSize" value="@Model.Filter.PageSize" />
 
                             <div class="form-group mb-2">
                                 <label>Request No.</label>
-                                <input asp-for="Filter.RequestNo" class="form-control form-control-sm vni-font" />
+                                <input name="RequestNo" value="@Model.Filter.RequestNo" class="form-control form-control-sm vni-font" />
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>Status</label>
+                                <select name="StatusId" class="form-control form-control-sm">
+                                    @foreach (var status in Model.StatusList)
+                                    {
+                                        var isSelectedStatus = string.IsNullOrWhiteSpace(status.Value)
+                                            ? !Model.Filter.StatusId.HasValue
+                                            : Model.Filter.StatusId?.ToString() == status.Value;
+                                        <option value="@status.Value" selected="@(isSelectedStatus ? "selected" : null)">@status.Text</option>
+                                    }
+                                </select>
                             </div>
 
                             <div class="form-group mb-2">
                                 <label>Description</label>
-                                <input asp-for="Filter.Description" class="form-control form-control-sm vni-font" />
+                                <input name="Description" value="@Model.Filter.Description" class="form-control form-control-sm vni-font" />
                             </div>
 
                             <div class="form-group mb-1">
                                 <div class="custom-control custom-checkbox">
-                                    <input asp-for="Filter.UseDateRange" class="custom-control-input" />
-                                    <label asp-for="Filter.UseDateRange" class="custom-control-label">Use Date Range</label>
+                                    <input type="checkbox" id="Filter_UseDateRange" name="UseDateRange" value="true" class="custom-control-input" checked="@(Model.Filter.UseDateRange ? "checked" : null)" />
+                                    <label for="Filter_UseDateRange" class="custom-control-label">Use Date Range</label>
                                 </div>
                             </div>
 
                             <div class="form-group mb-2">
                                 <label>From Date</label>
-                                <input asp-for="Filter.FromDate" type="date" class="form-control form-control-sm" />
+                                <input id="Filter_FromDate" name="FromDate" value="@(Model.Filter.FromDate?.ToString("yyyy-MM-dd"))" type="date" class="form-control form-control-sm" />
                             </div>
 
                             <div class="form-group mb-3">
                                 <label>To Date</label>
-                                <input asp-for="Filter.ToDate" type="date" class="form-control form-control-sm" />
+                                <input id="Filter_ToDate" name="ToDate" value="@(Model.Filter.ToDate?.ToString("yyyy-MM-dd"))" type="date" class="form-control form-control-sm" />
                             </div>
 
                             <button type="submit" class="btn btn-primary btn-block btn-sm border mb-2">
@@ -161,7 +175,20 @@
                                                     <a href="#" class="prq-row-link text-bold" data-id="@row.Id">@row.RequestNo</a>
                                                 </td>
                                                 <td>@row.RequestDate.ToString("dd/MM/yyyy")</td>
-                                                <td>@row.Description</td>
+                                                <td class="prq-description-column">
+                                                    <div class="prq-description-cell">
+                                                        @if (Model.NeedCollapseDescription(row.Description))
+                                                        {
+                                                            <span class="prq-description-preview">@Model.GetDescriptionPreview(row.Description)</span>
+                                                            <button type="button" class="prq-read-more">Read more</button>
+                                                            <span class="prq-description-full d-none">@row.Description</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="prq-description-full">@row.Description</span>
+                                                        }
+                                                    </div>
+                                                </td>
                                                 <td>@row.StatusName</td>
                                                 <td>@row.PurchaserCode</td>
                                                 <td>@row.ChiefACode</td>
@@ -177,14 +204,20 @@
 
                 <div class="card card-outline card-primary">
                     <div class="card-footer p-2 text-center module-action-bar prq-action-bar">
-                        <button type="button" id="prqAddAtBtn" class="btn btn-sm btn-action-copy border mx-1 my-1" disabled data-toggle="modal" data-target="#prqAddAtModal"><i class="fas fa-file-signature"></i> Add AT</button>
-                        @if (Model.PagePerm.HasPermission(3))
+                        @if (Model.CanAddAt)
+                        {
+                            <button type="button" id="prqAddAtBtn" class="btn btn-sm btn-action-copy border mx-1 my-1" disabled data-toggle="modal" data-target="#prqAddAtModal"><i class="fas fa-file-signature"></i> Add AT</button>
+                        }
+                        @if (Model.CanAddNew)
                         {
                             <a asp-page="./PurchaseRequisitionDetail" asp-route-mode="add" class="btn btn-sm btn-action-add border mx-1 my-1"><i class="fas fa-plus"></i> Add New</a>
                         }
                         <button type="button" id="btnEdit" class="btn btn-sm btn-action-submit border mx-1 my-1" disabled><i class="fas fa-edit"></i> Edit</button>
-                        <button type="button" id="btnView" class="btn btn-sm btn-action-save border mx-1 my-1" disabled><i class="fas fa-eye"></i> View</button>
-                        <button type="button" id="btnViewDetail" class="btn btn-sm btn-action-export border mx-1 my-1" disabled><i class="fas fa-list-alt"></i> View Detail</button>
+                        @if (Model.CanViewRequisition)
+                        {
+                            <button type="button" id="btnView" class="btn btn-sm btn-action-save border mx-1 my-1" disabled><i class="fas fa-eye"></i> View</button>
+                            <button type="button" id="btnViewDetail" class="btn btn-sm btn-action-export border mx-1 my-1" disabled><i class="fas fa-list-alt"></i> View Detail</button>
+                        }
                         <button type="button" id="btnExportExcel" class="btn btn-sm btn-action-export border mx-1 my-1"><i class="fas fa-file-excel"></i> Export Excel</button>
                         <button type="button" id="btnDisapproval" class="btn btn-sm btn-action-copy border mx-1 my-1" disabled><i class="fas fa-ban"></i> Disapproval</button>
                     </div>
@@ -209,13 +242,14 @@
 
                     <input asp-for="SelectedPrId" type="hidden" id="SelectedPrId" />
                     <input asp-for="AddAtDetailsJson" type="hidden" id="AddAtDetailsJson" />
-                    <input type="hidden" name="Filter.RequestNo" value="@Model.Filter.RequestNo" />
-                    <input type="hidden" name="Filter.Description" value="@Model.Filter.Description" />
-                    <input type="hidden" name="Filter.UseDateRange" value="@Model.Filter.UseDateRange" />
-                    <input type="hidden" name="Filter.FromDate" value="@(Model.Filter.FromDate?.ToString("yyyy-MM-dd"))" />
-                    <input type="hidden" name="Filter.ToDate" value="@(Model.Filter.ToDate?.ToString("yyyy-MM-dd"))" />
-                    <input type="hidden" name="Filter.Page" value="@Model.Filter.Page" />
-                    <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+                    <input type="hidden" name="RequestNo" value="@Model.Filter.RequestNo" />
+                    <input type="hidden" name="StatusId" value="@Model.Filter.StatusId" />
+                    <input type="hidden" name="Description" value="@Model.Filter.Description" />
+                    <input type="hidden" name="UseDateRange" value="@Model.Filter.UseDateRange" />
+                    <input type="hidden" name="FromDate" value="@(Model.Filter.FromDate?.ToString("yyyy-MM-dd"))" />
+                    <input type="hidden" name="ToDate" value="@(Model.Filter.ToDate?.ToString("yyyy-MM-dd"))" />
+                    <input type="hidden" name="PageNumber" value="@Model.Filter.Page" />
+                    <input type="hidden" name="PageSize" value="@Model.Filter.PageSize" />
 
                     <div class="mb-2">
                         <button type="button" class="btn btn-sm btn-action-add border mr-2" data-toggle="modal" data-target="#prqAddAtDetailModal">
@@ -339,9 +373,9 @@
 @section Scripts {
     <script>
         window.purchaseRequisitionPage = {
-            canView: @(Model.PagePerm.HasPermission(2) ? "true" : "false"),
+            canView: @(Model.CanViewRequisition ? "true" : "false"),
             canEdit: @(Model.PagePerm.HasPermission(4) ? "true" : "false"),
-            canAddAt: @(Model.PagePerm.HasPermission(4) ? "true" : "false"),
+            canAddAt: @(Model.CanAddAt ? "true" : "false"),
             canDisapproval: @(Model.PagePerm.HasPermission(6) ? "true" : "false"),
             detailUrlBase: '@Url.Page("./PurchaseRequisitionDetail")'
         };
