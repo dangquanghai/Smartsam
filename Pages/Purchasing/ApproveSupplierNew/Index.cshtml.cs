@@ -631,10 +631,11 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplierNew
 
         private bool CanViewAllDepartments()
         {
-            return _dataScope.LevelCheckSupplier.HasValue
+            return _isAdminRole
+                || (_dataScope.LevelCheckSupplier.HasValue
                 && (_dataScope.LevelCheckSupplier.Value == 1
                     || _dataScope.LevelCheckSupplier.Value == 3
-                    || _dataScope.LevelCheckSupplier.Value == 4);
+                    || _dataScope.LevelCheckSupplier.Value == 4));
         }
 
         private bool CanAccessDepartment(int? supplierDeptId)
