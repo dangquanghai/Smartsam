@@ -5,6 +5,7 @@ using System.Net.Mail;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Data.SqlClient;
+using SmartSam.Helpers;
 using SmartSam.Pages;
 using SmartSam.Pages.Purchasing.Supplier;
 using SmartSam.Services;
@@ -34,6 +35,9 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
         [BindProperty(SupportsGet = true)]
         public int? CurrentSupplierId { get; set; }
+
+        [BindProperty(SupportsGet = true)]
+        public string? Type { get; set; }
 
         [BindProperty]
         public ApproveSupplierDetailViewModel EditSupplier { get; set; } = new ApproveSupplierDetailViewModel();
@@ -65,6 +69,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public ApprovePurchaseOrderInfoViewModel PurchaseOrderInfo { get; set; } = new ApprovePurchaseOrderInfoViewModel();
         public List<ApproveSupplierServiceRowViewModel> SupplierServiceRows { get; set; } = new List<ApproveSupplierServiceRowViewModel>();
         public int? LevelCheckSupplier => _dataScope.LevelCheckSupplier;
+        public bool IsApproveSupplierNewMode => string.Equals(Type, "new", StringComparison.OrdinalIgnoreCase);
+        public string PageTitle => IsApproveSupplierNewMode ? "Approve Supplier New" : "Approve Supplier";
         public bool CanEditAllSupplierFields => _isAdminRole || _dataScope.LevelCheckSupplier == 1;
         public bool CanEditCommentOnly => !_isAdminRole && _dataScope.LevelCheckSupplier.HasValue && _dataScope.LevelCheckSupplier.Value > 1;
         public bool CanEditComment => CanEditAllSupplierFields || CanEditCommentOnly;
@@ -415,7 +421,11 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
             if (CurrentSupplierDetail is not null)
             {
-                PurchaseOrderInfo = GetPurchaseOrderInfo(CurrentSupplierDetail.SupplierID, DateTime.Now.Year);
+                if (!IsApproveSupplierNewMode)
+                {
+                    PurchaseOrderInfo = GetPurchaseOrderInfo(CurrentSupplierDetail.SupplierID, DateTime.Now.Year);
+                }
+
                 SupplierServiceRows = GetSupplierServiceRows(CurrentSupplierDetail.SupplierID);
             }
         }
@@ -449,7 +459,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 WHERE (@DeptID IS NULL OR s.DeptID = @DeptID)
                   AND (@StatusID IS NULL OR s.[Status] = @StatusID)
                   AND (@MaxStatusExclusive IS NULL OR ISNULL(s.[Status], 0) < @MaxStatusExclusive)
-                  AND ISNULL(s.IsNew, 0) = 0
+                  AND ISNULL(s.IsNew, 0) = @IsNew
                 ORDER BY s.SupplierID DESC", conn);
 
             BindSearchParams(cmd, criteria);
@@ -509,9 +519,10 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 LEFT JOIN dbo.PC_SupplierStatus st ON s.[Status] = st.SupplierStatusID
                 LEFT JOIN dbo.MS_Department d ON s.DeptID = d.DeptID
                 WHERE s.SupplierID = @SupplierID
-                  AND ISNULL(s.IsNew, 0) = 0", conn);
+                  AND ISNULL(s.IsNew, 0) = @IsNew", conn);
 
             cmd.Parameters.AddWithValue("@SupplierID", supplierId);
+            cmd.Parameters.Add("@IsNew", SqlDbType.Bit).Value = IsApproveSupplierNewMode;
             conn.Open();
             using var rd = cmd.ExecuteReader();
             if (!rd.Read())
@@ -733,7 +744,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             {
                 DeptId = ResolveDepartmentFilter(),
                 StatusId = ResolveStatusFilterByLevel(),
-                MaxStatusExclusive = null
+                MaxStatusExclusive = null,
+                IsNew = IsApproveSupplierNewMode
             };
         }
 
@@ -768,6 +780,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             cmd.Parameters.Add("@DeptID", SqlDbType.Int).Value = criteria.DeptId.HasValue ? criteria.DeptId.Value : DBNull.Value;
             cmd.Parameters.Add("@StatusID", SqlDbType.Int).Value = criteria.StatusId.HasValue ? criteria.StatusId.Value : DBNull.Value;
             cmd.Parameters.Add("@MaxStatusExclusive", SqlDbType.Int).Value = criteria.MaxStatusExclusive.HasValue ? criteria.MaxStatusExclusive.Value : DBNull.Value;
+            cmd.Parameters.Add("@IsNew", SqlDbType.Bit).Value = criteria.IsNew;
         }
 
         private bool SupplierCodeExists(string supplierCode, int? excludeSupplierId = null)
@@ -995,16 +1008,20 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             var supplierCode = string.IsNullOrWhiteSpace(supplier.SupplierCode) ? supplier.SupplierID.ToString() : supplier.SupplierCode;
             var supplierName = string.IsNullOrWhiteSpace(supplier.SupplierName) ? "-" : supplier.SupplierName;
 
-            var detailUrl = Url.Page("/Purchasing/ApproveSupplierAnnualy/Index", values: new
+            // 1. Dùng chung một page duyệt supplier, chỉ phân biệt bằng tham số type=new
+            var detailUrl = Url.Page("/Purchasing/ApproveSupplier/Index", values: new
             {
-                CurrentSupplierId = supplier.SupplierID
+                CurrentSupplierId = supplier.SupplierID,
+                Type = IsApproveSupplierNewMode ? "new" : null
             });
 
             var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl)
                 ? string.Empty
                 : $"{Request.Scheme}://{Request.Host}{detailUrl}";
 
-            var subject = $"[Supplier Approval] Last supplier processed at level {currentLevel}";
+            var subject = IsApproveSupplierNewMode
+                ? $"[Approve Supplier New] Last supplier processed at level {currentLevel}"
+                : $"[Supplier Approval] Last supplier processed at level {currentLevel}";
             var body = $@"
 <p>Dear Approver Level {nextLevel},</p>
 <p>The last supplier in current approval list has been <b>{action}</b> at level {currentLevel}.</p>
@@ -1014,8 +1031,11 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
   <li>Action by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
   <li>Action time: <b>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</b></li>
 </ul>
-{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Approve Supplier Annualy</a></p>")}
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">{WebUtility.HtmlEncode(PageTitle)}</a></p>")}
 <p>SmartSam System</p>";
+            var htmlBody = IsApproveSupplierNewMode
+                ? EmailTemplateHelper.WrapInNotifyTemplate("APPROVE SUPPLIER NEW", "#17a2b8", DateTime.Now, body)
+                : body;
 
             try
             {
@@ -1023,7 +1043,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 {
                     From = new MailAddress(senderEmail, "SmartSam System"),
                     Subject = subject,
-                    Body = body,
+                    Body = htmlBody,
                     IsBodyHtml = true
                 };
 
@@ -1058,7 +1078,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         {
             return RedirectToPage("./Index", new
             {
-                CurrentSupplierId
+                CurrentSupplierId,
+                Type
             });
         }
 
@@ -1211,6 +1232,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public int? DeptId { get; set; }
         public int? StatusId { get; set; }
         public int? MaxStatusExclusive { get; set; }
+        public bool IsNew { get; set; }
     }
 
     public class ApproveListRowViewModel

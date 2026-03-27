@@ -1,11 +1,12 @@
 @page
 @model SmartSam.Pages.Purchasing.ApproveSupplier.ApproveSupplierDetailModel
 @{
-    ViewData["Title"] = "Approve Supplier";
+    ViewData["Title"] = Model.PageTitle;
 
     Func<int, string> navUrl = (supplierId) => Url.Page("./Index", new
     {
-        CurrentSupplierId = supplierId
+        CurrentSupplierId = supplierId,
+        Type = Model.Type
     }) ?? "#";
 
     var editAll = Model.CanEditAllSupplierFields;
@@ -31,7 +32,7 @@
 
         <div class="card card-primary card-outline mb-2">
             <div class="card-header p-2 d-flex justify-content-between align-items-center">
-                <h3 class="card-title mb-0">Approve Supplier</h3>
+                <h3 class="card-title mb-0">@Model.PageTitle</h3>
             </div>
             <div class="card-body p-2">
                 @if (Model.CurrentSupplierDetail is null)
@@ -43,6 +44,7 @@
                     <form method="post" id="approveSupplierForm">
                         <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
                         <input type="hidden" asp-for="CurrentSupplierId" />
+                        <input type="hidden" asp-for="Type" />
                         <input type="hidden" asp-for="EditSupplier.SupplierID" />
 
                         <div class="mb-2">
@@ -230,44 +232,47 @@
             </div>
         </div>
 
-        <div class="card card-secondary card-outline">
-            <div class="card-header p-2">
-                <h3 class="card-title">Purchase Order Information</h3>
-            </div>
-            <div class="card-body p-2">
-                <div class="font-weight-bold">CountPO: @Model.PurchaseOrderInfo.CountPO, Total Cost: @Model.PurchaseOrderInfo.TotalCost.ToString("N0") VND</div>
-                <table class="table table-bordered table-sm mt-2 mb-0">
-                    <thead>
-                        <tr>
-                            <th style="width:30%">Index Name</th>
-                            <th style="width:40%">Sub Index</th>
-                            <th style="width:15%">TheTime</th>
-                            <th style="width:15%">Point</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if (Model.PurchaseOrderInfo.Rows.Count == 0)
-                        {
+        @if (!Model.IsApproveSupplierNewMode)
+        {
+            <div class="card card-secondary card-outline">
+                <div class="card-header p-2">
+                    <h3 class="card-title">Purchase Order Information</h3>
+                </div>
+                <div class="card-body p-2">
+                    <div class="font-weight-bold">CountPO: @Model.PurchaseOrderInfo.CountPO, Total Cost: @Model.PurchaseOrderInfo.TotalCost.ToString("N0") VND</div>
+                    <table class="table table-bordered table-sm mt-2 mb-0">
+                        <thead>
                             <tr>
-                                <td colspan="4" class="text-center text-muted">No PO information in year @Model.PurchaseOrderInfo.Year.</td>
+                                <th style="width:30%">Index Name</th>
+                                <th style="width:40%">Sub Index</th>
+                                <th style="width:15%">TheTime</th>
+                                <th style="width:15%">Point</th>
                             </tr>
-                        }
-                        else
-                        {
-                            foreach (var po in Model.PurchaseOrderInfo.Rows)
+                        </thead>
+                        <tbody>
+                            @if (Model.PurchaseOrderInfo.Rows.Count == 0)
                             {
                                 <tr>
-                                    <td>@(string.IsNullOrWhiteSpace(po.IndexName) ? "-" : po.IndexName)</td>
-                                    <td>@(string.IsNullOrWhiteSpace(po.SubIndex) ? "-" : po.SubIndex)</td>
-                                    <td>@po.TheTime</td>
-                                    <td>@po.Point.ToString("0.##")</td>
+                                    <td colspan="4" class="text-center text-muted">No PO information in year @Model.PurchaseOrderInfo.Year.</td>
                                 </tr>
                             }
-                        }
-                    </tbody>
-                </table>
+                            else
+                            {
+                                foreach (var po in Model.PurchaseOrderInfo.Rows)
+                                {
+                                    <tr>
+                                        <td>@(string.IsNullOrWhiteSpace(po.IndexName) ? "-" : po.IndexName)</td>
+                                        <td>@(string.IsNullOrWhiteSpace(po.SubIndex) ? "-" : po.SubIndex)</td>
+                                        <td>@po.TheTime</td>
+                                        <td>@po.Point.ToString("0.##")</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
+        }
 
         <div class="card card-secondary card-outline mt-2">
             <div class="card-header p-2">
