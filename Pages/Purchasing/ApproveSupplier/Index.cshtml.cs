@@ -1229,12 +1229,20 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
         private IActionResult RedirectToCurrentList()
         {
-            return RedirectToPage("./Index", new
+            var routeValues = new Dictionary<string, object?>();
+
+            if (IsSupplierLinkMode)
             {
-                CurrentSupplierId,
-                Type,
-                supplier_id = SupplierId
-            });
+                routeValues["Type"] = Type;
+                routeValues["supplier_id"] = SupplierId;
+            }
+            else
+            {
+                routeValues["CurrentSupplierId"] = CurrentSupplierId;
+                routeValues["Type"] = Type;
+            }
+
+            return RedirectToPage("./Index", routeValues);
         }
 
         private int? GetNextSupplierIdFromCurrentRows(int supplierId)
