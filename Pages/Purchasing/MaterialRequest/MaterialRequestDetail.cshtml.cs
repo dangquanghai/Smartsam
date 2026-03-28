@@ -18,15 +18,18 @@ public class MaterialRequestDetailModel : BasePageModel
 
     private const int MaterialRequestFunctionId = 104;
     private const int PermissionCreate = 1;
+    private const int PermissionCreateAuto = 2;
     private const int PermissionEdit = 3;
     private const int PermissionShowAll = 4;
-    private const int PermissionShowCreate = 7;
-    private const int StatusJustCreated = 0;
-    private const int StatusSubmittedByOwner = 1;
-    private const int StatusHeadDeptApproved = 2;
-    private const int StatusPurchaserChecked = 3;
-    private const int StatusCompleted = 4;
+    private const int NoScopeStoreGroup = -1;
+    private const int StatusJustCreated = -1;
+    private const int StatusSubmittedToHead = 0;
+    private const int StatusHeadDeptApproved = 1;
+    private const int StatusPurchaserChecked = 2;
+    private const int StatusCfoApproved = 3;
+    private const int StatusCollectedToPr = 4;
     private const int StatusRejected = 5;
+    private const int StatusIssued = 6;
 
     private EmployeeMaterialScopeDto _dataScope = new EmployeeMaterialScopeDto();
     private bool _isAdminRole;
@@ -83,10 +86,10 @@ public class MaterialRequestDetailModel : BasePageModel
         {
             if (IsEdit)
             {
-                return HasPermission(PermissionEdit) && CurrentStatusId == StatusJustCreated;
+                return (IsAdminUser() || HasPermission(PermissionEdit)) && CurrentStatusId == StatusJustCreated;
             }
 
-            return HasPermission(PermissionCreate) || HasPermission(PermissionShowCreate);
+            return User.Identity?.IsAuthenticated == true || IsAdminUser();
         }
     }
 
@@ -102,7 +105,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
     public bool CanSubmit
     {
-        get { return IsEdit && HasPermission(PermissionEdit) && CurrentStatusId == StatusJustCreated; }
+        get { return IsEdit && (IsAdminUser() || HasPermission(PermissionEdit)) && CurrentStatusId == StatusJustCreated; }
     }
 
     public bool CanApprove
@@ -141,13 +144,13 @@ public class MaterialRequestDetailModel : BasePageModel
         {
             if (StoreGroupLocked)
             {
-                Input.StoreGroup = _dataScope.StoreGroup;
+                Input.StoreGroup = _dataScope.StoreGroup ?? NoScopeStoreGroup;
             }
 
             Input.DateCreate = DateTime.Today;
             Input.FromDate = DateTime.Today.AddMonths(-3);
             Input.ToDate = DateTime.Today;
-            Input.MaterialStatusId ??= 0;
+            Input.MaterialStatusId ??= StatusJustCreated;
             return Page();
         }
 
@@ -183,11 +186,19 @@ public class MaterialRequestDetailModel : BasePageModel
             return Forbid();
         }
 
+        if (StoreGroupLocked && !_dataScope.StoreGroup.HasValue)
+        {
+            ModelState.AddModelError(string.Empty, "Store Group scope is required.");
+            LoadDropdowns();
+            Lines = ResolvePostedLines();
+            return Page();
+        }
+
         LoadDropdowns();
 
         if (StoreGroupLocked)
         {
-            Input.StoreGroup = _dataScope.StoreGroup;
+            Input.StoreGroup = _dataScope.StoreGroup ?? NoScopeStoreGroup;
         }
 
         MaterialRequestDetailDto? existing = null;
@@ -202,7 +213,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
             var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
             PagePerm = GetUserPermissions();
-            if (!HasPermission(PermissionEdit) || currentStatus != StatusJustCreated)
+            if ((!IsAdminUser() && !HasPermission(PermissionEdit)) || currentStatus != StatusJustCreated)
             {
                 WarningMessage = "You cannot edit this Material Request at current status.";
                 return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
@@ -215,7 +226,7 @@ public class MaterialRequestDetailModel : BasePageModel
             Input.FromDate ??= existing.FromDate;
             Input.ToDate ??= existing.ToDate;
         }
-        else if (!(HasPermission(PermissionCreate) || HasPermission(PermissionShowCreate)))
+        else if (User.Identity?.IsAuthenticated != true)
         {
             return Forbid();
         }
@@ -289,7 +300,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
         if (StoreGroupLocked)
         {
-            Input.StoreGroup = _dataScope.StoreGroup;
+            Input.StoreGroup = _dataScope.StoreGroup ?? NoScopeStoreGroup;
         }
 
         var existing = await _materialRequestService.GetDetailAsync(Id!.Value, cancellationToken);
@@ -361,7 +372,7 @@ public class MaterialRequestDetailModel : BasePageModel
             return new JsonResult(new { success = false, message = "Access denied." });
         }
 
-        var rows = await _materialRequestService.SearchItemsAsync(keyword, checkBalanceInStore, Input.StoreGroup, cancellationToken);
+        var rows = await _materialRequestService.SearchItemsAsync(keyword, null, checkBalanceInStore, Input.StoreGroup, cancellationToken);
         return new JsonResult(new { success = true, data = rows });
     }
 
@@ -385,12 +396,12 @@ public class MaterialRequestDetailModel : BasePageModel
             }
 
             var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
-            if (!HasPermission(PermissionEdit) || currentStatus != StatusJustCreated)
+            if ((!IsAdminUser() && !HasPermission(PermissionEdit)) || currentStatus != StatusJustCreated)
             {
                 return new JsonResult(new { success = false, message = "You cannot add item at current status." });
             }
         }
-        else if (!(HasPermission(PermissionCreate) || HasPermission(PermissionShowCreate)))
+        else if (User.Identity?.IsAuthenticated != true)
         {
             return new JsonResult(new { success = false, message = "Access denied." });
         }
@@ -414,38 +425,15 @@ public class MaterialRequestDetailModel : BasePageModel
         var stores = LoadListFromSql(
             @"SELECT
                     kp.KPGroupID,
-                    CONCAT(
-                        ISNULL(kp.KPGroupName, CONCAT('Store Group ', CAST(kp.KPGroupID AS varchar(20)))),
-                        ' (',
-                        ISNULL(dep.DeptCode, CONCAT('Dept ', CAST(kp.DepID AS varchar(20)))),
-                        ')'
-                    ) AS KPGroupName
+                    CASE
+                        WHEN kp.KPGroupName IS NOT NULL AND dep.DeptCode IS NOT NULL THEN CONCAT(kp.KPGroupName, ' (', dep.DeptCode, ')')
+                        ELSE NULL
+                    END AS KPGroupName
               FROM dbo.INV_KPGroup kp
               LEFT JOIN dbo.MS_Department dep ON dep.DeptID = kp.DepID
               ORDER BY kp.KPGroupID",
             "KPGroupID",
             "KPGroupName");
-
-        if (stores.Count == 0)
-        {
-            stores = LoadListFromSql(
-                @"SELECT DISTINCT
-                        CAST(e.StoreGR AS int) AS StoreGroup,
-                        CONCAT(
-                            'Store Group ',
-                            CAST(e.StoreGR AS varchar(20)),
-                            ' (',
-                            COALESCE(MIN(dep.DeptCode), CONCAT('Dept ', CAST(MIN(e.DeptID) AS varchar(20)))),
-                            ')'
-                        ) AS StoreGroupName
-                  FROM dbo.MS_Employee e
-                  LEFT JOIN dbo.MS_Department dep ON dep.DeptID = e.DeptID
-                  WHERE StoreGR IS NOT NULL AND StoreGR > 0
-                  GROUP BY e.StoreGR
-                  ORDER BY StoreGroup",
-                "StoreGroup",
-                "StoreGroupName");
-        }
 
         StoreGroups = stores;
 
@@ -468,7 +456,7 @@ public class MaterialRequestDetailModel : BasePageModel
                     new SelectListItem
                     {
                         Value = _dataScope.StoreGroup.Value.ToString(),
-                        Text = selectedStore?.Text ?? $"Store Group {_dataScope.StoreGroup.Value}"
+                        Text = selectedStore?.Text ?? string.Empty
                     }
                 };
             }
@@ -714,7 +702,15 @@ public class MaterialRequestDetailModel : BasePageModel
 
     private bool CanAccessPage()
     {
-        return IsAdminUser() || PagePerm.AllowedNos.Count > 0;
+        return User.Identity?.IsAuthenticated == true
+            || IsAdminUser()
+            || HasPermission(PermissionCreate)
+            || HasPermission(PermissionCreateAuto)
+            || HasPermission(PermissionEdit)
+            || HasPermission(PermissionShowAll)
+            || HasPermission(5)
+            || HasPermission(6)
+            || HasPermission(7);
     }
 
     private bool HasPermission(int permissionNo)
@@ -769,7 +765,7 @@ public class MaterialRequestDetailModel : BasePageModel
             return true;
         }
 
-        if (statusId == StatusSubmittedByOwner)
+        if (statusId == StatusSubmittedToHead)
         {
             return _dataScope.IsHeadDept || _dataScope.ApprovalLevel >= 2;
         }
@@ -784,6 +780,11 @@ public class MaterialRequestDetailModel : BasePageModel
             return _dataScope.ApprovalLevel >= 3;
         }
 
+        if (statusId == StatusCfoApproved)
+        {
+            return _dataScope.ApprovalLevel >= 3;
+        }
+
         return false;
     }
 
@@ -793,7 +794,7 @@ public class MaterialRequestDetailModel : BasePageModel
         {
             return true;
         }
-        if (statusId is not (StatusSubmittedByOwner or StatusHeadDeptApproved or StatusPurchaserChecked))
+        if (statusId is not (StatusSubmittedToHead or StatusHeadDeptApproved or StatusPurchaserChecked or StatusCfoApproved))
         {
             return false;
         }
@@ -826,14 +827,14 @@ public class MaterialRequestDetailModel : BasePageModel
         if (action == MaterialRequestWorkflowAction.Submit && currentStatus == StatusJustCreated)
         {
             return new MaterialRequestWorkflowTransition(
-                    StatusSubmittedByOwner,
+                    StatusSubmittedToHead,
                     "Submitted successfully. Waiting for Head Dept approval.",
                     false,
                     false,
                     false);
         }
 
-        if (action == MaterialRequestWorkflowAction.Approve && currentStatus == StatusSubmittedByOwner)
+        if (action == MaterialRequestWorkflowAction.Approve && currentStatus == StatusSubmittedToHead)
         {
             return new MaterialRequestWorkflowTransition(
                     StatusHeadDeptApproved,
@@ -856,17 +857,28 @@ public class MaterialRequestDetailModel : BasePageModel
         if (action == MaterialRequestWorkflowAction.Approve && currentStatus == StatusPurchaserChecked)
         {
             return new MaterialRequestWorkflowTransition(
-                    StatusCompleted,
-                    "Approved by Chief of Accounting. MR completed.",
+                    StatusCfoApproved,
+                    "Approved by CFO.",
+                    null,
+                    null,
+                    null);
+        }
+
+        if (action == MaterialRequestWorkflowAction.Approve && currentStatus == StatusCfoApproved)
+        {
+            return new MaterialRequestWorkflowTransition(
+                    StatusCollectedToPr,
+                    "Collected to PR.",
                     null,
                     true,
                     true);
         }
 
         if (action == MaterialRequestWorkflowAction.Reject &&
-            (currentStatus == StatusSubmittedByOwner ||
+            (currentStatus == StatusSubmittedToHead ||
              currentStatus == StatusHeadDeptApproved ||
-             currentStatus == StatusPurchaserChecked))
+             currentStatus == StatusPurchaserChecked ||
+             currentStatus == StatusCfoApproved))
         {
             return new MaterialRequestWorkflowTransition(
                     StatusRejected,

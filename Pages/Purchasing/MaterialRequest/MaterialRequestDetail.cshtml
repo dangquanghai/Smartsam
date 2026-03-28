@@ -2,8 +2,8 @@
 @model SmartSam.Pages.Purchasing.MaterialRequest.MaterialRequestDetailModel
 @{
     ViewData["Title"] = "Material Request Detail";
-    var statusText = Model.Statuses.FirstOrDefault(x => x.Value == (Model.Input.MaterialStatusId ?? 0).ToString())?.Text
-        ?? (Model.Input.MaterialStatusId?.ToString() ?? "0");
+    var statusText = Model.Statuses.FirstOrDefault(x => x.Value == (Model.Input.MaterialStatusId ?? -1).ToString())?.Text
+        ?? (Model.Input.MaterialStatusId?.ToString() ?? "-1");
 }
 
 <section class="content">
@@ -182,7 +182,6 @@
                         <button type="button" class="btn btn-danger btn-sm mx-1 my-1" id="removeMrLineBtn"><i class="fas fa-trash-alt"></i> Remove Item</button>
                         <button type="button" class="btn btn-primary btn-sm mx-1 my-1" id="createNewItemBtn"><i class="fas fa-box-open"></i> Create new item</button>
                         <button type="button" class="btn btn-info btn-sm mx-1 my-1" id="calculateBtn"><i class="fas fa-calculator"></i> Calculate</button>
-                        <button type="submit" asp-page-handler="Save" id="mrSaveBtn" class="btn btn-primary btn-sm mx-1 my-1"><i class="fas fa-save"></i> Save</button>
                         <button type="submit" asp-page-handler="Submit" id="mrSubmitBtn" class="btn btn-dark btn-sm mx-1 my-1"><i class="fas fa-paper-plane"></i> Submit</button>
                         <button type="submit" asp-page-handler="Approve" id="mrApproveBtn" class="btn btn-success btn-sm mx-1 my-1"><i class="fas fa-check"></i> Approve</button>
                         <button type="submit" asp-page-handler="Reject" id="mrRejectBtn" class="btn btn-danger btn-sm mx-1 my-1"><i class="fas fa-times"></i> Reject</button>

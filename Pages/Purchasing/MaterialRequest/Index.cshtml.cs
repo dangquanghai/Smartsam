@@ -28,7 +28,7 @@ public class IndexModel : BasePageModel
     private const int PermissionShowAll = 4;
     private const int PermissionShowPc = 5;
     private const int PermissionShowStore = 6;
-    private const int PermissionShowCreate = 7;
+    private const int StatusJustCreated = -1;
     private const int NoScopeStoreGroup = -1;
     private const string ConditionModeAllUsers = "allUsers";
     private const string ConditionModeStoreman = "storeman";
@@ -194,10 +194,10 @@ public class IndexModel : BasePageModel
 
         var dataWithActions = result.Rows.Select(r =>
         {
-            var statusId = r.MaterialStatusId ?? 0;
+            var statusId = r.MaterialStatusId ?? StatusJustCreated;
             var effectivePerms = PagePerm.AllowedNos;
 
-            var canEditRow = effectivePerms.Contains(PermissionEdit) && statusId == 0;
+            var canEditRow = effectivePerms.Contains(PermissionEdit) && statusId == StatusJustCreated;
             var canApprove = CanApproveStatus(statusId);
             var canReject = CanRejectStatus(statusId);
 
@@ -231,7 +231,7 @@ public class IndexModel : BasePageModel
     // ==========================================
     // 3. MATERIAL REQUEST CREATION ACTIONS
     // ==========================================
-    public IActionResult OnGetSearchItems(string? keyword, bool checkBalanceInStore = false, int? storeGroup = null)
+    public IActionResult OnGetSearchItems(string? itemCode, string? itemName, bool checkBalanceInStore = false, int? storeGroup = null)
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
@@ -244,13 +244,10 @@ public class IndexModel : BasePageModel
             return new JsonResult(new { success = false, message = "Access denied." });
         }
 
-        var scopedStoreGroup = IsStoreGroupLocked() ? _dataScope.StoreGroup : (storeGroup ?? Filter.StoreGroup);
-        var items = _materialRequestService.SearchItemsAsync(keyword, checkBalanceInStore, scopedStoreGroup, cancellationToken).GetAwaiter().GetResult();
-
-        if (items.Count == 0 && scopedStoreGroup.HasValue)
-        {
-            items = _materialRequestService.SearchItemsAsync(keyword, checkBalanceInStore, null, cancellationToken).GetAwaiter().GetResult();
-        }
+        var scopedStoreGroup = IsStoreGroupLocked()
+            ? (_dataScope.StoreGroup ?? NoScopeStoreGroup)
+            : (storeGroup ?? Filter.StoreGroup);
+        var items = _materialRequestService.SearchItemsAsync(itemCode, itemName, checkBalanceInStore, scopedStoreGroup, cancellationToken).GetAwaiter().GetResult();
 
         return new JsonResult(new { success = true, data = items });
     }
@@ -266,6 +263,12 @@ public class IndexModel : BasePageModel
         if (!CanAccessPage() || !AllowCreate())
         {
             return Forbid();
+        }
+
+        if (IsStoreGroupLocked() && !_dataScope.StoreGroup.HasValue)
+        {
+            WarningMessage = "Store Group scope is required.";
+            return RedirectToPage("./Index");
         }
 
         var selectedItems = ParseCreateItems(CreateLinesJson);
@@ -310,7 +313,7 @@ public class IndexModel : BasePageModel
             FromDate = DateTime.Today.AddMonths(-3),
             ToDate = DateTime.Today,
             AccordingTo = CreateDescription.Trim(),
-            MaterialStatusId = 0,
+            MaterialStatusId = StatusJustCreated,
             NoIssue = 0,
             IsAuto = false,
             Approval = false,
@@ -344,6 +347,12 @@ public class IndexModel : BasePageModel
             return Forbid();
         }
 
+        if (IsStoreGroupLocked() && !_dataScope.StoreGroup.HasValue)
+        {
+            WarningMessage = "Store Group scope is required.";
+            return RedirectToPage("./Index");
+        }
+
         var scopedStoreGroup = IsStoreGroupLocked()
             ? _dataScope.StoreGroup
             : (CreateAutoStoreGroup ?? Filter.StoreGroup);
@@ -372,7 +381,7 @@ public class IndexModel : BasePageModel
             FromDate = DateTime.Today.AddMonths(-3),
             ToDate = DateTime.Today,
             AccordingTo = description,
-            MaterialStatusId = 0,
+            MaterialStatusId = StatusJustCreated,
             NoIssue = 0,
             IsAuto = true,
             Approval = false,
@@ -401,38 +410,15 @@ public class IndexModel : BasePageModel
         var stores = LoadListFromSql(
             @"SELECT
                     kp.KPGroupID,
-                    CONCAT(
-                        ISNULL(kp.KPGroupName, CONCAT('Store Group ', CAST(kp.KPGroupID AS varchar(20)))),
-                        ' (',
-                        ISNULL(dep.DeptCode, CONCAT('Dept ', CAST(kp.DepID AS varchar(20)))),
-                        ')'
-                    ) AS KPGroupName
+                    CASE
+                        WHEN kp.KPGroupName IS NOT NULL AND dep.DeptCode IS NOT NULL THEN CONCAT(kp.KPGroupName, ' (', dep.DeptCode, ')')
+                        ELSE NULL
+                    END AS KPGroupName
               FROM dbo.INV_KPGroup kp
               LEFT JOIN dbo.MS_Department dep ON dep.DeptID = kp.DepID
               ORDER BY kp.KPGroupID",
             "KPGroupID",
             "KPGroupName");
-
-        if (stores.Count == 0)
-        {
-            stores = LoadListFromSql(
-                @"SELECT DISTINCT
-                        CAST(e.StoreGR AS int) AS StoreGroup,
-                        CONCAT(
-                            'Store Group ',
-                            CAST(e.StoreGR AS varchar(20)),
-                            ' (',
-                            COALESCE(MIN(dep.DeptCode), CONCAT('Dept ', CAST(MIN(e.DeptID) AS varchar(20)))),
-                            ')'
-                        ) AS StoreGroupName
-                  FROM dbo.MS_Employee e
-                  LEFT JOIN dbo.MS_Department dep ON dep.DeptID = e.DeptID
-                  WHERE StoreGR IS NOT NULL AND StoreGR > 0
-                  GROUP BY e.StoreGR
-                  ORDER BY StoreGroup",
-                "StoreGroup",
-                "StoreGroupName");
-        }
 
         StoreGroups = new List<SelectListItem>();
         StoreGroups.Add(new SelectListItem { Value = string.Empty, Text = "--- All ---" });
@@ -447,29 +433,6 @@ public class IndexModel : BasePageModel
 
         Statuses = new List<SelectListItem>(statuses);
 
-        if (!AllowShowAll() && (Filter.StatusIds?.Count ?? 0) == 0 && !Request.Query.ContainsKey("Filter.StatusIds"))
-        {
-            int defaultStatus;
-            if (_dataScope.ApprovalLevel <= 0)
-            {
-                defaultStatus = 0;
-            }
-            else if (_dataScope.ApprovalLevel == 1)
-            {
-                defaultStatus = 1;
-            }
-            else if (_dataScope.ApprovalLevel == 2)
-            {
-                defaultStatus = 2;
-            }
-            else
-            {
-                defaultStatus = 3;
-            }
-
-            Filter.StatusIds = new List<int> { defaultStatus };
-        }
-
         if (IsStoreGroupLocked())
         {
             Filter.StoreGroup = _dataScope.StoreGroup ?? NoScopeStoreGroup;
@@ -481,7 +444,7 @@ public class IndexModel : BasePageModel
                     new SelectListItem
                     {
                         Value = _dataScope.StoreGroup.Value.ToString(),
-                        Text = selectedStore?.Text ?? $"Store Group {_dataScope.StoreGroup.Value}"
+                        Text = selectedStore?.Text ?? string.Empty
                     }
                 };
             }
@@ -530,7 +493,7 @@ public class IndexModel : BasePageModel
         return new MaterialRequestFilterCriteria
         {
             RequestNo = isStoremanMode || string.IsNullOrWhiteSpace(Filter.RequestNo) ? null : Filter.RequestNo.Trim(),
-            StoreGroup = scopedStoreGroup == NoScopeStoreGroup ? null : scopedStoreGroup,
+            StoreGroup = scopedStoreGroup,
             StatusIds = isStoremanMode ? new List<int>() : (Filter.StatusIds ?? new List<int>()),
             ItemCode = isStoremanMode && !string.IsNullOrWhiteSpace(Filter.ItemCode) ? Filter.ItemCode.Trim() : null,
             NoIssue = isStoremanMode && Filter.IssueLessThanOrder ? 1 : null,
@@ -658,12 +621,14 @@ public class IndexModel : BasePageModel
 
     private bool CanAccessPage()
     {
-        if (IsAdminUser())
-        {
-            return true;
-        }
-
-        return PagePerm.AllowedNos.Count > 0;
+        return User.Identity?.IsAuthenticated == true
+            || IsAdminUser()
+            || HasPermission(PermissionCreateAuto)
+            || HasPermission(PermissionEdit)
+            || HasPermission(PermissionShowAll)
+            || HasPermission(PermissionShowPc)
+            || HasPermission(PermissionShowStore)
+            || HasPermission(7);
     }
 
     private bool HasPermission(int permissionNo)
@@ -673,17 +638,17 @@ public class IndexModel : BasePageModel
 
     private bool AllowCreate()
     {
-        return HasPermission(PermissionCreate) || HasPermission(PermissionShowCreate);
+        return User.Identity?.IsAuthenticated == true || IsAdminUser();
     }
 
     private bool AllowCreateAuto()
     {
-        return HasPermission(PermissionCreateAuto);
+        return IsAdminUser() || HasPermission(PermissionCreateAuto);
     }
 
     private bool AllowEdit()
     {
-        return HasPermission(PermissionEdit);
+        return IsAdminUser() || HasPermission(PermissionEdit);
     }
 
     private bool AllowShowAll()
@@ -693,7 +658,7 @@ public class IndexModel : BasePageModel
 
     private bool AllowShowPcCondition()
     {
-        return IsAdminUser() || HasPermission(PermissionShowPc);
+        return User.Identity?.IsAuthenticated == true;
     }
 
     private bool AllowShowStoreCondition()
@@ -803,7 +768,7 @@ public class IndexModel : BasePageModel
                 ItemCode = item.ItemCode.Trim(),
                 ItemName = (item.ItemName ?? string.Empty).Trim(),
                 Unit = (item.Unit ?? string.Empty).Trim(),
-                OrderQty = 0,
+                OrderQty = item.OrderQty.HasValue && item.OrderQty.Value > 0 ? item.OrderQty.Value : 1m,
                 NotReceipt = 0,
                 InStock = item.InStock,
                 AccIn = 0,
@@ -978,6 +943,10 @@ public class EmployeeMaterialScopeDto
     public int? StoreGroup { get; set; }
     public int ApprovalLevel { get; set; }
     public bool IsHeadDept { get; set; }
+    public bool IsPurchaser { get; set; }
+    public bool IsCFO { get; set; }
+    public bool IsBOD { get; set; }
+    public bool IsInventoryControlInDep { get; set; }
     public bool SeeDataAllDept { get; set; }
 }
 
@@ -988,6 +957,7 @@ public class MaterialRequestItemLookupDto
     public string Unit { get; set; } = string.Empty;
     public decimal InStock { get; set; }
     public int? StoreGroupId { get; set; }
+    public decimal? OrderQty { get; set; }
 }
 
 public class MaterialRequestService
@@ -1011,6 +981,10 @@ public class MaterialRequestService
                 StoreGR,
                 ISNULL(Approval, 0) AS ApprovalLevel,
                 ISNULL(HeadDept, 0) AS IsHeadDept,
+                ISNULL(IsPurchaser, 0) AS IsPurchaser,
+                ISNULL(IsCFO, 0) AS IsCFO,
+                ISNULL(IsBOD, 0) AS IsBOD,
+                ISNULL(IsInventoryControlInDep, 0) AS IsInventoryControlInDep,
                 ISNULL(SeeDataAllDept, 0) AS SeeDataAllDept
             FROM dbo.MS_Employee
             WHERE EmployeeCode = @EmployeeCode";
@@ -1023,7 +997,11 @@ public class MaterialRequestService
                 StoreGroup = rd.IsDBNull(0) ? null : Convert.ToInt32(rd[0]),
                 ApprovalLevel = rd.IsDBNull(1) ? 0 : Convert.ToInt32(rd[1]),
                 IsHeadDept = !rd.IsDBNull(2) && Convert.ToInt32(rd[2]) == 1,
-                SeeDataAllDept = !rd.IsDBNull(3) && Convert.ToInt32(rd[3]) == 1
+                IsPurchaser = !rd.IsDBNull(3) && Convert.ToInt32(rd[3]) == 1,
+                IsCFO = !rd.IsDBNull(4) && Convert.ToInt32(rd[4]) == 1,
+                IsBOD = !rd.IsDBNull(5) && Convert.ToInt32(rd[5]) == 1,
+                IsInventoryControlInDep = !rd.IsDBNull(6) && Convert.ToInt32(rd[6]) == 1,
+                SeeDataAllDept = !rd.IsDBNull(7) && Convert.ToInt32(rd[7]) == 1
             },
             cmd => Helper.AddParameter(cmd, "@EmployeeCode", employeeCode.Trim(), SqlDbType.VarChar, 50),
             cancellationToken) ?? new EmployeeMaterialScopeDto();
@@ -1032,8 +1010,14 @@ public class MaterialRequestService
     public async Task<IReadOnlyList<MaterialRequestLookupOptionDto>> GetStoreGroupsAsync(CancellationToken cancellationToken = default)
     {
         const string sql = @"
-            SELECT KPGroupID, KPGroupName
-            FROM dbo.INV_KPGroup
+            SELECT
+                kp.KPGroupID,
+                CASE
+                    WHEN kp.KPGroupName IS NOT NULL AND dep.DeptCode IS NOT NULL THEN CONCAT(kp.KPGroupName, ' (', dep.DeptCode, ')')
+                    ELSE NULL
+                END AS KPGroupName
+            FROM dbo.INV_KPGroup kp
+            LEFT JOIN dbo.MS_Department dep ON dep.DeptID = kp.DepID
             ORDER BY KPGroupID";
 
         var rows = await Helper.QueryAsync(
@@ -1042,29 +1026,7 @@ public class MaterialRequestService
             rd => new MaterialRequestLookupOptionDto
             {
                 Id = rd.GetInt32(0),
-                Name = rd[1]?.ToString() ?? $"Store Group {rd.GetInt32(0)}"
-            },
-            null,
-            cancellationToken);
-
-        if (rows.Count > 0)
-        {
-            return rows;
-        }
-
-        const string fallbackSql = @"
-            SELECT DISTINCT CAST(StoreGR AS int) AS StoreGroup
-            FROM dbo.MS_Employee
-            WHERE StoreGR IS NOT NULL AND StoreGR > 0
-            ORDER BY StoreGroup";
-
-        rows = await Helper.QueryAsync(
-            _connectionString,
-            fallbackSql,
-            rd => new MaterialRequestLookupOptionDto
-            {
-                Id = rd.GetInt32(0),
-                Name = $"Store Group {rd.GetInt32(0)}"
+                Name = rd[1]?.ToString() ?? string.Empty
             },
             null,
             cancellationToken);
@@ -1152,7 +1114,7 @@ public class MaterialRequestService
             SELECT
                 CAST(r.REQUEST_NO AS bigint) AS REQUEST_NO,
                 CAST(r.STORE_GROUP AS int) AS STORE_GROUP,
-                ISNULL(kp.KPGroupName, CONCAT('Store Group ', CAST(r.STORE_GROUP AS varchar(20)))) AS KPGroupName,
+                kp.KPGroupName AS KPGroupName,
                 r.DATE_CREATE,
                 r.FROM_DATE,
                 r.TO_DATE,
@@ -1503,7 +1465,8 @@ public class MaterialRequestService
     }
 
     public async Task<IReadOnlyList<MaterialRequestItemLookupDto>> SearchItemsAsync(
-        string? keyword,
+        string? itemCode,
+        string? itemName,
         bool checkBalanceInStore = false,
         int? storeGroup = null,
         CancellationToken cancellationToken = default)
@@ -1514,13 +1477,13 @@ public class MaterialRequestService
                 i.ItemName,
                 ISNULL(i.Unit, '') AS Unit,
                 ISNULL(MAX(b.IsQ), 0) AS InStock,
-                i.KPGroupItem
+                i.KPGroupItem,
+                CAST(1 AS decimal(18,2)) AS OrderQty
             FROM dbo.INV_ItemList i
             LEFT JOIN dbo.INV_ItemBalanceACC_TMP b ON b.ItemCode = i.ItemCode
             WHERE
-                (@Keyword IS NULL
-                    OR i.ItemCode LIKE '%' + @Keyword + '%'
-                    OR i.ItemName LIKE '%' + @Keyword + '%')
+                (@ItemCode IS NULL OR i.ItemCode LIKE '%' + @ItemCode + '%')
+                AND (@ItemName IS NULL OR i.ItemName LIKE '%' + @ItemName + '%')
                 AND (i.IsActive = 1 OR i.IsActive IS NULL)
                 AND (@CheckBalanceInStore = 0 OR ISNULL(b.IsQ, 0) > 0)
                 AND (@StoreGroup IS NULL OR @StoreGroup = 0 OR i.KPGroupItem = @StoreGroup)
@@ -1536,11 +1499,13 @@ public class MaterialRequestService
                 ItemName = rd[1]?.ToString() ?? string.Empty,
                 Unit = rd[2]?.ToString() ?? string.Empty,
                 InStock = rd.IsDBNull(3) ? 0 : Convert.ToDecimal(rd[3]),
-                StoreGroupId = rd.IsDBNull(4) ? null : Convert.ToInt32(rd[4])
+                StoreGroupId = rd.IsDBNull(4) ? null : Convert.ToInt32(rd[4]),
+                OrderQty = rd.IsDBNull(5) ? 1m : Convert.ToDecimal(rd[5])
             },
             cmd =>
             {
-                Helper.AddParameter(cmd, "@Keyword", string.IsNullOrWhiteSpace(keyword) ? null : keyword.Trim(), SqlDbType.VarChar, 150);
+                Helper.AddParameter(cmd, "@ItemCode", string.IsNullOrWhiteSpace(itemCode) ? null : itemCode.Trim(), SqlDbType.VarChar, 20);
+                Helper.AddParameter(cmd, "@ItemName", string.IsNullOrWhiteSpace(itemName) ? null : itemName.Trim(), SqlDbType.VarChar, 150);
                 Helper.AddParameter(cmd, "@CheckBalanceInStore", checkBalanceInStore, SqlDbType.Bit);
                 Helper.AddParameter(cmd, "@StoreGroup", storeGroup, SqlDbType.Int);
             },
@@ -1655,7 +1620,7 @@ public class MaterialRequestService
 
     private static async Task<int> GetDefaultStatusIdAsync(SqlConnection conn, SqlTransaction tx, CancellationToken cancellationToken)
     {
-        const string sql = "SELECT ISNULL(MIN(MaterialStatusID), 0) FROM dbo.MaterialStatus";
+        const string sql = "SELECT ISNULL(MIN(MaterialStatusID), -1) FROM dbo.MaterialStatus";
         await using var cmd = new SqlCommand(sql, conn, tx);
         var value = await cmd.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt32(value);
