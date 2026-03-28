@@ -4,6 +4,18 @@
     ViewData["Title"] = "Purchase Requisition";
     var currentPage = Model.Filter.Page <= 0 ? 1 : Model.Filter.Page;
     var totalPages = Model.TotalPages <= 0 ? 1 : Model.TotalPages;
+    var pageItems = new List<int?>();
+    for (var p = 1; p <= totalPages; p++)
+    {
+        if (p == 1 || p == totalPages || (p >= currentPage - 2 && p <= currentPage + 2))
+        {
+            pageItems.Add(p);
+        }
+        else if (pageItems.Count == 0 || pageItems[^1].HasValue)
+        {
+            pageItems.Add(null);
+        }
+    }
     Func<int, string> pageUrl = (page) => Url.Page("./Index", new
     {
         RequestNo = Model.Filter.RequestNo,
@@ -102,42 +114,54 @@
                     <div class="card-header prq-table-header">
                         <div class="prq-table-header-left">
                             <h3 class="card-title">Purchase Requisitions</h3>
+                            <span class="badge badge-light ml-2" id="total-records-badge">@Model.TotalRecords records</span>
                         </div>
                         <div class="prq-table-header-right app-paging-white">
-                            <small class="prq-table-paging-info">
-                                @if (Model.TotalRecords == 0)
-                                {
-                                    <text>Showing 0 to 0 of 0 entries</text>
-                                }
-                                else
-                                {
-                                    <text>Showing @Model.PageStart to @Model.PageEnd of @Model.TotalRecords entries</text>
-                                }
-                            </small>
-                            <div class="prq-page-size-form m-0">
-                                <label class="mb-0 prq-page-size-label" for="prqPageSize">Show</label>
-                                <select id="prqPageSize" class="form-control form-control-sm prq-page-size-select">
-                                    <option value="10" selected="@(Model.Filter.PageSize == 10 ? "selected" : null)">10</option>
-                                    <option value="20" selected="@(Model.Filter.PageSize == 20 ? "selected" : null)">20</option>
-                                    <option value="50" selected="@(Model.Filter.PageSize == 50 ? "selected" : null)">50</option>
-                                    <option value="100" selected="@(Model.Filter.PageSize == 100 ? "selected" : null)">100</option>
-                                    <option value="200" selected="@(Model.Filter.PageSize == 200 ? "selected" : null)">200</option>
-                                </select>
-                            </div>
-                            <ul class="pagination pagination-sm m-0">
-                                <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
-                                    <a class="page-link prq-pager-link" href="@(Model.HasPreviousPage ? pageUrl(currentPage - 1) : "#")"><i class="fas fa-angle-left"></i></a>
-                                </li>
-                                @for (var p = Math.Max(1, currentPage - 2); p <= Math.Min(totalPages, currentPage + 2); p++)
-                                {
-                                    <li class="page-item @(p == currentPage ? "active" : "")">
-                                        <a class="page-link prq-pager-link" href="@pageUrl(p)">@p</a>
+                            <nav aria-label="Page navigation">
+                                <div id="pagination-info" class="d-inline-block mr-2 prq-pagination-info">
+                                    @if (Model.TotalRecords == 0)
+                                    {
+                                        <small>No records</small>
+                                    }
+                                    else
+                                    {
+                                        <small>Showing @Model.PageStart to @Model.PageEnd of @Model.TotalRecords entries</small>
+                                    }
+                                </div>
+                                <div class="prq-page-size-form d-inline-flex mr-2">
+                                    <label class="mb-0 prq-page-size-label" for="prqPageSize">Show</label>
+                                    <select id="prqPageSize" class="form-control form-control-sm prq-page-size-select">
+                                        <option value="10" selected="@(Model.Filter.PageSize == 10 ? "selected" : null)">10</option>
+                                        <option value="20" selected="@(Model.Filter.PageSize == 20 ? "selected" : null)">20</option>
+                                        <option value="50" selected="@(Model.Filter.PageSize == 50 ? "selected" : null)">50</option>
+                                        <option value="100" selected="@(Model.Filter.PageSize == 100 ? "selected" : null)">100</option>
+                                        <option value="200" selected="@(Model.Filter.PageSize == 200 ? "selected" : null)">200</option>
+                                    </select>
+                                </div>
+                                <ul class="pagination pagination-sm mb-0 d-inline-flex" id="pagination">
+                                    <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+                                        <a class="page-link prq-pager-link" href="@(Model.HasPreviousPage ? pageUrl(currentPage - 1) : "#")">Prev</a>
                                     </li>
-                                }
-                                <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
-                                    <a class="page-link prq-pager-link" href="@(Model.HasNextPage ? pageUrl(currentPage + 1) : "#")"><i class="fas fa-angle-right"></i></a>
-                                </li>
-                            </ul>
+                                    @foreach (var pageItem in pageItems)
+                                    {
+                                        if (pageItem.HasValue)
+                                        {
+                                            <li class="page-item @(pageItem.Value == currentPage ? "active" : "")">
+                                                <a class="page-link prq-pager-link" href="@pageUrl(pageItem.Value)">@pageItem.Value</a>
+                                            </li>
+                                        }
+                                        else
+                                        {
+                                            <li class="page-item disabled">
+                                                <span class="page-link">...</span>
+                                            </li>
+                                        }
+                                    }
+                                    <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+                                        <a class="page-link prq-pager-link" href="@(Model.HasNextPage ? pageUrl(currentPage + 1) : "#")">Next</a>
+                                    </li>
+                                </ul>
+                            </nav>
                         </div>
                     </div>
 

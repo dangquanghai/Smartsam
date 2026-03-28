@@ -516,6 +516,7 @@ VALUES
         NormalizeIntQuery("PageSize", value => Filter.PageSize = value, DefaultPageSize);
         NormalizeDateQuery(nameof(Filter.FromDate), value => Filter.FromDate = value);
         NormalizeDateQuery(nameof(Filter.ToDate), value => Filter.ToDate = value);
+        ClearPaginationModelState();
     }
 
     private void NormalizePostInputs()
@@ -528,6 +529,7 @@ VALUES
         NormalizeIntForm("PageSize", value => Filter.PageSize = value, DefaultPageSize);
         NormalizeDateForm(nameof(Filter.FromDate), value => Filter.FromDate = value);
         NormalizeDateForm(nameof(Filter.ToDate), value => Filter.ToDate = value);
+        ClearPaginationModelState();
 
         if (Request.HasFormContentType && Request.Form.ContainsKey(nameof(SelectedPrId)))
         {
@@ -535,6 +537,14 @@ VALUES
             SelectedPrId = int.TryParse(raw, out var parsed) ? parsed : null;
             ModelState.Remove(nameof(SelectedPrId));
         }
+    }
+
+    private void ClearPaginationModelState()
+    {
+        ModelState.Remove("Page");
+        ModelState.Remove("page");
+        ModelState.Remove("Filter.Page");
+        ModelState.Remove("Filter.PageSize");
     }
 
     private void NormalizeDateQuery(string key, Action<DateTime?> assign)
