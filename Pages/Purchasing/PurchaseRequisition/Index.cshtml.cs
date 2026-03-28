@@ -54,8 +54,9 @@ public class IndexModel : BasePageModel
     public List<PurchaseRequisitionItemLookup> ItemList { get; set; } = [];
     public List<PurchaseRequisitionSupplierLookup> SupplierList { get; set; } = [];
     public bool CanAddNew { get; set; }
-    public bool CanViewRequisition { get; set; }
     public bool CanAddAt { get; set; }
+    public bool CanEditRequisition { get; set; }
+    public bool CanViewDetailRequisition { get; set; }
     public int TotalRecords { get; set; }
     public int TotalPages => Filter.PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)Filter.PageSize));
     public int PageStart => TotalRecords == 0 ? 0 : ((Filter.Page - 1) * Filter.PageSize) + 1;
@@ -233,10 +234,11 @@ public class IndexModel : BasePageModel
             ISNULL(p.[Description], '') AS [Description],
             p.[Status],
             ISNULL(NULLIF(st.PRStatusName, ''), CASE p.[Status]
-                WHEN 1 THEN 'Done'
-                WHEN 2 THEN 'In Progress'
-                WHEN 3 THEN 'Disapproved'
-                ELSE 'Preparing'
+                WHEN 1 THEN 'New'
+                WHEN 2 THEN 'Waiting For Approve'
+                WHEN 3 THEN 'Pending'
+                WHEN 4 THEN 'Done'
+                ELSE 'New'
             END) AS StatusName,
             ISNULL(ep.EmployeeCode, '') AS PurchaserCode,
             ISNULL(ec.EmployeeCode, '') AS ChiefACode,
@@ -283,12 +285,11 @@ public class IndexModel : BasePageModel
 
     private object BuildRowActions(PurchaseRequisitionRow row) => new
     {
-        canView = CanViewRequisition,
-        canEdit = HasPermission(PermissionEdit),
+        canEdit = CanEditRow(row.StatusId),
         canAddAt = CanAddAt,
-        canViewDetail = CanViewRequisition,
+        canViewDetail = CanViewDetailRow(row.StatusId),
         canDisapproval = HasPermission(PermissionDisapproval),
-        accessMode = HasPermission(PermissionEdit) ? "edit" : "view"
+        accessMode = CanEditRow(row.StatusId) ? "edit" : "view"
     };
 
     private void LoadStatusList()
@@ -709,14 +710,13 @@ VALUES
 
     private void LoadPageActions()
     {
-        // Quyền vào danh sách dùng mã View List của page.
-        // Các nút xem/thêm bản ghi phải đi qua SecurityService để khớp với phân quyền hệ thống.
-        var addPermissions = GetEffectivePermissionsByStatus(0);
-        var viewPermissions = GetEffectivePermissionsByStatus(1);
+        // 1. Các nút trên màn hình danh sách phải bám theo quyền hiệu lực như STContract.
+        var newStatusPermissions = GetEffectivePermissionsByStatus(1);
 
-        CanAddNew = addPermissions.Contains(PermissionAdd);
-        CanAddAt = addPermissions.Contains(PermissionAdd);
-        CanViewRequisition = viewPermissions.Contains(PermissionViewDetail);
+        CanAddNew = newStatusPermissions.Contains(PermissionAdd);
+        CanAddAt = newStatusPermissions.Contains(PermissionAdd);
+        CanEditRequisition = newStatusPermissions.Contains(PermissionEdit);
+        CanViewDetailRequisition = newStatusPermissions.Contains(PermissionViewDetail);
     }
 
     private List<int> GetEffectivePermissionsByStatus(int status)
@@ -730,6 +730,16 @@ VALUES
         }
 
         return _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, status);
+    }
+
+    public bool CanEditRow(byte? statusId)
+    {
+        return statusId.HasValue && GetEffectivePermissionsByStatus(statusId.Value).Contains(PermissionEdit);
+    }
+
+    public bool CanViewDetailRow(byte? statusId)
+    {
+        return statusId.HasValue && GetEffectivePermissionsByStatus(statusId.Value).Contains(PermissionViewDetail);
     }
 
     private bool HasPermission(int permissionNo) => PagePerm.HasPermission(permissionNo);

@@ -7,18 +7,24 @@ using Microsoft.Data.SqlClient;
 using SmartSam.Helpers;
 using SmartSam.Pages;
 using SmartSam.Services;
+using SmartSam.Services.Interfaces;
 
 namespace SmartSam.Pages.Purchasing.PurchaseRequisition;
 
 public class PurchaseRequisitionDetailModel : BasePageModel
 {
     private const int FUNCTION_ID = 72;
+    private const int PermissionViewDetail = 2;
+    private const int PermissionAdd = 3;
+    private const int PermissionEdit = 4;
     private readonly PermissionService _permissionService;
+    private readonly ISecurityService _securityService;
     private readonly ILogger<PurchaseRequisitionDetailModel> _logger;
 
-    public PurchaseRequisitionDetailModel(IConfiguration config, PermissionService permissionService, ILogger<PurchaseRequisitionDetailModel> logger) : base(config)
+    public PurchaseRequisitionDetailModel(IConfiguration config, PermissionService permissionService, ISecurityService securityService, ILogger<PurchaseRequisitionDetailModel> logger) : base(config)
     {
         _permissionService = permissionService;
+        _securityService = securityService;
         _logger = logger;
     }
 
@@ -47,6 +53,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
 
     public async Task<IActionResult> OnGetAsync(int? id, string mode = "view")
     {
+        // 1. Lấy quyền tĩnh của page trước khi xử lý dữ liệu chi tiết
         PagePerm = GetUserPermissions();
         Mode = string.IsNullOrWhiteSpace(mode) ? "view" : mode.Trim().ToLowerInvariant();
 
@@ -60,21 +67,30 @@ public class PurchaseRequisitionDetailModel : BasePageModel
                 return NotFound();
             }
 
-            if (!PagePerm.HasPermission(2))
+            // 2. Quyền xem/sửa chi tiết phải bám theo quyền hiệu lực của trạng thái chứng từ
+            var effectivePermissions = GetEffectivePermissionsByStatus(Requisition.Status);
+            if (!effectivePermissions.Contains(PermissionViewDetail))
             {
-                return RedirectToPage("./Index", new { msg = "You have no permission to access this requisition." });
+                TempData["Message"] = "You have no permission to access this requisition.";
+                TempData["MessageType"] = "warning";
+                return RedirectToPage("./Index");
             }
 
-            if (Mode == "edit" && !PagePerm.HasPermission(4))
+            if (Mode == "edit" && !effectivePermissions.Contains(PermissionEdit))
             {
-                Mode = "view";
+                TempData["Message"] = "You have no permission to edit this requisition.";
+                TempData["MessageType"] = "warning";
+                return RedirectToPage("./Index");
             }
         }
         else
         {
-            if (!PagePerm.HasPermission(3))
+            var effectivePermissions = GetEffectivePermissionsByStatus(1);
+            if (!effectivePermissions.Contains(PermissionAdd))
             {
-                return RedirectToPage("./Index", new { msg = "You have no permission to add requisition." });
+                TempData["Message"] = "You have no permission to add requisition.";
+                TempData["MessageType"] = "warning";
+                return RedirectToPage("./Index");
             }
 
             Mode = "add";
@@ -83,27 +99,31 @@ public class PurchaseRequisitionDetailModel : BasePageModel
                 RequestNo = GetSuggestedRequestNo(DateTime.Today),
                 RequestDate = DateTime.Today,
                 Currency = 1,
-                Status = StatusList.Count > 0 && byte.TryParse(StatusList[0].Value, out var statusId) ? statusId : (byte)0
+                Status = StatusList.Count > 0 && byte.TryParse(StatusList[0].Value, out var statusId) ? statusId : (byte)1
             };
             DetailsJson = "[]";
         }
 
         CanSave = Mode == "add"
-            ? PagePerm.HasPermission(3)
-            : Mode == "edit" && PagePerm.HasPermission(4);
+            ? GetEffectivePermissionsByStatus(1).Contains(PermissionAdd)
+            : Mode == "edit" && GetEffectivePermissionsByStatus(Requisition.Status).Contains(PermissionEdit);
 
         return Page();
     }
 
     public IActionResult OnPost()
     {
+        // 1. Lấy quyền trước khi save để chặn gọi trực tiếp từ URL hoặc submit tay
         PagePerm = GetUserPermissions();
         LoadAllDropdowns();
 
         var isNew = Requisition.Id <= 0;
         Mode = isNew ? "add" : (string.IsNullOrWhiteSpace(Mode) ? "edit" : Mode.Trim().ToLowerInvariant());
 
-        if (isNew && !PagePerm.HasPermission(3) || !isNew && !PagePerm.HasPermission(4))
+        var effectivePermissions = isNew
+            ? GetEffectivePermissionsByStatus(1)
+            : GetEffectivePermissionsByStatus(Requisition.Status);
+        if (isNew && !effectivePermissions.Contains(PermissionAdd) || !isNew && !effectivePermissions.Contains(PermissionEdit))
         {
             ModelState.AddModelError(string.Empty, "You have no permission to save requisition.");
             CanSave = false;
@@ -162,7 +182,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
 
         using (var cmd = new SqlCommand(@"
 SELECT PRID, ISNULL(RequestNo, '') AS RequestNo, RequestDate, ISNULL([Description], '') AS [Description],
-       ISNULL(Currency, 1) AS Currency, ISNULL([Status], 0) AS [Status]
+       ISNULL(Currency, 1) AS Currency, ISNULL([Status], 1) AS [Status]
 FROM dbo.PC_PR
 WHERE PRID = @PRID", conn))
         {
@@ -194,7 +214,7 @@ WHERE PRID = @PRID", conn))
         var rows = new List<PurchaseRequisitionDetailInput>();
 
         using var cmd = new SqlCommand(@"
-SELECT d.PRDetailID,
+SELECT d.RecordID,
        d.ItemID,
        ISNULL(i.ItemCode, '') AS ItemCode,
        ISNULL(i.ItemName, '') AS ItemName,
@@ -209,7 +229,7 @@ FROM dbo.PC_PRDetail d
 LEFT JOIN dbo.INV_ItemList i ON d.ItemID = i.ItemID
 LEFT JOIN dbo.PC_Suppliers s ON d.SupplierID = s.SupplierID
 WHERE d.PRID = @PRID
-ORDER BY d.PRDetailID", conn);
+ORDER BY d.RecordID", conn);
 
         cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = prId;
         using var rd = cmd.ExecuteReader();
@@ -217,7 +237,7 @@ ORDER BY d.PRDetailID", conn);
         {
             rows.Add(new PurchaseRequisitionDetailInput
             {
-                DetailId = rd.IsDBNull(rd.GetOrdinal("PRDetailID")) ? 0 : Convert.ToInt64(rd["PRDetailID"]),
+                DetailId = rd.IsDBNull(rd.GetOrdinal("RecordID")) ? 0 : Convert.ToInt64(rd["RecordID"]),
                 ItemId = Convert.ToInt32(rd["ItemID"]),
                 ItemCode = Convert.ToString(rd["ItemCode"]) ?? string.Empty,
                 ItemName = Convert.ToString(rd["ItemName"]) ?? string.Empty,
@@ -472,6 +492,19 @@ END", conn, trans);
         }
 
         return permsObj;
+    }
+
+    private List<int> GetEffectivePermissionsByStatus(int status)
+    {
+        var isAdmin = User.FindFirst("IsAdminRole")?.Value == "True";
+        var roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
+
+        if (isAdmin)
+        {
+            return Enumerable.Range(1, 20).ToList();
+        }
+
+        return _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, status);
     }
 }
 
