@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
@@ -28,7 +28,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
         _logger = logger;
     }
 
-    public PagePermissions PagePerm { get; set; } = new();
+    public PagePermissions PagePerm { get; private set; } = new PagePermissions();
     public bool CanSave { get; set; }
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
 
@@ -36,7 +36,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
     public string Mode { get; set; } = "add";
 
     [BindProperty]
-    public PurchaseRequisitionHeader Requisition { get; set; } = new();
+    public PurchaseRequisitionHeader Requisition { get; set; } = new PurchaseRequisitionHeader();
 
     [BindProperty]
     public string DetailsJson { get; set; } = "[]";
@@ -47,27 +47,29 @@ public class PurchaseRequisitionDetailModel : BasePageModel
     [TempData]
     public string MessageType { get; set; } = "info";
 
-    public List<SelectListItem> StatusList { get; set; } = [];
-    public List<PurchaseRequisitionItemLookup> ItemList { get; set; } = [];
-    public List<PurchaseRequisitionSupplierLookup> SupplierList { get; set; } = [];
+    public List<SelectListItem> StatusList { get; set; } = new List<SelectListItem>();
+    public List<PurchaseRequisitionItemLookup> ItemList { get; set; } = new List<PurchaseRequisitionItemLookup>();
+    public List<PurchaseRequisitionSupplierLookup> SupplierList { get; set; } = new List<PurchaseRequisitionSupplierLookup>();
 
-    public async Task<IActionResult> OnGetAsync(int? id, string mode = "view")
+    public IActionResult OnGet(int? id, string mode = "view")
     {
-        // 1. Lấy quyền tĩnh của page trước khi xử lý dữ liệu chi tiết
+        // 1. Lấy quyền của trang trước khi xử lý dữ liệu chi tiết.
         PagePerm = GetUserPermissions();
         Mode = string.IsNullOrWhiteSpace(mode) ? "view" : mode.Trim().ToLowerInvariant();
 
+        // 2. Luôn nạp dữ liệu dropdown để màn hình hiển thị đầy đủ khi add, edit hoặc view.
         LoadAllDropdowns();
 
         if (id.HasValue && id.Value > 0)
         {
+            // 3. Trường hợp mở bản ghi sẵn có thì phải nạp header và detail trước.
             LoadPurchaseRequisition(id.Value);
             if (Requisition.Id <= 0)
             {
                 return NotFound();
             }
 
-            // 2. Quyền xem/sửa chi tiết phải bám theo quyền hiệu lực của trạng thái chứng từ
+            // 4. Quyền xem và sửa phải bám theo quyền hiệu lực của đúng trạng thái chứng từ.
             var effectivePermissions = GetEffectivePermissionsByStatus(Requisition.Status);
             if (!effectivePermissions.Contains(PermissionViewDetail))
             {
@@ -85,6 +87,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
         }
         else
         {
+            // 5. Trường hợp tạo mới phải kiểm tra quyền Add theo trạng thái khởi tạo mặc định.
             var effectivePermissions = GetEffectivePermissionsByStatus(1);
             if (!effectivePermissions.Contains(PermissionAdd))
             {
@@ -104,6 +107,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
             DetailsJson = "[]";
         }
 
+        // 6. Cờ CanSave quyết định form có được phép nhập liệu và lưu hay không.
         CanSave = Mode == "add"
             ? GetEffectivePermissionsByStatus(1).Contains(PermissionAdd)
             : Mode == "edit" && GetEffectivePermissionsByStatus(Requisition.Status).Contains(PermissionEdit);
@@ -113,13 +117,14 @@ public class PurchaseRequisitionDetailModel : BasePageModel
 
     public IActionResult OnPost()
     {
-        // 1. Lấy quyền trước khi save để chặn gọi trực tiếp từ URL hoặc submit tay
+        // 1. Lấy quyền trước khi lưu để chặn submit trực tiếp không đúng quyền.
         PagePerm = GetUserPermissions();
         LoadAllDropdowns();
 
         var isNew = Requisition.Id <= 0;
         Mode = isNew ? "add" : (string.IsNullOrWhiteSpace(Mode) ? "edit" : Mode.Trim().ToLowerInvariant());
 
+        // 2. Quyền lưu phụ thuộc vào việc đang tạo mới hay đang sửa bản ghi hiện hữu.
         var effectivePermissions = isNew
             ? GetEffectivePermissionsByStatus(1)
             : GetEffectivePermissionsByStatus(Requisition.Status);
@@ -132,6 +137,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
 
         CanSave = !IsViewMode;
 
+        // 3. Parse các dòng chi tiết và kiểm tra dữ liệu bắt buộc trước khi lưu.
         var details = ParseDetails();
         if (details.Count == 0)
         {
@@ -150,6 +156,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
 
         try
         {
+            // 4. Header và detail luôn được lưu trong cùng một transaction để tránh lệch dữ liệu.
             SavePurchaseRequisition(details);
             TempData["Message"] = "Purchase requisition saved successfully.";
             TempData["MessageType"] = "success";
@@ -170,6 +177,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
 
     private void LoadAllDropdowns()
     {
+        // 1. Màn hình chi tiết dùng chung 3 nhóm dropdown chính.
         LoadStatusList();
         LoadItemList();
         LoadSupplierList();
@@ -180,6 +188,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
 
+        // 1. Nạp thông tin header của phiếu đề nghị mua hàng.
         using (var cmd = new SqlCommand(@"
 SELECT PRID, ISNULL(RequestNo, '') AS RequestNo, RequestDate, ISNULL([Description], '') AS [Description],
        ISNULL(Currency, 1) AS Currency, ISNULL([Status], 1) AS [Status]
@@ -204,6 +213,7 @@ WHERE PRID = @PRID", conn))
 
         if (Requisition.Id > 0)
         {
+            // 2. Sau khi có header thì nạp tiếp các dòng vật tư chi tiết để đổ ra bảng item.
             var details = LoadDetailRows(conn, Requisition.Id);
             DetailsJson = JsonSerializer.Serialize(details);
         }
@@ -256,6 +266,7 @@ ORDER BY d.RecordID", conn);
 
     private void LoadStatusList()
     {
+        // 1. Trạng thái hiển thị đúng theo bảng cấu hình PC_PRStatus.
         StatusList = LoadListFromSql(
             "SELECT PRStatusID, PRStatusName FROM dbo.PC_PRStatus ORDER BY PRStatusID",
             "PRStatusID",
@@ -264,7 +275,8 @@ ORDER BY d.RecordID", conn);
 
     private void LoadItemList()
     {
-        ItemList = [];
+        // 1. Chỉ nạp các vật tư được phép dùng cho nghiệp vụ mua hàng.
+        ItemList = new List<PurchaseRequisitionItemLookup>();
         const string sql = @"
 SELECT TOP 200 ItemID, ISNULL(ItemCode, '') AS ItemCode, ISNULL(ItemName, '') AS ItemName, ISNULL(Unit, '') AS Unit
 FROM dbo.INV_ItemList
@@ -290,10 +302,12 @@ ORDER BY ItemCode";
 
     private void LoadSupplierList()
     {
-        SupplierList = [];
+        // 1. Danh sách supplier phục vụ cho popup thêm chi tiết chỉ lấy các supplier chưa bị xóa.
+        SupplierList = new List<PurchaseRequisitionSupplierLookup>();
         const string sql = @"
 SELECT TOP 200 SupplierID, ISNULL(SupplierCode, '') AS SupplierCode, ISNULL(SupplierName, '') AS SupplierName
 FROM dbo.PC_Suppliers
+WHERE ISNULL(IsDeleted, 0) = 0
 ORDER BY SupplierCode";
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -314,6 +328,7 @@ ORDER BY SupplierCode";
 
     private string GetSuggestedRequestNo(DateTime requestDate)
     {
+        // 1. Mã PR được sinh theo mẫu PRxx/MMyy để đồng bộ với dữ liệu đang có.
         var suffix = requestDate.ToString("MMyy");
         var prefix = $"PR%/{suffix}";
 
@@ -332,6 +347,7 @@ WHERE RequestNo LIKE @Prefix", conn);
 
     private void SavePurchaseRequisition(IReadOnlyList<PurchaseRequisitionDetailInput> details)
     {
+        // 1. Người thao tác hiện tại được dùng để xác định Purchaser mặc định khi tạo mới.
         var operatorCode = User.Identity?.Name?.Trim() ?? string.Empty;
         var isNew = Requisition.Id <= 0;
 
@@ -341,6 +357,7 @@ WHERE RequestNo LIKE @Prefix", conn);
 
         try
         {
+            // 2. RequestNo là duy nhất, không được phép trùng với bản ghi khác.
             using (var checkCmd = new SqlCommand(@"
 SELECT COUNT(1)
 FROM dbo.PC_PR
@@ -358,6 +375,7 @@ WHERE RequestNo = @RequestNo
 
             if (isNew)
             {
+                // 3. Khi tạo mới, hệ thống tự gán Purchaser theo tài khoản đăng nhập.
                 var purId = ResolvePurchaserId(conn, trans, operatorCode);
                 using var headerCmd = new SqlCommand(@"
 INSERT INTO dbo.PC_PR
@@ -382,6 +400,7 @@ SELECT CAST(SCOPE_IDENTITY() AS int);", conn, trans);
             }
             else
             {
+                // 4. Khi sửa, header được cập nhật lại và toàn bộ detail cũ được thay bằng danh sách mới.
                 using var headerCmd = new SqlCommand(@"
 UPDATE dbo.PC_PR
 SET RequestNo = @RequestNo,
@@ -405,6 +424,7 @@ WHERE PRID = @PRID", conn, trans);
                 deleteCmd.ExecuteNonQuery();
             }
 
+            // 5. Sau khi lưu header thì ghi lại toàn bộ detail hiện tại của chứng từ.
             foreach (var detail in details)
             {
                 IndexModel.InsertDetail(conn, trans, Requisition.Id, detail);
@@ -421,6 +441,8 @@ WHERE PRID = @PRID", conn, trans);
 
     private static int? ResolvePurchaserId(SqlConnection conn, SqlTransaction trans, string operatorCode)
     {
+        // 1. Ưu tiên lấy chính nhân viên đang đăng nhập làm người tạo phiếu.
+        // 2. Nếu không tìm thấy thì fallback về các mã đang được dùng để test trong hệ thống.
         using var cmd = new SqlCommand(@"
 SELECT TOP 1 EmployeeID
 FROM dbo.MS_Employee
@@ -441,7 +463,7 @@ END", conn, trans);
 
     private List<PurchaseRequisitionDetailInput> ParseDetails()
     {
-        if (string.IsNullOrWhiteSpace(DetailsJson)) return [];
+        if (string.IsNullOrWhiteSpace(DetailsJson)) return new List<PurchaseRequisitionDetailInput>();
 
         try
         {
@@ -449,17 +471,18 @@ END", conn, trans);
             {
                 PropertyNameCaseInsensitive = true
             });
-            return details ?? [];
+            return details ?? new List<PurchaseRequisitionDetailInput>();
         }
         catch
         {
             ModelState.AddModelError(string.Empty, "Detail data format is invalid.");
-            return [];
+            return new List<PurchaseRequisitionDetailInput>();
         }
     }
 
     private void ValidateDetail(PurchaseRequisitionDetailInput detail, int rowNo)
     {
+        // 1. Mỗi dòng chi tiết bắt buộc có Item và QtyPur lớn hơn 0 trước khi lưu.
         if (detail.ItemId <= 0)
         {
             ModelState.AddModelError(string.Empty, $"Row {rowNo}: Item is required.");
@@ -478,16 +501,18 @@ END", conn, trans);
 
     private PagePermissions GetUserPermissions()
     {
-        var isAdmin = User.FindFirst("IsAdminRole")?.Value == "True";
-        var roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
+        var isAdmin = IsAdminRole();
+        var roleId = GetCurrentRoleId();
         var permsObj = new PagePermissions();
 
         if (isAdmin)
         {
+            // 1. Admin được cấp danh sách quyền đầy đủ để giao diện mở toàn bộ chức năng.
             permsObj.AllowedNos = Enumerable.Range(1, 20).ToList();
         }
         else
         {
+            // 2. User thường lấy quyền tĩnh của page theo RoleID và FunctionID.
             permsObj.AllowedNos = _permissionService.GetPermissionsForPage(roleId, FUNCTION_ID);
         }
 
@@ -496,15 +521,27 @@ END", conn, trans);
 
     private List<int> GetEffectivePermissionsByStatus(int status)
     {
-        var isAdmin = User.FindFirst("IsAdminRole")?.Value == "True";
-        var roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
+        var isAdmin = IsAdminRole();
+        var roleId = GetCurrentRoleId();
 
         if (isAdmin)
         {
+            // 1. Admin luôn có đầy đủ quyền hiệu lực trên mọi trạng thái.
             return Enumerable.Range(1, 20).ToList();
         }
 
+        // 2. User thường phải lấy quyền hiệu lực qua SecurityService theo trạng thái hiện tại.
         return _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, status);
+    }
+
+    private int GetCurrentRoleId()
+    {
+        return int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
+    }
+
+    private bool IsAdminRole()
+    {
+        return User.FindFirst("IsAdminRole")?.Value == "True";
     }
 }
 

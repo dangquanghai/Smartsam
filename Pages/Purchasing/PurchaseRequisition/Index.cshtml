@@ -101,9 +101,6 @@
                             <button type="submit" class="btn btn-primary btn-block btn-sm border mb-2">
                                 <i class="fas fa-search"></i> Search
                             </button>
-                            <button type="button" id="btnPrintList" class="btn btn-outline-secondary btn-block btn-sm border">
-                                <i class="fas fa-print"></i> Print List
-                            </button>
                         </form>
                     </div>
                 </div>
@@ -193,7 +190,7 @@
                                         {
                                             <tr class="prq-row" data-prid="@row.Id" data-request-no="@row.RequestNo" data-can-edit="@(Model.CanEditRow(row.StatusId) ? "true" : "false")" data-can-view-detail="@(Model.CanViewDetailRow(row.StatusId) ? "true" : "false")">
                                                 <td>
-                                                    <input type="radio" class="prq-selector" name="selectedPurchaseRequisition" aria-label="Select row" />
+                                                    <input type="checkbox" class="prq-selector" name="selectedPurchaseRequisition" aria-label="Select row" />
                                                 </td>
                                                 <td>
                                                     <a href="#" class="prq-row-link text-bold" data-id="@row.Id">@row.RequestNo</a>
