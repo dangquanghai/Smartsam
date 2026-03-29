@@ -70,6 +70,10 @@
         });
 
         rowChecks.forEach((check) => {
+            check.addEventListener("mousedown", () => {
+                check.dataset.wasChecked = check.checked ? "true" : "false";
+            });
+
             check.addEventListener("change", (ev) => {
                 const target = ev.currentTarget;
                 if (target.checked) {
@@ -79,6 +83,18 @@
                         }
                     });
                 }
+                syncState();
+            });
+
+            check.addEventListener("click", (ev) => {
+                const target = ev.currentTarget;
+                if (target.dataset.wasChecked !== "true") {
+                    return;
+                }
+
+                ev.preventDefault();
+                target.checked = false;
+                delete target.dataset.wasChecked;
                 syncState();
             });
         });

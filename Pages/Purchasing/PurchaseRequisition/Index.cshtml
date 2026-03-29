@@ -190,7 +190,7 @@
                                         {
                                             <tr class="prq-row" data-prid="@row.Id" data-request-no="@row.RequestNo" data-can-edit="@(Model.CanEditRow(row.StatusId) ? "true" : "false")" data-can-view-detail="@(Model.CanViewDetailRow(row.StatusId) ? "true" : "false")">
                                                 <td>
-                                                    <input type="checkbox" class="prq-selector" name="selectedPurchaseRequisition" aria-label="Select row" />
+                                                    <input type="radio" class="prq-selector" name="selectedPurchaseRequisition" aria-label="Select row" />
                                                 </td>
                                                 <td>
                                                     <a href="#" class="prq-row-link text-bold" data-id="@row.Id">@row.RequestNo</a>
