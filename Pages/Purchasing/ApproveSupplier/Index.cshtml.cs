@@ -2,6 +2,8 @@
 using System.Data;
 using System.Net;
 using System.Net.Mail;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Data.SqlClient;
@@ -21,6 +23,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         private const int NoStatusScopeValue = -999;
         private const int PermissionViewList = 1;
         private const int PermissionApprove = 2;
+        private const string ProcessedSupplierSessionKeyPrefix = "ApproveSupplierProcessed";
 
         private ApproveEmployeeDataScopeViewModel _dataScope = new ApproveEmployeeDataScopeViewModel();
         private bool _isAdminRole;
@@ -258,7 +261,6 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             }
 
             LoadSupplierRows();
-            var nextSupplierId = GetNextSupplierIdFromCurrentRows(supplierId);
             var shouldNotifyNextLevel = IsApproveSupplierNewMode
                 ? true
                 : IsLastSupplierInCurrentRows(supplierId);
@@ -283,8 +285,13 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 return RedirectToCurrentList();
             }
 
+            if (!IsSupplierLinkMode)
+            {
+                MarkSupplierProcessedInCurrentLogin(supplierId);
+            }
+
             var notifyResult = shouldNotifyNextLevel ? TryQueueNotifyNextLevel(currentLevel, current, "approved") : null;
-            CurrentSupplierId = IsSupplierLinkMode ? supplierId : nextSupplierId;
+            CurrentSupplierId = IsSupplierLinkMode ? supplierId : GetNextActiveSupplierIdAfterProcessing(supplierId);
             var approveMessage = "Approved supplier successfully.";
             if (!string.IsNullOrWhiteSpace(notifyResult))
             {
@@ -339,7 +346,6 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             }
 
             LoadSupplierRows();
-            var nextSupplierId = GetNextSupplierIdFromCurrentRows(supplierId);
             var currentLevel = _dataScope.LevelCheckSupplier.Value;
             var operatorCode = User.Identity?.Name?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(operatorCode))
@@ -360,7 +366,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 return RedirectToCurrentList();
             }
 
-            CurrentSupplierId = IsSupplierLinkMode ? supplierId : nextSupplierId;
+            if (!IsSupplierLinkMode)
+            {
+                MarkSupplierProcessedInCurrentLogin(supplierId);
+            }
+
+            CurrentSupplierId = IsSupplierLinkMode ? supplierId : GetNextActiveSupplierIdAfterProcessing(supplierId);
             var disapproveMessage = "Disapproved supplier successfully.";
 
             SetFlashMessage(disapproveMessage, "success");
@@ -420,6 +431,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             // 1. Build điều kiện tìm kiếm theo đúng phạm vi quyền
             var criteria = BuildCriteria();
             Rows = SearchSupplierRows(criteria);
+            Rows = MergeProcessedSupplierRows(Rows);
         }
 
         private void LoadCurrentSupplierDetailData()
@@ -444,12 +456,21 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
             // 2. Xác định vị trí record đang chọn trên danh sách hiện tại
             var selectedId = CurrentSupplierId.GetValueOrDefault();
-            var selectedIndex = Rows.FindIndex(x => x.SupplierID == selectedId);
+            var selectedIndex = CurrentSupplierId.HasValue
+                ? Rows.FindIndex(x => x.SupplierID == selectedId)
+                : GetDefaultCurrentSupplierIndex();
+            if (selectedIndex < 0)
+            {
+                selectedIndex = GetDefaultCurrentSupplierIndex();
+                CurrentSupplierId = Rows[0].SupplierID;
+            }
+
             if (selectedIndex < 0)
             {
                 selectedIndex = 0;
-                CurrentSupplierId = Rows[0].SupplierID;
             }
+
+            CurrentSupplierId = Rows[selectedIndex].SupplierID;
 
             CurrentSupplierPosition = selectedIndex + 1;
             GoToOrder = CurrentSupplierPosition;
@@ -484,6 +505,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 }
 
                 SupplierServiceRows = GetSupplierServiceRows(CurrentSupplierDetail.SupplierID);
+
+                if (!IsSupplierLinkMode && IsProcessedSupplierInCurrentLogin(CurrentSupplierDetail.SupplierID))
+                {
+                    // 4. Trong cùng phiên đăng nhập, supplier đã approve/disapprove vẫn hiển thị nhưng bị khóa thao tác.
+                    IsCurrentSupplierReadOnly = true;
+                }
             }
         }
 
@@ -1085,19 +1112,26 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return cmd.ExecuteNonQuery() > 0;
         }
 
-        private List<string> GetEmailsByLevelCheck(int levelCheckSupplier)
+        private List<string> GetEmailsByLevelCheck(int levelCheckSupplier, int? deptId)
         {
             var rows = new List<string>();
+
+            if (!deptId.HasValue)
+            {
+                return rows;
+            }
 
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
             using var cmd = new SqlCommand(@"
                 SELECT DISTINCT LTRIM(RTRIM(TheEmail))
                 FROM dbo.MS_Employee
                 WHERE LevelCheckSupplier = @LevelCheckSupplier
+                  AND DeptID = @DeptID
                   AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
                   AND ISNULL(IsActive, 0) = 1", conn);
 
             cmd.Parameters.AddWithValue("@LevelCheckSupplier", levelCheckSupplier);
+            cmd.Parameters.AddWithValue("@DeptID", deptId.Value);
             conn.Open();
 
             using var rd = cmd.ExecuteReader();
@@ -1121,7 +1155,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             }
 
             var nextLevel = currentLevel + 1;
-            var recipients = GetEmailsByLevelCheck(nextLevel);
+            var recipients = GetEmailsByLevelCheck(nextLevel, supplier.DeptID);
             if (recipients.Count == 0)
             {
                 return $"No email recipients were found for the next level.";
@@ -1280,6 +1314,201 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
             var currentIndex = Rows.FindIndex(x => x.SupplierID == supplierId);
             return currentIndex >= 0 && currentIndex == Rows.Count - 1;
+        }
+
+        private List<ApproveListRowViewModel> MergeProcessedSupplierRows(List<ApproveListRowViewModel> rows)
+        {
+            if (IsSupplierLinkMode)
+            {
+                return rows;
+            }
+
+            var mergedRows = new List<ApproveListRowViewModel>(rows);
+            var processedIds = GetProcessedSupplierIdsInCurrentLogin();
+            if (processedIds.Count == 0)
+            {
+                return mergedRows;
+            }
+
+            foreach (var supplierId in processedIds)
+            {
+                if (mergedRows.Any(x => x.SupplierID == supplierId))
+                {
+                    continue;
+                }
+
+                var processedRow = GetSupplierRowForCurrentSession(supplierId);
+                if (processedRow is null)
+                {
+                    continue;
+                }
+
+                mergedRows.Add(processedRow);
+            }
+
+            return mergedRows
+                .OrderBy(x => IsProcessedSupplierInCurrentLogin(x.SupplierID) ? 0 : 1)
+                .ThenByDescending(x => x.SupplierID)
+                .ToList();
+        }
+
+        private int GetDefaultCurrentSupplierIndex()
+        {
+            // Khi người dùng mở menu mặc định, ưu tiên focus supplier chưa xử lý trước.
+            var unprocessedIndex = Rows.FindIndex(x => !IsProcessedSupplierInCurrentLogin(x.SupplierID));
+            return unprocessedIndex >= 0 ? unprocessedIndex : 0;
+        }
+
+        private ApproveListRowViewModel? GetSupplierRowForCurrentSession(int supplierId)
+        {
+            using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+            using var cmd = new SqlCommand(@"
+                SELECT
+                    s.SupplierID,
+                    s.SupplierCode,
+                    s.SupplierName,
+                    s.Address,
+                    s.Phone,
+                    s.Mobile,
+                    s.Fax,
+                    s.Contact,
+                    s.[Position],
+                    s.Business,
+                    s.DeptID,
+                    d.DeptCode,
+                    st.SupplierStatusName,
+                    s.[Status]
+                FROM dbo.PC_Suppliers s
+                LEFT JOIN dbo.PC_SupplierStatus st ON s.[Status] = st.SupplierStatusID
+                LEFT JOIN dbo.MS_Department d ON s.DeptID = d.DeptID
+                WHERE s.SupplierID = @SupplierID
+                  AND ISNULL(s.IsNew, 0) = 0", conn);
+
+            cmd.Parameters.Add("@SupplierID", SqlDbType.Int).Value = supplierId;
+            conn.Open();
+
+            using var rd = cmd.ExecuteReader();
+            if (!rd.Read())
+            {
+                return null;
+            }
+
+            var row = new ApproveListRowViewModel
+            {
+                SupplierID = Convert.ToInt32(rd[0]),
+                SupplierCode = Convert.ToString(rd[1]) ?? string.Empty,
+                SupplierName = Convert.ToString(rd[2]) ?? string.Empty,
+                Address = Convert.ToString(rd[3]) ?? string.Empty,
+                Phone = Convert.ToString(rd[4]) ?? string.Empty,
+                Mobile = Convert.ToString(rd[5]) ?? string.Empty,
+                Fax = Convert.ToString(rd[6]) ?? string.Empty,
+                Contact = Convert.ToString(rd[7]) ?? string.Empty,
+                Position = Convert.ToString(rd[8]) ?? string.Empty,
+                Business = Convert.ToString(rd[9]) ?? string.Empty,
+                DeptID = rd.IsDBNull(10) ? null : Convert.ToInt32(rd[10]),
+                DeptCode = Convert.ToString(rd[11]) ?? string.Empty,
+                SupplierStatusName = Convert.ToString(rd[12]) ?? string.Empty,
+                Status = rd.IsDBNull(13) ? null : Convert.ToInt32(rd[13])
+            };
+
+            if (!CanAccessDepartment(row.DeptID))
+            {
+                return null;
+            }
+
+            return row;
+        }
+
+        private bool IsProcessedSupplierInCurrentLogin(int supplierId)
+        {
+            return GetProcessedSupplierIdsInCurrentLogin().Contains(supplierId);
+        }
+
+        private int? GetNextActiveSupplierIdAfterProcessing(int supplierId)
+        {
+            if (Rows.Count == 0)
+            {
+                return supplierId;
+            }
+
+            var processedIds = GetProcessedSupplierIdsInCurrentLogin();
+            processedIds.Add(supplierId);
+
+            var currentIndex = Rows.FindIndex(x => x.SupplierID == supplierId);
+            if (currentIndex < 0)
+            {
+                return Rows
+                    .FirstOrDefault(x => !processedIds.Contains(x.SupplierID))
+                    ?.SupplierID ?? supplierId;
+            }
+
+            for (var index = currentIndex + 1; index < Rows.Count; index++)
+            {
+                if (!processedIds.Contains(Rows[index].SupplierID))
+                {
+                    return Rows[index].SupplierID;
+                }
+            }
+
+            for (var index = 0; index < currentIndex; index++)
+            {
+                if (!processedIds.Contains(Rows[index].SupplierID))
+                {
+                    return Rows[index].SupplierID;
+                }
+            }
+
+            return supplierId;
+        }
+
+        private void MarkSupplierProcessedInCurrentLogin(int supplierId)
+        {
+            var processedIds = GetProcessedSupplierIdsInCurrentLogin();
+            if (!processedIds.Add(supplierId))
+            {
+                return;
+            }
+
+            HttpContext.Session.SetString(GetProcessedSupplierSessionKey(), string.Join(",", processedIds.OrderBy(x => x)));
+        }
+
+        private HashSet<int> GetProcessedSupplierIdsInCurrentLogin()
+        {
+            var rawValue = HttpContext.Session.GetString(GetProcessedSupplierSessionKey());
+            var supplierIds = new HashSet<int>();
+            if (string.IsNullOrWhiteSpace(rawValue))
+            {
+                return supplierIds;
+            }
+
+            foreach (var item in rawValue.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (int.TryParse(item, out var supplierId) && supplierId > 0)
+                {
+                    supplierIds.Add(supplierId);
+                }
+            }
+
+            return supplierIds;
+        }
+
+        private string GetProcessedSupplierSessionKey()
+        {
+            var employeeCode = User.Identity?.Name?.Trim() ?? "ANONYMOUS";
+            var authCookie = Request.Cookies[".AspNetCore.Cookies"] ?? string.Empty;
+            var authCookieHash = ComputeSha256(authCookie);
+            return $"{ProcessedSupplierSessionKeyPrefix}:{employeeCode}:{authCookieHash}";
+        }
+
+        private static string ComputeSha256(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return "empty";
+            }
+
+            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+            return Convert.ToHexString(bytes);
         }
 
         private static ApproveSupplierDetailViewModel CloneForEdit(ApproveSupplierDetailViewModel source)
@@ -1539,6 +1768,10 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public int? Status { get; set; }
     }
 }
+
+
+
+
 
 
 
