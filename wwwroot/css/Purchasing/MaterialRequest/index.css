@@ -336,6 +336,25 @@
     margin: 0.625rem auto;
 }
 
+.create-auto-modal-dialog {
+    max-width: 520px;
+    margin: 0.75rem auto;
+}
+
+.create-auto-modal-footer {
+    padding-top: 0.85rem;
+    padding-bottom: 0.85rem;
+}
+
+.create-auto-according {
+    min-height: 56px;
+    resize: none;
+}
+
+.create-auto-date-range-control {
+    width: 100%;
+}
+
 
 .create-mr-input-row {
     display: flex;
@@ -648,8 +667,29 @@
     cursor: pointer;
 }
 
-#mrLineTableBody .mr-line-row.is-selected {
-    background-color: #dff0ff;
+#mrLineTableBody .mr-line-row.is-selected > td {
+    background-color: #b7d7f4 !important;
+    font-weight: 600;
+}
+
+#mrLineTableBody .mr-line-row.is-selected .mr-readonly-cell-text {
+    color: #143a66;
+}
+
+.mr-col-select {
+    width: 42px;
+}
+
+.mr-line-select-cell {
+    width: 42px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.mr-line-select {
+    width: 1rem;
+    height: 1rem;
+    accent-color: #0d6efd;
 }
 
 .mr-item-lookup-toolbar .form-group {

@@ -638,6 +638,16 @@
         const $filterStoreGroup = $('#Filter_StoreGroup');
         const $descInput = $('#createAutoDescription');
         const $form = $('#createAutoMrForm');
+        const $dateRange = $('#CreateAutoDateRange');
+        const $dateCreate = $('input[name="CreateAutoDateCreate"]');
+        const $fromDate = $('input[name="CreateAutoFromDate"]');
+        const $toDate = $('input[name="CreateAutoToDate"]');
+
+        if ($dateRange.length > 0) {
+            window.initSimpleDateRange('CreateAutoDateRange', 'input[name="CreateAutoFromDate"]', 'input[name="CreateAutoToDate"]', {
+                linkedCalendars: false
+            });
+        }
 
         function setDefaults() {
             if ($filterStoreGroup.length > 0 && $storeGroupSelect.length > 0) {
@@ -648,6 +658,30 @@
                 const now = new Date();
                 const month = String(now.getMonth() + 1).padStart(2, '0');
                 $descInput.val(`Auto MR ${month}/${now.getFullYear()}`);
+            }
+
+            if ($dateCreate.length > 0 && !$dateCreate.val()) {
+                const now = new Date();
+                $dateCreate.val(now.toISOString().slice(0, 10));
+            }
+
+            if ($fromDate.length > 0 && !$fromDate.val()) {
+                const now = new Date();
+                now.setMonth(now.getMonth() - 3);
+                $fromDate.val(now.toISOString().slice(0, 10));
+            }
+
+            if ($toDate.length > 0 && !$toDate.val()) {
+                const now = new Date();
+                $toDate.val(now.toISOString().slice(0, 10));
+            }
+
+            if ($dateRange.length > 0) {
+                const fromValue = ($fromDate.val() || '').toString().trim();
+                const toValue = ($toDate.val() || '').toString().trim();
+                if (fromValue && toValue) {
+                    window.setDateRangeValue('CreateAutoDateRange', fromValue, toValue);
+                }
             }
         }
 

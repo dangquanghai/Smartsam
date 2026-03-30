@@ -214,7 +214,7 @@
                 <!-- ACTION PANEL -->
                 <div class="card card-outline card-primary mr-action-panel">
                     <div class="card-footer p-2 text-center">
-                        @if (Model.PagePerm.HasPermission(2))
+                        @if (Model.CanCreateAutoMr)
                         {
                             <button type="button" id="btnCreateAuto" class="btn btn-danger btn-sm">CreateAT</button>
                         }
@@ -341,13 +341,13 @@
     </div>
 }
 
-@if (Model.PagePerm.HasPermission(2))
+@if (Model.CanCreateAutoMr)
 {
     <div class="modal fade" id="createAutoMrModal" tabindex="-1" role="dialog" aria-labelledby="createAutoMrModalLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
-        <div class="modal-dialog" role="document">
+        <div class="modal-dialog create-auto-modal-dialog" role="document">
             <div class="modal-content">
                 <div class="modal-header py-2">
-                    <h5 class="modal-title" id="createAutoMrModalLabel">Create Auto MR</h5>
+                    <h5 class="modal-title" id="createAutoMrModalLabel">Generate MR</h5>
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                         <span aria-hidden="true">&times;</span>
                     </button>
@@ -355,31 +355,68 @@
                 <div class="modal-body pt-2 pb-1">
                     <form id="createAutoMrForm" method="post" asp-page-handler="CreateAuto">
                         @Html.AntiForgeryToken()
-                        <div class="form-group mb-2">
-                            <label class="mb-1">Store Group</label>
-                            <select id="createAutoStoreGroup"
-                                    name="CreateAutoStoreGroup"
-                                    class="form-control"
-                                    disabled="@storeGroupLocked">
-                                @foreach (var option in Model.StoreGroups)
+                        <div class="form-row">
+                            <div class="form-group col-md-4 mb-2">
+                                <label class="mb-1">Request No:</label>
+                                <input type="text"
+                                       class="form-control form-control-sm"
+                                       value="@(Model.CreateAutoRequestNoPreview.HasValue ? Model.CreateAutoRequestNoPreview.Value.ToString() : "(auto)")"
+                                       readonly />
+                            </div>
+                            <div class="form-group col-md-8 mb-2">
+                                <label class="mb-1">Store Group:</label>
+                                <select id="createAutoStoreGroup"
+                                        name="CreateAutoStoreGroup"
+                                        class="form-control form-control-sm"
+                                        disabled="@storeGroupLocked">
+                                    @foreach (var option in Model.StoreGroups)
+                                    {
+                                        <option value="@option.Value">@option.Text</option>
+                                    }
+                                </select>
+                                @if (storeGroupLocked)
                                 {
-                                    <option value="@option.Value">@option.Text</option>
+                                        <input type="hidden" name="CreateAutoStoreGroup" value="@Model.Filter.StoreGroup" />
                                 }
-                            </select>
-                            @if (storeGroupLocked)
-                            {
-                                <input type="hidden" name="CreateAutoStoreGroup" value="@Model.Filter.StoreGroup" />
-                            }
+                            </div>
                         </div>
-                        <div class="form-group mb-0">
-                            <label class="mb-1">Description</label>
-                            <textarea id="createAutoDescription" name="CreateAutoDescription" class="form-control vni-font" rows="2"></textarea>
+                        <div class="form-row">
+                            <div class="form-group col-md-4 mb-2">
+                                <label class="mb-1">Date Create:</label>
+                                <input type="date"
+                                       name="CreateAutoDateCreate"
+                                       class="form-control form-control-sm"
+                                       value="@(Model.CreateAutoDateCreate.HasValue ? Model.CreateAutoDateCreate.Value.ToString("yyyy-MM-dd") : string.Empty)" />
+                            </div>
+                            <div class="form-group col-md-8 mb-2">
+                                <label class="mb-1">According:</label>
+                                <textarea name="CreateAutoDescription"
+                                          id="createAutoDescription"
+                                          class="form-control form-control-sm vni-font create-auto-according"
+                                          rows="2">@((Model.CreateAutoDescription ?? string.Empty))</textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group col-md-12 mb-0">
+                                <label class="mb-1">From Date - To Date:</label>
+                                <div class="mr-date-range-control create-auto-date-range-control">
+                                    <input type="text"
+                                           id="CreateAutoDateRange"
+                                           class="form-control form-control-sm"
+                                           readonly />
+                                </div>
+                                <input type="hidden"
+                                       name="CreateAutoFromDate"
+                                       value="@(Model.CreateAutoFromDate.HasValue ? Model.CreateAutoFromDate.Value.ToString("yyyy-MM-dd") : string.Empty)" />
+                                <input type="hidden"
+                                       name="CreateAutoToDate"
+                                       value="@(Model.CreateAutoToDate.HasValue ? Model.CreateAutoToDate.Value.ToString("yyyy-MM-dd") : string.Empty)" />
+                            </div>
                         </div>
                     </form>
                 </div>
-                <div class="modal-footer py-2">
-                    <button type="submit" form="createAutoMrForm" class="btn btn-sm btn-primary">Create AT</button>
-                    <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Close</button>
+                <div class="modal-footer create-auto-modal-footer">
+                    <button type="submit" form="createAutoMrForm" class="btn btn-sm btn-primary">Generate</button>
                 </div>
             </div>
         </div>

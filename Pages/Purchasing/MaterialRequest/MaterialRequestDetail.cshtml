@@ -10,13 +10,20 @@
     <div class="container-fluid">
         <form method="post"
               id="materialRequestDetailForm"
+              data-current-status="@Model.CurrentStatusId"
               data-can-save="@Model.CanSave.ToString().ToLowerInvariant()"
               data-can-submit="@Model.CanSubmit.ToString().ToLowerInvariant()"
+              data-can-calculate="@Model.CanCalculate.ToString().ToLowerInvariant()"
               data-can-approve="@Model.CanApprove.ToString().ToLowerInvariant()"
               data-can-reject="@Model.CanReject.ToString().ToLowerInvariant()"
               data-store-group-locked="@Model.StoreGroupLocked.ToString().ToLowerInvariant()">
-            <input type="hidden" asp-for="LinesJson" id="linesJsonInput" />
-            <input type="hidden" asp-for="ReturnUrl" />
+              <input type="hidden" asp-for="Id" />
+              <input type="hidden" asp-for="LinesJson" id="linesJsonInput" />
+              <input type="hidden" asp-for="RejectItemLineIdsJson" id="rejectItemLineIdsJsonInput" />
+              <input type="hidden" asp-for="RejectItemReason" id="rejectItemReasonInput" />
+              <input type="hidden" id="workflowActionModeInput" />
+              <input type="hidden" id="draftSaveActionInput" name="DraftSaveAction" />
+              <input type="hidden" asp-for="ReturnUrl" />
 
             <div class="card card-primary card-outline">
                 <div class="card-header p-2">
@@ -26,7 +33,7 @@
                     @if (TempData["SuccessMessage"] != null)
                     {
                         <div class="alert alert-success alert-dismissible fade show" role="alert">
-                            <strong><i class="fas fa-check-circle"></i> Thông báo:</strong> @TempData["SuccessMessage"]
+                            <strong><i class="fas fa-check-circle"></i></strong> @TempData["SuccessMessage"]
                             <button type="button" class="close" data-dismiss="alert" aria-label="Close">
                                 <span aria-hidden="true">&times;</span>
                             </button>
@@ -101,6 +108,7 @@
                     <div class="table-responsive">
                         <table class="table table-sm table-bordered mb-0" id="mrLineTable">
                             <colgroup>
+                                <col class="mr-col-select" />
                                 <col class="mr-col-itemcode" />
                                 <col class="mr-col-itemname" />
                                 <col class="mr-col-unit" />
@@ -113,6 +121,7 @@
                             </colgroup>
                             <thead class="thead-light">
                                 <tr>
+                                    <th></th>
                                     <th>ITEMCODE</th>
                                     <th>ITEMNAME</th>
                                     <th>Unit</th>
@@ -127,7 +136,7 @@
                             <tbody id="mrLineTableBody">
                                 @if (Model.Lines.Count == 0)
                                 {
-                                    <tr class="mr-line-empty"><td colspan="9" class="text-center text-muted">No line items.</td></tr>
+                                    <tr class="mr-line-empty"><td colspan="10" class="text-center text-muted">No line items.</td></tr>
                                 }
                                 else
                                 {
@@ -135,7 +144,11 @@
                                     {
                                         var line = Model.Lines[i];
                                         <tr class="mr-line-row">
+                                            <td class="mr-line-select-cell text-center align-middle">
+                                                <input type="radio" class="mr-line-select" name="mrLineSelect" aria-label="Select row" />
+                                            </td>
                                             <td>
+                                                <input type="hidden" class="mr-line-id" value="@(line.Id?.ToString() ?? string.Empty)" />
                                                 <span class="mr-readonly-cell-text">@(line.ItemCode ?? string.Empty)</span>
                                                 <input type="hidden" class="mr-line-itemcode" value="@line.ItemCode" />
                                             </td>
@@ -161,11 +174,12 @@
                                                 <input type="hidden" class="mr-line-accin" value="@(line.AccIn?.ToString("0.##") ?? "0")" />
                                             </td>
                                             <td>
-                                                <span class="mr-readonly-cell-text">@(line.Buy?.ToString("0.##") ?? "0")</span>
+                                                <span class="mr-readonly-cell-text mr-line-buy-text">@(line.Buy?.ToString("0.##") ?? "0")</span>
                                                 <input type="hidden" class="mr-line-buy" value="@(line.Buy?.ToString("0.##") ?? "0")" />
                                             </td>
                                             <td>
                                                 <input type="text" class="form-control form-control-sm mr-line-note vni-font" value="@line.Note" />
+                                                <input type="hidden" class="mr-line-normmain" value="@(line.NormMain?.ToString("0.##") ?? "0")" />
                                                 <input type="hidden" class="mr-line-price" value="@(line.Price?.ToString("0.##") ?? "0")" />
                                                 <input type="hidden" class="mr-line-new-item" value="@(line.NewItem ? "true" : "false")" />
                                             </td>
@@ -178,13 +192,13 @@
                 </div>
                 <div class="card-footer py-2">
                     <div class="float-left">
-                        <button type="button" class="btn btn-success btn-sm mx-1 my-1" id="addMrLineBtn"><i class="fas fa-plus"></i> Add Detail</button>
-                        <button type="button" class="btn btn-danger btn-sm mx-1 my-1" id="removeMrLineBtn"><i class="fas fa-trash-alt"></i> Remove Item</button>
-                        <button type="button" class="btn btn-primary btn-sm mx-1 my-1" id="createNewItemBtn"><i class="fas fa-box-open"></i> Create new item</button>
-                        <button type="button" class="btn btn-info btn-sm mx-1 my-1" id="calculateBtn"><i class="fas fa-calculator"></i> Calculate</button>
-                        <button type="submit" asp-page-handler="Submit" id="mrSubmitBtn" class="btn btn-dark btn-sm mx-1 my-1"><i class="fas fa-paper-plane"></i> Submit</button>
-                        <button type="submit" asp-page-handler="Approve" id="mrApproveBtn" class="btn btn-success btn-sm mx-1 my-1"><i class="fas fa-check"></i> Approve</button>
-                        <button type="submit" asp-page-handler="Reject" id="mrRejectBtn" class="btn btn-danger btn-sm mx-1 my-1"><i class="fas fa-times"></i> Reject</button>
+                        <button type="button" class="btn btn-success btn-sm mx-1 my-1 @(Model.CurrentStatusId == -1 && Model.CanSave ? string.Empty : "d-none")" id="addMrLineBtn"><i class="fas fa-plus"></i> Add Detail</button>
+                        <button type="button" class="btn btn-danger btn-sm mx-1 my-1 @(Model.CurrentStatusId == -1 && Model.CanSave ? string.Empty : "d-none")" id="removeMrLineBtn"><i class="fas fa-trash-alt"></i> Remove Item</button>
+                        <button type="button" class="btn btn-primary btn-sm mx-1 my-1 @(Model.CurrentStatusId == -1 && Model.CanSave ? string.Empty : "d-none")" id="createNewItemBtn"><i class="fas fa-box-open"></i> Create new item</button>
+                        <button type="submit" asp-page-handler="Calculate" class="btn btn-info btn-sm mx-1 my-1 @(Model.CanCalculate ? string.Empty : "d-none")" id="calculateBtn"><i class="fas fa-calculator"></i> Calculate</button>
+                        <button type="submit" asp-page-handler="Submit" id="mrSubmitBtn" class="btn btn-dark btn-sm mx-1 my-1 @(Model.CurrentStatusId == -1 && Model.CanSubmit ? string.Empty : "d-none")"><i class="fas fa-paper-plane"></i> Submit</button>
+                        <button type="submit" asp-page-handler="Approve" id="mrApproveBtn" class="btn btn-success btn-sm mx-1 my-1 @(Model.CanApprove ? string.Empty : "d-none")"><i class="fas fa-check"></i> Approve</button>
+                        <button type="button" asp-page-handler="Reject" id="mrRejectBtn" class="btn btn-danger btn-sm mx-1 my-1 @(Model.CanReject ? string.Empty : "d-none")"><i class="fas fa-times"></i> Reject</button>
                         <a href="@Model.BackToListUrl" class="btn btn-default btn-sm mx-1 my-1">Back to List</a>
                     </div>
                     <div class="float-right">

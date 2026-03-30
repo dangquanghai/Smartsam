@@ -66,6 +66,18 @@ public class IndexModel : BasePageModel
     [BindProperty]
     public int? CreateAutoStoreGroup { get; set; }
 
+    [BindProperty]
+    public DateTime? CreateAutoDateCreate { get; set; }
+
+    [BindProperty]
+    public DateTime? CreateAutoFromDate { get; set; }
+
+    [BindProperty]
+    public DateTime? CreateAutoToDate { get; set; }
+
+    [BindProperty]
+    public long? CreateAutoRequestNoPreview { get; set; }
+
     [TempData]
     public string? SuccessMessage { get; set; }
 
@@ -79,6 +91,7 @@ public class IndexModel : BasePageModel
     public List<SelectListItem> StoreGroups { get; set; } = new List<SelectListItem>();
     public List<SelectListItem> Statuses { get; set; } = new List<SelectListItem>();
     public List<MaterialRequestListRowDto> Rows { get; set; } = new List<MaterialRequestListRowDto>();
+    public bool CanCreateAutoMr => CanCreateAutoMrCore();
 
     public int TotalRecords { get; set; }
     public int TotalPages
@@ -123,6 +136,7 @@ public class IndexModel : BasePageModel
 
         ApplyTempDataMessagesToModelState();
         NormalizeConditionMode();
+        PopulateCreateAutoDefaults(cancellationToken);
         if (Filter.PageSize <= 0)
         {
             Filter.PageSize = DefaultPageSize;
@@ -137,6 +151,7 @@ public class IndexModel : BasePageModel
             Filter.ToDate = DateTime.Today.Date;
         }
 
+        ApplyDefaultInboxStatusIfNeeded();
         ViewData["CanShowPcCondition"] = AllowShowPcCondition();
         ViewData["CanShowStoreCondition"] = AllowShowStoreCondition();
         ViewData["StoreGroupLocked"] = IsStoreGroupLocked();
@@ -188,6 +203,7 @@ public class IndexModel : BasePageModel
         Filter.PageSize = request.PageSize <= 0 ? DefaultPageSize : Math.Min(request.PageSize, 200);
 
         NormalizeConditionMode();
+        ApplyDefaultInboxStatusIfNeeded();
 
         var result = _materialRequestService.SearchPagedAsync(BuildCriteria(includePaging: true), cancellationToken).GetAwaiter().GetResult();
         var totalPages = Filter.PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(result.TotalCount / (double)Filter.PageSize));
@@ -198,8 +214,9 @@ public class IndexModel : BasePageModel
             var effectivePerms = PagePerm.AllowedNos;
 
             var canEditRow = effectivePerms.Contains(PermissionEdit) && statusId == StatusJustCreated;
-            var canApprove = CanApproveStatus(statusId);
-            var canReject = CanRejectStatus(statusId);
+            var isAuto = r.IsAuto;
+            var canApprove = CanApproveStatus(statusId, isAuto);
+            var canReject = CanRejectStatus(statusId, isAuto);
 
             return new
             {
@@ -370,16 +387,19 @@ public class IndexModel : BasePageModel
             return RedirectToPage("./Index");
         }
 
+        var dateCreate = CreateAutoDateCreate ?? DateTime.Today;
+        var fromDate = CreateAutoFromDate ?? dateCreate.AddMonths(-3);
+        var toDate = CreateAutoToDate ?? dateCreate;
         var description = string.IsNullOrWhiteSpace(CreateAutoDescription)
-            ? $"Auto MR {DateTime.Today:MM/yyyy}"
+            ? $"Auto MR {dateCreate:MM/yyyy}"
             : CreateAutoDescription.Trim();
 
         var header = new MaterialRequestDetailDto
         {
             StoreGroup = scopedStoreGroup,
-            DateCreate = DateTime.Today,
-            FromDate = DateTime.Today.AddMonths(-3),
-            ToDate = DateTime.Today,
+            DateCreate = dateCreate,
+            FromDate = fromDate,
+            ToDate = toDate,
             AccordingTo = description,
             MaterialStatusId = StatusJustCreated,
             NoIssue = 0,
@@ -459,6 +479,47 @@ public class IndexModel : BasePageModel
                     }
                 };
             }
+        }
+    }
+
+    private void PopulateCreateAutoDefaults(CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!CreateAutoRequestNoPreview.HasValue || CreateAutoRequestNoPreview.Value <= 0)
+            {
+                var connectionString = _config.GetConnectionString("DefaultConnection")
+                    ?? throw new InvalidOperationException("Missing connection string: DefaultConnection");
+                var previewValue = Helper.ExecuteScalarAsync(
+                    connectionString,
+                    "SELECT ISNULL(MAX(REQUEST_NO), 0) + 1 FROM dbo.MATERIAL_REQUEST",
+                    cancellationToken: cancellationToken).GetAwaiter().GetResult();
+                CreateAutoRequestNoPreview = Convert.ToInt64(previewValue ?? 0L);
+            }
+        }
+        catch
+        {
+            CreateAutoRequestNoPreview = null;
+        }
+
+        if (!CreateAutoDateCreate.HasValue)
+        {
+            CreateAutoDateCreate = DateTime.Today;
+        }
+
+        if (!CreateAutoFromDate.HasValue)
+        {
+            CreateAutoFromDate = CreateAutoDateCreate.Value.AddMonths(-3);
+        }
+
+        if (!CreateAutoToDate.HasValue)
+        {
+            CreateAutoToDate = CreateAutoDateCreate.Value;
+        }
+
+        if (string.IsNullOrWhiteSpace(CreateAutoDescription))
+        {
+            CreateAutoDescription = $"Auto MR {CreateAutoDateCreate.Value:MM/yyyy}";
         }
     }
 
@@ -643,7 +704,13 @@ public class IndexModel : BasePageModel
 
     private bool AllowCreateAuto()
     {
-        return IsAdminUser() || HasPermission(PermissionCreateAuto);
+        return CanCreateAutoMrCore();
+    }
+
+    private bool CanCreateAutoMrCore()
+    {
+        return IsAdminUser()
+            || (_dataScope.IsInventoryControlInDep && _dataScope.StoreGroup.HasValue);
     }
 
     private bool AllowEdit()
@@ -651,9 +718,19 @@ public class IndexModel : BasePageModel
         return IsAdminUser() || HasPermission(PermissionEdit);
     }
 
-    private bool AllowShowAll()
+    private bool CanShowAllRequests()
     {
-        return IsAdminUser() || HasPermission(PermissionShowAll) || _dataScope.ApprovalLevel >= 2;
+        return IsAdminUser()
+            || HasPermission(PermissionShowAll);
+    }
+
+    private bool CanAccessAllStoreGroups()
+    {
+        return IsAdminUser()
+            || _dataScope.IsPurchaser
+            || _dataScope.IsCFO
+            || _dataScope.IsBOD
+            || _dataScope.ApprovalLevel >= 2;
     }
 
     private bool AllowShowPcCondition()
@@ -668,7 +745,7 @@ public class IndexModel : BasePageModel
 
     private bool IsStoreGroupLocked()
     {
-        return !AllowShowAll();
+        return !CanAccessAllStoreGroups();
     }
 
     private void ApplyTempDataMessagesToModelState()
@@ -684,43 +761,70 @@ public class IndexModel : BasePageModel
         }
     }
 
-    private bool CanApproveStatus(int statusId)
+    private void ApplyDefaultInboxStatusIfNeeded()
     {
-        if (_isAdminRole)
+        if (CanShowAllRequests())
         {
-            return true;
+            return;
         }
 
-        if (statusId == 1)
+        if (Filter.StatusIds is { Count: > 0 })
         {
-            return _dataScope.IsHeadDept || _dataScope.ApprovalLevel >= 2;
+            return;
         }
 
-        if (statusId == 2)
-        {
-            return _dataScope.ApprovalLevel >= 2;
-        }
-
-        if (statusId == 3)
-        {
-            return _dataScope.ApprovalLevel >= 3;
-        }
-
-        return false;
+        Filter.StatusIds = new List<int> { GetDefaultInboxStatusId() };
     }
 
-    private bool CanRejectStatus(int statusId)
+    private int GetDefaultInboxStatusId()
+    {
+        if (_dataScope.IsHeadDept)
+        {
+            return 0;
+        }
+
+        if (_dataScope.IsPurchaser || _dataScope.ApprovalLevel >= 2)
+        {
+            return 1;
+        }
+
+        if (_dataScope.IsCFO || _dataScope.ApprovalLevel >= 3)
+        {
+            return 2;
+        }
+
+        return StatusJustCreated;
+    }
+
+    private bool CanApproveStatus(int statusId, bool isAuto)
     {
         if (_isAdminRole)
         {
             return true;
         }
-        if (statusId is not (1 or 2 or 3))
-        {
-            return false;
-        }
 
-        return _dataScope.IsHeadDept || _dataScope.ApprovalLevel >= 2;
+        return statusId switch
+        {
+            1 => _dataScope.IsHeadDept,
+            2 => _dataScope.IsPurchaser,
+            3 => !isAuto && _dataScope.IsCFO,
+            _ => false
+        };
+    }
+
+    private bool CanRejectStatus(int statusId, bool isAuto)
+    {
+        if (_isAdminRole)
+        {
+            return true;
+        }
+        return statusId switch
+        {
+            1 => _dataScope.IsHeadDept,
+            2 => _dataScope.IsPurchaser,
+            3 => !isAuto && _dataScope.IsCFO,
+            _ => false
+        };
     }
 
     private static List<MaterialRequestItemLookupDto> ParseCreateItems(string? json)
@@ -773,6 +877,7 @@ public class IndexModel : BasePageModel
                 InStock = item.InStock,
                 AccIn = 0,
                 Buy = 0,
+                NormMain = 0,
                 Price = 0,
                 Note = string.Empty,
                 NewItem = false,
@@ -919,6 +1024,7 @@ public class MaterialRequestLineDto
     public decimal? InStock { get; set; }
     public decimal? AccIn { get; set; }
     public decimal? Buy { get; set; }
+    public decimal? NormMain { get; set; }
     public decimal? Price { get; set; }
 
     [StringLength(255, ErrorMessage = "Note must be at most 255 characters.")]
@@ -926,6 +1032,7 @@ public class MaterialRequestLineDto
 
     public bool NewItem { get; set; }
     public bool Selected { get; set; }
+    public decimal? Issued { get; set; }
 }
 
 public class MaterialRequestLineReadonlySnapshotDto
@@ -1223,10 +1330,12 @@ public class MaterialRequestService
                 d.INSTOCK,
                 d.acctualyInventory,
                 d.BUY,
+                ISNULL(d.NORM_Q_MAIN, 0) AS NORM_Q_MAIN,
                 d.PRICE,
                 d.NOTE,
                 ISNULL(d.NEW_ITEM, 0) AS NEW_ITEM,
-                ISNULL(d.SELECTED, 0) AS SELECTED
+                ISNULL(d.SELECTED, 0) AS SELECTED,
+                ISNULL(d.ISSUED, 0) AS ISSUED
             FROM dbo.MATERIAL_REQUEST_DETAIL d
             LEFT JOIN dbo.INV_ItemList i ON i.ItemCode = d.ITEMCODE
             WHERE REQUEST_NO = @RequestNo
@@ -1246,10 +1355,12 @@ public class MaterialRequestService
                 InStock = rd.IsDBNull(6) ? null : Convert.ToDecimal(rd[6]),
                 AccIn = rd.IsDBNull(7) ? null : Convert.ToDecimal(rd[7]),
                 Buy = rd.IsDBNull(8) ? null : Convert.ToDecimal(rd[8]),
-                Price = rd.IsDBNull(9) ? null : Convert.ToDecimal(rd[9]),
-                Note = rd[10]?.ToString(),
-                NewItem = !rd.IsDBNull(11) && Convert.ToBoolean(rd[11]),
-                Selected = !rd.IsDBNull(12) && Convert.ToBoolean(rd[12])
+                NormMain = rd.IsDBNull(9) ? null : Convert.ToDecimal(rd[9]),
+                Price = rd.IsDBNull(10) ? null : Convert.ToDecimal(rd[10]),
+                Note = rd[11]?.ToString(),
+                NewItem = !rd.IsDBNull(12) && Convert.ToBoolean(rd[12]),
+                Selected = !rd.IsDBNull(13) && Convert.ToBoolean(rd[13]),
+                Issued = rd.IsDBNull(14) ? null : Convert.ToDecimal(rd[14])
             },
             cmd => AddNumeric18_0Param(cmd, "@RequestNo", requestNo),
             cancellationToken);
@@ -1303,6 +1414,77 @@ public class MaterialRequestService
         return snapshots;
     }
 
+    public async Task CalculatePurchaserLinesAsync(
+        long requestNo,
+        int storeGroup,
+        IList<MaterialRequestLineDto> lines,
+        CancellationToken cancellationToken = default)
+    {
+        if (lines.Count == 0)
+        {
+            return;
+        }
+
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync(cancellationToken);
+
+        foreach (var line in lines)
+        {
+            var itemCode = (line.ItemCode ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(itemCode))
+            {
+                continue;
+            }
+
+            if (itemCode.StartsWith("ORDER", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var normMain = 0m;
+            var normDept = 0m;
+            var rawInventory = 0m;
+            var reservedQty = 0m;
+            int? itemId = null;
+
+            await using (var itemCmd = new SqlCommand(@"
+                SELECT TOP 1
+                    i.ItemID,
+                    CAST(COALESCE(NULLIF(i.StoreNormInMain, 0), NULLIF(i.ReOrderPoint, 0), 1) AS decimal(18,2)) AS NormMain,
+                    CAST(ISNULL(kgi.ReOrderPoint, 0) AS decimal(18,2)) AS NormDept
+                FROM dbo.INV_ItemList i
+                LEFT JOIN dbo.INV_KPGroupIndex kgi
+                    ON kgi.ItemID = i.ItemID
+                   AND kgi.KPGroupID = @StoreGroup
+                WHERE i.ItemCode = @ItemCode", conn))
+            {
+                Helper.AddParameter(itemCmd, "@ItemCode", itemCode, SqlDbType.VarChar, 20);
+                Helper.AddParameter(itemCmd, "@StoreGroup", storeGroup, SqlDbType.Int);
+
+                await using var reader = await itemCmd.ExecuteReaderAsync(cancellationToken);
+                if (await reader.ReadAsync(cancellationToken))
+                {
+                    itemId = reader.IsDBNull(0) ? (int?)null : Convert.ToInt32(reader[0]);
+                    normMain = reader.IsDBNull(1) ? 0m : Convert.ToDecimal(reader[1]);
+                    normDept = reader.IsDBNull(2) ? 0m : Convert.ToDecimal(reader[2]);
+                }
+            }
+
+            if (itemId.HasValue)
+            {
+                rawInventory = await GetMainInventoryAsync(conn, itemId.Value, storeGroup, cancellationToken);
+            }
+
+            reservedQty = await GetReservedQtyAsync(conn, requestNo, itemCode, cancellationToken);
+
+            line.NormMain = normMain;
+            line.NotReceipt = reservedQty;
+            line.AccIn = rawInventory;
+            line.InStock = rawInventory - reservedQty;
+            line.Buy = (line.OrderQty ?? 0m) + normMain + normDept - (line.InStock ?? 0m);
+        }
+    }
+
     public async Task<Dictionary<string, string>> GetItemUnitsAsync(IEnumerable<string> itemCodes, CancellationToken cancellationToken = default)
     {
         var normalizedCodes = itemCodes
@@ -1352,6 +1534,87 @@ public class MaterialRequestService
         }
 
         return unitMap;
+    }
+
+    private static async Task<decimal> GetMainInventoryAsync(SqlConnection conn, int itemId, int storeGroup, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            SELECT
+                ISNULL(bg.BGQty, 0)
+                + ISNULL(rcv.RecQty, 0)
+                - ISNULL(iss.IssQty, 0) AS EndQty
+            FROM
+                (
+                    SELECT SUM(bg.BGQuantity) AS BGQty
+                    FROM dbo.INV_ItemStoreBG bg
+                    INNER JOIN dbo.INV_StoreList sl ON bg.StoreID = sl.StoreID
+                    INNER JOIN dbo.INV_KPGroup kp ON sl.DeptID = kp.KPGroupID
+                    WHERE bg.[Year] = YEAR(GETDATE())
+                      AND bg.ItemID = @ItemID
+                      AND kp.KPGroupID = @StoreGroup
+                      AND sl.StoreID <> 23
+                      AND sl.StoreID <> 24
+                ) bg
+            CROSS APPLY
+                (
+                    SELECT SUM(fd.Act_Qty) AS RecQty
+                    FROM dbo.INV_ItemFlowDetail fd
+                    INNER JOIN dbo.INV_ItemFlow f ON fd.FlowID = f.FlowID
+                    INNER JOIN dbo.INV_StoreList sl ON f.ToStore = sl.StoreID
+                    INNER JOIN dbo.INV_KPGroup kp ON sl.DeptID = kp.KPGroupID
+                    WHERE (f.FlowType = 2 OR f.FlowType = 3)
+                      AND YEAR(f.FlowDate) = YEAR(GETDATE())
+                      AND fd.ItemID = @ItemID
+                      AND kp.KPGroupID = @StoreGroup
+                      AND sl.StoreID <> 23
+                      AND sl.StoreID <> 24
+                ) rcv
+            CROSS APPLY
+                (
+                    SELECT SUM(fd.Act_Qty) AS IssQty
+                    FROM dbo.INV_ItemFlowDetail fd
+                    INNER JOIN dbo.INV_ItemFlow f ON fd.FlowID = f.FlowID
+                    INNER JOIN dbo.INV_StoreList sl ON f.FromStore = sl.StoreID
+                    INNER JOIN dbo.INV_KPGroup kp ON sl.DeptID = kp.KPGroupID
+                    WHERE (f.FlowType = 1 OR f.FlowType = 3)
+                      AND YEAR(f.FlowDate) = YEAR(GETDATE())
+                      AND fd.ItemID = @ItemID
+                      AND kp.KPGroupID = @StoreGroup
+                      AND sl.StoreID <> 23
+                      AND sl.StoreID <> 24
+                ) iss";
+
+        await using var cmd = new SqlCommand(sql, conn);
+        Helper.AddParameter(cmd, "@ItemID", itemId, SqlDbType.Int);
+        Helper.AddParameter(cmd, "@StoreGroup", storeGroup, SqlDbType.Int);
+
+        var value = await cmd.ExecuteScalarAsync(cancellationToken);
+        return value == null || value == DBNull.Value ? 0m : Convert.ToDecimal(value);
+    }
+
+    private static async Task<decimal> GetReservedQtyAsync(SqlConnection conn, long requestNo, string itemCode, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            SELECT ISNULL(SUM(
+                CASE
+                    WHEN ISNULL(d.NEW_ORDER, 0) - ISNULL(d.ISSUED, 0) > 0
+                        THEN ISNULL(d.NEW_ORDER, 0) - ISNULL(d.ISSUED, 0)
+                    ELSE 0
+                END
+            ), 0)
+            FROM dbo.MATERIAL_REQUEST r
+            INNER JOIN dbo.MATERIAL_REQUEST_DETAIL d ON r.REQUEST_NO = d.REQUEST_NO
+            WHERE d.ITEMCODE = @ItemCode
+              AND r.REQUEST_NO <> @RequestNo
+              AND ISNULL(r.NO_ISSUE, 0) = 0
+              AND r.MATERIALSTATUSID BETWEEN 2 AND 4";
+
+        await using var cmd = new SqlCommand(sql, conn);
+        AddNumeric18_0Param(cmd, "@RequestNo", requestNo);
+        Helper.AddParameter(cmd, "@ItemCode", itemCode, SqlDbType.VarChar, 20);
+
+        var value = await cmd.ExecuteScalarAsync(cancellationToken);
+        return value == null || value == DBNull.Value ? 0m : Convert.ToDecimal(value);
     }
 
     public async Task<long> SaveAsync(long? requestNo, MaterialRequestDetailDto header, IReadOnlyList<MaterialRequestLineDto> lines, CancellationToken cancellationToken = default)
@@ -1431,7 +1694,7 @@ public class MaterialRequestService
                     (
                         @RequestNo, @ItemCode, @Unit, 0, 0, 0, 0,
                         0, @NotReceipt, @OrderQty, @InStock, @AccIn, @Buy, 0,
-                        @NewItem, @Selected, 0, @Price, @Note, 0, 0, 0, 0
+                        @NewItem, @Selected, @NormMain, @Price, @Note, 0, 0, 0, 0
                     )";
 
                 foreach (var line in lines)
@@ -1445,6 +1708,7 @@ public class MaterialRequestService
                     AddDecimal18_2Param(lineCmd, "@InStock", line.InStock ?? 0m);
                     AddDecimal18_2Param(lineCmd, "@AccIn", line.AccIn ?? 0m);
                     AddDecimal18_2Param(lineCmd, "@Buy", line.Buy ?? 0m);
+                    AddDecimal18_2Param(lineCmd, "@NormMain", line.NormMain ?? 0m);
                     AddDecimal18_2Param(lineCmd, "@Price", line.Price ?? 0m);
                     Helper.AddParameter(lineCmd, "@Note", (line.Note ?? string.Empty).Trim(), SqlDbType.VarChar, 255);
                     Helper.AddParameter(lineCmd, "@NewItem", line.NewItem, SqlDbType.Bit);
@@ -1462,6 +1726,418 @@ public class MaterialRequestService
             await tx.RollbackAsync(cancellationToken);
             throw;
         }
+    }
+
+    public async Task<long> ProcessLegacyRejectAsync(
+        MaterialRequestDetailDto sourceHeader,
+        IReadOnlyList<MaterialRequestLineDto> sourceLines,
+        IReadOnlyCollection<int> selectedLineIds,
+        string? rejectReason,
+        string operatorCode,
+        CancellationToken cancellationToken = default)
+    {
+        if (!sourceHeader.StoreGroup.HasValue)
+        {
+            throw new InvalidOperationException("Store Group scope is required.");
+        }
+
+        var normalizedLineIds = selectedLineIds
+            .Where(x => x > 0)
+            .Distinct()
+            .ToList();
+
+            if (normalizedLineIds.Count == 0)
+            {
+                throw new InvalidOperationException("Please select item row(s) to reject.");
+            }
+
+        var selectedLines = sourceLines
+            .Where(line => line.Id.HasValue && normalizedLineIds.Contains(line.Id.Value))
+            .ToList();
+
+        if (selectedLines.Count == 0)
+        {
+            throw new InvalidOperationException("Please select item row(s) to reject.");
+        }
+
+        var normalizedSourceLines = NormalizeLines(sourceLines);
+        var currentStatus = sourceHeader.MaterialStatusId ?? -1;
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync(cancellationToken);
+        await using var tx = await conn.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            var employeeId = await ResolveEmployeeIdAsync(conn, (SqlTransaction)tx, operatorCode, cancellationToken);
+            var allSelected = selectedLines.Count == normalizedSourceLines.Count;
+
+            if (normalizedSourceLines.Count == 1 || allSelected)
+            {
+                await UpdateHeaderStatusOnlyAsync(
+                    conn,
+                    (SqlTransaction)tx,
+                    sourceHeader.RequestNo,
+                    5,
+                    cancellationToken);
+            }
+            else
+            {
+                var rejectedNo = await FindRejectedPoolRequestNoAsync(
+                    conn,
+                    (SqlTransaction)tx,
+                    sourceHeader.StoreGroup.Value,
+                    cancellationToken);
+
+                if (!rejectedNo.HasValue)
+                {
+                    var rejectedHeader = new MaterialRequestDetailDto
+                    {
+                        StoreGroup = sourceHeader.StoreGroup,
+                        DateCreate = DateTime.Now,
+                        AccordingTo = "This request contain items that were reject from another requests",
+                        Approval = false,
+                        ApprovalEnd = true,
+                        PostPr = false,
+                        IsAuto = false,
+                        FromDate = sourceHeader.FromDate,
+                        ToDate = sourceHeader.ToDate,
+                        MaterialStatusId = 5,
+                        PrNo = null,
+                        NoIssue = sourceHeader.NoIssue
+                    };
+
+                    rejectedNo = await SaveRequestCoreAsync(conn, (SqlTransaction)tx, null, rejectedHeader, Array.Empty<MaterialRequestLineDto>(), cancellationToken);
+                    await InsertSuperRequestAsync(conn, (SqlTransaction)tx, rejectedNo.Value, employeeId, DateTime.Now, "Reject request", cancellationToken);
+                }
+
+                await MoveLinesToRequestAsync(
+                    conn,
+                    (SqlTransaction)tx,
+                    rejectedNo.Value,
+                    selectedLines,
+                    sourceHeader.RequestNo,
+                    string.Empty,
+                    operatorCode,
+                    cancellationToken);
+            }
+
+            await tx.CommitAsync(cancellationToken);
+            return sourceHeader.RequestNo;
+        }
+        catch
+        {
+            await tx.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    private async Task<long> SaveRequestCoreAsync(
+        SqlConnection conn,
+        SqlTransaction tx,
+        long? requestNo,
+        MaterialRequestDetailDto header,
+        IReadOnlyList<MaterialRequestLineDto> lines,
+        CancellationToken cancellationToken)
+    {
+        var resolvedRequestNo = requestNo ?? await GetNextRequestNoAsync(conn, tx, cancellationToken);
+        var statusId = header.MaterialStatusId ?? await GetDefaultStatusIdAsync(conn, tx, cancellationToken);
+
+        if (requestNo.HasValue)
+        {
+            const string updateSql = @"
+                UPDATE dbo.MATERIAL_REQUEST
+                SET
+                    STORE_GROUP = @StoreGroup,
+                    DATE_CREATE = @DateCreate,
+                    ACCORDINGTO = @AccordingTo,
+                    APPROVAL = @Approval,
+                    POST_PR = @PostPr,
+                    IS_AUTO = @IsAuto,
+                    FROM_DATE = @FromDate,
+                    TO_DATE = @ToDate,
+                    APPROVAL_END = @ApprovalEnd,
+                    MATERIALSTATUSID = @StatusId,
+                    PRNO = @PrNo,
+                    NO_ISSUE = @NoIssue
+                WHERE REQUEST_NO = @RequestNo";
+
+            await using var updateCmd = new SqlCommand(updateSql, conn, tx);
+            BindHeaderParams(updateCmd, resolvedRequestNo, header, statusId);
+            var updated = await updateCmd.ExecuteNonQueryAsync(cancellationToken);
+            if (updated == 0)
+            {
+                throw new InvalidOperationException("Material Request not found.");
+            }
+        }
+        else
+        {
+            const string insertSql = @"
+                INSERT INTO dbo.MATERIAL_REQUEST
+                (
+                    REQUEST_NO, STORE_GROUP, DATE_CREATE, ACCORDINGTO, APPROVAL, POST_PR, IS_AUTO,
+                    FROM_DATE, TO_DATE, APPROVAL_END, MATERIALSTATUSID, PRNO, NO_ISSUE
+                )
+                VALUES
+                (
+                    @RequestNo, @StoreGroup, @DateCreate, @AccordingTo, @Approval, @PostPr, @IsAuto,
+                    @FromDate, @ToDate, @ApprovalEnd, @StatusId, @PrNo, @NoIssue
+                )";
+
+            await using var insertCmd = new SqlCommand(insertSql, conn, tx);
+            BindHeaderParams(insertCmd, resolvedRequestNo, header, statusId);
+            await insertCmd.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        const string deleteLineSql = "DELETE FROM dbo.MATERIAL_REQUEST_DETAIL WHERE REQUEST_NO = @RequestNo";
+        await using (var deleteCmd = new SqlCommand(deleteLineSql, conn, tx))
+        {
+            AddNumeric18_0Param(deleteCmd, "@RequestNo", resolvedRequestNo);
+            await deleteCmd.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        if (lines.Count > 0)
+        {
+            const string insertLineSql = @"
+                INSERT INTO dbo.MATERIAL_REQUEST_DETAIL
+                (
+                    REQUEST_NO, ITEMCODE, UNIT, BEGIN_Q, RECEIPT_Q, USING_Q, END_Q,
+                    NORM_Q, NOT_RECEIPT, NEW_ORDER, INSTOCK, acctualyInventory, BUY, ISSUED,
+                    NEW_ITEM, SELECTED, NORM_Q_MAIN, PRICE, NOTE, PostedPR, ManualCheck, TempStore, CreatedAsset
+                )
+                VALUES
+                (
+                    @RequestNo, @ItemCode, @Unit, 0, 0, 0, 0,
+                    0, @NotReceipt, @OrderQty, @InStock, @AccIn, @Buy, 0,
+                    @NewItem, @Selected, @NormMain, @Price, @Note, 0, 0, 0, 0
+                )";
+
+            foreach (var line in lines)
+            {
+                await using var lineCmd = new SqlCommand(insertLineSql, conn, tx);
+                AddNumeric18_0Param(lineCmd, "@RequestNo", resolvedRequestNo);
+                Helper.AddParameter(lineCmd, "@ItemCode", (line.ItemCode ?? string.Empty).Trim(), SqlDbType.VarChar, 20);
+                Helper.AddParameter(lineCmd, "@Unit", (line.Unit ?? string.Empty).Trim(), SqlDbType.VarChar, 50);
+                AddDecimal18_2Param(lineCmd, "@OrderQty", line.OrderQty ?? 0m);
+                AddDecimal18_2Param(lineCmd, "@NotReceipt", line.NotReceipt ?? 0m);
+                AddDecimal18_2Param(lineCmd, "@InStock", line.InStock ?? 0m);
+                AddDecimal18_2Param(lineCmd, "@AccIn", line.AccIn ?? 0m);
+                AddDecimal18_2Param(lineCmd, "@Buy", line.Buy ?? 0m);
+                AddDecimal18_2Param(lineCmd, "@NormMain", line.NormMain ?? 0m);
+                AddDecimal18_2Param(lineCmd, "@Price", line.Price ?? 0m);
+                Helper.AddParameter(lineCmd, "@Note", (line.Note ?? string.Empty).Trim(), SqlDbType.VarChar, 255);
+                Helper.AddParameter(lineCmd, "@NewItem", line.NewItem, SqlDbType.Bit);
+                Helper.AddParameter(lineCmd, "@Selected", line.Selected, SqlDbType.Bit);
+                await lineCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+        }
+
+        return resolvedRequestNo;
+    }
+
+    private static async Task<long?> FindRejectedPoolRequestNoAsync(SqlConnection conn, SqlTransaction tx, int storeGroup, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            SELECT TOP 1 REQUEST_NO
+            FROM dbo.MATERIAL_REQUEST
+            WHERE MATERIALSTATUSID = 5
+              AND STORE_GROUP = @StoreGroup
+            ORDER BY REQUEST_NO DESC";
+
+        await using var cmd = new SqlCommand(sql, conn, tx);
+        Helper.AddParameter(cmd, "@StoreGroup", storeGroup, SqlDbType.Int);
+        var value = await cmd.ExecuteScalarAsync(cancellationToken);
+        return value == null || value == DBNull.Value ? null : Convert.ToInt64(value);
+    }
+
+    private static async Task UpdateHeaderStatusOnlyAsync(
+        SqlConnection conn,
+        SqlTransaction tx,
+        long requestNo,
+        int statusId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            UPDATE dbo.MATERIAL_REQUEST
+            SET MATERIALSTATUSID = @StatusId,
+                APPROVAL = CASE WHEN @StatusId = 5 THEN 0 ELSE APPROVAL END,
+                APPROVAL_END = CASE WHEN @StatusId = 5 THEN 1 ELSE APPROVAL_END END,
+                POST_PR = CASE WHEN @StatusId = 5 THEN 0 ELSE POST_PR END
+            WHERE REQUEST_NO = @RequestNo";
+
+        await using var cmd = new SqlCommand(sql, conn, tx);
+        AddNumeric18_0Param(cmd, "@RequestNo", requestNo);
+        Helper.AddParameter(cmd, "@StatusId", statusId, SqlDbType.Int);
+        await cmd.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task MoveLinesToRequestAsync(
+        SqlConnection conn,
+        SqlTransaction tx,
+        long targetRequestNo,
+        IReadOnlyList<MaterialRequestLineDto> lines,
+        long sourceRequestNo,
+        string rejectReason,
+        string operatorCode,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            UPDATE dbo.MATERIAL_REQUEST_DETAIL
+            SET REQUEST_NO = @TargetRequestNo,
+                NOTE = @Note
+            WHERE ID = @LineId";
+
+        foreach (var line in lines)
+        {
+            if (!line.Id.HasValue || line.Id.Value <= 0)
+            {
+                continue;
+            }
+
+            await using var cmd = new SqlCommand(sql, conn, tx);
+            AddNumeric18_0Param(cmd, "@TargetRequestNo", targetRequestNo);
+            AddNumeric18_0Param(cmd, "@LineId", line.Id.Value);
+            Helper.AddParameter(cmd, "@Note", BuildRejectNote(line, sourceRequestNo, rejectReason, operatorCode), SqlDbType.VarChar, 255);
+            await cmd.ExecuteNonQueryAsync(cancellationToken);
+        }
+    }
+
+    private static async Task<int> ResolveEmployeeIdAsync(SqlConnection conn, SqlTransaction tx, string employeeCode, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            SELECT TOP 1 EmployeeID
+            FROM dbo.MS_Employee
+            WHERE EmployeeCode = @EmployeeCode";
+
+        await using var cmd = new SqlCommand(sql, conn, tx);
+        Helper.AddParameter(cmd, "@EmployeeCode", employeeCode, SqlDbType.VarChar, 50);
+        var value = await cmd.ExecuteScalarAsync(cancellationToken);
+        return value == null || value == DBNull.Value ? 0 : Convert.ToInt32(value);
+    }
+
+    private static async Task InsertSuperRequestAsync(SqlConnection conn, SqlTransaction tx, long requestNo, int employeeId, DateTime timeEffective, string note, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            INSERT INTO dbo.SUPER_REQUEST
+            (
+                RequestNo, EmployeeID, TimeEffective, TypeEffective, Note
+            )
+            VALUES
+            (
+                @RequestNo, @EmployeeID, @TimeEffective, 5, @Note
+            )";
+
+        await using var cmd = new SqlCommand(sql, conn, tx);
+        AddNumeric18_0Param(cmd, "@RequestNo", requestNo);
+        Helper.AddParameter(cmd, "@EmployeeID", employeeId, SqlDbType.Int);
+        Helper.AddParameter(cmd, "@TimeEffective", timeEffective, SqlDbType.DateTime);
+        Helper.AddParameter(cmd, "@Note", note, SqlDbType.VarChar, 50);
+        await cmd.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static MaterialRequestDetailDto CloneHeader(MaterialRequestDetailDto source)
+    {
+        return new MaterialRequestDetailDto
+        {
+            RequestNo = source.RequestNo,
+            StoreGroup = source.StoreGroup,
+            DateCreate = source.DateCreate,
+            AccordingTo = source.AccordingTo,
+            Approval = source.Approval,
+            ApprovalEnd = source.ApprovalEnd,
+            PostPr = source.PostPr,
+            IsAuto = source.IsAuto,
+            FromDate = source.FromDate,
+            ToDate = source.ToDate,
+            MaterialStatusId = source.MaterialStatusId,
+            PrNo = source.PrNo,
+            NoIssue = source.NoIssue
+        };
+    }
+
+    private static MaterialRequestDetailDto CloneRejectedHeader(MaterialRequestDetailDto source, DateTime now)
+    {
+        var header = CloneHeader(source);
+        header.DateCreate = now;
+        header.AccordingTo = "This request contain items that were reject from another requests";
+        header.MaterialStatusId = 5;
+        header.Approval = false;
+        header.ApprovalEnd = true;
+        header.PostPr = false;
+        header.IsAuto = false;
+        return header;
+    }
+
+    private static List<MaterialRequestLineDto> NormalizeLines(IEnumerable<MaterialRequestLineDto> lines)
+    {
+        var result = new List<MaterialRequestLineDto>();
+
+        foreach (var line in lines)
+        {
+            var itemCode = (line.ItemCode ?? string.Empty).Trim();
+            var itemName = (line.ItemName ?? string.Empty).Trim();
+            var unit = (line.Unit ?? string.Empty).Trim();
+            var note = (line.Note ?? string.Empty).Trim();
+
+            var isBlank = string.IsNullOrWhiteSpace(itemCode)
+                && string.IsNullOrWhiteSpace(itemName)
+                && string.IsNullOrWhiteSpace(unit)
+                && string.IsNullOrWhiteSpace(note)
+                && !(line.OrderQty.HasValue && line.OrderQty.Value != 0)
+                && !(line.NotReceipt.HasValue && line.NotReceipt.Value != 0)
+                && !(line.InStock.HasValue && line.InStock.Value != 0)
+                && !(line.AccIn.HasValue && line.AccIn.Value != 0)
+                && !(line.Buy.HasValue && line.Buy.Value != 0)
+                && !(line.Price.HasValue && line.Price.Value != 0);
+
+            if (isBlank)
+            {
+                continue;
+            }
+
+            result.Add(new MaterialRequestLineDto
+            {
+                Id = line.Id,
+                ItemCode = itemCode,
+                ItemName = itemName,
+                Unit = unit,
+                OrderQty = line.OrderQty ?? 0,
+                NotReceipt = line.NotReceipt ?? 0,
+                InStock = line.InStock ?? 0,
+                AccIn = line.AccIn ?? 0,
+                Buy = line.Buy ?? 0,
+                NormMain = line.NormMain ?? 0,
+                Price = line.Price ?? 0,
+                Note = note,
+                NewItem = line.NewItem,
+                Selected = line.Selected,
+                Issued = line.Issued
+            });
+        }
+
+        return result;
+    }
+
+    private static string BuildRejectNote(MaterialRequestLineDto source, long requestNo, string rejectReason, string operatorCode)
+    {
+        var noteParts = new List<string>
+        {
+            $"rejected from request {requestNo}"
+        };
+
+        var originalNote = (source.Note ?? string.Empty).Trim();
+        if (!string.IsNullOrWhiteSpace(originalNote))
+        {
+            noteParts.Add(originalNote);
+        }
+
+        noteParts.Add($"-{operatorCode}");
+        var note = string.Join(" ", noteParts);
+        if (note.Length > 255)
+        {
+            note = note.Substring(0, 255);
+        }
+
+        return note;
     }
 
     public async Task<IReadOnlyList<MaterialRequestItemLookupDto>> SearchItemsAsync(
@@ -1658,7 +2334,7 @@ public class MaterialRequestService
                 i.ItemCode,
                 i.ItemName,
                 ISNULL(i.Unit, '') AS Unit,
-                CAST(ISNULL(NULLIF(i.StoreNormInMain, 0), NULLIF(i.ReOrderPoint, 0), 1) AS decimal(18,2)) AS OrderQty
+                CAST(COALESCE(NULLIF(i.StoreNormInMain, 0), NULLIF(i.ReOrderPoint, 0), 1) AS decimal(18,2)) AS OrderQty
             FROM dbo.INV_ItemList i
             WHERE
                 (i.IsActive = 1 OR i.IsActive IS NULL)
@@ -1687,6 +2363,7 @@ public class MaterialRequestService
                     InStock = 0,
                     AccIn = 0,
                     Buy = 0,
+                    NormMain = 0,
                     Price = 0,
                     Note = string.Empty,
                     NewItem = false,
