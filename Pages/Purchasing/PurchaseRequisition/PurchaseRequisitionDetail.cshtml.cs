@@ -21,6 +21,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
     private readonly ISecurityService _securityService;
     private readonly ILogger<PurchaseRequisitionDetailModel> _logger;
 
+    // Khởi tạo các service và thành phần cần dùng cho màn hình chi tiết phiếu đề nghị mua hàng.
     public PurchaseRequisitionDetailModel(IConfiguration config, PermissionService permissionService, ISecurityService securityService, ILogger<PurchaseRequisitionDetailModel> logger) : base(config)
     {
         _permissionService = permissionService;
@@ -51,9 +52,9 @@ public class PurchaseRequisitionDetailModel : BasePageModel
     public List<PurchaseRequisitionItemLookup> ItemList { get; set; } = new List<PurchaseRequisitionItemLookup>();
     public List<PurchaseRequisitionSupplierLookup> SupplierList { get; set; } = new List<PurchaseRequisitionSupplierLookup>();
 
+    // Xử lý tải dữ liệu ban đầu của màn hình.
     public IActionResult OnGet(int? id, string mode = "view")
     {
-        // 1. Lấy quyền của trang trước khi xử lý dữ liệu chi tiết.
         PagePerm = GetUserPermissions();
         Mode = string.IsNullOrWhiteSpace(mode) ? "view" : mode.Trim().ToLowerInvariant();
 
@@ -115,9 +116,9 @@ public class PurchaseRequisitionDetailModel : BasePageModel
         return Page();
     }
 
+    // Thực hiện xử lý cho hàm OnPost theo nghiệp vụ của màn hình.
     public IActionResult OnPost()
     {
-        // 1. Lấy quyền trước khi lưu để chặn submit trực tiếp không đúng quyền.
         PagePerm = GetUserPermissions();
         LoadAllDropdowns();
 
@@ -175,14 +176,15 @@ public class PurchaseRequisitionDetailModel : BasePageModel
         }
     }
 
+    // Thực hiện xử lý cho hàm LoadAllDropdowns theo nghiệp vụ của màn hình.
     private void LoadAllDropdowns()
     {
-        // 1. Màn hình chi tiết dùng chung 3 nhóm dropdown chính.
         LoadStatusList();
         LoadItemList();
         LoadSupplierList();
     }
 
+    // Thực hiện xử lý cho hàm LoadPurchaseRequisition theo nghiệp vụ của màn hình.
     private void LoadPurchaseRequisition(int id)
     {
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -219,6 +221,7 @@ WHERE PRID = @PRID", conn))
         }
     }
 
+    // Thực hiện xử lý cho hàm LoadDetailRows theo nghiệp vụ của màn hình.
     private List<PurchaseRequisitionDetailInput> LoadDetailRows(SqlConnection conn, int prId)
     {
         var rows = new List<PurchaseRequisitionDetailInput>();
@@ -264,18 +267,18 @@ ORDER BY d.RecordID", conn);
         return rows;
     }
 
+    // Thực hiện xử lý cho hàm LoadStatusList theo nghiệp vụ của màn hình.
     private void LoadStatusList()
     {
-        // 1. Trạng thái hiển thị đúng theo bảng cấu hình PC_PRStatus.
         StatusList = LoadListFromSql(
             "SELECT PRStatusID, PRStatusName FROM dbo.PC_PRStatus ORDER BY PRStatusID",
             "PRStatusID",
             "PRStatusName");
     }
 
+    // Thực hiện xử lý cho hàm LoadItemList theo nghiệp vụ của màn hình.
     private void LoadItemList()
     {
-        // 1. Chỉ nạp các vật tư được phép dùng cho nghiệp vụ mua hàng.
         ItemList = new List<PurchaseRequisitionItemLookup>();
         const string sql = @"
 SELECT TOP 200 ItemID, ISNULL(ItemCode, '') AS ItemCode, ISNULL(ItemName, '') AS ItemName, ISNULL(Unit, '') AS Unit
@@ -300,9 +303,9 @@ ORDER BY ItemCode";
         }
     }
 
+    // Thực hiện xử lý cho hàm LoadSupplierList theo nghiệp vụ của màn hình.
     private void LoadSupplierList()
     {
-        // 1. Danh sách supplier phục vụ cho popup thêm chi tiết chỉ lấy các supplier chưa bị xóa.
         SupplierList = new List<PurchaseRequisitionSupplierLookup>();
         const string sql = @"
 SELECT TOP 200 SupplierID, ISNULL(SupplierCode, '') AS SupplierCode, ISNULL(SupplierName, '') AS SupplierName
@@ -326,9 +329,9 @@ ORDER BY SupplierCode";
         }
     }
 
+    // Thực hiện xử lý cho hàm GetSuggestedRequestNo theo nghiệp vụ của màn hình.
     private string GetSuggestedRequestNo(DateTime requestDate)
     {
-        // 1. Mã PR được sinh theo mẫu PRxx/MMyy để đồng bộ với dữ liệu đang có.
         var suffix = requestDate.ToString("MMyy");
         var prefix = $"PR%/{suffix}";
 
@@ -345,9 +348,9 @@ WHERE RequestNo LIKE @Prefix", conn);
         return $"PR{(maxNo + 1):00}/{suffix}";
     }
 
+    // Thực hiện xử lý cho hàm SavePurchaseRequisition theo nghiệp vụ của màn hình.
     private void SavePurchaseRequisition(IReadOnlyList<PurchaseRequisitionDetailInput> details)
     {
-        // 1. Người thao tác hiện tại được dùng để xác định Purchaser mặc định khi tạo mới.
         var operatorCode = User.Identity?.Name?.Trim() ?? string.Empty;
         var isNew = Requisition.Id <= 0;
 
@@ -439,9 +442,9 @@ WHERE PRID = @PRID", conn, trans);
         }
     }
 
+    // Thực hiện xử lý cho hàm ResolvePurchaserId theo nghiệp vụ của màn hình.
     private static int? ResolvePurchaserId(SqlConnection conn, SqlTransaction trans, string operatorCode)
     {
-        // 1. Ưu tiên lấy chính nhân viên đang đăng nhập làm người tạo phiếu.
         // 2. Nếu không tìm thấy thì fallback về các mã đang được dùng để test trong hệ thống.
         using var cmd = new SqlCommand(@"
 SELECT TOP 1 EmployeeID
@@ -461,6 +464,7 @@ END", conn, trans);
         return result == null || result == DBNull.Value ? null : Convert.ToInt32(result);
     }
 
+    // Thực hiện xử lý cho hàm ParseDetails theo nghiệp vụ của màn hình.
     private List<PurchaseRequisitionDetailInput> ParseDetails()
     {
         if (string.IsNullOrWhiteSpace(DetailsJson)) return new List<PurchaseRequisitionDetailInput>();
@@ -480,9 +484,9 @@ END", conn, trans);
         }
     }
 
+    // Thực hiện xử lý cho hàm ValidateDetail theo nghiệp vụ của màn hình.
     private void ValidateDetail(PurchaseRequisitionDetailInput detail, int rowNo)
     {
-        // 1. Mỗi dòng chi tiết bắt buộc có Item và QtyPur lớn hơn 0 trước khi lưu.
         if (detail.ItemId <= 0)
         {
             ModelState.AddModelError(string.Empty, $"Row {rowNo}: Item is required.");
@@ -499,6 +503,7 @@ END", conn, trans);
         }
     }
 
+    // Lấy tập quyền thực tế của người dùng trên chức năng hiện tại.
     private PagePermissions GetUserPermissions()
     {
         var isAdmin = IsAdminRole();
@@ -519,6 +524,7 @@ END", conn, trans);
         return permsObj;
     }
 
+    // Thực hiện xử lý cho hàm GetEffectivePermissionsByStatus theo nghiệp vụ của màn hình.
     private List<int> GetEffectivePermissionsByStatus(int status)
     {
         var isAdmin = IsAdminRole();
@@ -534,11 +540,13 @@ END", conn, trans);
         return _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, status);
     }
 
+    // Thực hiện xử lý cho hàm GetCurrentRoleId theo nghiệp vụ của màn hình.
     private int GetCurrentRoleId()
     {
         return int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
     }
 
+    // Thực hiện xử lý cho hàm IsAdminRole theo nghiệp vụ của màn hình.
     private bool IsAdminRole()
     {
         return User.FindFirst("IsAdminRole")?.Value == "True";

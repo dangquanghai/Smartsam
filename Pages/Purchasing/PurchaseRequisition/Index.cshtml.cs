@@ -25,6 +25,7 @@ public class IndexModel : BasePageModel
     private readonly PermissionService _permissionService;
     private readonly ISecurityService _securityService;
 
+    // Khởi tạo các service và thành phần cần dùng cho màn hình danh sách phiếu đề nghị mua hàng.
     public IndexModel(IConfiguration config, ILogger<IndexModel> logger, PermissionService permissionService, ISecurityService securityService) : base(config)
     {
         _logger = logger;
@@ -65,9 +66,9 @@ public class IndexModel : BasePageModel
     public bool HasPreviousPage => Filter.Page > 1;
     public bool HasNextPage => Filter.Page < TotalPages;
 
+    // Xử lý tải dữ liệu ban đầu của màn hình.
     public IActionResult OnGet()
     {
-        // 1. Lấy quyền thực tế của role đang đăng nhập
         PagePerm = GetUserPermissions();
         LoadPageActions();
         if (!HasPermission(PermissionViewList))
@@ -84,6 +85,7 @@ public class IndexModel : BasePageModel
         return Page();
     }
 
+    // Xử lý yêu cầu tìm kiếm danh sách theo điều kiện người dùng nhập.
     public IActionResult OnPostSearch([FromBody] PurchaseRequisitionSearchRequest request)
     {
         try
@@ -123,9 +125,9 @@ public class IndexModel : BasePageModel
         }
     }
 
+    // Xử lý thao tác Add AT để tạo nhanh chứng từ và chi tiết.
     public IActionResult OnPostAddAt()
     {
-        // 1. Lấy quyền thực tế của role đang đăng nhập
         PagePerm = GetUserPermissions();
         LoadPageActions();
         if (!CanAddAt)
@@ -181,9 +183,9 @@ public class IndexModel : BasePageModel
         return RedirectToPage("./Index", BuildRouteValues());
     }
 
+    // Xử lý xuất dữ liệu ra file Excel.
     public IActionResult OnGetExportExcel()
     {
-        // 1. Lấy quyền trước khi export để chặn gọi trực tiếp từ URL.
         PagePerm = GetUserPermissions();
         if (!HasPermission(PermissionViewList))
         {
@@ -226,6 +228,7 @@ public class IndexModel : BasePageModel
         return ExportPurchaseRequisitionListExcel(rows);
     }
 
+    // Thực hiện xử lý cho hàm ExportPurchaseRequisitionListExcel theo nghiệp vụ của màn hình.
     private IActionResult ExportPurchaseRequisitionListExcel(List<PurchaseRequisitionRow> rows)
     {
         using var workbook = new XLWorkbook();
@@ -269,6 +272,7 @@ public class IndexModel : BasePageModel
         return BuildExcelFileResult(workbook, "purchase_requisition");
     }
 
+    // Thực hiện xử lý cho hàm ExportPurchaseRequisitionDetailExcel theo nghiệp vụ của màn hình.
     private IActionResult ExportPurchaseRequisitionDetailExcel(PurchaseRequisitionExportHeader requisition)
     {
         using var workbook = new XLWorkbook();
@@ -339,6 +343,7 @@ public class IndexModel : BasePageModel
         return BuildExcelFileResult(workbook, $"purchase_requisition_{requisition.RequestNo}");
     }
 
+    // Thực hiện xử lý cho hàm LoadPurchaseRequisitionForExport theo nghiệp vụ của màn hình.
     private PurchaseRequisitionExportHeader? LoadPurchaseRequisitionForExport(int prId)
     {
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -393,6 +398,7 @@ WHERE p.PRID = @PRID", conn);
         return requisition;
     }
 
+    // Thực hiện xử lý cho hàm LoadPurchaseRequisitionDetailRows theo nghiệp vụ của màn hình.
     private List<PurchaseRequisitionDetailInput> LoadPurchaseRequisitionDetailRows(SqlConnection conn, int prId)
     {
         var rows = new List<PurchaseRequisitionDetailInput>();
@@ -438,9 +444,9 @@ ORDER BY d.RecordID", conn);
         return rows;
     }
 
+    // Thực hiện xử lý cho hàm FormatWorksheetAsTable theo nghiệp vụ của màn hình.
     private void FormatWorksheetAsTable(IXLWorksheet worksheet, int fromRow, int toRow, int totalColumns)
     {
-        // 1. Toàn bộ bảng export đều có viền và tự xuống hàng khi nội dung dài.
         var range = worksheet.Range(fromRow, 1, toRow, totalColumns);
         range.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
         range.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
@@ -460,6 +466,7 @@ ORDER BY d.RecordID", conn);
         }
     }
 
+    // Thực hiện xử lý cho hàm BuildExcelFileResult theo nghiệp vụ của màn hình.
     private FileContentResult BuildExcelFileResult(XLWorkbook workbook, string filePrefix)
     {
         using var stream = new MemoryStream();
@@ -472,9 +479,9 @@ ORDER BY d.RecordID", conn);
             fileName);
     }
 
+    // Thực hiện xử lý cho hàm LoadPurchaseRequisitionRows theo nghiệp vụ của màn hình.
     private void LoadPurchaseRequisitionRows()
     {
-        // 1. Danh sách luôn load theo filter hiện tại và tự kéo trang về hợp lệ nếu page vượt quá tổng trang.
         var (rows, totalRecords) = SearchPurchaseRequisitionRows(Filter);
         Rows = rows;
         TotalRecords = totalRecords;
@@ -488,6 +495,7 @@ ORDER BY d.RecordID", conn);
         }
     }
 
+    // Thực hiện xử lý cho hàm SearchPurchaseRequisitionRows theo nghiệp vụ của màn hình.
     private (List<PurchaseRequisitionRow> rows, int totalRecords) SearchPurchaseRequisitionRows(PurchaseRequisitionFilter filter)
     {
         var rows = new List<PurchaseRequisitionRow>();
@@ -587,9 +595,9 @@ ORDER BY d.RecordID", conn);
         accessMode = CanEditRow(row.StatusId) ? "edit" : "view"
     };
 
+    // Thực hiện xử lý cho hàm LoadStatusList theo nghiệp vụ của màn hình.
     private void LoadStatusList()
     {
-        // 1. Danh sách trạng thái phục vụ cho ô filter ở màn hình danh sách.
         StatusList = new List<SelectListItem>
         {
             new SelectListItem
@@ -617,13 +625,14 @@ ORDER BY PRStatusID", conn);
         }
     }
 
+    // Thực hiện xử lý cho hàm LoadLookups theo nghiệp vụ của màn hình.
     private void LoadLookups()
     {
-        // 1. Popup Add AT cần dùng chung lookup Item và Supplier.
         LoadItemList();
         LoadSupplierList();
     }
 
+    // Thực hiện xử lý cho hàm LoadItemList theo nghiệp vụ của màn hình.
     private void LoadItemList()
     {
         ItemList = new List<PurchaseRequisitionItemLookup>();
@@ -653,6 +662,7 @@ ORDER BY ItemCode", conn);
         }
     }
 
+    // Thực hiện xử lý cho hàm LoadSupplierList theo nghiệp vụ của màn hình.
     private void LoadSupplierList()
     {
         SupplierList = new List<PurchaseRequisitionSupplierLookup>();
@@ -679,9 +689,9 @@ ORDER BY SupplierCode", conn);
         }
     }
 
+    // Thực hiện xử lý cho hàm AddDetails theo nghiệp vụ của màn hình.
     private void AddDetails(int prId, IReadOnlyList<PurchaseRequisitionDetailInput> details)
     {
-        // 1. Add AT chỉ chèn thêm detail vào phiếu hiện hữu nên phải khóa trong cùng transaction.
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
         using var trans = conn.BeginTransaction();
@@ -750,9 +760,9 @@ VALUES
         cmd.Parameters.Add("@ToDate", SqlDbType.DateTime).Value = filter.ToDate.HasValue ? filter.ToDate.Value.Date : DBNull.Value;
     }
 
+    // Thực hiện xử lý cho hàm NormalizeFilter theo nghiệp vụ của màn hình.
     private void NormalizeFilter()
     {
-        // 1. Chỉ cho phép PageSize nằm trong danh sách được hỗ trợ để tránh giá trị lạ từ query/form.
         if (!AllowedPageSizes.Contains(Filter.PageSize))
         {
             Filter.PageSize = DefaultPageSize;
@@ -780,9 +790,9 @@ VALUES
         }
     }
 
+    // Thực hiện xử lý cho hàm BuildSearchFilter theo nghiệp vụ của màn hình.
     private PurchaseRequisitionFilter BuildSearchFilter(PurchaseRequisitionSearchRequest request)
     {
-        // 1. Dữ liệu search AJAX được quy về cùng một model filter như màn hình danh sách.
         return new PurchaseRequisitionFilter
         {
             RequestNo = request.RequestNo,
@@ -808,9 +818,9 @@ VALUES
         PageSize = Filter.PageSize
     };
 
+    // Thực hiện xử lý cho hàm NormalizeQueryInputs theo nghiệp vụ của màn hình.
     private void NormalizeQueryInputs()
     {
-        // 1. Chủ động đọc query bằng tay để tránh lỗi bind sai kiểu với Page/PageSize như trước đây.
         Filter.RequestNo = Request.Query[nameof(Filter.RequestNo)].ToString();
         NormalizeNullableIntQuery(nameof(Filter.StatusId), value => Filter.StatusId = value);
         Filter.Description = Request.Query[nameof(Filter.Description)].ToString();
@@ -822,9 +832,9 @@ VALUES
         ClearPaginationModelState();
     }
 
+    // Thực hiện xử lý cho hàm NormalizePostInputs theo nghiệp vụ của màn hình.
     private void NormalizePostInputs()
     {
-        // 1. Post Add AT vẫn phải giữ nguyên filter hiện tại để quay lại đúng danh sách sau khi lưu.
         Filter.RequestNo = Request.Form[nameof(Filter.RequestNo)].ToString();
         NormalizeNullableIntForm(nameof(Filter.StatusId), value => Filter.StatusId = value);
         Filter.Description = Request.Form[nameof(Filter.Description)].ToString();
@@ -843,27 +853,30 @@ VALUES
         }
     }
 
+    // Thực hiện xử lý cho hàm ClearPaginationModelState theo nghiệp vụ của màn hình.
     private void ClearPaginationModelState()
     {
-        // 1. Xóa ModelState của các key phân trang để tránh đụng với route page của Razor Pages.
         ModelState.Remove("Page");
         ModelState.Remove("page");
         ModelState.Remove("Filter.Page");
         ModelState.Remove("Filter.PageSize");
     }
 
+    // Thực hiện xử lý cho hàm NormalizeDateQuery theo nghiệp vụ của màn hình.
     private void NormalizeDateQuery(string key, Action<DateTime?> assign)
     {
         if (!Request.Query.ContainsKey(key)) return;
         ParseDate(Request.Query[key].ToString(), assign, key);
     }
 
+    // Thực hiện xử lý cho hàm NormalizeDateForm theo nghiệp vụ của màn hình.
     private void NormalizeDateForm(string key, Action<DateTime?> assign)
     {
         if (!Request.HasFormContentType || !Request.Form.ContainsKey(key)) return;
         ParseDate(Request.Form[key].ToString(), assign, key);
     }
 
+    // Thực hiện xử lý cho hàm ParseDate theo nghiệp vụ của màn hình.
     private void ParseDate(string raw, Action<DateTime?> assign, string key)
     {
         if (string.IsNullOrWhiteSpace(raw))
@@ -886,6 +899,7 @@ VALUES
         ModelState.Remove(key);
     }
 
+    // Thực hiện xử lý cho hàm NormalizeBoolQuery theo nghiệp vụ của màn hình.
     private void NormalizeBoolQuery(string key, Action<bool> assign)
     {
         if (!Request.Query.ContainsKey(key)) return;
@@ -893,6 +907,7 @@ VALUES
         ModelState.Remove(key);
     }
 
+    // Thực hiện xử lý cho hàm NormalizeBoolForm theo nghiệp vụ của màn hình.
     private void NormalizeBoolForm(string key, Action<bool> assign)
     {
         if (!Request.HasFormContentType || !Request.Form.ContainsKey(key)) return;
@@ -900,6 +915,7 @@ VALUES
         ModelState.Remove(key);
     }
 
+    // Thực hiện xử lý cho hàm ParseBoolValues theo nghiệp vụ của màn hình.
     private static bool ParseBoolValues(IEnumerable<string> values)
     {
         foreach (var value in values)
@@ -911,6 +927,7 @@ VALUES
         return false;
     }
 
+    // Thực hiện xử lý cho hàm NormalizeIntQuery theo nghiệp vụ của màn hình.
     private void NormalizeIntQuery(string key, Action<int> assign, int defaultValue)
     {
         if (!Request.Query.ContainsKey(key)) return;
@@ -918,6 +935,7 @@ VALUES
         ModelState.Remove(key);
     }
 
+    // Thực hiện xử lý cho hàm NormalizeIntForm theo nghiệp vụ của màn hình.
     private void NormalizeIntForm(string key, Action<int> assign, int defaultValue)
     {
         if (!Request.HasFormContentType || !Request.Form.ContainsKey(key)) return;
@@ -925,6 +943,7 @@ VALUES
         ModelState.Remove(key);
     }
 
+    // Thực hiện xử lý cho hàm NormalizeNullableIntQuery theo nghiệp vụ của màn hình.
     private void NormalizeNullableIntQuery(string key, Action<int?> assign)
     {
         if (!Request.Query.ContainsKey(key))
@@ -937,6 +956,7 @@ VALUES
         ModelState.Remove(key);
     }
 
+    // Thực hiện xử lý cho hàm NormalizeNullableIntForm theo nghiệp vụ của màn hình.
     private void NormalizeNullableIntForm(string key, Action<int?> assign)
     {
         if (!Request.HasFormContentType || !Request.Form.ContainsKey(key))
@@ -949,6 +969,7 @@ VALUES
         ModelState.Remove(key);
     }
 
+    // Thực hiện xử lý cho hàm ParseAddAtDetails theo nghiệp vụ của màn hình.
     private List<PurchaseRequisitionDetailInput> ParseAddAtDetails()
     {
         if (string.IsNullOrWhiteSpace(AddAtDetailsJson)) return new List<PurchaseRequisitionDetailInput>();
@@ -968,9 +989,9 @@ VALUES
         }
     }
 
+    // Thực hiện xử lý cho hàm ValidateDetail theo nghiệp vụ của màn hình.
     private void ValidateDetail(PurchaseRequisitionDetailInput detail, int rowNo)
     {
-        // 1. Validate lại ở server để không phụ thuộc hoàn toàn vào dữ liệu phía client.
         if (detail.ItemId <= 0)
         {
             ModelState.AddModelError(string.Empty, $"Row {rowNo}: Item is required.");
@@ -987,6 +1008,7 @@ VALUES
         }
     }
 
+    // Thực hiện xử lý cho hàm GetModelStateErrorMessage theo nghiệp vụ của màn hình.
     private string GetModelStateErrorMessage()
     {
         var errors = ModelState.Values
@@ -1001,6 +1023,7 @@ VALUES
             : "Cannot save Add AT details. Please review data and try again.";
     }
 
+    // Lấy tập quyền thực tế của người dùng trên chức năng hiện tại.
     private PagePermissions GetUserPermissions()
     {
         bool isAdmin = IsAdminRole();
@@ -1024,9 +1047,9 @@ VALUES
         return permsObj;
     }
 
+    // Thực hiện xử lý cho hàm LoadPageActions theo nghiệp vụ của màn hình.
     private void LoadPageActions()
     {
-        // 1. Các nút trên màn hình danh sách phải bám theo quyền hiệu lực như STContract.
         var newStatusPermissions = GetEffectivePermissionsByStatus(1);
 
         CanAddNew = newStatusPermissions.Contains(PermissionAdd);
@@ -1035,6 +1058,7 @@ VALUES
         CanViewDetailRequisition = newStatusPermissions.Contains(PermissionViewDetail);
     }
 
+    // Thực hiện xử lý cho hàm GetEffectivePermissionsByStatus theo nghiệp vụ của màn hình.
     private List<int> GetEffectivePermissionsByStatus(int status)
     {
         bool isAdmin = IsAdminRole();
@@ -1048,11 +1072,13 @@ VALUES
         return _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, status);
     }
 
+    // Thực hiện xử lý cho hàm CanEditRow theo nghiệp vụ của màn hình.
     public bool CanEditRow(byte? statusId)
     {
         return statusId.HasValue && GetEffectivePermissionsByStatus(statusId.Value).Contains(PermissionEdit);
     }
 
+    // Thực hiện xử lý cho hàm CanViewDetailRow theo nghiệp vụ của màn hình.
     public bool CanViewDetailRow(byte? statusId)
     {
         return statusId.HasValue && GetEffectivePermissionsByStatus(statusId.Value).Contains(PermissionViewDetail);
@@ -1060,11 +1086,13 @@ VALUES
 
     private bool HasPermission(int permissionNo) => PagePerm.HasPermission(permissionNo);
 
+    // Thực hiện xử lý cho hàm NeedCollapseDescription theo nghiệp vụ của màn hình.
     public bool NeedCollapseDescription(string? description)
     {
         return !string.IsNullOrWhiteSpace(description) && description.Trim().Length > 80;
     }
 
+    // Thực hiện xử lý cho hàm GetDescriptionPreview theo nghiệp vụ của màn hình.
     public string GetDescriptionPreview(string? description)
     {
         if (string.IsNullOrWhiteSpace(description))
@@ -1076,11 +1104,13 @@ VALUES
         return source.Length <= 80 ? source : $"{source[..80]}...";
     }
 
+    // Thực hiện xử lý cho hàm GetCurrentRoleId theo nghiệp vụ của màn hình.
     private int GetCurrentRoleId()
     {
         return int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
     }
 
+    // Thực hiện xử lý cho hàm IsAdminRole theo nghiệp vụ của màn hình.
     private bool IsAdminRole()
     {
         return User.FindFirst("IsAdminRole")?.Value == "True";
