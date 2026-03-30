@@ -1,5 +1,5 @@
-$(document).ready(function () {
-    // 1. LÃƒÂ¡Ã‚ÂºÃ‚Â¥y mode vÃƒÆ’Ã‚Â  quyÃƒÂ¡Ã‚Â»Ã‚Ân thao tÃƒÆ’Ã‚Â¡c cÃƒÂ¡Ã‚Â»Ã‚Â§a ngÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âi dÃƒÆ’Ã‚Â¹ng
+﻿$(document).ready(function () {
+    // Read mode and user rights
     const urlParams = new URLSearchParams(window.location.search);
     const modeParam = urlParams.get('mode');
     const mode = modeParam ? modeParam.toLowerCase() : 'add';
@@ -14,10 +14,10 @@ $(document).ready(function () {
         canReject: toBoolData($form.data('can-reject'))
     };
 
-    // 2. ChÃƒÂ¡Ã‚ÂºÃ‚Â¡y khÃƒÂ¡Ã‚Â»Ã…Â¸i tÃƒÂ¡Ã‚ÂºÃ‚Â¡o trang
+    // Start page
     initializePage(mode, currentStatusId, actionPerm);
 
-    // 3. XÃƒÂ¡Ã‚Â»Ã‚Â­ lÃƒÆ’Ã‚Â½ sÃƒÂ¡Ã‚Â»Ã‚Â± kiÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡n SUBMIT Form chÃƒÆ’Ã‚Â­nh
+    // Handle main form submit
     $('#materialRequestDetailForm').on('submit', function (e) {
         if (mode === 'view') return true;
 
@@ -25,7 +25,7 @@ $(document).ready(function () {
         const form = this;
         let actionMode = ($('#workflowActionModeInput').val() || '').toString().trim();
 
-        e.preventDefault(); // TÃƒÂ¡Ã‚ÂºÃ‚Â¡m dÃƒÂ¡Ã‚Â»Ã‚Â«ng Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã†â€™ validate
+        e.preventDefault(); // Stop browser submit
 
         const $tableBody = $('#mrLineTableBody');
         const $linesJsonInput = $('#linesJsonInput');
@@ -59,7 +59,7 @@ $(document).ready(function () {
                 form.action = submitter.formAction;
             }
 
-            form.submit(); // OK hÃƒÂ¡Ã‚ÂºÃ‚Â¿t thÃƒÆ’Ã‚Â¬ submit thÃƒÂ¡Ã‚Â»Ã‚Â±c sÃƒÂ¡Ã‚Â»Ã‚Â± theo Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Âºng nÃƒÆ’Ã‚Âºt Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ bÃƒÂ¡Ã‚ÂºÃ‚Â¥m
+            form.submit(); // Use the clicked button submit
         }
     });
 
@@ -106,9 +106,7 @@ $(document).ready(function () {
     });
 });
 
-/* ==========================================================================
-   CÃƒÆ’Ã‚ÂC HÃƒÆ’Ã¢â€šÂ¬M KHÃƒÂ¡Ã‚Â»Ã…Â¾I TÃƒÂ¡Ã‚ÂºÃ‚Â O VÃƒÆ’Ã¢â€šÂ¬ VALIDATION (NÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢i bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢)
-   ========================================================================== */
+// Validation helpers
 function initializePage(mode, currentStatusId, actionPerm) {
     const $form = $('#materialRequestDetailForm');
     const $tableBody = $('#mrLineTableBody');
@@ -122,7 +120,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
     const isViewMode = mode === 'view';
     const disableEditFields = isViewMode || !canSave;
 
-    // KhÃƒÆ’Ã‚Â³a/mÃƒÂ¡Ã‚Â»Ã…Â¸ input theo mode + quyÃƒÂ¡Ã‚Â»Ã‚Ân
+    // Stop browser submit
     $form.find('input, textarea, select')
         .not('[type="hidden"], .mr-line-select, #Input_IsAuto, #mrSubmitBtn, #mrApproveBtn, #mrRejectBtn, #addMrLineBtn, #removeMrLineBtn, #createNewItemBtn, #calculateBtn')
         .prop('disabled', disableEditFields);
@@ -144,7 +142,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
     const showCalculateAction = isHeadApproved && canCalculate;
     const showWorkflowActions = !isDraft && (canApprove || canReject);
 
-    // KhÃƒÆ’Ã‚Â³a/mÃƒÂ¡Ã‚Â»Ã…Â¸ nhÃƒÆ’Ã‚Â³m nÃƒÆ’Ã‚Âºt thao tÃƒÆ’Ã‚Â¡c theo trÃƒÂ¡Ã‚ÂºÃ‚Â¡ng thÃƒÆ’Ã‚Â¡i workflow
+    // Use the clicked button submit
     $('#addMrLineBtn, #removeMrLineBtn, #createNewItemBtn')
         .toggle(showEditActions)
         .prop('disabled', !showEditActions);
@@ -161,12 +159,12 @@ function initializePage(mode, currentStatusId, actionPerm) {
         .toggle(showWorkflowActions)
         .prop('disabled', !showWorkflowActions || (!canApprove && !canReject));
 
-    // Ãƒâ€žÃ‚ÂÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ng bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ checkbox Not issue vÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi hidden input
+    // Validation helpers
     $('#NoIssueCheck').off('change').on('change', function () {
         $('#Input_NoIssue').val(this.checked ? '1' : '0');
     });
 
-    // ChÃƒÂ¡Ã‚Â»Ã‚Ân dÃƒÆ’Ã‚Â²ng trong grid line item
+    // Lock inputs by mode and rights
     $tableBody.off('click.mrLine').on('click.mrLine', '.mr-line-row', function (event) {
         if ($(event.target).is('input, label, button, textarea, select, a')) return;
         setSelectedMrLineRow($tableBody, $(this));
@@ -187,13 +185,13 @@ function initializePage(mode, currentStatusId, actionPerm) {
         }
     });
 
-    // NÃƒÆ’Ã‚Âºt Add Detail mÃƒÂ¡Ã‚Â»Ã…Â¸ popup lookup item
+    // Lock action buttons by workflow status
     $('#addMrLineBtn').off('click').on('click', function () {
         $('#mrItemLookupModal').modal('show');
         runItemLookupSearch();
     });
 
-    // NÃƒÆ’Ã‚Âºt Remove Item xÃƒÆ’Ã‚Â³a cÃƒÆ’Ã‚Â¡c dÃƒÆ’Ã‚Â²ng Ãƒâ€žÃ¢â‚¬Ëœang chÃƒÂ¡Ã‚Â»Ã‚Ân
+    // Sync the Not issue checkbox with the hidden field
     $('#removeMrLineBtn').off('click').on('click', function () {
         const $selectedRows = $tableBody.find('.mr-line-row.is-selected');
         if ($selectedRows.length === 0) {
@@ -217,7 +215,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
         runItemLookupSearch();
     });
 
-    // Add item tÃƒÂ¡Ã‚Â»Ã‚Â« lookup vÃƒÆ’Ã‚Â o grid
+    // Select a row in the grid
     $('#lookupResultBody').off('click.mrAddItem').on('click.mrAddItem', '.lookup-add-item-btn', function () {
         const $tr = $(this).closest('tr');
         if ($tr.length === 0) return;
@@ -242,7 +240,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
         }
     });
 
-    // NÃƒÆ’Ã‚Âºt Create new item mÃƒÂ¡Ã‚Â»Ã…Â¸ popup tÃƒÂ¡Ã‚ÂºÃ‚Â¡o nhanh
+    // Add Detail opens item lookup
     $('#createNewItemBtn').off('click').on('click', function () {
         $('#newItemName').val('');
         $('#newItemUnit').val('');
@@ -250,7 +248,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
         $('#mrNewItemModal').modal('show');
     });
 
-    // XÃƒÆ’Ã‚Â¡c nhÃƒÂ¡Ã‚ÂºÃ‚Â­n tÃƒÂ¡Ã‚ÂºÃ‚Â¡o item mÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi
+    // Remove Item deletes the selected rows
     $('#createNewItemConfirmBtn').off('click').on('click', async function () {
         const itemName = ($('#newItemName').val() || '').toString().trim();
         const unit = ($('#newItemUnit').val() || '').toString().trim();
@@ -285,14 +283,14 @@ function initializePage(mode, currentStatusId, actionPerm) {
         }
     });
 
-    // Enter trong ÃƒÆ’Ã‚Â´ search lookup thÃƒÆ’Ã‚Â¬ chÃƒÂ¡Ã‚ÂºÃ‚Â¡y search luÃƒÆ’Ã‚Â´n
+    // Search in item lookup
     $('#lookupKeyword').off('keydown').on('keydown', function (event) {
         if (event.key !== 'Enter') return;
         event.preventDefault();
         runItemLookupSearch();
     });
 
-    // Ãƒâ€žÃ‚ÂÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ng bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ dÃƒÂ¡Ã‚Â»Ã‚Â¯ liÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡u line ban Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚ÂºÃ‚Â§u
+    // Add item from lookup to the grid
     syncEmptyRow($tableBody);
     syncLineInputNames($tableBody);
     refreshLineIndexes($tableBody);
@@ -379,7 +377,7 @@ function validateMainForm(actionMode) {
         }
     }
 
-    // Check ngÃƒÆ’Ã‚Â y From <= To
+    // Create new item opens the popup
     if (new Date($('#Input_FromDate').val()) > new Date($('#Input_ToDate').val())) {
         alert("Error: 'From Date' must be less than or equal to 'To Date'.");
         return false;
@@ -480,9 +478,7 @@ function toNullableInt(value) {
     return Number.isFinite(parsed) ? parsed : null;
 }
 
-/* ==========================================================================
-   CÃƒÆ’Ã‚ÂC HÃƒÆ’Ã¢â€šÂ¬M XÃƒÂ¡Ã‚Â»Ã‚Â¬ LÃƒÆ’Ã‚Â GRID LINE ITEM
-   ========================================================================== */
+// Grid line items
 
 function toNumber(value) {
     const parsed = Number.parseFloat((value || '').toString().trim());
@@ -719,9 +715,7 @@ function showDetailErrorMessage(message) {
     alert(message || 'Cannot save Material Request.');
 }
 
-/* ==========================================================================
-   CÃƒÆ’Ã‚ÂC HÃƒÆ’Ã¢â€šÂ¬M AJAX CHO LOOKUP / CREATE QUICK ITEM
-   ========================================================================== */
+// Lookup and quick item
 
 async function runItemLookupSearch() {
     try {
@@ -813,9 +807,7 @@ function createQuickItem(itemName, unit) {
     });
 }
 
-/* ==========================================================================
-   HÃƒÆ’Ã¢â€šÂ¬M DÃƒÆ’Ã¢â€žÂ¢NG CHUNG
-   ========================================================================== */
+// Shared helpers
 
 function escapeHtml(value) {
     return (value || '').toString()
