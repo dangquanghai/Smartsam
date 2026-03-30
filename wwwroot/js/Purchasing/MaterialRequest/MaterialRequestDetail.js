@@ -124,8 +124,10 @@ function initializePage(mode, currentStatusId, actionPerm) {
 
     // KhÃƒÆ’Ã‚Â³a/mÃƒÂ¡Ã‚Â»Ã…Â¸ input theo mode + quyÃƒÂ¡Ã‚Â»Ã‚Ân
     $form.find('input, textarea, select')
-        .not('[type="hidden"], .mr-line-select, #mrSubmitBtn, #mrApproveBtn, #mrRejectBtn, #addMrLineBtn, #removeMrLineBtn, #createNewItemBtn, #calculateBtn')
+        .not('[type="hidden"], .mr-line-select, #Input_IsAuto, #mrSubmitBtn, #mrApproveBtn, #mrRejectBtn, #addMrLineBtn, #removeMrLineBtn, #createNewItemBtn, #calculateBtn')
         .prop('disabled', disableEditFields);
+
+    $('#Input_IsAuto').prop('disabled', true);
 
     if (toBoolData($form.data('store-group-locked'))) {
         $('#Input_StoreGroup').prop('disabled', true);
@@ -275,7 +277,6 @@ function initializePage(mode, currentStatusId, actionPerm) {
                 normMain: 0,
                 newItem: true
         });
-            $('#mrNewItemModal').modal('hide');
             if (added) {
                 autoSaveDraftAfterGridChange('create-new-item');
             }
@@ -645,9 +646,77 @@ function autoSaveDraftAfterGridChange(draftSaveAction) {
     $('#draftSaveActionInput').val((draftSaveAction || '').toString());
     $('#rejectItemLineIdsJsonInput').val('');
 
-    setTimeout(function () {
-        $form.trigger('submit');
-    }, 0);
+    submitDraftSaveAjax($form);
+}
+
+function submitDraftSaveAjax($form) {
+    if ($form.length === 0) return;
+
+    const form = $form[0];
+    const formData = new FormData(form);
+    const targetUrl = new URL(window.location.href);
+    targetUrl.searchParams.delete('handler');
+
+    $.ajax({
+        url: targetUrl.toString(),
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        success: function (res) {
+            if (res && res.success) {
+                if (res.requestNo !== undefined && res.requestNo !== null && res.requestNo !== '') {
+                    updateDraftSavedRequestNo(res.requestNo);
+                }
+                showDetailSuccessMessage(res.message || 'Line changes saved.');
+                return;
+            }
+
+            showDetailErrorMessage((res && res.message) ? res.message : 'Cannot save Material Request.');
+        },
+        error: function (xhr) {
+            const responseMessage = xhr && xhr.responseJSON && xhr.responseJSON.message
+                ? xhr.responseJSON.message
+                : (xhr && xhr.responseText ? xhr.responseText : '');
+            showDetailErrorMessage(responseMessage || 'Cannot save Material Request.');
+        }
+    });
+}
+
+function updateDraftSavedRequestNo(requestNo) {
+    const normalized = (requestNo || '').toString().trim();
+    if (!normalized) return;
+
+    $('#Id').val(normalized);
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('id', normalized);
+    url.searchParams.set('mode', 'edit');
+    window.history.replaceState({}, '', url.toString());
+}
+
+function showDetailSuccessMessage(message) {
+    const $target = $('#materialRequestDetailForm .card-body').first();
+    const safeMessage = escapeHtml(message || 'Saved successfully.');
+    const $alert = $(`
+        <div class="alert alert-success alert-dismissible fade show mr-auto-message" role="alert">
+            <strong><i class="fas fa-check-circle"></i></strong> ${safeMessage}
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>`);
+
+    $target.find('.mr-auto-message').remove();
+    if ($target.length > 0) {
+        $target.prepend($alert);
+    } else {
+        alert(message || 'Saved successfully.');
+    }
+}
+
+function showDetailErrorMessage(message) {
+    alert(message || 'Cannot save Material Request.');
 }
 
 /* ==========================================================================

@@ -21,7 +21,7 @@
               <input type="hidden" asp-for="LinesJson" id="linesJsonInput" />
               <input type="hidden" asp-for="RejectItemLineIdsJson" id="rejectItemLineIdsJsonInput" />
               <input type="hidden" asp-for="RejectItemReason" id="rejectItemReasonInput" />
-              <input type="hidden" id="workflowActionModeInput" />
+                <input type="hidden" id="workflowActionModeInput" name="workflowActionModeInput" />
               <input type="hidden" id="draftSaveActionInput" name="DraftSaveAction" />
               <input type="hidden" asp-for="ReturnUrl" />
 
@@ -67,7 +67,12 @@
 
                                 <div class="col-sm-2">
                                     <div class="custom-control custom-checkbox mr-detail-check-inline">
-                                        <input asp-for="Input.IsAuto" type="checkbox" id="Input_IsAuto" class="custom-control-input" />
+                                        <input type="checkbox"
+                                               id="Input_IsAuto"
+                                               class="custom-control-input"
+                                               @(Model.Input.IsAuto ? "checked" : string.Empty)
+                                               disabled />
+                                        <input type="hidden" name="Input.IsAuto" value="@(Model.Input.IsAuto ? "true" : "false")" />
                                         <label for="Input_IsAuto" class="custom-control-label">Auto</label>
                                     </div>
                                 </div>

@@ -260,18 +260,47 @@ public class MaterialRequestDetailModel : BasePageModel
 
         try
         {
-            var actionMode = Request.Form["workflowActionModeInput"].ToString();
-            var draftSaveAction = Request.Form["DraftSaveAction"].ToString();
-            var savedNo = await _materialRequestService.SaveAsync(IsEdit ? Id : null, Input, lines, cancellationToken);
-            SuccessMessage = string.Equals(actionMode, "draft-save", StringComparison.OrdinalIgnoreCase)
+        var actionMode = Request.Form["workflowActionModeInput"].ToString();
+        var draftSaveAction = Request.Form["DraftSaveAction"].ToString();
+        if (IsEdit && existing is not null)
+        {
+            Input.IsAuto = existing.IsAuto;
+        }
+        else
+        {
+            Input.IsAuto = false;
+        }
+        var savedNo = await _materialRequestService.SaveAsync(IsEdit ? Id : null, Input, lines, cancellationToken);
+            var isDraftSave = string.Equals(actionMode, "draft-save", StringComparison.OrdinalIgnoreCase);
+            var successMessage = isDraftSave
                 ? GetDraftSaveSuccessMessage(draftSaveAction)
                 : (IsEdit ? "Saved successfully." : "Material Request created successfully.");
+
+            if (isDraftSave && IsAjaxRequest())
+            {
+                return new JsonResult(new
+                {
+                    success = true,
+                    requestNo = savedNo,
+                    message = successMessage
+                });
+            }
+
+            SuccessMessage = successMessage;
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(savedNo));
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[MaterialRequest][Save] {ex}");
             Lines = lines;
+            if (IsAjaxRequest() && string.Equals(Request.Form["workflowActionModeInput"].ToString(), "draft-save", StringComparison.OrdinalIgnoreCase))
+            {
+                return new JsonResult(new
+                {
+                    success = false,
+                    message = ex is InvalidOperationException ? ex.Message : $"Cannot save Material Request. {ex.Message}"
+                });
+            }
             ModelState.AddModelError(string.Empty, ex is InvalidOperationException ? ex.Message : $"Cannot save Material Request. {ex.Message}");
             return Page();
         }
@@ -844,6 +873,11 @@ public class MaterialRequestDetailModel : BasePageModel
             "create-new-item" => "New item created and saved.",
             _ => "Line changes saved."
         };
+    }
+
+    private bool IsAjaxRequest()
+    {
+        return string.Equals(Request.Headers["X-Requested-With"].ToString(), "XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task LoadUserScopeAsync(CancellationToken cancellationToken)
