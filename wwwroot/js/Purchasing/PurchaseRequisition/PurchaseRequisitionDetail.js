@@ -14,6 +14,38 @@
         return toNumber(value).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
     }
 
+    function normalizeDetailRow(row) {
+        if (!row || typeof row !== "object") {
+            return {
+                detailId: 0,
+                itemId: 0,
+                itemCode: "",
+                itemName: "",
+                unit: "",
+                qtyFromM: 0,
+                qtyPur: 0,
+                unitPrice: 0,
+                remark: "",
+                supplierId: null,
+                supplierText: ""
+            };
+        }
+
+        return {
+            detailId: row.detailId ?? row.DetailId ?? 0,
+            itemId: row.itemId ?? row.ItemId ?? 0,
+            itemCode: row.itemCode ?? row.ItemCode ?? "",
+            itemName: row.itemName ?? row.ItemName ?? "",
+            unit: row.unit ?? row.Unit ?? "",
+            qtyFromM: row.qtyFromM ?? row.QtyFromM ?? 0,
+            qtyPur: row.qtyPur ?? row.QtyPur ?? 0,
+            unitPrice: row.unitPrice ?? row.UnitPrice ?? 0,
+            remark: row.remark ?? row.Remark ?? "",
+            supplierId: row.supplierId ?? row.SupplierId ?? null,
+            supplierText: row.supplierText ?? row.SupplierText ?? ""
+        };
+    }
+
     function initDetail() {
         const detailsJsonEl = document.getElementById("DetailsJson");
         const rowsContainer = document.getElementById("prqDetailRows");
@@ -32,7 +64,7 @@
 
         let details = [];
         try {
-            details = detailsJsonEl.value ? JSON.parse(detailsJsonEl.value) : [];
+            details = detailsJsonEl.value ? JSON.parse(detailsJsonEl.value).map(normalizeDetailRow) : [];
         } catch {
             details = [];
         }
@@ -63,8 +95,8 @@
 
             emptyRow.style.display = "none";
             details.forEach((d, index) => {
-                const removeButton = getConfig().canSave
-                    ? `<button type="button" class="btn btn-xs btn-outline-danger border" data-remove-index="${index}">X</button>`
+                const removeButtonCell = getConfig().canSave
+                    ? `<td class="text-center"><button type="button" class="btn btn-xs btn-outline-danger border" data-remove-index="${index}">X</button></td>`
                     : "";
 
                 const tr = document.createElement("tr");
@@ -79,7 +111,7 @@
                     <td class="prq-center">${formatNumber(d.qtyPur * d.unitPrice)}</td>
                     <td class="prq-center">${d.remark || ""}</td>
                     <td>${d.supplierText || ""}</td>
-                    <td class="text-center">${removeButton}</td>`;
+                    ${removeButtonCell}`;
                 rowsContainer.appendChild(tr);
             });
             syncHiddenInput();

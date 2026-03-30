@@ -6,6 +6,47 @@
     let currentPage = 1;
     let currentDataRows = [];
 
+    function buildCurrentReturnUrl() {
+        return `${window.location.pathname}${window.location.search || ''}`;
+    }
+
+    function syncBrowserUrlToSearchState(page) {
+        const form = document.getElementById('mrSearchForm');
+        if (!form || !window.history || typeof window.history.replaceState !== 'function') {
+            return;
+        }
+
+        const pageIndexInput = form.querySelector('input[name="Filter.PageIndex"]');
+        if (pageIndexInput) {
+            pageIndexInput.value = String(page > 0 ? page : 1);
+        }
+
+        const pageSizeInput = form.querySelector('input[name="Filter.PageSize"]');
+        if (pageSizeInput) {
+            pageSizeInput.value = String(pageSize);
+        }
+
+        const params = new URLSearchParams(new FormData(form));
+        const query = params.toString();
+        const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+        window.history.replaceState({}, '', nextUrl);
+    }
+
+    function formatLocalDate(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function buildDetailUrl(requestNo, mode) {
+        const url = new URL('/Purchasing/MaterialRequest/MaterialRequestDetail', window.location.origin);
+        url.searchParams.set('id', requestNo || '');
+        url.searchParams.set('mode', mode || 'view');
+        url.searchParams.set('returnUrl', buildCurrentReturnUrl());
+        return url.toString();
+    }
+
     // ========== SEARCH FUNCTION ==========
     function performSearch(page = 1) {
         currentPage = page;
@@ -53,6 +94,7 @@
                     currentDataRows = response.data || [];
                     renderContracts(response.data);
                     updatePagination(response.total, response.page, response.pageSize, response.totalPages);
+                    syncBrowserUrlToSearchState(response.page || page);
                     resetActions();
                 } else {
                     showError('Search failed: ' + (response && response.message ? response.message : ''));
@@ -90,7 +132,7 @@
                 </td>
                 <td>${r.dateCreateDisplay || r.DateCreateDisplay || ''}</td>
                 <td style="white-space:nowrap">${r.accordingTo || r.AccordingTo || ''}</td>
-                <td style="white-space:nowrap">${r.kPGroupName || r.KPGroupName || ''}</td>
+                <td style="white-space:nowrap">${r.kpGroupName || r.KPGroupName || r.kPGroupName || ''}</td>
                 <td>${r.materialStatusName || r.MaterialStatusName || ''}</td>
                 <td>${r.prNo || r.PrNo || ''}</td>
                 <td style="display:none">${r.materialStatusId || r.MaterialStatusId || ''}</td>
@@ -123,7 +165,7 @@
 
         if (perms.canAccess === true) {
             const mode = perms.accessMode || 'view';
-            window.location.href = `/Purchasing/MaterialRequest/MaterialRequestDetail?id=${requestNo}&mode=${mode}`;
+            window.location.href = buildDetailUrl(requestNo, mode);
         } else {
             alert('You have no right to view this request.');
         }
@@ -265,7 +307,8 @@
         });
 
         // 4. Tự động Search lần đầu khi load trang
-        performSearch(1);
+        const initialPage = parseInt($('#mrSearchForm input[name="Filter.PageIndex"]').val() || '1', 10);
+        performSearch(Number.isFinite(initialPage) && initialPage > 0 ? initialPage : 1);
     }
 
     function showLoading(show) {
@@ -284,6 +327,8 @@
         const $dropdownBtn = $('#mrStatusDropdownBtn');
         const $menu = $('.mr-status-menu');
         const $checkboxes = $('.mr-status-checkbox');
+        const $selectAllBtn = $('#mrStatusSelectAllBtn');
+        const $clearBtn = $('#mrStatusClearBtn');
         if ($dropdownBtn.length === 0 || $menu.length === 0 || $checkboxes.length === 0) return;
 
         function updateCaption() {
@@ -314,6 +359,16 @@
         });
 
         $checkboxes.off('change').on('change', updateCaption);
+        $selectAllBtn.off('click').on('click', function () {
+            $checkboxes.prop('checked', true);
+            updateCaption();
+        });
+
+        $clearBtn.off('click').on('click', function () {
+            $checkboxes.prop('checked', false);
+            updateCaption();
+        });
+
         updateCaption();
     }
 
@@ -350,7 +405,8 @@
         const $moveRightBtn = $('#createMrMoveRightBtn');
         const $moveLeftBtn = $('#createMrMoveLeftBtn');
         const $confirmBtn = $('#createMrConfirmBtn');
-        const $keywordInput = $('#createMrKeyword');
+        const $itemCodeInput = $('#createMrItemCode');
+        const $itemNameInput = $('#createMrItemName');
         const $checkBalanceInput = $('#createMrCheckBalance');
         const $searchBody = $('#createMrSearchResultBody');
         const $selectedBody = $('#createMrSelectedBody');
@@ -380,6 +436,24 @@
             $confirmBtn.prop('disabled', !(hasItems && hasDescription));
         }
 
+        function readOrderQtyFromInput(input) {
+            const raw = $(input).val();
+            const value = Number.parseFloat((raw || '').toString().trim());
+            return Number.isFinite(value) && value > 0 ? value : 1;
+        }
+
+        function collectRowItem(tr) {
+            if (!tr || !tr.dataset.itemCode) return null;
+            return {
+                itemCode: tr.dataset.itemCode || '',
+                itemName: tr.dataset.itemName || '',
+                unit: tr.dataset.unit || '',
+                inStock: Number.parseFloat(tr.dataset.inStock || '0') || 0,
+                storeGroupId: Number.parseInt(tr.dataset.storeGroupId || '0', 10) || 0,
+                orderQty: readOrderQtyFromInput(tr.querySelector('.create-mr-order-input'))
+            };
+        }
+
         function redrawSelected() {
             renderSelectedRows($selectedBody.get(0), Array.from(selectedMap.values()));
             syncConfirmState();
@@ -390,33 +464,47 @@
             redrawSelected();
             showValidation('');
             $descriptionInput.val('');
+            $itemCodeInput.val('');
+            $itemNameInput.val('');
 
             const storeGroupValue = getCurrentStoreGroupValue();
             $storeGroupPostInput.val(storeGroupValue === null ? '' : String(storeGroupValue));
             syncConfirmState();
-
-            try {
-                const items = await searchItems('', $checkBalanceInput.is(':checked'), storeGroupValue);
-                renderSearchRows($searchBody.get(0), items);
-            } catch (err) {
-                console.error(err);
-                renderSearchRows($searchBody.get(0), []);
-            }
+            renderSearchRows($searchBody.get(0), [], 'Enter item code or item name, then click Search.');
         });
 
         $searchBtn.off('click').on('click', async function () {
             showValidation('');
+            const itemCode = ($itemCodeInput.val() || '').toString().trim();
+            const itemName = ($itemNameInput.val() || '').toString().trim();
+
+            if (itemCode.length < 2 && itemName.length < 5) {
+                showValidation('Enter at least 2 characters for Item Code or 5 characters for Item Name.');
+                renderSearchRows($searchBody.get(0), [], 'Enter item code or item name, then click Search.');
+                return;
+            }
+
             try {
-                const items = await searchItems(
-                    ($keywordInput.val() || '').toString().trim(),
-                    $checkBalanceInput.is(':checked'),
-                    getCurrentStoreGroupValue()
-                );
+                const items = await searchItems(itemCode, itemName, $checkBalanceInput.is(':checked'), getCurrentStoreGroupValue());
                 renderSearchRows($searchBody.get(0), items);
             } catch (err) {
                 console.error(err);
                 showValidation('Cannot load item list.');
-                renderSearchRows($searchBody.get(0), []);
+                renderSearchRows($searchBody.get(0), [], 'Enter item code or item name, then click Search.');
+            }
+        });
+
+        $itemCodeInput.off('keydown').on('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                $searchBtn.trigger('click');
+            }
+        });
+
+        $itemNameInput.off('keydown').on('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                $searchBtn.trigger('click');
             }
         });
 
@@ -427,18 +515,18 @@
             if (checkbox && !event.target.closest('input')) checkbox.checked = !checkbox.checked;
         });
 
+        $searchBody.off('input', '.create-mr-order-input').on('input', '.create-mr-order-input', function () {
+            const tr = $(this).closest('tr').get(0);
+            if (!tr || !tr.dataset.itemCode) return;
+            tr.dataset.orderQty = String(readOrderQtyFromInput(this));
+        });
+
         $searchBody.off('dblclick', 'tr').on('dblclick', 'tr', function (event) {
             const tr = event.currentTarget;
-            if (!tr || !tr.dataset.itemCode) return;
-            const itemCode = tr.dataset.itemCode || '';
+            const rowItem = collectRowItem(tr);
+            if (!rowItem) return;
 
-            selectedMap.set(itemCode, {
-                itemCode: itemCode,
-                itemName: tr.dataset.itemName || '',
-                unit: tr.dataset.unit || '',
-                inStock: Number.parseFloat(tr.dataset.inStock || '0') || 0,
-                storeGroupId: Number.parseInt(tr.dataset.storeGroupId || '0', 10) || 0
-            });
+            selectedMap.set(rowItem.itemCode, rowItem);
 
             showValidation('');
             redrawSelected();
@@ -455,16 +543,10 @@
             }
 
             checkedRows.forEach(function (tr) {
-                const itemCode = tr.dataset.itemCode || '';
-                if (!itemCode) return;
+                const rowItem = collectRowItem(tr);
+                if (!rowItem) return;
 
-                selectedMap.set(itemCode, {
-                    itemCode: itemCode,
-                    itemName: tr.dataset.itemName || '',
-                    unit: tr.dataset.unit || '',
-                    inStock: Number.parseFloat(tr.dataset.inStock || '0') || 0,
-                    storeGroupId: Number.parseInt(tr.dataset.storeGroupId || '0', 10) || 0
-                });
+                selectedMap.set(rowItem.itemCode, rowItem);
             });
 
             showValidation('');
@@ -487,6 +569,17 @@
             if (!itemCode) return;
             selectedMap.delete(itemCode);
             redrawSelected();
+        });
+
+        $selectedBody.off('input', '.create-mr-order-input').on('input', '.create-mr-order-input', function () {
+            const tr = $(this).closest('tr').get(0);
+            if (!tr || !tr.dataset.itemCode) return;
+            const itemCode = tr.dataset.itemCode || '';
+            const existing = selectedMap.get(itemCode);
+            if (!existing) return;
+            existing.orderQty = readOrderQtyFromInput(this);
+            tr.dataset.orderQty = String(existing.orderQty);
+            selectedMap.set(itemCode, existing);
         });
 
         $descriptionInput.off('input').on('input', function () {
@@ -518,7 +611,7 @@
                 $storeGroupPostInput.val(String(storeGroupValue));
             } else {
                 const itemGroups = Array.from(new Set(
-                    selectedItems
+                selectedItems
                         .map(function (x) { return Number.parseInt(x.storeGroupId || 0, 10); })
                         .filter(function (x) { return Number.isFinite(x) && x > 0; })
                 ));
@@ -572,11 +665,12 @@
         });
     }
 
-    function searchItems(keyword, checkBalanceInStore, storeGroup) {
+    function searchItems(itemCode, itemName, checkBalanceInStore, storeGroup) {
         return new Promise(function (resolve, reject) {
             const url = new URL(window.location.href);
             url.searchParams.set('handler', 'SearchItems');
-            if (keyword) url.searchParams.set('keyword', keyword);
+            if (itemCode) url.searchParams.set('itemCode', itemCode);
+            if (itemName) url.searchParams.set('itemName', itemName);
             if (checkBalanceInStore) url.searchParams.set('checkBalanceInStore', 'true');
             if (storeGroup !== null && storeGroup !== undefined && Number.isFinite(storeGroup)) {
                 url.searchParams.set('storeGroup', String(storeGroup));
@@ -600,10 +694,10 @@
         });
     }
 
-    function renderSearchRows(body, items) {
+    function renderSearchRows(body, items, emptyMessage) {
         body.innerHTML = '';
         if (!items || items.length === 0) {
-            body.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No data</td></tr>';
+            body.innerHTML = `<tr><td colspan="6" class="text-center text-muted">${emptyMessage || 'No data'}</td></tr>`;
             return;
         }
 
@@ -614,11 +708,19 @@
             tr.dataset.unit = item.unit || '';
             tr.dataset.inStock = item.inStock || 0;
             tr.dataset.storeGroupId = item.storeGroupId || 0;
+            tr.dataset.orderQty = item.orderQty || 1;
             tr.innerHTML = `
                 <td><input type="checkbox" class="create-mr-search-checkbox"></td>
                 <td>${item.itemCode || ''}</td>
                 <td class="vni-font">${item.itemName || ''}</td>
                 <td>${item.unit || ''}</td>`;
+            const orderCell = document.createElement('td');
+            orderCell.textContent = Number.isFinite(Number(item.inStock)) ? String(item.inStock || 0) : '0';
+            tr.appendChild(orderCell);
+
+            const orderInputCell = document.createElement('td');
+            orderInputCell.innerHTML = `<input type="number" min="0.01" step="0.01" class="form-control form-control-sm create-mr-order-input" value="${item.orderQty && item.orderQty > 0 ? item.orderQty : 1}">`;
+            tr.appendChild(orderInputCell);
             body.appendChild(tr);
         });
     }
@@ -626,18 +728,22 @@
     function renderSelectedRows(body, selectedItems) {
         body.innerHTML = '';
         if (!selectedItems || selectedItems.length === 0) {
-            body.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No selected item</td></tr>';
+            body.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No selected item</td></tr>';
             return;
         }
 
         selectedItems.forEach(function (item) {
             const tr = document.createElement('tr');
             tr.dataset.itemCode = item.itemCode;
+            tr.dataset.orderQty = item.orderQty || 1;
             tr.innerHTML = `
                 <td><input type="checkbox" class="create-mr-selected-checkbox"></td>
                 <td>${item.itemCode || ''}</td>
                 <td class="vni-font">${item.itemName || ''}</td>
                 <td>${item.unit || ''}</td>`;
+            const orderCell = document.createElement('td');
+            orderCell.innerHTML = `<input type="number" min="0.01" step="0.01" class="form-control form-control-sm create-mr-order-input" value="${item.orderQty && item.orderQty > 0 ? item.orderQty : 1}">`;
+            tr.appendChild(orderCell);
             body.appendChild(tr);
         });
     }

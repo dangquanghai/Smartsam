@@ -64,6 +64,10 @@
     gap: 0.35rem;
 }
 
+.prq-pagination-info {
+    padding-top: 0.3rem;
+}
+
 .prq-page-size-label {
     margin-bottom: 0;
     font-size: 0.75rem;

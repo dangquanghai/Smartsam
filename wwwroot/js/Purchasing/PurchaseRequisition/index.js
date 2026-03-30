@@ -51,8 +51,9 @@
                 if (ev.target && ev.target.closest("input, a, button")) return;
                 const check = row.querySelector(".prq-selector");
                 if (!check) return;
+                const willSelect = !check.checked;
                 rowChecks.forEach((item) => { item.checked = false; });
-                check.checked = true;
+                check.checked = willSelect;
                 syncState();
             });
 
@@ -68,7 +69,35 @@
             });
         });
 
-        rowChecks.forEach((check) => check.addEventListener("change", syncState));
+        rowChecks.forEach((check) => {
+            check.addEventListener("mousedown", () => {
+                check.dataset.wasChecked = check.checked ? "true" : "false";
+            });
+
+            check.addEventListener("change", (ev) => {
+                const target = ev.currentTarget;
+                if (target.checked) {
+                    rowChecks.forEach((item) => {
+                        if (item !== target) {
+                            item.checked = false;
+                        }
+                    });
+                }
+                syncState();
+            });
+
+            check.addEventListener("click", (ev) => {
+                const target = ev.currentTarget;
+                if (target.dataset.wasChecked !== "true") {
+                    return;
+                }
+
+                ev.preventDefault();
+                target.checked = false;
+                delete target.dataset.wasChecked;
+                syncState();
+            });
+        });
         window.getPrqSelectedRows = () => rows.filter((row) => row.querySelector(".prq-selector")?.checked);
         syncState();
     }
@@ -166,7 +195,6 @@
     function initActions() {
         const btnEdit = document.getElementById("btnEdit");
         const btnViewDetail = document.getElementById("btnViewDetail");
-        const btnPrintList = document.getElementById("btnPrintList");
         const btnExportExcel = document.getElementById("btnExportExcel");
         const btnDisapproval = document.getElementById("btnDisapproval");
         const config = getConfig();
@@ -196,8 +224,30 @@
             window.location.href = buildDetailUrl(row.getAttribute("data-prid"), "view");
         });
 
-        btnPrintList?.addEventListener("click", () => window.print());
-        btnExportExcel?.addEventListener("click", () => alert("Export Excel is not implemented yet."));
+        btnExportExcel?.addEventListener("click", () => {
+            const params = new URLSearchParams();
+            const selectedRow = getSelectedRow();
+            const requestNo = document.getElementById("Filter_RequestNo")?.value || "";
+            const statusId = document.getElementById("Filter_StatusId")?.value || "";
+            const description = document.getElementById("Filter_Description")?.value || "";
+            const useDateRange = document.getElementById("Filter_UseDateRange")?.checked || false;
+            const fromDate = document.getElementById("Filter_FromDate")?.value || "";
+            const toDate = document.getElementById("Filter_ToDate")?.value || "";
+
+            if (requestNo) params.set("RequestNo", requestNo);
+            if (statusId) params.set("StatusId", statusId);
+            if (description) params.set("Description", description);
+            params.set("UseDateRange", useDateRange ? "true" : "false");
+            if (useDateRange && fromDate) params.set("FromDate", fromDate);
+            if (useDateRange && toDate) params.set("ToDate", toDate);
+            if (selectedRow) {
+                const selectedPrId = selectedRow.getAttribute("data-prid") || "";
+                if (selectedPrId) params.set("SelectedPrId", selectedPrId);
+            }
+
+            const query = params.toString();
+            window.location.href = `${window.location.pathname}?handler=ExportExcel${query ? `&${query}` : ""}`;
+        });
         btnDisapproval?.addEventListener("click", () => alert("Disapproval is not implemented yet."));
 
         document.addEventListener("prq:selection-changed", syncState);

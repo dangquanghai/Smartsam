@@ -6,11 +6,13 @@
     Func<int, string> navUrl = (supplierId) => Url.Page("./Index", new
     {
         CurrentSupplierId = supplierId,
-        Type = Model.Type
+        Type = Model.Type,
+        supplier_id = Model.SupplierId
     }) ?? "#";
 
     var editAll = Model.CanEditAllSupplierFields;
     var commentOnly = Model.CanEditCommentOnly;
+    var useSupplierLinkMode = Model.IsSupplierLinkMode;
 }
 
 <section class="content">
@@ -37,7 +39,7 @@
             <div class="card-body p-2">
                 @if (Model.CurrentSupplierDetail is null)
                 {
-                    <div class="text-muted">No supplier found for current scope.</div>
+                    <div class="text-muted text-center">No supplier found for current scope.</div>
                 }
                 else
                 {
@@ -45,6 +47,7 @@
                         <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
                         <input type="hidden" asp-for="CurrentSupplierId" />
                         <input type="hidden" asp-for="Type" />
+                        <input type="hidden" name="supplier_id" value="@Model.SupplierId" />
                         <input type="hidden" asp-for="EditSupplier.SupplierID" />
 
                         <div class="mb-2">
@@ -143,40 +146,43 @@
 
                         <div class="d-flex align-items-center mb-2 module-action-bar">
                             <div class="d-flex align-items-center flex-wrap">
-                                @if (Model.HasFirstSupplier)
+                                @if (!useSupplierLinkMode)
                                 {
-                                    <a class="btn btn-sm btn-action-close nav-mini-btn mr-1" href="@navUrl(Model.FirstSupplierId!.Value)">&lt;&lt;</a>
-                                }
-                                else
-                                {
-                                    <button type="button" class="btn btn-sm btn-action-close nav-mini-btn mr-1" disabled>&lt;&lt;</button>
-                                }
+                                    @if (Model.HasFirstSupplier)
+                                    {
+                                        <a class="btn btn-sm btn-action-close nav-mini-btn mr-1" href="@navUrl(Model.FirstSupplierId!.Value)">&lt;&lt;</a>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-sm btn-action-close nav-mini-btn mr-1" disabled>&lt;&lt;</button>
+                                    }
 
-                                @if (Model.HasPrevSupplier)
-                                {
-                                    <a class="btn btn-sm btn-action-close nav-mini-btn mr-1" href="@navUrl(Model.PrevSupplierId!.Value)">&lt;</a>
-                                }
-                                else
-                                {
-                                    <button type="button" class="btn btn-sm btn-action-close nav-mini-btn mr-1" disabled>&lt;</button>
-                                }
+                                    @if (Model.HasPrevSupplier)
+                                    {
+                                        <a class="btn btn-sm btn-action-close nav-mini-btn mr-1" href="@navUrl(Model.PrevSupplierId!.Value)">&lt;</a>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-sm btn-action-close nav-mini-btn mr-1" disabled>&lt;</button>
+                                    }
 
-                                @if (Model.HasNextSupplier)
-                                {
-                                    <a class="btn btn-sm btn-action-close nav-mini-btn mr-1" href="@navUrl(Model.NextSupplierId!.Value)">&gt;</a>
-                                }
-                                else
-                                {
-                                    <button type="button" class="btn btn-sm btn-action-close nav-mini-btn mr-1" disabled>&gt;</button>
-                                }
+                                    @if (Model.HasNextSupplier)
+                                    {
+                                        <a class="btn btn-sm btn-action-close nav-mini-btn mr-1" href="@navUrl(Model.NextSupplierId!.Value)">&gt;</a>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-sm btn-action-close nav-mini-btn mr-1" disabled>&gt;</button>
+                                    }
 
-                                @if (Model.HasLastSupplier)
-                                {
-                                    <a class="btn btn-sm btn-action-close nav-mini-btn mr-3" href="@navUrl(Model.LastSupplierId!.Value)">&gt;&gt;</a>
-                                }
-                                else
-                                {
-                                    <button type="button" class="btn btn-sm btn-action-close nav-mini-btn mr-3" disabled>&gt;&gt;</button>
+                                    @if (Model.HasLastSupplier)
+                                    {
+                                        <a class="btn btn-sm btn-action-close nav-mini-btn mr-3" href="@navUrl(Model.LastSupplierId!.Value)">&gt;&gt;</a>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-sm btn-action-close nav-mini-btn mr-3" disabled>&gt;&gt;</button>
+                                    }
                                 }
 
                                 <button
@@ -199,14 +205,17 @@
                                     data-confirm-kind="primary">
                                     <i class="fas fa-ban mr-1"></i>DisApprove Supplier
                                 </button>
-                                <a class="btn btn-sm btn-action-close mr-3" href="/Purchasing/Supplier/Index"><i class="fas fa-times mr-1"></i>Close</a>
+                                <a class="btn btn-sm btn-action-close mr-3" href="/"><i class="fas fa-times mr-1"></i>Close</a>
                                 <span class="text-danger font-weight-bold mr-3">@(string.IsNullOrWhiteSpace(Model.CurrentSupplierDetail?.SupplierStatusName) ? "N/A" : Model.CurrentSupplierDetail!.SupplierStatusName)</span>
                             </div>
 
                             <div class="d-flex align-items-center ml-auto">
-                                <span class="text-primary font-weight-bold mr-3">@Model.CurrentSupplierPosition/@Model.CurrentPageSupplierCount Suppliers</span>
-                                <input asp-for="GoToOrder" type="number" min="1" max="@Model.CurrentPageSupplierCount" class="form-control form-control-sm mr-2" style="width:80px" />
-                                <button type="submit" formaction="?handler=GoTo" class="btn btn-sm btn-action-close goto-btn-compact"><i class="fas fa-share-square mr-1"></i>Go to</button>
+                                @if (!useSupplierLinkMode)
+                                {
+                                    <span class="text-primary font-weight-bold mr-3">@Model.CurrentSupplierPosition/@Model.CurrentPageSupplierCount Suppliers</span>
+                                    <input asp-for="GoToOrder" type="number" min="1" max="@Model.CurrentPageSupplierCount" class="form-control form-control-sm mr-2" style="width:80px" />
+                                    <button type="submit" formaction="?handler=GoTo" class="btn btn-sm btn-action-close goto-btn-compact"><i class="fas fa-share-square mr-1"></i>Go to</button>
+                                }
                             </div>
                         </div>
                     </form>

@@ -87,12 +87,15 @@
                                     <th style="width:120px;" class="prq-center">Amount</th>
                                     <th style="width:220px;" class="prq-center">Remark</th>
                                     <th style="width:180px;">Supplier</th>
-                                    <th style="width:60px;"></th>
+                                    @if (Model.CanSave)
+                                    {
+                                        <th style="width:60px;"></th>
+                                    }
                                 </tr>
                             </thead>
                             <tbody id="prqDetailRows">
                                 <tr id="prqDetailEmptyRow">
-                                    <td colspan="10" class="text-center text-muted">No detail rows</td>
+                                    <td colspan="@(Model.CanSave ? 10 : 9)" class="text-center text-muted">No detail rows</td>
                                 </tr>
                             </tbody>
                         </table>

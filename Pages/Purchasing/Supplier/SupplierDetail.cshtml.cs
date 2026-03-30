@@ -12,6 +12,8 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Linq;
+using System.Net;
+using System.Net.Mail;
 
 namespace SmartSam.Pages.Purchasing.Supplier
 {
@@ -20,6 +22,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         // Tracking comment: keep Supplier detail page model marked as touched for current work.
         private readonly ISecurityService _securityService;
         private readonly PermissionService _permissionService;
+        private readonly ILogger<SupplierDetailModel> _logger;
         private readonly string _connectionString;
 
         private const string AnnualYearColumn = "ForYear";
@@ -37,10 +40,11 @@ namespace SmartSam.Pages.Purchasing.Supplier
         private List<int> _effectivePerms = new List<int>();
 
         // Constructor truyền config vào BasePageModel
-        public SupplierDetailModel(ISecurityService securityService, PermissionService permissionService, IConfiguration config) : base(config)
+        public SupplierDetailModel(ISecurityService securityService, PermissionService permissionService, IConfiguration config, ILogger<SupplierDetailModel> logger) : base(config)
         {
             _securityService = securityService;
             _permissionService = permissionService;
+            _logger = logger;
             _connectionString = _config.GetConnectionString("DefaultConnection")
                 ?? throw new InvalidOperationException("Missing connection string: DefaultConnection");
         }
@@ -637,6 +641,12 @@ namespace SmartSam.Pages.Purchasing.Supplier
             var operatorCode = User.Identity?.Name ?? "SYSTEM";
             SubmitApproval(Id!.Value, operatorCode);
 
+            // Nếu supplier là mới thì gửi mail ngay cho cấp duyệt tiếp theo giống luồng approve new.
+            if (current.IsNew)
+            {
+                TryQueueNotifyNewSupplierAfterSubmit(Id.Value, current, operatorCode);
+            }
+
             SetFlashMessage("Supplier submitted successfully.", "success");
             return RedirectToPage("./SupplierDetail", BuildDetailRouteValues(Id.Value));
         }
@@ -1122,6 +1132,128 @@ namespace SmartSam.Pages.Purchasing.Supplier
             cmd.ExecuteNonQuery();
         }
 
+        private void TryQueueNotifyNewSupplierAfterSubmit(int supplierId, SupplierViewModel supplier, string operatorCode)
+        {
+            // 1. Sau khi submit, supplier mới luôn chuyển sang Status = 1 nên cấp duyệt tiếp theo là level 2.
+            const int nextLevel = 2;
+            var recipients = GetEmailsByLevelCheck(nextLevel);
+            if (recipients.Count == 0)
+            {
+                return;
+            }
+
+            var senderEmail = _config.GetValue<string>("EmailSettings:SenderEmail");
+            var mailPass = _config.GetValue<string>("EmailSettings:Password");
+            var mailServer = _config.GetValue<string>("EmailSettings:MailServer");
+            var mailPort = _config.GetValue<int?>("EmailSettings:MailPort") ?? 0;
+            if (string.IsNullOrWhiteSpace(senderEmail) ||
+                string.IsNullOrWhiteSpace(mailPass) ||
+                string.IsNullOrWhiteSpace(mailServer) ||
+                mailPort <= 0)
+            {
+                return;
+            }
+
+            var supplierCode = string.IsNullOrWhiteSpace(supplier.SupplierCode) ? supplierId.ToString() : supplier.SupplierCode;
+            var supplierName = string.IsNullOrWhiteSpace(supplier.SupplierName) ? "-" : supplier.SupplierName;
+            var detailUrl = Url.Page("/Purchasing/ApproveSupplier/Index", values: new
+            {
+                Type = "new",
+                supplier_id = supplierId
+            });
+
+            var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl)
+                ? string.Empty
+                : $"{Request.Scheme}://{Request.Host}{detailUrl}";
+
+            var body = $@"
+<p>Dear Approver Level {nextLevel},</p>
+<p>A new supplier has just been <b>submitted</b> and is waiting for your approval.</p>
+<ul>
+  <li>Supplier Code: <b>{WebUtility.HtmlEncode(supplierCode)}</b></li>
+  <li>Supplier Name: <b>{WebUtility.HtmlEncode(supplierName)}</b></li>
+  <li>Submitted by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
+  <li>Submit time: <b>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</b></li>
+</ul>
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Approve Supplier New</a></p>")}
+<p>SmartSam System</p>";
+
+            var htmlBody = EmailTemplateHelper.WrapInNotifyTemplate("APPROVE SUPPLIER NEW", "#17a2b8", DateTime.Now, body);
+            var notifyRequest = new SupplierSubmitNotifyRequestViewModel
+            {
+                NextLevel = nextLevel,
+                SenderEmail = senderEmail,
+                Password = mailPass,
+                MailServer = mailServer,
+                MailPort = mailPort,
+                Subject = "[Approve Supplier New] Supplier submitted for approval",
+                HtmlBody = htmlBody,
+                Recipients = recipients
+            };
+
+            _ = SendNotifyEmailAsync(notifyRequest);
+        }
+
+        private List<string> GetEmailsByLevelCheck(int levelCheckSupplier)
+        {
+            var rows = new List<string>();
+
+            using var conn = new SqlConnection(_connectionString);
+            using var cmd = new SqlCommand(@"
+                SELECT DISTINCT LTRIM(RTRIM(TheEmail))
+                FROM dbo.MS_Employee
+                WHERE LevelCheckSupplier = @LevelCheckSupplier
+                  AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
+                  AND ISNULL(IsActive, 0) = 1", conn);
+
+            cmd.Parameters.AddWithValue("@LevelCheckSupplier", levelCheckSupplier);
+            conn.Open();
+
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read())
+            {
+                var email = Convert.ToString(rd[0]) ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(email))
+                {
+                    rows.Add(email.Trim());
+                }
+            }
+
+            return rows.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        private async Task SendNotifyEmailAsync(SupplierSubmitNotifyRequestViewModel notifyRequest)
+        {
+            try
+            {
+                using var mail = new MailMessage
+                {
+                    From = new MailAddress(notifyRequest.SenderEmail, "SmartSam System"),
+                    Subject = notifyRequest.Subject,
+                    Body = notifyRequest.HtmlBody,
+                    IsBodyHtml = true
+                };
+
+                foreach (var recipient in notifyRequest.Recipients)
+                {
+                    mail.To.Add(recipient);
+                }
+
+                using var smtp = new SmtpClient(notifyRequest.MailServer, notifyRequest.MailPort)
+                {
+                    EnableSsl = true,
+                    Credentials = new NetworkCredential(notifyRequest.SenderEmail, notifyRequest.Password)
+                };
+
+                await smtp.SendMailAsync(mail);
+                _logger.LogInformation("Notification email sent for new supplier submit to level {NextLevel}.", notifyRequest.NextLevel);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Cannot send notification email for new supplier submit to level {NextLevel}.", notifyRequest.NextLevel);
+            }
+        }
+
         // Reset workflow de supplier disapproved co the submit lai tu dau.
         private void ResetForReuse(int supplierId)
         {
@@ -1258,6 +1390,18 @@ namespace SmartSam.Pages.Purchasing.Supplier
         {
             public int? DeptID { get; set; }
             public int LevelCheckSupplier { get; set; }
+        }
+
+        public class SupplierSubmitNotifyRequestViewModel
+        {
+            public int NextLevel { get; set; }
+            public string SenderEmail { get; set; } = string.Empty;
+            public string Password { get; set; } = string.Empty;
+            public string MailServer { get; set; } = string.Empty;
+            public int MailPort { get; set; }
+            public string Subject { get; set; } = string.Empty;
+            public string HtmlBody { get; set; } = string.Empty;
+            public List<string> Recipients { get; set; } = new List<string>();
         }
     }
 }

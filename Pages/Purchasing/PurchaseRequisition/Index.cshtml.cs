@@ -1,6 +1,7 @@
 ﻿using System.Data;
 using System.Globalization;
 using System.Text.Json;
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
@@ -35,9 +36,9 @@ public class IndexModel : BasePageModel
     public int DefaultPageSize => _config.GetValue<int>("AppSettings:DefaultPageSize", 10);
 
     [BindProperty(SupportsGet = true)]
-    public PurchaseRequisitionFilter Filter { get; set; } = new();
+    public PurchaseRequisitionFilter Filter { get; set; } = new PurchaseRequisitionFilter();
 
-    [BindProperty]
+    [BindProperty(SupportsGet = true)]
     public int? SelectedPrId { get; set; }
 
     [BindProperty]
@@ -49,10 +50,10 @@ public class IndexModel : BasePageModel
     [TempData]
     public string MessageType { get; set; } = "info";
 
-    public List<PurchaseRequisitionRow> Rows { get; set; } = [];
+    public List<PurchaseRequisitionRow> Rows { get; set; } = new List<PurchaseRequisitionRow>();
     public List<SelectListItem> StatusList { get; set; } = new List<SelectListItem>();
-    public List<PurchaseRequisitionItemLookup> ItemList { get; set; } = [];
-    public List<PurchaseRequisitionSupplierLookup> SupplierList { get; set; } = [];
+    public List<PurchaseRequisitionItemLookup> ItemList { get; set; } = new List<PurchaseRequisitionItemLookup>();
+    public List<PurchaseRequisitionSupplierLookup> SupplierList { get; set; } = new List<PurchaseRequisitionSupplierLookup>();
     public bool CanAddNew { get; set; }
     public bool CanAddAt { get; set; }
     public bool CanEditRequisition { get; set; }
@@ -74,7 +75,7 @@ public class IndexModel : BasePageModel
             return Redirect("/");
         }
 
-        // 2. Chuẩn hóa filter và load dữ liệu màn hình
+        // 2. Chuẩn hóa filter trước khi nạp dữ liệu để danh sách và phân trang luôn đồng bộ.
         NormalizeQueryInputs();
         NormalizeFilter();
         LoadStatusList();
@@ -95,7 +96,7 @@ public class IndexModel : BasePageModel
                 return new JsonResult(new { success = false, message = "You have no permission to access purchase requisitions." });
             }
 
-            // 2. Build filter và lấy danh sách dữ liệu
+            // 2. Build filter tìm kiếm và lấy danh sách dữ liệu theo đúng điều kiện người dùng chọn.
             var filter = BuildSearchFilter(request);
             var (rows, totalRecords) = SearchPurchaseRequisitionRows(filter);
 
@@ -132,7 +133,7 @@ public class IndexModel : BasePageModel
             return Redirect("/");
         }
 
-        // 2. Chuẩn hóa filter sau post để quay lại đúng danh sách đang xem
+        // 2. Chuẩn hóa filter sau post để quay lại đúng danh sách người dùng đang xem.
         NormalizePostInputs();
         NormalizeFilter();
 
@@ -180,8 +181,300 @@ public class IndexModel : BasePageModel
         return RedirectToPage("./Index", BuildRouteValues());
     }
 
+    public IActionResult OnGetExportExcel()
+    {
+        // 1. Lấy quyền trước khi export để chặn gọi trực tiếp từ URL.
+        PagePerm = GetUserPermissions();
+        if (!HasPermission(PermissionViewList))
+        {
+            return Redirect("/");
+        }
+
+        // 2. Export phải bám đúng điều kiện filter hiện tại của màn hình danh sách.
+        NormalizeQueryInputs();
+        NormalizeFilter();
+
+        if (SelectedPrId.HasValue && SelectedPrId.Value > 0)
+        {
+            var requisition = LoadPurchaseRequisitionForExport(SelectedPrId.Value);
+            if (requisition == null)
+            {
+                return RedirectToPage("./Index", BuildRouteValues());
+            }
+
+            if (!CanViewDetailRow(requisition.StatusId))
+            {
+                return Redirect("/");
+            }
+
+            return ExportPurchaseRequisitionDetailExcel(requisition);
+        }
+
+        var exportFilter = new PurchaseRequisitionFilter
+        {
+            RequestNo = Filter.RequestNo,
+            StatusId = Filter.StatusId,
+            Description = Filter.Description,
+            UseDateRange = Filter.UseDateRange,
+            FromDate = Filter.FromDate,
+            ToDate = Filter.ToDate,
+            Page = 1,
+            PageSize = int.MaxValue
+        };
+
+        var (rows, _) = SearchPurchaseRequisitionRows(exportFilter);
+        return ExportPurchaseRequisitionListExcel(rows);
+    }
+
+    private IActionResult ExportPurchaseRequisitionListExcel(List<PurchaseRequisitionRow> rows)
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Purchase Requisition");
+
+        // 1. File export danh sách hiển thị đúng các cột đang dùng ở màn hình list.
+        var headers = new[]
+        {
+            "STT",
+            "No.",
+            "Date",
+            "Description",
+            "Status",
+            "Purchaser",
+            "C of A",
+            "G Director"
+        };
+
+        for (var col = 0; col < headers.Length; col++)
+        {
+            worksheet.Cell(1, col + 1).Value = headers[col];
+        }
+
+        var rowIndex = 2;
+        var orderNo = 1;
+        foreach (var row in rows)
+        {
+            worksheet.Cell(rowIndex, 1).Value = orderNo;
+            worksheet.Cell(rowIndex, 2).Value = row.RequestNo;
+            worksheet.Cell(rowIndex, 3).Value = row.RequestDate == DateTime.MinValue ? string.Empty : row.RequestDate.ToString("dd/MM/yyyy");
+            worksheet.Cell(rowIndex, 4).Value = row.Description;
+            worksheet.Cell(rowIndex, 5).Value = row.StatusName;
+            worksheet.Cell(rowIndex, 6).Value = row.PurchaserCode;
+            worksheet.Cell(rowIndex, 7).Value = row.ChiefACode;
+            worksheet.Cell(rowIndex, 8).Value = row.GDirectorCode;
+            rowIndex++;
+            orderNo++;
+        }
+
+        FormatWorksheetAsTable(worksheet, 1, Math.Max(1, rowIndex - 1), headers.Length);
+        return BuildExcelFileResult(workbook, "purchase_requisition");
+    }
+
+    private IActionResult ExportPurchaseRequisitionDetailExcel(PurchaseRequisitionExportHeader requisition)
+    {
+        using var workbook = new XLWorkbook();
+        var headerSheet = workbook.Worksheets.Add("Purchase Requisition");
+        var detailSheet = workbook.Worksheets.Add("PR Items");
+
+        // 1. Sheet đầu tiên chứa thông tin header của phiếu đang được chọn.
+        var headerRows = new (string Label, string Value)[]
+        {
+            ("No.", requisition.RequestNo),
+            ("Date", requisition.RequestDate == DateTime.MinValue ? string.Empty : requisition.RequestDate.ToString("dd/MM/yyyy")),
+            ("Description", requisition.Description),
+            ("Status", requisition.StatusName),
+            ("Purchaser", requisition.PurchaserCode),
+            ("C of A", requisition.ChiefACode),
+            ("G Director", requisition.GDirectorCode)
+        };
+
+        for (var i = 0; i < headerRows.Length; i++)
+        {
+            headerSheet.Cell(i + 1, 1).Value = headerRows[i].Label;
+            headerSheet.Cell(i + 1, 2).Value = headerRows[i].Value;
+        }
+
+        FormatWorksheetAsTable(headerSheet, 1, headerRows.Length, 2);
+
+        // 2. Sheet thứ hai chứa toàn bộ item detail của phiếu đang chọn.
+        var detailHeaders = new[]
+        {
+            "STT",
+            "Item Code",
+            "Item Name",
+            "Unit",
+            "QtyFromM",
+            "QtyPur",
+            "U.Price",
+            "Amount",
+            "Remark",
+            "Supplier"
+        };
+
+        for (var col = 0; col < detailHeaders.Length; col++)
+        {
+            detailSheet.Cell(1, col + 1).Value = detailHeaders[col];
+        }
+
+        var rowIndex = 2;
+        var orderNo = 1;
+        foreach (var detail in requisition.Details)
+        {
+            detailSheet.Cell(rowIndex, 1).Value = orderNo;
+            detailSheet.Cell(rowIndex, 2).Value = detail.ItemCode;
+            detailSheet.Cell(rowIndex, 3).Value = detail.ItemName;
+            detailSheet.Cell(rowIndex, 4).Value = detail.Unit;
+            detailSheet.Cell(rowIndex, 5).Value = detail.QtyFromM;
+            detailSheet.Cell(rowIndex, 6).Value = detail.QtyPur;
+            detailSheet.Cell(rowIndex, 7).Value = detail.UnitPrice;
+            detailSheet.Cell(rowIndex, 8).Value = detail.QtyPur * detail.UnitPrice;
+            detailSheet.Cell(rowIndex, 9).Value = detail.Remark ?? string.Empty;
+            detailSheet.Cell(rowIndex, 10).Value = detail.SupplierText;
+            rowIndex++;
+            orderNo++;
+        }
+
+        FormatWorksheetAsTable(detailSheet, 1, Math.Max(1, rowIndex - 1), detailHeaders.Length);
+        detailSheet.Column(7).Style.NumberFormat.Format = "#,##0.00";
+        detailSheet.Column(8).Style.NumberFormat.Format = "#,##0.00";
+        return BuildExcelFileResult(workbook, $"purchase_requisition_{requisition.RequestNo}");
+    }
+
+    private PurchaseRequisitionExportHeader? LoadPurchaseRequisitionForExport(int prId)
+    {
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+
+        using var cmd = new SqlCommand(@"
+SELECT
+    p.PRID,
+    ISNULL(p.RequestNo, '') AS RequestNo,
+    p.RequestDate,
+    ISNULL(p.[Description], '') AS [Description],
+    ISNULL(p.[Status], 1) AS [Status],
+    ISNULL(NULLIF(st.PRStatusName, ''), CASE p.[Status]
+        WHEN 1 THEN 'New'
+        WHEN 2 THEN 'Waiting For Approve'
+        WHEN 3 THEN 'Pending'
+        WHEN 4 THEN 'Done'
+        ELSE 'New'
+    END) AS StatusName,
+    ISNULL(ep.EmployeeCode, '') AS PurchaserCode,
+    ISNULL(ec.EmployeeCode, '') AS ChiefACode,
+    ISNULL(eg.EmployeeCode, '') AS GDirectorCode
+FROM dbo.PC_PR p
+LEFT JOIN dbo.PC_PRStatus st ON p.Status = st.PRStatusID
+LEFT JOIN dbo.MS_Employee ep ON p.PurId = ep.EmployeeID
+LEFT JOIN dbo.MS_Employee ec ON p.CAId = ec.EmployeeID
+LEFT JOIN dbo.MS_Employee eg ON p.GDId = eg.EmployeeID
+WHERE p.PRID = @PRID", conn);
+
+        cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = prId;
+        using var rd = cmd.ExecuteReader();
+        if (!rd.Read())
+        {
+            return null;
+        }
+
+        var requisition = new PurchaseRequisitionExportHeader
+        {
+            Id = Convert.ToInt32(rd["PRID"]),
+            RequestNo = Convert.ToString(rd["RequestNo"]) ?? string.Empty,
+            RequestDate = rd.IsDBNull(rd.GetOrdinal("RequestDate")) ? DateTime.MinValue : Convert.ToDateTime(rd["RequestDate"]),
+            Description = Convert.ToString(rd["Description"]) ?? string.Empty,
+            StatusId = Convert.ToByte(rd["Status"]),
+            StatusName = Convert.ToString(rd["StatusName"]) ?? string.Empty,
+            PurchaserCode = Convert.ToString(rd["PurchaserCode"]) ?? string.Empty,
+            ChiefACode = Convert.ToString(rd["ChiefACode"]) ?? string.Empty,
+            GDirectorCode = Convert.ToString(rd["GDirectorCode"]) ?? string.Empty
+        };
+        rd.Close();
+
+        requisition.Details = LoadPurchaseRequisitionDetailRows(conn, prId);
+        return requisition;
+    }
+
+    private List<PurchaseRequisitionDetailInput> LoadPurchaseRequisitionDetailRows(SqlConnection conn, int prId)
+    {
+        var rows = new List<PurchaseRequisitionDetailInput>();
+
+        using var cmd = new SqlCommand(@"
+SELECT d.RecordID,
+       d.ItemID,
+       ISNULL(i.ItemCode, '') AS ItemCode,
+       ISNULL(i.ItemName, '') AS ItemName,
+       ISNULL(i.Unit, '') AS Unit,
+       ISNULL(d.SugQty, 0) AS QtyFromM,
+       ISNULL(d.Quantity, 0) AS QtyPur,
+       ISNULL(d.UnitPrice, 0) AS UnitPrice,
+       ISNULL(d.Remark, '') AS Remark,
+       d.SupplierID,
+       CASE WHEN s.SupplierID IS NULL THEN '' ELSE ISNULL(s.SupplierCode, '') + ' - ' + ISNULL(s.SupplierName, '') END AS SupplierText
+FROM dbo.PC_PRDetail d
+LEFT JOIN dbo.INV_ItemList i ON d.ItemID = i.ItemID
+LEFT JOIN dbo.PC_Suppliers s ON d.SupplierID = s.SupplierID
+WHERE d.PRID = @PRID
+ORDER BY d.RecordID", conn);
+
+        cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = prId;
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            rows.Add(new PurchaseRequisitionDetailInput
+            {
+                DetailId = rd.IsDBNull(rd.GetOrdinal("RecordID")) ? 0 : Convert.ToInt64(rd["RecordID"]),
+                ItemId = Convert.ToInt32(rd["ItemID"]),
+                ItemCode = Convert.ToString(rd["ItemCode"]) ?? string.Empty,
+                ItemName = Convert.ToString(rd["ItemName"]) ?? string.Empty,
+                Unit = Convert.ToString(rd["Unit"]) ?? string.Empty,
+                QtyFromM = Convert.ToDecimal(rd["QtyFromM"]),
+                QtyPur = Convert.ToDecimal(rd["QtyPur"]),
+                UnitPrice = Convert.ToDecimal(rd["UnitPrice"]),
+                Remark = Convert.ToString(rd["Remark"]),
+                SupplierId = rd.IsDBNull(rd.GetOrdinal("SupplierID")) ? null : Convert.ToInt32(rd["SupplierID"]),
+                SupplierText = Convert.ToString(rd["SupplierText"]) ?? string.Empty
+            });
+        }
+
+        return rows;
+    }
+
+    private void FormatWorksheetAsTable(IXLWorksheet worksheet, int fromRow, int toRow, int totalColumns)
+    {
+        // 1. Toàn bộ bảng export đều có viền và tự xuống hàng khi nội dung dài.
+        var range = worksheet.Range(fromRow, 1, toRow, totalColumns);
+        range.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        range.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+        range.Style.Alignment.WrapText = true;
+        range.Style.Alignment.Vertical = XLAlignmentVerticalValues.Top;
+
+        worksheet.Row(fromRow).Style.Font.Bold = true;
+        worksheet.Row(fromRow).Style.Fill.BackgroundColor = XLColor.FromHtml("#D9E2F3");
+        worksheet.Columns().AdjustToContents();
+
+        for (var col = 1; col <= totalColumns; col++)
+        {
+            if (worksheet.Column(col).Width > 40)
+            {
+                worksheet.Column(col).Width = 40;
+            }
+        }
+    }
+
+    private FileContentResult BuildExcelFileResult(XLWorkbook workbook, string filePrefix)
+    {
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+
+        var fileName = $"{filePrefix}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+        return File(
+            stream.ToArray(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            fileName);
+    }
+
     private void LoadPurchaseRequisitionRows()
     {
+        // 1. Danh sách luôn load theo filter hiện tại và tự kéo trang về hợp lệ nếu page vượt quá tổng trang.
         var (rows, totalRecords) = SearchPurchaseRequisitionRows(Filter);
         Rows = rows;
         TotalRecords = totalRecords;
@@ -206,6 +499,7 @@ public class IndexModel : BasePageModel
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
 
+        // 1. Đếm tổng số bản ghi trước để phục vụ phân trang.
         using (var countCmd = new SqlCommand(@"
         SELECT COUNT(1)
         FROM dbo.PC_PR p
@@ -226,6 +520,7 @@ public class IndexModel : BasePageModel
             totalRecords = Convert.ToInt32(countCmd.ExecuteScalar() ?? 0);
         }
 
+        // 2. Lấy danh sách dữ liệu theo đúng trang đang xem.
         using var cmd = new SqlCommand(@"
         SELECT
             p.PRID,
@@ -294,6 +589,7 @@ public class IndexModel : BasePageModel
 
     private void LoadStatusList()
     {
+        // 1. Danh sách trạng thái phục vụ cho ô filter ở màn hình danh sách.
         StatusList = new List<SelectListItem>
         {
             new SelectListItem
@@ -323,13 +619,14 @@ ORDER BY PRStatusID", conn);
 
     private void LoadLookups()
     {
+        // 1. Popup Add AT cần dùng chung lookup Item và Supplier.
         LoadItemList();
         LoadSupplierList();
     }
 
     private void LoadItemList()
     {
-        ItemList = [];
+        ItemList = new List<PurchaseRequisitionItemLookup>();
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         using var cmd = new SqlCommand(@"
@@ -358,7 +655,7 @@ ORDER BY ItemCode", conn);
 
     private void LoadSupplierList()
     {
-        SupplierList = [];
+        SupplierList = new List<PurchaseRequisitionSupplierLookup>();
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         using var cmd = new SqlCommand(@"
@@ -384,6 +681,7 @@ ORDER BY SupplierCode", conn);
 
     private void AddDetails(int prId, IReadOnlyList<PurchaseRequisitionDetailInput> details)
     {
+        // 1. Add AT chỉ chèn thêm detail vào phiếu hiện hữu nên phải khóa trong cùng transaction.
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
         using var trans = conn.BeginTransaction();
@@ -400,6 +698,7 @@ ORDER BY SupplierCode", conn);
                 }
             }
 
+            // 2. Mỗi dòng được ghi vào PC_PRDetail bằng cùng cấu trúc với màn hình detail.
             foreach (var detail in details)
             {
                 InsertDetail(conn, trans, prId, detail);
@@ -442,6 +741,7 @@ VALUES
 
     internal static void BindSearchParams(SqlCommand cmd, PurchaseRequisitionFilter filter)
     {
+        // 1. Bộ tham số tìm kiếm dùng chung cho cả câu đếm và câu lấy danh sách.
         cmd.Parameters.Add("@RequestNo", SqlDbType.VarChar, 20).Value = string.IsNullOrWhiteSpace(filter.RequestNo) ? DBNull.Value : filter.RequestNo.Trim();
         cmd.Parameters.Add("@StatusID", SqlDbType.Int).Value = filter.StatusId.HasValue ? filter.StatusId.Value : DBNull.Value;
         cmd.Parameters.Add("@Description", SqlDbType.VarChar, 500).Value = string.IsNullOrWhiteSpace(filter.Description) ? DBNull.Value : filter.Description.Trim();
@@ -452,6 +752,7 @@ VALUES
 
     private void NormalizeFilter()
     {
+        // 1. Chỉ cho phép PageSize nằm trong danh sách được hỗ trợ để tránh giá trị lạ từ query/form.
         if (!AllowedPageSizes.Contains(Filter.PageSize))
         {
             Filter.PageSize = DefaultPageSize;
@@ -481,6 +782,7 @@ VALUES
 
     private PurchaseRequisitionFilter BuildSearchFilter(PurchaseRequisitionSearchRequest request)
     {
+        // 1. Dữ liệu search AJAX được quy về cùng một model filter như màn hình danh sách.
         return new PurchaseRequisitionFilter
         {
             RequestNo = request.RequestNo,
@@ -508,6 +810,7 @@ VALUES
 
     private void NormalizeQueryInputs()
     {
+        // 1. Chủ động đọc query bằng tay để tránh lỗi bind sai kiểu với Page/PageSize như trước đây.
         Filter.RequestNo = Request.Query[nameof(Filter.RequestNo)].ToString();
         NormalizeNullableIntQuery(nameof(Filter.StatusId), value => Filter.StatusId = value);
         Filter.Description = Request.Query[nameof(Filter.Description)].ToString();
@@ -516,10 +819,12 @@ VALUES
         NormalizeIntQuery("PageSize", value => Filter.PageSize = value, DefaultPageSize);
         NormalizeDateQuery(nameof(Filter.FromDate), value => Filter.FromDate = value);
         NormalizeDateQuery(nameof(Filter.ToDate), value => Filter.ToDate = value);
+        ClearPaginationModelState();
     }
 
     private void NormalizePostInputs()
     {
+        // 1. Post Add AT vẫn phải giữ nguyên filter hiện tại để quay lại đúng danh sách sau khi lưu.
         Filter.RequestNo = Request.Form[nameof(Filter.RequestNo)].ToString();
         NormalizeNullableIntForm(nameof(Filter.StatusId), value => Filter.StatusId = value);
         Filter.Description = Request.Form[nameof(Filter.Description)].ToString();
@@ -528,6 +833,7 @@ VALUES
         NormalizeIntForm("PageSize", value => Filter.PageSize = value, DefaultPageSize);
         NormalizeDateForm(nameof(Filter.FromDate), value => Filter.FromDate = value);
         NormalizeDateForm(nameof(Filter.ToDate), value => Filter.ToDate = value);
+        ClearPaginationModelState();
 
         if (Request.HasFormContentType && Request.Form.ContainsKey(nameof(SelectedPrId)))
         {
@@ -535,6 +841,15 @@ VALUES
             SelectedPrId = int.TryParse(raw, out var parsed) ? parsed : null;
             ModelState.Remove(nameof(SelectedPrId));
         }
+    }
+
+    private void ClearPaginationModelState()
+    {
+        // 1. Xóa ModelState của các key phân trang để tránh đụng với route page của Razor Pages.
+        ModelState.Remove("Page");
+        ModelState.Remove("page");
+        ModelState.Remove("Filter.Page");
+        ModelState.Remove("Filter.PageSize");
     }
 
     private void NormalizeDateQuery(string key, Action<DateTime?> assign)
@@ -636,7 +951,7 @@ VALUES
 
     private List<PurchaseRequisitionDetailInput> ParseAddAtDetails()
     {
-        if (string.IsNullOrWhiteSpace(AddAtDetailsJson)) return [];
+        if (string.IsNullOrWhiteSpace(AddAtDetailsJson)) return new List<PurchaseRequisitionDetailInput>();
 
         try
         {
@@ -644,17 +959,18 @@ VALUES
             {
                 PropertyNameCaseInsensitive = true
             });
-            return details ?? [];
+            return details ?? new List<PurchaseRequisitionDetailInput>();
         }
         catch
         {
             ModelState.AddModelError(string.Empty, "Detail data format is invalid.");
-            return [];
+            return new List<PurchaseRequisitionDetailInput>();
         }
     }
 
     private void ValidateDetail(PurchaseRequisitionDetailInput detail, int rowNo)
     {
+        // 1. Validate lại ở server để không phụ thuộc hoàn toàn vào dữ liệu phía client.
         if (detail.ItemId <= 0)
         {
             ModelState.AddModelError(string.Empty, $"Row {rowNo}: Item is required.");
@@ -687,8 +1003,8 @@ VALUES
 
     private PagePermissions GetUserPermissions()
     {
-        bool isAdmin = User.FindFirst("IsAdminRole")?.Value == "True";
-        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
+        bool isAdmin = IsAdminRole();
+        int roleId = GetCurrentRoleId();
 
         // 1. Khởi tạo đối tượng PagePermissions mới
         var permsObj = new PagePermissions();
@@ -721,8 +1037,8 @@ VALUES
 
     private List<int> GetEffectivePermissionsByStatus(int status)
     {
-        bool isAdmin = User.FindFirst("IsAdminRole")?.Value == "True";
-        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
+        bool isAdmin = IsAdminRole();
+        int roleId = GetCurrentRoleId();
 
         if (isAdmin)
         {
@@ -758,6 +1074,16 @@ VALUES
 
         var source = description.Trim();
         return source.Length <= 80 ? source : $"{source[..80]}...";
+    }
+
+    private int GetCurrentRoleId()
+    {
+        return int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
+    }
+
+    private bool IsAdminRole()
+    {
+        return User.FindFirst("IsAdminRole")?.Value == "True";
     }
 }
 
@@ -798,6 +1124,20 @@ public class PurchaseRequisitionRow
     public string GDirectorCode { get; set; } = string.Empty;
 }
 
+public class PurchaseRequisitionExportHeader
+{
+    public int Id { get; set; }
+    public string RequestNo { get; set; } = string.Empty;
+    public DateTime RequestDate { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public byte StatusId { get; set; }
+    public string StatusName { get; set; } = string.Empty;
+    public string PurchaserCode { get; set; } = string.Empty;
+    public string ChiefACode { get; set; } = string.Empty;
+    public string GDirectorCode { get; set; } = string.Empty;
+    public List<PurchaseRequisitionDetailInput> Details { get; set; } = new List<PurchaseRequisitionDetailInput>();
+}
+
 public class PurchaseRequisitionItemLookup
 {
     public int Id { get; set; }
@@ -827,6 +1167,7 @@ public class PurchaseRequisitionDetailInput
     public int? SupplierId { get; set; }
     public string SupplierText { get; set; } = string.Empty;
 }
+
 
 
 

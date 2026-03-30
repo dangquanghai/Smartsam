@@ -40,6 +40,9 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public string? Type { get; set; }
 
         [BindProperty]
+        public int? SupplierId { get; set; }
+
+        [BindProperty]
         public ApproveSupplierDetailViewModel EditSupplier { get; set; } = new ApproveSupplierDetailViewModel();
 
         [BindProperty]
@@ -69,20 +72,29 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public ApprovePurchaseOrderInfoViewModel PurchaseOrderInfo { get; set; } = new ApprovePurchaseOrderInfoViewModel();
         public List<ApproveSupplierServiceRowViewModel> SupplierServiceRows { get; set; } = new List<ApproveSupplierServiceRowViewModel>();
         public int? LevelCheckSupplier => _dataScope.LevelCheckSupplier;
-        public bool IsApproveSupplierNewMode => string.Equals(Type, "new", StringComparison.OrdinalIgnoreCase);
-        public string PageTitle => IsApproveSupplierNewMode ? "Approve Supplier New" : "Approve Supplier";
-        public bool CanEditAllSupplierFields => _isAdminRole || _dataScope.LevelCheckSupplier == 1;
-        public bool CanEditCommentOnly => !_isAdminRole && _dataScope.LevelCheckSupplier.HasValue && _dataScope.LevelCheckSupplier.Value > 1;
+        public bool IsSupplierLinkMode => string.Equals(Type, "new", StringComparison.OrdinalIgnoreCase) && SupplierId.HasValue && SupplierId.Value > 0;
+        public bool IsApproveSupplierNewMode => IsSupplierLinkMode;
+        public string PageTitle => IsSupplierLinkMode ? "Approve Supplier New" : "Approve Supplier";
+        public bool IsCurrentSupplierReadOnly { get; private set; }
+        public bool CanEditAllSupplierFields => !IsCurrentSupplierReadOnly && (_isAdminRole || _dataScope.LevelCheckSupplier == 1);
+        public bool CanEditCommentOnly => !IsCurrentSupplierReadOnly && !_isAdminRole && _dataScope.LevelCheckSupplier.HasValue && _dataScope.LevelCheckSupplier.Value > 1;
         public bool CanEditComment => CanEditAllSupplierFields || CanEditCommentOnly;
-        public bool CanApproveByLevel => _dataScope.LevelCheckSupplier.HasValue && _dataScope.LevelCheckSupplier.Value is >= 1 and <= 4;
-        public bool CanDisapproveByLevel => _dataScope.LevelCheckSupplier.HasValue && _dataScope.LevelCheckSupplier.Value is >= 2 and <= 4;
+        public bool CanApproveByLevel => !IsCurrentSupplierReadOnly && _dataScope.LevelCheckSupplier.HasValue && _dataScope.LevelCheckSupplier.Value is >= 1 and <= 4;
+        public bool CanDisapproveByLevel => !IsCurrentSupplierReadOnly && _dataScope.LevelCheckSupplier.HasValue && _dataScope.LevelCheckSupplier.Value is >= 2 and <= 4;
 
         public IActionResult OnGet()
         {
+            SupplierId = ResolveSupplierIdFromRequest();
+
             // 1. Lấy tập quyền thực tế của role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
             if (!HasPermission(PermissionViewList))
+            {
+                return Redirect("/");
+            }
+
+            if (IsSupplierLinkMode && (!_dataScope.LevelCheckSupplier.HasValue || _dataScope.LevelCheckSupplier.Value is < 1 or > 4))
             {
                 return Redirect("/");
             }
@@ -101,6 +113,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
         public IActionResult OnPostSave()
         {
+            SupplierId = ResolveSupplierIdFromRequest();
+
             // 1. Lấy tập quyền thực tế của role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
@@ -126,6 +140,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             if (!CanAccessDepartment(current.DeptID))
             {
                 return Forbid();
+            }
+
+            if (!CanEditBySupplierLinkState(current))
+            {
+                SetFlashMessage("Supplier is no longer editable in current approval step.", "warning");
+                return RedirectToCurrentList();
             }
 
             if (!CanEditAllSupplierFields && !CanEditCommentOnly)
@@ -154,6 +174,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
         public IActionResult OnPostGoTo()
         {
+            SupplierId = ResolveSupplierIdFromRequest();
+
             // 1. Lấy tập quyền thực tế của role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
@@ -181,6 +203,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
         public IActionResult OnPostApprove()
         {
+            SupplierId = ResolveSupplierIdFromRequest();
+
             // 1. Lấy tập quyền thực tế của role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
@@ -214,6 +238,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 return Forbid();
             }
 
+            if (!CanEditBySupplierLinkState(current))
+            {
+                SetFlashMessage("Supplier is no longer in approvable step.", "warning");
+                return RedirectToCurrentList();
+            }
+
             var approveValidationMessage = ValidateSupplierInputLikeDetail(
                 supplierId,
                 current,
@@ -229,7 +259,9 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
             LoadSupplierRows();
             var nextSupplierId = GetNextSupplierIdFromCurrentRows(supplierId);
-            var isLastSupplier = IsLastSupplierInCurrentRows(supplierId);
+            var shouldNotifyNextLevel = IsApproveSupplierNewMode
+                ? true
+                : IsLastSupplierInCurrentRows(supplierId);
             var currentLevel = _dataScope.LevelCheckSupplier.Value;
             var operatorCode = User.Identity?.Name?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(operatorCode))
@@ -251,8 +283,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 return RedirectToCurrentList();
             }
 
-            var notifyResult = isLastSupplier ? TryQueueNotifyNextLevel(currentLevel, current, "approved") : null;
-            CurrentSupplierId = nextSupplierId;
+            var notifyResult = shouldNotifyNextLevel ? TryQueueNotifyNextLevel(currentLevel, current, "approved") : null;
+            CurrentSupplierId = IsSupplierLinkMode ? supplierId : nextSupplierId;
             var approveMessage = "Approved supplier successfully.";
             if (!string.IsNullOrWhiteSpace(notifyResult))
             {
@@ -265,6 +297,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
         public IActionResult OnPostDisapprove()
         {
+            SupplierId = ResolveSupplierIdFromRequest();
+
             // 1. Lấy tập quyền thực tế của role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
@@ -298,9 +332,14 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 return Forbid();
             }
 
+            if (!CanEditBySupplierLinkState(current))
+            {
+                SetFlashMessage("Supplier is no longer in disapprovable step.", "warning");
+                return RedirectToCurrentList();
+            }
+
             LoadSupplierRows();
             var nextSupplierId = GetNextSupplierIdFromCurrentRows(supplierId);
-            var isLastSupplier = IsLastSupplierInCurrentRows(supplierId);
             var currentLevel = _dataScope.LevelCheckSupplier.Value;
             var operatorCode = User.Identity?.Name?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(operatorCode))
@@ -321,13 +360,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 return RedirectToCurrentList();
             }
 
-            var notifyResult = isLastSupplier ? TryQueueNotifyNextLevel(currentLevel, current, "disapproved") : null;
-            CurrentSupplierId = nextSupplierId;
+            CurrentSupplierId = IsSupplierLinkMode ? supplierId : nextSupplierId;
             var disapproveMessage = "Disapproved supplier successfully.";
-            if (!string.IsNullOrWhiteSpace(notifyResult))
-            {
-                disapproveMessage += $" {notifyResult}";
-            }
 
             SetFlashMessage(disapproveMessage, "success");
             return RedirectToCurrentList();
@@ -335,6 +369,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
         public IActionResult OnPostSaveMoreComment()
         {
+            SupplierId = ResolveSupplierIdFromRequest();
+
             // 1. Lấy tập quyền thực tế của role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
@@ -362,6 +398,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 return Forbid();
             }
 
+            if (!CanEditBySupplierLinkState(current))
+            {
+                SetFlashMessage("Supplier is no longer editable in current approval step.", "warning");
+                return RedirectToCurrentList();
+            }
+
             if (!CanEditComment)
             {
                 return Forbid();
@@ -387,6 +429,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             PurchaseOrderInfo = new ApprovePurchaseOrderInfoViewModel();
             SupplierServiceRows = new List<ApproveSupplierServiceRowViewModel>();
             CurrentSupplierPosition = 0;
+            IsCurrentSupplierReadOnly = false;
             FirstSupplierId = null;
             LastSupplierId = null;
             PrevSupplierId = null;
@@ -421,6 +464,20 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
             if (CurrentSupplierDetail is not null)
             {
+                if (!ApplySupplierLinkAccessRule(CurrentSupplierDetail))
+                {
+                    CurrentSupplierDetail = null;
+                    EditSupplier = new ApproveSupplierDetailViewModel();
+                    Rows = new List<ApproveListRowViewModel>();
+                    CurrentSupplierPosition = 0;
+                    FirstSupplierId = null;
+                    LastSupplierId = null;
+                    PrevSupplierId = null;
+                    NextSupplierId = null;
+                    GoToOrder = null;
+                    return;
+                }
+
                 if (!IsApproveSupplierNewMode)
                 {
                     PurchaseOrderInfo = GetPurchaseOrderInfo(CurrentSupplierDetail.SupplierID, DateTime.Now.Year);
@@ -459,6 +516,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 WHERE (@DeptID IS NULL OR s.DeptID = @DeptID)
                   AND (@StatusID IS NULL OR s.[Status] = @StatusID)
                   AND (@MaxStatusExclusive IS NULL OR ISNULL(s.[Status], 0) < @MaxStatusExclusive)
+                  AND (@SupplierID IS NULL OR s.SupplierID = @SupplierID)
                   AND ISNULL(s.IsNew, 0) = @IsNew
                 ORDER BY s.SupplierID DESC", conn);
 
@@ -743,9 +801,10 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return new ApproveFilterCriteria
             {
                 DeptId = ResolveDepartmentFilter(),
-                StatusId = ResolveStatusFilterByLevel(),
+                StatusId = IsSupplierLinkMode ? null : ResolveStatusFilterByLevel(),
                 MaxStatusExclusive = null,
-                IsNew = IsApproveSupplierNewMode
+                IsNew = IsApproveSupplierNewMode,
+                SupplierId = IsSupplierLinkMode ? SupplierId : null
             };
         }
 
@@ -780,7 +839,83 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             cmd.Parameters.Add("@DeptID", SqlDbType.Int).Value = criteria.DeptId.HasValue ? criteria.DeptId.Value : DBNull.Value;
             cmd.Parameters.Add("@StatusID", SqlDbType.Int).Value = criteria.StatusId.HasValue ? criteria.StatusId.Value : DBNull.Value;
             cmd.Parameters.Add("@MaxStatusExclusive", SqlDbType.Int).Value = criteria.MaxStatusExclusive.HasValue ? criteria.MaxStatusExclusive.Value : DBNull.Value;
+            cmd.Parameters.Add("@SupplierID", SqlDbType.Int).Value = criteria.SupplierId.HasValue ? criteria.SupplierId.Value : DBNull.Value;
             cmd.Parameters.Add("@IsNew", SqlDbType.Bit).Value = criteria.IsNew;
+        }
+
+        private int? ResolveSupplierIdFromRequest()
+        {
+            if (Request.HasFormContentType && Request.Form.ContainsKey("supplier_id"))
+            {
+                var rawForm = Request.Form["supplier_id"].ToString();
+                if (int.TryParse(rawForm, out var parsedForm))
+                {
+                    return parsedForm;
+                }
+            }
+
+            var rawQuery = Request.Query["supplier_id"].ToString();
+            return int.TryParse(rawQuery, out var parsedQuery) ? parsedQuery : null;
+        }
+
+        private bool ApplySupplierLinkAccessRule(ApproveSupplierDetailViewModel supplier)
+        {
+            if (!IsSupplierLinkMode)
+            {
+                return true;
+            }
+
+            if (!supplier.IsNew)
+            {
+                SetFlashMessage("Supplier is not a new supplier.", "warning");
+                return false;
+            }
+
+            if (!_dataScope.LevelCheckSupplier.HasValue || _dataScope.LevelCheckSupplier.Value is < 1 or > 4)
+            {
+                SetFlashMessage("You have no right to access this approval link.", "warning");
+                return false;
+            }
+
+            var currentLevel = _dataScope.LevelCheckSupplier.Value;
+            var supplierStatus = supplier.Status ?? 0;
+
+            // 4. Link duyệt mới chỉ cho phép 3 trạng thái: đang chờ mình duyệt, đã duyệt xong bởi mình, hoặc ẩn nếu lệch workflow.
+            if (supplierStatus == currentLevel - 1)
+            {
+                IsCurrentSupplierReadOnly = false;
+                return true;
+            }
+
+            if (supplierStatus == currentLevel)
+            {
+                IsCurrentSupplierReadOnly = true;
+                return true;
+            }
+
+            if (supplierStatus > currentLevel)
+            {
+                SetFlashMessage("This supplier has already passed your approval level.", "warning");
+                return false;
+            }
+
+            SetFlashMessage("This supplier is not in your approval step yet.", "warning");
+            return false;
+        }
+
+        private bool CanEditBySupplierLinkState(ApproveSupplierDetailViewModel supplier)
+        {
+            if (!IsSupplierLinkMode)
+            {
+                return true;
+            }
+
+            if (!_dataScope.LevelCheckSupplier.HasValue)
+            {
+                return false;
+            }
+
+            return (supplier.Status ?? 0) == _dataScope.LevelCheckSupplier.Value - 1;
         }
 
         private bool SupplierCodeExists(string supplierCode, int? excludeSupplierId = null)
@@ -989,7 +1124,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             var recipients = GetEmailsByLevelCheck(nextLevel);
             if (recipients.Count == 0)
             {
-                return $"No email recipients found for level {nextLevel}.";
+                return $"No email recipients were found for the next level.";
             }
 
             var senderEmail = _config.GetValue<string>("EmailSettings:SenderEmail");
@@ -1011,7 +1146,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             // 1. Dùng chung một page duyệt supplier, chỉ phân biệt bằng tham số type=new
             var detailUrl = Url.Page("/Purchasing/ApproveSupplier/Index", values: new
             {
-                Type = IsApproveSupplierNewMode ? "new" : null
+                Type = IsApproveSupplierNewMode ? "new" : null,
+                supplier_id = IsApproveSupplierNewMode ? (int?)supplier.SupplierID : null
             });
 
             var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl)
@@ -1050,7 +1186,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             };
 
             _ = SendNotifyEmailAsync(notifyRequest);
-            return $"Notification email is being sent to level {nextLevel}.";
+            return $"The notification email is being sent to the next level.";
         }
 
         private async Task SendNotifyEmailAsync(ApproveSupplierNotifyRequestViewModel notifyRequest)
@@ -1093,11 +1229,20 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
         private IActionResult RedirectToCurrentList()
         {
-            return RedirectToPage("./Index", new
+            var routeValues = new Dictionary<string, object?>();
+
+            if (IsSupplierLinkMode)
             {
-                CurrentSupplierId,
-                Type
-            });
+                routeValues["Type"] = Type;
+                routeValues["supplier_id"] = SupplierId;
+            }
+            else
+            {
+                routeValues["CurrentSupplierId"] = CurrentSupplierId;
+                routeValues["Type"] = Type;
+            }
+
+            return RedirectToPage("./Index", routeValues);
         }
 
         private int? GetNextSupplierIdFromCurrentRows(int supplierId)
@@ -1249,6 +1394,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public int? DeptId { get; set; }
         public int? StatusId { get; set; }
         public int? MaxStatusExclusive { get; set; }
+        public int? SupplierId { get; set; }
         public bool IsNew { get; set; }
     }
 

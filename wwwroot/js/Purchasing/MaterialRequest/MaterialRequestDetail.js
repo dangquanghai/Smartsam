@@ -47,7 +47,7 @@ function initializePage(mode, actionPerm) {
 
     // Khóa/mở input theo mode + quyền
     $form.find('input, textarea, select')
-        .not('[type="hidden"], #mrSaveBtn, #mrSubmitBtn, #mrApproveBtn, #mrRejectBtn, #addMrLineBtn, #removeMrLineBtn, #createNewItemBtn, #calculateBtn')
+        .not('[type="hidden"], #mrSubmitBtn, #mrApproveBtn, #mrRejectBtn, #addMrLineBtn, #removeMrLineBtn, #createNewItemBtn, #calculateBtn')
         .prop('disabled', disableEditFields);
 
     if (toBoolData($form.data('store-group-locked'))) {
@@ -55,7 +55,7 @@ function initializePage(mode, actionPerm) {
     }
 
     // Khóa/mở nhóm nút thao tác theo quyền
-    $('#addMrLineBtn, #removeMrLineBtn, #createNewItemBtn, #calculateBtn, #mrSaveBtn')
+    $('#addMrLineBtn, #removeMrLineBtn, #createNewItemBtn, #calculateBtn')
         .prop('disabled', isViewMode || !canSave);
     $('#mrSubmitBtn').prop('disabled', isViewMode || !canSubmit);
     $('#mrApproveBtn').prop('disabled', isViewMode || !canApprove);
@@ -63,7 +63,7 @@ function initializePage(mode, actionPerm) {
 
     // Chế độ view: ẩn các nút thao tác chính
     if (isViewMode) {
-        $('#mrSaveBtn, #mrSubmitBtn, #mrApproveBtn, #mrRejectBtn').hide();
+        $('#mrSubmitBtn, #mrApproveBtn, #mrRejectBtn').hide();
         $('#addMrLineBtn, #removeMrLineBtn, #createNewItemBtn, #calculateBtn').hide();
     }
 
