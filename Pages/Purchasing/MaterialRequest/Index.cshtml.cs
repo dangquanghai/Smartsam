@@ -33,6 +33,7 @@ public class IndexModel : BasePageModel
     private const string ConditionModeAllUsers = "allUsers";
     private const string ConditionModeStoreman = "storeman";
 
+
     private EmployeeMaterialScopeDto _dataScope = new EmployeeMaterialScopeDto();
     private bool _isAdminRole;
 
@@ -44,6 +45,7 @@ public class IndexModel : BasePageModel
     }
 
     [BindProperty(SupportsGet = true)]
+
     public MaterialRequestFilter Filter { get; set; } = new();
 
     public int DefaultPageSize
@@ -90,7 +92,7 @@ public class IndexModel : BasePageModel
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
     public List<SelectListItem> StoreGroups { get; set; } = new List<SelectListItem>();
     public List<SelectListItem> Statuses { get; set; } = new List<SelectListItem>();
-    public List<MaterialRequestListRowDto> Rows { get; set; } = new List<MaterialRequestListRowDto>();
+   public List<MaterialRequestListRowDto> Rows { get; set; } = new List<MaterialRequestListRowDto>();
     public bool CanCreateAutoMr => CanCreateAutoMrCore();
 
     public int TotalRecords { get; set; }
@@ -120,6 +122,9 @@ public class IndexModel : BasePageModel
     // ==========================================
     // 1. PAGE LOAD (GET)
     // ==========================================
+    /// <summary>
+    /// Xu ly GET cho trang danh sach MaterialRequest.
+    /// </summary>
     public void OnGet()
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
@@ -163,6 +168,11 @@ public class IndexModel : BasePageModel
     // ==========================================
     // 2. AJAX SEARCH AND ITEM ACTIONS
     // ==========================================
+    /// <summary>
+    /// Tim danh sach MaterialRequest theo bo loc.
+    /// </summary>
+    /// <param name="request">Du lieu tim kiem tu client.</param>
+    /// <returns>Ket qua JSON de render bang.</returns>
     public IActionResult OnPostSearch([FromBody] MaterialRequestSearchRequest request)
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
@@ -248,6 +258,14 @@ public class IndexModel : BasePageModel
     // ==========================================
     // 3. MATERIAL REQUEST CREATION ACTIONS
     // ==========================================
+    /// <summary>
+    /// Lay danh sach item cho popup tim kiem.
+    /// </summary>
+    /// <param name="itemCode">Ma item can tim.</param>
+    /// <param name="itemName">Ten item can tim.</param>
+    /// <param name="checkBalanceInStore">Co kiem tra ton kho hay khong.</param>
+    /// <param name="storeGroup">Store Group ap dung.</param>
+    /// <returns>Ket qua JSON cho lookup.</returns>
     public IActionResult OnGetSearchItems(string? itemCode, string? itemName, bool checkBalanceInStore = false, int? storeGroup = null)
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
@@ -269,6 +287,10 @@ public class IndexModel : BasePageModel
         return new JsonResult(new { success = true, data = items });
     }
 
+    /// <summary>
+    /// Tao MR thu cong tu popup.
+    /// </summary>
+    /// <returns>Chuyen ve man detail cua request moi.</returns>
     public IActionResult OnPostCreateMr()
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
@@ -351,6 +373,13 @@ public class IndexModel : BasePageModel
         }
     }
 
+    /// <summary>
+    /// Tao Auto MR tu form Generate MR.
+    /// Ham nay doc du lieu tu popup Generate MR, kiem tra scope hien tai cua user,
+    /// lay dung Store Group dang ap dung cho user do, sau do goi service de tao
+    /// header moi va fill detail bang rule legacy.
+    /// </summary>
+    /// <returns>Chuyen ve man detail cua request moi.</returns>
     public IActionResult OnPostCreateAuto()
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
@@ -358,12 +387,15 @@ public class IndexModel : BasePageModel
 
         PagePerm = new PagePermissions();
         PagePerm = GetUserPermissions();
+        // Doc scope truoc de biet Store Group nao dang ap dung cho user hien tai.
         LoadUserScopeAsync(cancellationToken).GetAwaiter().GetResult();
         if (!CanAccessPage() || !AllowCreateAuto())
         {
             return Forbid();
         }
 
+        // Auto MR chi nam tren 1 Store Group. Neu scope bi khoa thi dung group hien tai,
+        // con neu scope mo thi form van can co mot group dang duoc chon hop le.
         if (IsStoreGroupLocked() && !_dataScope.StoreGroup.HasValue)
         {
             WarningMessage = "Store Group scope is required.";
@@ -380,38 +412,25 @@ public class IndexModel : BasePageModel
             return RedirectToPage("./Index");
         }
 
-        var lines = _materialRequestService.BuildAutoLinesAsync(scopedStoreGroup.Value, cancellationToken).GetAwaiter().GetResult().ToList();
-        if (lines.Count == 0)
-        {
-            WarningMessage = "No item template found for Auto MR.";
-            return RedirectToPage("./Index");
-        }
-
+        // Lay gia tri tu popup, neu nguoi dung khong nhap thi dung mac dinh an toan.
         var dateCreate = CreateAutoDateCreate ?? DateTime.Today;
         var fromDate = CreateAutoFromDate ?? dateCreate.AddMonths(-3);
         var toDate = CreateAutoToDate ?? dateCreate;
+        // Theo form Generate MR, if user does not type text then use month text.
         var description = string.IsNullOrWhiteSpace(CreateAutoDescription)
             ? $"Auto MR {dateCreate:MM/yyyy}"
             : CreateAutoDescription.Trim();
 
-        var header = new MaterialRequestDetailDto
-        {
-            StoreGroup = scopedStoreGroup,
-            DateCreate = dateCreate,
-            FromDate = fromDate,
-            ToDate = toDate,
-            AccordingTo = description,
-            MaterialStatusId = StatusJustCreated,
-            NoIssue = 0,
-            IsAuto = true,
-            Approval = false,
-            ApprovalEnd = false,
-            PostPr = false
-        };
-
         try
         {
-            var requestNo = _materialRequestService.SaveAsync(null, header, lines, cancellationToken).GetAwaiter().GetResult();
+            // Auto MR uses the old DB rule.
+            var requestNo = _materialRequestService.CreateAutoRequestAsync(
+                scopedStoreGroup.Value,
+                dateCreate,
+                fromDate,
+                toDate,
+                description,
+                cancellationToken).GetAwaiter().GetResult();
             SuccessMessage = "Auto Material Request created successfully.";
             return RedirectToPage("./MaterialRequestDetail", new { id = requestNo, mode = "edit" });
         }
@@ -425,6 +444,9 @@ public class IndexModel : BasePageModel
     // ==========================================
     // 4. FILTER AND DROPDOWN HELPERS
     // ==========================================
+    /// <summary>
+    /// Nap danh sach bo loc va dropdown cho trang.
+    /// </summary>
     private void LoadFilters()
     {
         var stores = LoadListFromSql(
@@ -482,6 +504,10 @@ public class IndexModel : BasePageModel
         }
     }
 
+    /// <summary>
+    /// Nap gia tri mac dinh cho form Generate MR.
+    /// </summary>
+    /// <param name="cancellationToken">Token de huy yeu cau neu can.</param>
     private void PopulateCreateAutoDefaults(CancellationToken cancellationToken)
     {
         try
@@ -526,6 +552,10 @@ public class IndexModel : BasePageModel
     // ==========================================
     // 5. SHARED DATA TRANSFORM HELPERS
     // ==========================================
+    /// <summary>
+    /// Nap du lieu grid theo bo loc hien tai.
+    /// </summary>
+    /// <param name="cancellationToken">Token de huy yeu cau neu can.</param>
     private async Task LoadRowsAsync(CancellationToken cancellationToken)
     {
         if (Filter.PageSize <= 0) Filter.PageSize = DefaultPageSize;
@@ -544,6 +574,11 @@ public class IndexModel : BasePageModel
         Rows = result.Rows;
     }
 
+    /// <summary>
+    /// Tao criteria de query danh sach.
+    /// </summary>
+    /// <param name="includePaging">Co them phan trang hay khong.</param>
+    /// <returns>Criteria cho query.</returns>
     private MaterialRequestFilterCriteria BuildCriteria(bool includePaging)
     {
         var scopedStoreGroup = IsStoreGroupLocked()
@@ -568,6 +603,9 @@ public class IndexModel : BasePageModel
         };
     }
 
+    /// <summary>
+    /// Chuan hoa mode loc cua trang.
+    /// </summary>
     private void NormalizeConditionMode()
     {
         if (AllowShowStoreCondition() && !AllowShowPcCondition())
@@ -597,6 +635,10 @@ public class IndexModel : BasePageModel
         Filter.ConditionMode = ConditionModeStoreman;
     }
 
+    /// <summary>
+    /// Nap scope va quyen cua user hien tai.
+    /// </summary>
+    /// <param name="cancellationToken">Token de huy yeu cau neu can.</param>
     private async Task LoadUserScopeAsync(CancellationToken cancellationToken)
     {
         _isAdminRole = IsAdminUser();
@@ -609,6 +651,10 @@ public class IndexModel : BasePageModel
         _dataScope = await _materialRequestService.GetEmployeeScopeAsync(User.Identity?.Name, cancellationToken);
     }
 
+    /// <summary>
+    /// Lay quyen page cua user.
+    /// </summary>
+    /// <returns>Thong tin quyen trang.</returns>
     private PagePermissions GetUserPermissions()
     {
         bool isAdmin = IsAdminUser();
@@ -628,6 +674,10 @@ public class IndexModel : BasePageModel
         return permsObj;
     }
 
+    /// <summary>
+    /// Kiem tra user co la admin hay khong.
+    /// </summary>
+    /// <returns>True neu la admin.</returns>
     private bool IsAdminUser()
     {
         var adminClaim = (User.FindFirst("IsAdminRole")?.Value ?? string.Empty).Trim();
@@ -680,6 +730,10 @@ public class IndexModel : BasePageModel
         }
     }
 
+    /// <summary>
+    /// Kiem tra user co duoc vao trang hay khong.
+    /// </summary>
+    /// <returns>True neu co quyen vao trang.</returns>
     private bool CanAccessPage()
     {
         return User.Identity?.IsAuthenticated == true
@@ -692,38 +746,67 @@ public class IndexModel : BasePageModel
             || HasPermission(7);
     }
 
+    /// <summary>
+    /// Kiem tra user co quyen so can dung hay khong.
+    /// </summary>
+    /// <param name="permissionNo">So quyen can kiem tra.</param>
+    /// <returns>True neu co quyen.</returns>
     private bool HasPermission(int permissionNo)
     {
         return PagePerm.HasPermission(permissionNo);
     }
 
+    /// <summary>
+    /// Kiem tra co hien nut Create MR hay khong.
+    /// </summary>
+    /// <returns>True neu duoc tao MR thu cong.</returns>
     private bool AllowCreate()
     {
         return User.Identity?.IsAuthenticated == true || IsAdminUser();
     }
 
+    /// <summary>
+    /// Kiem tra co hien nut CreateAT hay khong.
+    /// </summary>
+    /// <returns>True neu duoc tao Auto MR.</returns>
     private bool AllowCreateAuto()
     {
         return CanCreateAutoMrCore();
     }
 
+    /// <summary>
+    /// Kiem tra dieu kien nghiep vu de tao Auto MR.
+    /// </summary>
+    /// <returns>True neu user duoc tao Auto MR.</returns>
     private bool CanCreateAutoMrCore()
     {
         return IsAdminUser()
             || (_dataScope.IsInventoryControlInDep && _dataScope.StoreGroup.HasValue);
     }
 
+    /// <summary>
+    /// Kiem tra co duoc sua MR hay khong.
+    /// </summary>
+    /// <returns>True neu duoc edit.</returns>
     private bool AllowEdit()
     {
         return IsAdminUser() || HasPermission(PermissionEdit);
     }
 
+    /// <summary>
+    /// Kiem tra co xem duoc tat ca MR hay khong.
+    /// </summary>
+    /// <returns>True neu duoc xem all MR.</returns>
     private bool CanShowAllRequests()
     {
         return IsAdminUser()
             || HasPermission(PermissionShowAll);
     }
 
+    /// <summary>
+    /// Kiem tra co mo het Store Group hay khong.
+    /// </summary>
+    /// <returns>True neu duoc mo scope Store Group.</returns>
     private bool CanAccessAllStoreGroups()
     {
         return IsAdminUser()
@@ -733,21 +816,36 @@ public class IndexModel : BasePageModel
             || _dataScope.ApprovalLevel >= 2;
     }
 
+    /// <summary>
+    /// Kiem tra dieu kien xem nhom PC.
+    /// </summary>
+    /// <returns>True neu co the xem PC condition.</returns>
     private bool AllowShowPcCondition()
     {
         return User.Identity?.IsAuthenticated == true;
     }
 
+    /// <summary>
+    /// Kiem tra dieu kien xem nhom Store.
+    /// </summary>
+    /// <returns>True neu co the xem Store condition.</returns>
     private bool AllowShowStoreCondition()
     {
         return IsAdminUser() || HasPermission(PermissionShowStore);
     }
 
+    /// <summary>
+    /// Kiem tra Store Group co bi khoa theo scope khong.
+    /// </summary>
+    /// <returns>True neu Store Group dang bi khoa.</returns>
     private bool IsStoreGroupLocked()
     {
         return !CanAccessAllStoreGroups();
     }
 
+    /// <summary>
+    /// Day message tu TempData vao ModelState.
+    /// </summary>
     private void ApplyTempDataMessagesToModelState()
     {
         if (!string.IsNullOrWhiteSpace(ErrorMessage))
@@ -761,6 +859,9 @@ public class IndexModel : BasePageModel
         }
     }
 
+    /// <summary>
+    /// Dat status inbox mac dinh neu user chua chon gi.
+    /// </summary>
     private void ApplyDefaultInboxStatusIfNeeded()
     {
         if (CanShowAllRequests())
@@ -776,6 +877,10 @@ public class IndexModel : BasePageModel
         Filter.StatusIds = new List<int> { GetDefaultInboxStatusId() };
     }
 
+    /// <summary>
+    /// Lay status inbox mac dinh theo role.
+    /// </summary>
+    /// <returns>Status mac dinh.</returns>
     private int GetDefaultInboxStatusId()
     {
         if (_dataScope.IsHeadDept)
@@ -796,6 +901,12 @@ public class IndexModel : BasePageModel
         return StatusJustCreated;
     }
 
+    /// <summary>
+    /// Kiem tra status nao duoc phe duyet.
+    /// </summary>
+    /// <param name="statusId">Status cua MR.</param>
+    /// <param name="isAuto">True neu la Auto MR.</param>
+    /// <returns>True neu duoc approve.</returns>
     private bool CanApproveStatus(int statusId, bool isAuto)
     {
         if (_isAdminRole)
@@ -812,6 +923,12 @@ public class IndexModel : BasePageModel
         };
     }
 
+    /// <summary>
+    /// Kiem tra status nao duoc reject.
+    /// </summary>
+    /// <param name="statusId">Status cua MR.</param>
+    /// <param name="isAuto">True neu la Auto MR.</param>
+    /// <returns>True neu duoc reject.</returns>
     private bool CanRejectStatus(int statusId, bool isAuto)
     {
         if (_isAdminRole)
@@ -827,6 +944,11 @@ public class IndexModel : BasePageModel
         };
     }
 
+    /// <summary>
+    /// Doc danh sach item tu JSON cua form tao MR.
+    /// </summary>
+    /// <param name="json">Chuoi JSON tu client.</param>
+    /// <returns>Danh sach item da doc.</returns>
     private static List<MaterialRequestItemLookupDto> ParseCreateItems(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
@@ -856,6 +978,11 @@ public class IndexModel : BasePageModel
         }
     }
 
+    /// <summary>
+    /// Doi item lookup sang detail line.
+    /// </summary>
+    /// <param name="items">Danh sach item lookup.</param>
+    /// <returns>Danh sach line de save.</returns>
     private static List<MaterialRequestLineDto> MapItemsToCreateLines(IEnumerable<MaterialRequestItemLookupDto> items)
     {
         var result = new List<MaterialRequestLineDto>();
@@ -895,6 +1022,9 @@ public class MaterialRequestFilter
 {
     public string? RequestNo { get; set; }
     public int? StoreGroup { get; set; }
+    /// <summary>
+    /// Ham List<int>.
+    /// </summary>
     public List<int> StatusIds { get; set; } = new List<int>();
     public string? ItemCode { get; set; }
     public bool IssueLessThanOrder { get; set; }
@@ -949,6 +1079,9 @@ public class MaterialRequestFilterCriteria
 
 public class MaterialRequestSearchResultDto
 {
+    /// <summary>
+    /// Ham List<MaterialRequestListRowDto>.
+    /// </summary>
     public List<MaterialRequestListRowDto> Rows { get; set; } = new List<MaterialRequestListRowDto>();
     public int TotalCount { get; set; }
 }
@@ -1070,12 +1203,18 @@ public class MaterialRequestItemLookupDto
 public class MaterialRequestService
 {
     private readonly string _connectionString;
+    /// <summary>
+    /// Ham MaterialRequestService.
+    /// </summary>
     public MaterialRequestService(IConfiguration configuration)
     {
         _connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Missing connection string: DefaultConnection");
     }
 
+    /// <summary>
+    /// Lay scope cua employee cho MaterialRequest.
+    /// </summary>
     public async Task<EmployeeMaterialScopeDto> GetEmployeeScopeAsync(string? employeeCode, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(employeeCode))
@@ -1114,6 +1253,9 @@ public class MaterialRequestService
             cancellationToken) ?? new EmployeeMaterialScopeDto();
     }
 
+    /// <summary>
+    /// Lay danh sach Store Group.
+    /// </summary>
     public async Task<IReadOnlyList<MaterialRequestLookupOptionDto>> GetStoreGroupsAsync(CancellationToken cancellationToken = default)
     {
         const string sql = @"
@@ -1141,6 +1283,9 @@ public class MaterialRequestService
         return rows;
     }
 
+    /// <summary>
+    /// Lay danh sach status MR.
+    /// </summary>
     public async Task<IReadOnlyList<MaterialRequestLookupOptionDto>> GetStatusesAsync(CancellationToken cancellationToken = default)
     {
         const string sql = @"
@@ -1162,6 +1307,98 @@ public class MaterialRequestService
         return rows;
     }
 
+    /// <summary>
+    /// Tao Auto MR theo rule cu: lay so moi, tao header moi, roi goi HaiGenMR de fill detail.
+    /// </summary>
+    /// <param name="storeGroup">Store Group hien tai duoc dung de tao Auto MR.</param>
+    /// <param name="dateCreate">Ngay tao MR.</param>
+    /// <param name="fromDate">Ngay bat dau ky lay lieu.</param>
+    /// <param name="toDate">Ngay ket thuc ky lay lieu.</param>
+    /// <param name="accordingTo">Noi dung According/Description cua MR.</param>
+    /// <param name="cancellationToken">Token de huy yeu cau neu can.</param>
+    /// <returns>Request No moi vua tao.</returns>
+    public async Task<long> CreateAutoRequestAsync(
+        int storeGroup,
+        DateTime dateCreate,
+        DateTime fromDate,
+        DateTime toDate,
+        string accordingTo,
+        CancellationToken cancellationToken = default)
+    {
+        // Legacy luong nay can giu request no, header insert, va proc fill detail trong cung transaction.
+        var normalizedAccording = string.IsNullOrWhiteSpace(accordingTo)
+            ? $"Auto MR {dateCreate:MM/yyyy}"
+            : accordingTo.Trim();
+
+        if (normalizedAccording.Length > 50)
+        {
+            normalizedAccording = normalizedAccording[..50];
+        }
+
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync(cancellationToken);
+        await using var tx = await conn.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            // Xin Request No tiep theo trong cung transaction de tranh trung so khi nhieu nguoi bam Generate cung luc.
+            var requestNo = await GetNextRequestNoAsync(conn, (SqlTransaction)tx, cancellationToken);
+
+            // HaiGenMR khong tu tao header. No can mot dong header san co de update lai sau do fill detail.
+            const string insertHeaderSql = @"
+                INSERT INTO dbo.MATERIAL_REQUEST
+                (
+                    REQUEST_NO, STORE_GROUP, DATE_CREATE, ACCORDINGTO, APPROVAL, POST_PR, IS_AUTO,
+                    FROM_DATE, TO_DATE, APPROVAL_END, MATERIALSTATUSID, PRNO, NO_ISSUE
+                )
+                VALUES
+                (
+                    @RequestNo, @StoreGroup, @DateCreate, @AccordingTo, 0, 0, 1,
+                    @FromDate, @ToDate, 0, -1, NULL, 0
+                )";
+
+            await using (var insertCmd = new SqlCommand(insertHeaderSql, conn, (SqlTransaction)tx))
+            {
+                AddNumeric18_0Param(insertCmd, "@RequestNo", requestNo);
+                AddNumeric18_0Param(insertCmd, "@StoreGroup", storeGroup);
+                AddDateTimeParam(insertCmd, "@DateCreate", dateCreate);
+                Helper.AddParameter(insertCmd, "@AccordingTo", normalizedAccording, SqlDbType.VarChar, 50);
+                AddDateTimeParam(insertCmd, "@FromDate", fromDate);
+                AddDateTimeParam(insertCmd, "@ToDate", toDate);
+                await insertCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            // Goi proc legacy de tinh va insert detail lines theo dung rule cu cua DB.
+            // Proc nay se update header ben tren va do ra cac dong detail can mua.
+            await using (var procCmd = new SqlCommand("dbo.HaiGenMR", conn, (SqlTransaction)tx))
+            {
+                procCmd.CommandType = CommandType.StoredProcedure;
+                AddNumeric18_0Param(procCmd, "@ReQuestNo", requestNo);
+                AddDateTimeParam(procCmd, "@DateCreate", dateCreate);
+                Helper.AddParameter(procCmd, "@According", normalizedAccording, SqlDbType.VarChar, 50);
+                AddDateTimeParam(procCmd, "@FromDate", fromDate);
+                AddDateTimeParam(procCmd, "@ToDate", toDate);
+                AddNumeric18_0Param(procCmd, "@KPGroup", storeGroup);
+                AddNumeric18_0Param(procCmd, "@MainGRStore", 1);
+
+                await procCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            // Chi commit khi ca header insert va proc fill detail deu thanh cong.
+            await tx.CommitAsync(cancellationToken);
+            return requestNo;
+        }
+        catch
+        {
+            // Neu co loi o bat ky buoc nao thi rollback het de khong de lai MR do.
+            await tx.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Tim danh sach MR theo bo loc va phan trang.
+    /// </summary>
     public async Task<MaterialRequestSearchResultDto> SearchPagedAsync(MaterialRequestFilterCriteria criteria, CancellationToken cancellationToken = default)
     {
         var pageIndex = criteria.PageIndex.GetValueOrDefault() <= 0 ? 1 : criteria.PageIndex!.Value;
@@ -1274,6 +1511,9 @@ public class MaterialRequestService
         };
     }
 
+    /// <summary>
+    /// Lay header cua MR.
+    /// </summary>
     public async Task<MaterialRequestDetailDto?> GetDetailAsync(long requestNo, CancellationToken cancellationToken = default)
     {
         const string sql = @"
@@ -1317,6 +1557,9 @@ public class MaterialRequestService
             cancellationToken);
     }
 
+    /// <summary>
+    /// Lay danh sach detail line cua MR.
+    /// </summary>
     public async Task<IReadOnlyList<MaterialRequestLineDto>> GetLinesAsync(long requestNo, CancellationToken cancellationToken = default)
     {
         const string sql = @"
@@ -1368,6 +1611,9 @@ public class MaterialRequestService
         return rows;
     }
 
+    /// <summary>
+    /// Lay snapshot chi doc cua cac line da luu.
+    /// </summary>
     public async Task<Dictionary<string, MaterialRequestLineReadonlySnapshotDto>> GetLineReadonlySnapshotsAsync(long requestNo, CancellationToken cancellationToken = default)
     {
         const string sql = @"
@@ -1414,6 +1660,9 @@ public class MaterialRequestService
         return snapshots;
     }
 
+    /// <summary>
+    /// Tinh lai cac line cho Purchaser.
+    /// </summary>
     public async Task CalculatePurchaserLinesAsync(
         long requestNo,
         int storeGroup,
@@ -1485,6 +1734,9 @@ public class MaterialRequestService
         }
     }
 
+    /// <summary>
+    /// Lay don vi cua item.
+    /// </summary>
     public async Task<Dictionary<string, string>> GetItemUnitsAsync(IEnumerable<string> itemCodes, CancellationToken cancellationToken = default)
     {
         var normalizedCodes = itemCodes
@@ -1536,6 +1788,9 @@ public class MaterialRequestService
         return unitMap;
     }
 
+    /// <summary>
+    /// Lay ton kho chinh cua item.
+    /// </summary>
     private static async Task<decimal> GetMainInventoryAsync(SqlConnection conn, int itemId, int storeGroup, CancellationToken cancellationToken)
     {
         const string sql = @"
@@ -1592,6 +1847,9 @@ public class MaterialRequestService
         return value == null || value == DBNull.Value ? 0m : Convert.ToDecimal(value);
     }
 
+    /// <summary>
+    /// Lay so luong da giu o cac MR khac.
+    /// </summary>
     private static async Task<decimal> GetReservedQtyAsync(SqlConnection conn, long requestNo, string itemCode, CancellationToken cancellationToken)
     {
         const string sql = @"
@@ -1617,6 +1875,9 @@ public class MaterialRequestService
         return value == null || value == DBNull.Value ? 0m : Convert.ToDecimal(value);
     }
 
+    /// <summary>
+    /// Luu MR vao database.
+    /// </summary>
     public async Task<long> SaveAsync(long? requestNo, MaterialRequestDetailDto header, IReadOnlyList<MaterialRequestLineDto> lines, CancellationToken cancellationToken = default)
     {
         await using var conn = new SqlConnection(_connectionString);
@@ -1728,6 +1989,9 @@ public class MaterialRequestService
         }
     }
 
+    /// <summary>
+    /// Xu ly reject theo flow legacy.
+    /// </summary>
     public async Task<long> ProcessLegacyRejectAsync(
         MaterialRequestDetailDto sourceHeader,
         IReadOnlyList<MaterialRequestLineDto> sourceLines,
@@ -1831,6 +2095,9 @@ public class MaterialRequestService
         }
     }
 
+    /// <summary>
+    /// Luu MR theo core flow.
+    /// </summary>
     private async Task<long> SaveRequestCoreAsync(
         SqlConnection conn,
         SqlTransaction tx,
@@ -1934,6 +2201,9 @@ public class MaterialRequestService
         return resolvedRequestNo;
     }
 
+    /// <summary>
+    /// Tim request status 5 phu hop de lam reject pool.
+    /// </summary>
     private static async Task<long?> FindRejectedPoolRequestNoAsync(SqlConnection conn, SqlTransaction tx, int storeGroup, CancellationToken cancellationToken)
     {
         const string sql = @"
@@ -1949,6 +2219,9 @@ public class MaterialRequestService
         return value == null || value == DBNull.Value ? null : Convert.ToInt64(value);
     }
 
+    /// <summary>
+    /// Cap nhat header MR ma khong doi line.
+    /// </summary>
     private static async Task UpdateHeaderStatusOnlyAsync(
         SqlConnection conn,
         SqlTransaction tx,
@@ -1970,6 +2243,9 @@ public class MaterialRequestService
         await cmd.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Chuyen cac line sang request khac.
+    /// </summary>
     private static async Task MoveLinesToRequestAsync(
         SqlConnection conn,
         SqlTransaction tx,
@@ -2001,6 +2277,9 @@ public class MaterialRequestService
         }
     }
 
+    /// <summary>
+    /// Lay EmployeeID theo ma employee.
+    /// </summary>
     private static async Task<int> ResolveEmployeeIdAsync(SqlConnection conn, SqlTransaction tx, string employeeCode, CancellationToken cancellationToken)
     {
         const string sql = @"
@@ -2014,6 +2293,9 @@ public class MaterialRequestService
         return value == null || value == DBNull.Value ? 0 : Convert.ToInt32(value);
     }
 
+    /// <summary>
+    /// Ghi log vao SUPER_REQUEST.
+    /// </summary>
     private static async Task InsertSuperRequestAsync(SqlConnection conn, SqlTransaction tx, long requestNo, int employeeId, DateTime timeEffective, string note, CancellationToken cancellationToken)
     {
         const string sql = @"
@@ -2034,6 +2316,9 @@ public class MaterialRequestService
         await cmd.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Tao ban sao header cho luong luu.
+    /// </summary>
     private static MaterialRequestDetailDto CloneHeader(MaterialRequestDetailDto source)
     {
         return new MaterialRequestDetailDto
@@ -2054,6 +2339,9 @@ public class MaterialRequestService
         };
     }
 
+    /// <summary>
+    /// Tao header rejected de luu vao pool.
+    /// </summary>
     private static MaterialRequestDetailDto CloneRejectedHeader(MaterialRequestDetailDto source, DateTime now)
     {
         var header = CloneHeader(source);
@@ -2067,6 +2355,9 @@ public class MaterialRequestService
         return header;
     }
 
+    /// <summary>
+    /// Chuan hoa danh sach line truoc khi save.
+    /// </summary>
     private static List<MaterialRequestLineDto> NormalizeLines(IEnumerable<MaterialRequestLineDto> lines)
     {
         var result = new List<MaterialRequestLineDto>();
@@ -2117,6 +2408,9 @@ public class MaterialRequestService
         return result;
     }
 
+    /// <summary>
+    /// Tao note reject theo format legacy.
+    /// </summary>
     private static string BuildRejectNote(MaterialRequestLineDto source, long requestNo, string rejectReason, string operatorCode)
     {
         var noteParts = new List<string>
@@ -2140,6 +2434,9 @@ public class MaterialRequestService
         return note;
     }
 
+    /// <summary>
+    /// Tim item trong popup search.
+    /// </summary>
     public async Task<IReadOnlyList<MaterialRequestItemLookupDto>> SearchItemsAsync(
         string? itemCode,
         string? itemName,
@@ -2190,6 +2487,9 @@ public class MaterialRequestService
         return rows;
     }
 
+    /// <summary>
+    /// Tao item moi nhanh.
+    /// </summary>
     public async Task<MaterialRequestItemLookupDto> CreateQuickItemAsync(string itemName, string? unit, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(itemName))
@@ -2239,6 +2539,9 @@ public class MaterialRequestService
         }
     }
 
+    /// <summary>
+    /// Gan tham so tim kiem vao SqlCommand.
+    /// </summary>
     private static void BindSearchParams(SqlCommand cmd, MaterialRequestFilterCriteria criteria, IReadOnlyList<int> statusIds)
     {
         Helper.AddParameter(cmd, "@RequestNo", string.IsNullOrWhiteSpace(criteria.RequestNo) ? null : criteria.RequestNo.Trim(), SqlDbType.VarChar, 50);
@@ -2257,6 +2560,9 @@ public class MaterialRequestService
         }
     }
 
+    /// <summary>
+    /// Gan tham so header vao SqlCommand.
+    /// </summary>
     private static void BindHeaderParams(SqlCommand cmd, long requestNo, MaterialRequestDetailDto header, int statusId)
     {
         AddNumeric18_0Param(cmd, "@RequestNo", requestNo);
@@ -2274,6 +2580,9 @@ public class MaterialRequestService
         Helper.AddParameter(cmd, "@NoIssue", header.NoIssue, SqlDbType.Int);
     }
 
+    /// <summary>
+    /// Tao dieu kien SQL cho danh sach status.
+    /// </summary>
     private static string BuildStatusFilterSql(IReadOnlyList<int> statusIds)
     {
         if (statusIds.Count == 0)
@@ -2286,14 +2595,26 @@ public class MaterialRequestService
         return $"r.MATERIALSTATUSID IN ({string.Join(", ", parameters)})";
     }
 
+    /// <summary>
+    /// Lay Request No tiep theo.
+    /// Ham nay giu lock trong transaction de tranh trung so khi nhieu nguoi tao cung luc.
+    /// </summary>
+    /// <param name="conn">SqlConnection dang mo.</param>
+    /// <param name="tx">Transaction dang dung de giu lock.</param>
+    /// <param name="cancellationToken">Token de huy yeu cau neu can.</param>
+    /// <returns>Request No tiep theo.</returns>
     private static async Task<long> GetNextRequestNoAsync(SqlConnection conn, SqlTransaction tx, CancellationToken cancellationToken)
     {
+        // UPDLOCK de chuan bi sua, HOLDLOCK de giu lock den cuoi transaction.
         const string sql = "SELECT ISNULL(MAX(REQUEST_NO), 0) + 1 FROM dbo.MATERIAL_REQUEST WITH (UPDLOCK, HOLDLOCK)";
         await using var cmd = new SqlCommand(sql, conn, tx);
         var value = await cmd.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt64(value);
     }
 
+    /// <summary>
+    /// Lay status mac dinh neu trang thai chua co.
+    /// </summary>
     private static async Task<int> GetDefaultStatusIdAsync(SqlConnection conn, SqlTransaction tx, CancellationToken cancellationToken)
     {
         const string sql = "SELECT ISNULL(MIN(MaterialStatusID), -1) FROM dbo.MaterialStatus";
@@ -2302,6 +2623,9 @@ public class MaterialRequestService
         return Convert.ToInt32(value);
     }
 
+    /// <summary>
+    /// Tao ma item nhanh.
+    /// </summary>
     private static async Task<string> GenerateQuickItemCodeAsync(SqlConnection conn, SqlTransaction tx, CancellationToken cancellationToken)
     {
         for (var i = 0; i < 50; i++)
@@ -2327,6 +2651,9 @@ public class MaterialRequestService
         throw new InvalidOperationException("Cannot generate Item Code. Please retry.");
     }
 
+    /// <summary>
+    /// Tao danh sach detail line cho Auto MR.
+    /// </summary>
     public async Task<IReadOnlyList<MaterialRequestLineDto>> BuildAutoLinesAsync(int storeGroup, CancellationToken cancellationToken = default)
     {
         const string sql = @"
@@ -2376,6 +2703,9 @@ public class MaterialRequestService
         return rows;
     }
 
+    /// <summary>
+    /// Them tham so decimal 18,0 vao SqlCommand.
+    /// </summary>
     private static void AddNumeric18_0Param(SqlCommand cmd, string name, object? value)
     {
         var p = cmd.Parameters.Add(name, SqlDbType.Decimal);
@@ -2384,6 +2714,9 @@ public class MaterialRequestService
         p.Value = value is null ? DBNull.Value : Convert.ToDecimal(value);
     }
 
+    /// <summary>
+    /// Them tham so decimal 18,2 vao SqlCommand.
+    /// </summary>
     private static void AddDecimal18_2Param(SqlCommand cmd, string name, object? value)
     {
         var p = cmd.Parameters.Add(name, SqlDbType.Decimal);
@@ -2391,6 +2724,13 @@ public class MaterialRequestService
         p.Scale = 2;
         p.Value = value is null ? DBNull.Value : Convert.ToDecimal(value);
     }
+
+    /// <summary>
+    /// Them tham so DateTime vao SqlCommand.
+    /// </summary>
+    private static void AddDateTimeParam(SqlCommand cmd, string name, DateTime value)
+    {
+        var p = cmd.Parameters.Add(name, SqlDbType.DateTime);
+        p.Value = value;
+    }
 }
-
-

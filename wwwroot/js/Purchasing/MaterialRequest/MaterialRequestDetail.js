@@ -188,7 +188,8 @@ function initializePage(mode, currentStatusId, actionPerm) {
     // Lock action buttons by workflow status
     $('#addMrLineBtn').off('click').on('click', function () {
         $('#mrItemLookupModal').modal('show');
-        runItemLookupSearch();
+        renderLookupResults($('#lookupResultBody'), []);
+        $('#lookupKeyword').trigger('focus');
     });
 
     // Sync the Not issue checkbox with the hidden field
@@ -288,6 +289,12 @@ function initializePage(mode, currentStatusId, actionPerm) {
         if (event.key !== 'Enter') return;
         event.preventDefault();
         runItemLookupSearch();
+    });
+
+    $('#lookupCheckStore').off('change').on('change', function () {
+        if (($('#lookupKeyword').val() || '').toString().trim().length > 0) {
+            runItemLookupSearch();
+        }
     });
 
     // Add item from lookup to the grid
