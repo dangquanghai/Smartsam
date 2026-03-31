@@ -189,6 +189,30 @@
     background: #f8f9fa;
 }
 
+.prq-add-at-text-cell {
+    white-space: normal !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+}
+
+.prq-add-at-file-input {
+    padding-bottom: 30px;
+}
+
+.prq-add-at-file-note {
+    margin-left: 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: #6c757d;
+}
+
+.prq-add-at-file-error {
+    margin-top: 0.25rem;
+    font-size: 0.8rem;
+    color: #dc3545;
+}
+
 @media (max-width: 767.98px) {
     .prq-table-wrap {
         max-height: 52vh;

@@ -16,7 +16,7 @@ Trong hệ thống hiện tại, page đang hỗ trợ các nghiệp vụ chính
 Ghi chú:
 
 - Dữ liệu thực tế trong DB cho thấy bảng `PC_PR` vẫn còn các cột liên quan đến quy trình từ `MR` như `MRNo`, `MRRequestNO`.
-- Tuy nhiên page hiện tại chưa có luồng tự động sinh PR từ MR. Phần này mới dừng ở mức lưu dấu vết dữ liệu/cột dự phòng.
+- Tuy nhiên page hiện tại chưa có luồng tự động sinh PR từ MR. Phần này mới dừng ở mức lưu dấu vết dữ liệu hoặc cột dự phòng.
 
 ## 2. Màn hình hiện có
 
@@ -45,13 +45,9 @@ Chức năng:
 - Cho phép:
   - `Add New`
   - `Edit`
-  - `View`
   - `View Detail`
   - `Add AT`
-
-Ghi chú:
-
-- `Export Excel` và `Disapproval` hiện mới có nút trên UI, JS đang báo `not implemented yet`.
+  - `Export Excel`
 
 ### 2.2. Màn hình chi tiết
 
@@ -134,12 +130,12 @@ Các cột chính:
 
 Bảng: `dbo.PC_PRStatus`
 
-Trạng thái thực tế hiện có:
+Bộ trạng thái đã đổi theo yêu cầu hiện tại:
 
-- `0 = Preparing`
-- `1 = Done`
-- `2 = In Progress`
-- `3 = Disapproved`
+- `1 = New`
+- `2 = Waiting For Approve`
+- `3 = Pending`
+- `4 = Done`
 
 ### 3.4. Master item
 
@@ -168,8 +164,7 @@ Cột đang dùng:
 
 Ghi chú:
 
-- Page hiện tại load supplier không lọc theo `IsDeleted` hay `Status`.
-- Nghĩa là đang lấy toàn bộ supplier và sort theo `SupplierCode`.
+- Page hiện tại đã lọc supplier theo `IsDeleted = 0` ở các chỗ liên quan popup chọn supplier.
 
 ## 4. Quan hệ dữ liệu
 
@@ -186,7 +181,7 @@ Quan hệ đang có trong DB:
 Hiểu ngắn gọn:
 
 - `PC_PR` là header của phiếu.
-- `PC_PRDetail` là các dòng vật tư/hàng hóa của phiếu.
+- `PC_PRDetail` là các dòng vật tư hoặc hàng hóa của phiếu.
 - Mỗi dòng PR detail tham chiếu tới 1 item và có thể chọn 1 supplier.
 
 ## 5. Mapping field của form detail
@@ -215,10 +210,6 @@ Hành vi:
 
 - tự fill, readonly trên form
 
-Không lưu riêng vì:
-
-- đơn vị được hiểu theo item
-
 ### 5.3. Supplier
 
 Nguồn:
@@ -237,11 +228,6 @@ Lưu vào:
 
 - `PC_PRDetail.SugQty`
 - `PC_PRDetail.PoQuantitySug`
-
-Ghi chú:
-
-- tên field trên UI là `QtyFromM`
-- nhưng trong detail thực tế đang map vào cột suggestion quantity
 
 ### 5.5. QtyPur
 
@@ -285,14 +271,13 @@ Lưu vào:
 
 Khi add mới:
 
-- sinh `RequestNo` theo mẫu `PRxx/MMyy`
+- sinh `RequestNo` theo mẫu hiện tại của hệ thống
 - insert header vào `PC_PR`
 - gán:
   - `IsAuto = 0`
   - `MRNo = NULL`
   - `PostPO = 0`
-  - `PurId` = user đang login
-  - nếu không tìm được user đang login thì fallback `FD031`, sau đó `FD031X`
+  - `PurId` = user đang login hoặc fallback theo rule hiện tại trong code
 - sau đó insert toàn bộ dòng detail vào `PC_PRDetail`
 
 ### 6.2. Sửa PR
@@ -311,16 +296,21 @@ Khi edit:
 
 Ghi chú:
 
-- đây là kiểu save replace-all, không phải update từng dòng detail riêng lẻ
+- Đây là kiểu save replace-all, không phải update từng dòng detail riêng lẻ.
 
-### 6.3. Add AT
+### 6.3. Add AT hiện tại trong code web
 
-Chức năng `Add AT` ở màn hình danh sách:
+Chức năng `Add AT` ở màn hình danh sách hiện đang chạy theo kiểu:
 
-- chọn đúng 1 PR
+- chọn đúng 1 PR có sẵn trên danh sách
 - nhập thêm các dòng detail
 - insert bổ sung trực tiếp vào `PC_PRDetail`
 - không sửa header
+- không tạo mới `PC_PR`
+
+Kết luận:
+
+- `Add AT` hiện tại trên web mới là phiên bản rút gọn, chưa đúng hoàn toàn với flow VB6 cũ.
 
 ## 7. Quyền hiện tại của chức năng
 
@@ -328,20 +318,18 @@ Function:
 
 - `SYS_RolePermission.FunctionID = 72`
 
-Các mã quyền đang thấy trong DB/code:
+Các mã quyền đang thấy trong DB và code:
 
 - `1`: quyền vào trang/list
 - `2`: view detail
 - `3`: add new
-- `4`: edit / add AT
-- `5`: có trong DB nhưng page hiện tại chưa triển khai hành động riêng trên UI
-- `6`: nút `Disapproval` có hiển thị theo quyền nhưng chưa có xử lý thực tế
+- `4`: edit
+- `6`: disapproval
 
 Trong code hiện tại:
 
-- List page dùng `PermissionService`
-- Detail page dùng `PermissionService`
-- Nếu admin (`IsAdminRole = True`) thì đang được cấp full quyền giả lập
+- List page và detail page đều bám quyền theo service bảo mật hiện tại.
+- Nếu admin (`IsAdminRole = true`) thì được cấp full quyền giả lập.
 
 ## 8. Workflow nghiệp vụ đang thấy từ data
 
@@ -349,69 +337,252 @@ Dựa trên dữ liệu thật trong `PC_PR`, có thể đọc được luồng 
 
 ### Bước 1. Purchaser tạo PR
 
-- `PurId` là người lập/chịu trách nhiệm đầu
-- ví dụ dữ liệu thật đang dùng nhiều:
-  - `FD031`
+- `PurId` là người lập hoặc chịu trách nhiệm đầu.
 
 ### Bước 2. Chief Accountant kiểm tra
 
-- `CAId` là người kiểm tra kế toán
-- ví dụ dữ liệu thật:
-  - `FD001X`
+- `CAId` là người kiểm tra kế toán.
 
-### Bước 3. General Director/BOD phê duyệt
+### Bước 3. General Director hoặc BOD phê duyệt
 
-- `GDId` là người duyệt cuối
-- ví dụ dữ liệu thật:
-  - `BOD011`
+- `GDId` là người duyệt cuối.
 
-### Bước 4. Hoàn tất hoặc trả lại
+### Bước 4. Hoàn tất
 
-Các trạng thái đang thấy:
+- chứng từ đi qua các trạng thái nghiệp vụ tương ứng cho đến khi `Done`.
 
-- `0 - Preparing`: đang soạn / chờ xử lý tiếp
-- `2 - In Progress`: đã đi vào luồng xử lý nhưng chưa hoàn tất
-- `1 - Done`: hoàn tất duyệt
-- `3 - Disapproved`: bị trả lại / không duyệt
-
-Ghi chú rất quan trọng:
+Ghi chú:
 
 - workflow này thấy rõ trong dữ liệu thật của bảng `PC_PR`
 - nhưng page hiện tại chưa có code submit/approve/disapprove hoàn chỉnh trên UI
-- nghĩa là dữ liệu và schema đã có luồng nghiệp vụ, còn màn hình hiện tại mới triển khai phần lập phiếu và nhập dòng chi tiết là chính
 
-## 9. Những gì page hiện tại chưa làm
+## 9. Phân tích lại chức năng Add AT theo flow VB6 và ảnh nghiệp vụ
 
-So với dữ liệu và ý nghĩa nghiệp vụ tổng thể, page hiện tại chưa triển khai hoặc mới dừng ở mức placeholder:
+### 9.1. Mục đích thật của Add AT
 
-- chưa có luồng `Submit by Purchaser`
-- chưa có luồng `Check by Chief of accounting`
-- chưa có luồng `Approval by BOD`
-- chưa có `Export Excel` thật
-- chưa có `Disapproval` thật
-- chưa có luồng tự sinh PR từ MR
-- chưa có liên kết thật sang PO dù bảng còn cột `PostPO`, `POed`, `PoQuantity`
+`Add AT` trong flow cũ không chỉ là thêm vài dòng detail thủ công vào một PR đang có sẵn.
+Nó là luồng `Gen PR` để gom các dòng `Material Request` đủ điều kiện thành một phiếu `Purchase Requisition` mới.
 
-## 10. Kết luận ngắn
+Hiểu ngắn gọn:
 
-`Purchase Requisition` hiện tại là chức năng lập và quản lý phiếu đề nghị mua hàng với 2 lớp dữ liệu:
+- Nguồn dữ liệu đầu vào là các dòng `MATERIAL_REQUEST_DETAIL` còn nhu cầu mua.
+- Người dùng chọn các dòng cần gom.
+- Hệ thống tạo mới một `PC_PR`.
+- Sau đó insert các dòng đã chọn vào `PC_PRDetail`.
+- Đồng thời cập nhật ngược lại dữ liệu MR để đánh dấu đã đưa vào PR hoặc giảm số lượng còn phải mua.
 
-- `PC_PR`: header phiếu
-- `PC_PRDetail`: chi tiết vật tư/hàng hóa
+### 9.2. Flow màn hình Add AT theo code VB6
 
-Page hiện chạy tốt cho các nghiệp vụ:
+#### Bước 1. Mở cửa sổ Gen PR
 
-- search list
-- add new
-- edit
-- view
-- add detail
-- add AT
+Khi mở form:
 
-Workflow duyệt nhiều cấp đã có dấu vết rõ trong DB:
+- `RequestDate` mặc định = `Now`
+- `RequestNo` được sinh tự động bằng `exec HaiAutoNumPR null`
+- `Currency` được nạp từ bảng `MS_CurrencyFL`
+- Lưới dữ liệu được nạp từ các dòng MR đủ điều kiện
 
-- Purchaser
-- Chief Accountant
-- General Director/BOD
+Query nguồn của lưới gồm:
 
-Nhưng phần UI/code hiện tại mới triển khai một phần đầu của quy trình, chưa triển khai đầy đủ luồng duyệt và chuyển tiếp nghiệp vụ.
+- `MATERIAL_REQUEST_DETAIL.REQUEST_NO`
+- `INV_ItemList.ItemID`
+- `INV_ItemList.ItemCode`
+- `INV_ItemList.ItemName`
+- `MATERIAL_REQUEST_DETAIL.BUY`
+- `INV_ItemList.UnitPrice`
+- `INV_ItemList.Specification`
+- `MATERIAL_REQUEST_DETAIL.NOTE`
+- `MATERIAL_REQUEST_DETAIL.ID`
+
+Quan hệ lấy dữ liệu:
+
+- `MATERIAL_REQUEST` join `MATERIAL_REQUEST_DETAIL` theo `REQUEST_NO`
+- `MATERIAL_REQUEST_DETAIL` join `INV_ItemList` theo `ITEMCODE = ItemCode`
+
+Điều kiện lấy dòng MR:
+
+- `MATERIAL_REQUEST_DETAIL.BUY > 0`
+- `PostedPR = 0 OR PostedPR IS NULL`
+- và thỏa một trong hai điều kiện:
+  - `MATERIAL_REQUEST.MATERIALSTATUSID = 3` và `BUY > 0`
+  - hoặc `MATERIAL_REQUEST.MATERIALSTATUSID = 2` và `MATERIAL_REQUEST.IS_AUTO = 1`
+
+Sắp xếp:
+
+- theo `REQUEST_NO`
+- rồi `ItemCode`
+
+#### Bước 2. Hệ thống thêm 2 cột thao tác vào lưới
+
+Sau khi bind lưới, chương trình thêm 2 cột động:
+
+- `Check`
+  - kiểu checkbox
+  - mặc định = `0`
+  - dùng để chọn dòng MR sẽ đưa vào PR
+- `SugBuy`
+  - mặc định = giá trị `BUY`
+  - cho phép người dùng sửa lại số lượng đề nghị mua trước khi insert vào `PC_PRDetail`
+
+Ý nghĩa nghiệp vụ:
+
+- `BUY` là số lượng hệ thống đề xuất hoặc còn phải mua từ MR
+- `SugBuy` là số lượng thực tế user chốt để đưa vào PR lần này
+
+#### Bước 3. User nhập Description và chọn các dòng MR
+
+User thao tác trên form:
+
+- nhập `Description`
+- check chọn các dòng cần đưa vào PR
+- có thể sửa `SugBuy` cho từng dòng
+- bấm `OK`
+
+#### Bước 4. Nhấn OK để tạo PR mới
+
+Nếu `Description` rỗng:
+
+- hệ thống không cho tạo
+- báo `Fill Description`
+
+Nếu `Description` hợp lệ:
+
+- insert mới vào `PC_PR`
+- dữ liệu ghi:
+  - `RequestNo`
+  - `RequestDate`
+  - `Description`
+  - `Currency = 1`
+  - `Status = 1`
+- sau đó lấy `PRID` mới tạo bằng `SELECT max(PRID)`
+- gọi tiếp `InsertToPR`
+- mở màn hình `PR Detail` ở mode `EDIT`
+
+### 9.3. Logic InsertToPR trong flow cũ
+
+Với mỗi dòng MR được check:
+
+- tạo mới một dòng `PC_PRDetail`
+- map dữ liệu như sau:
+  - `PRID` = PR vừa tạo
+  - `ItemID` = từ `INV_ItemList.ItemID`
+  - `Quantity` = giá trị `SugBuy`
+  - `Remark` = `INV_ItemList.Specification`
+  - `UnitPrice` = `INV_ItemList.UnitPrice`, nếu null thì = `0`
+  - `OrdAmount` = `UnitPrice * SugBuy`
+  - `MRRequestNO` = `MATERIAL_REQUEST.REQUEST_NO`
+  - `MRDetailID` = `MATERIAL_REQUEST_DETAIL.ID`
+
+Sau khi insert detail, hệ thống cập nhật ngược `MATERIAL_REQUEST_DETAIL`:
+
+- nếu `SugBuy < BUY`:
+  - cập nhật lại `BUY = BUY - SugBuy`
+- nếu `SugBuy >= BUY`:
+  - cập nhật `PostedPR = 1`
+
+Ý nghĩa nghiệp vụ:
+
+- một phần nhu cầu mua còn lại thì giữ tiếp ở MR
+- đủ hết thì đánh dấu dòng MR đã được đưa sang PR
+
+### 9.4. Khác biệt giữa flow cũ và code hiện tại của page PurchaseRequisition
+
+Flow cũ VB6:
+
+- `Add AT` tạo mới một PR mới từ các dòng MR đủ điều kiện
+- dữ liệu nguồn của popup là từ `MATERIAL_REQUEST` / `MATERIAL_REQUEST_DETAIL`
+- có `Check`
+- có `SugBuy`
+- có ràng buộc cập nhật ngược MR sau khi tạo PR
+- sau khi xong thì mở ngay `PR Detail` của phiếu vừa tạo
+
+Code hiện tại ở page `PurchaseRequisition`:
+
+- `Add AT` đang yêu cầu chọn đúng 1 dòng PR có sẵn trên danh sách
+- dữ liệu popup hiện đi theo `PurchaseRequisitionDetailInput`
+- backend chỉ gọi `AddDetails(prId, details)` để insert thêm vào `PC_PRDetail`
+- không tạo mới `PC_PR`
+- không đọc từ `MATERIAL_REQUEST`
+- không cập nhật ngược `MATERIAL_REQUEST_DETAIL.BUY` hoặc `PostedPR`
+- chưa lưu `MRRequestNO` và `MRDetailID` theo flow cũ của Add AT
+
+Kết luận:
+
+- `Add AT` hiện tại mới là phiên bản rút gọn kiểu “thêm nhanh detail vào PR đang có”
+- chưa đúng với flow nghiệp vụ cũ của `Gen PR`
+
+### 9.5. Gợi ý mapping field của popup Add AT theo flow cũ
+
+Nếu làm lại đúng theo VB6, popup Add AT cần tối thiểu các cột sau:
+
+- `Check`
+- `RequestNo`
+- `ItemCode`
+- `ItemName`
+- `BUY`
+- `SugBuy`
+- `Unit`
+- `UnitPrice`
+- `Specification`
+- `MRDetailID`
+
+Trong đó:
+
+- `Check` là cột chọn dòng
+- `SugBuy` là cột người dùng có thể sửa
+- `BUY` là số lượng còn phải mua từ MR
+- `MRDetailID` nên ẩn nhưng phải giữ để lưu vết truy xuất về MR
+
+### 9.6. Logic list page theo ảnh nghiệp vụ
+
+Ảnh nghiệp vụ cho thấy list page `Purchase Requisition` có thêm ý nghĩa phân vai theo bước duyệt:
+
+- `PU` nhìn theo trạng thái mặc định `1`
+- `CFO` và `BOD` nhìn theo trạng thái mặc định `2`
+- `CFO` có thêm điều kiện mặc định là các mốc ký của CFO đang null
+- `BOD` có thêm điều kiện mặc định là các mốc ký của BOD đang null
+
+Điều này cho thấy về lâu dài page list không chỉ search đơn thuần, mà còn cần:
+
+- lọc mặc định theo vai trò nghiệp vụ
+- thay đổi điều kiện list theo bước duyệt hiện tại
+- dùng dữ liệu người ký trong `PC_PR` để quyết định chứng từ nào đang chờ ai xử lý
+
+### 9.7. Trạng thái PR cần hiểu lại theo ảnh và code cũ
+
+Theo ảnh và mô tả nghiệp vụ, ý nghĩa thực tế của list có vẻ gần với luồng:
+
+- `1 = New`
+- `2 = Waiting For Approve`
+- `3 = Pending`
+- `4 = Done`
+
+Điểm này phù hợp hơn với việc:
+
+- `PU` tạo PR mới ở trạng thái đầu
+- sau submit thì chứng từ chuyển sang trạng thái chờ duyệt
+- các bước ký tiếp theo dùng điều kiện chữ ký null để xác định chứng từ đang ở ai
+
+### 9.8. Khoảng trống dữ liệu đang thiếu trong MS_Employee
+
+Theo yêu cầu nghiệp vụ mới, vai trò duyệt cần phân biệt bằng các cờ bool trong bảng `MS_Employee`:
+
+- `IsPachaser` hoặc `IsPurchaser`
+- `IsCFO`
+- `IsBOD`
+
+Kiểm tra schema DB hiện tại cho thấy:
+
+- bảng `MS_Employee` chưa có các cột trên
+
+Điều này có nghĩa là trước khi code đầy đủ flow Add AT / Submit / Approve theo vai trò mới, cần bổ sung data schema cho `MS_Employee`.
+
+### 9.9. Kết luận cho bước phân tích hiện tại
+
+Ở bước hiện tại có thể chốt như sau:
+
+- `Add AT` theo nghiệp vụ gốc là chức năng `Gen PR` từ MR, không phải chỉ thêm detail vào PR có sẵn
+- popup Add AT phải lấy nguồn từ `MATERIAL_REQUEST` và `MATERIAL_REQUEST_DETAIL`
+- khi lưu phải tạo mới `PC_PR`, insert `PC_PRDetail`, rồi cập nhật ngược lại dữ liệu MR
+- role `PU`, `CFO`, `BOD` cần được xác định bằng cờ bool ở `MS_Employee`, nhưng schema hiện tại đang thiếu
+- phần này mới nên dừng ở mức tài liệu phân tích; chưa nên sửa code cho tới khi chốt lại đầy đủ rule và cấu trúc data cần bổ sung

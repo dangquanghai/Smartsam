@@ -1,7 +1,9 @@
 ﻿using System.Data;
 using System.Globalization;
+using System.IO;
 using System.Text.Json;
 using ClosedXML.Excel;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
@@ -24,13 +26,15 @@ public class IndexModel : BasePageModel
     private readonly ILogger<IndexModel> _logger;
     private readonly PermissionService _permissionService;
     private readonly ISecurityService _securityService;
+    private readonly IWebHostEnvironment _webHostEnvironment;
 
     // Khởi tạo các service và thành phần cần dùng cho màn hình danh sách phiếu đề nghị mua hàng.
-    public IndexModel(IConfiguration config, ILogger<IndexModel> logger, PermissionService permissionService, ISecurityService securityService) : base(config)
+    public IndexModel(IConfiguration config, ILogger<IndexModel> logger, PermissionService permissionService, ISecurityService securityService, IWebHostEnvironment webHostEnvironment) : base(config)
     {
         _logger = logger;
         _permissionService = permissionService;
         _securityService = securityService;
+        _webHostEnvironment = webHostEnvironment;
     }
 
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
@@ -44,6 +48,21 @@ public class IndexModel : BasePageModel
 
     [BindProperty]
     public string AddAtDetailsJson { get; set; } = "[]";
+
+    [BindProperty]
+    public string AddAtRequestNo { get; set; } = string.Empty;
+
+    [BindProperty]
+    public DateTime? AddAtRequestDate { get; set; }
+
+    [BindProperty]
+    public string AddAtDescription { get; set; } = string.Empty;
+
+    [BindProperty]
+    public byte AddAtCurrencyId { get; set; } = 1;
+
+    [BindProperty]
+    public IFormFile? AddAtAttachment { get; set; }
 
     [TempData]
     public string? Message { get; set; }
@@ -60,6 +79,8 @@ public class IndexModel : BasePageModel
     public bool CanEditRequisition { get; set; }
     public bool CanViewDetailRequisition { get; set; }
     public int TotalRecords { get; set; }
+    public string AllowedAttachmentExtensionsText => _config.GetValue<string>("AllowedExtensions") ?? ".doc,.docx,.xls,.xlsx,.pdf,.jpg,.jpeg,.png";
+    public int MaxAttachmentSizeMb => _config.GetValue<int?>("MaxFileSizeMb") ?? 10;
     public int TotalPages => Filter.PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)Filter.PageSize));
     public int PageStart => TotalRecords == 0 ? 0 : ((Filter.Page - 1) * Filter.PageSize) + 1;
     public int PageEnd => TotalRecords == 0 ? 0 : Math.Min(Filter.Page * Filter.PageSize, TotalRecords);
@@ -139,21 +160,19 @@ public class IndexModel : BasePageModel
         NormalizePostInputs();
         NormalizeFilter();
 
-        var details = ParseAddAtDetails();
-        if (!SelectedPrId.HasValue || SelectedPrId.Value <= 0)
-        {
-            ModelState.AddModelError(string.Empty, "Please select exactly one requisition row.");
-        }
+        var details = ParseAddAtSourceRows();
 
         if (details.Count == 0)
         {
-            ModelState.AddModelError(string.Empty, "Please add at least one detail row.");
+            ModelState.AddModelError(string.Empty, "Please select at least one MR row.");
         }
 
         for (var i = 0; i < details.Count; i++)
         {
-            ValidateDetail(details[i], i + 1);
+            ValidateAddAtSourceRow(details[i], i + 1);
         }
+
+        ValidateAddAtAttachment();
 
         if (!ModelState.IsValid)
         {
@@ -164,9 +183,8 @@ public class IndexModel : BasePageModel
 
         try
         {
-            AddDetails(SelectedPrId!.Value, details);
-            Message = "Add AT details saved successfully.";
-            MessageType = "success";
+            var newPrId = CreatePurchaseRequisitionFromAddAt(details);
+            return RedirectToPage("./PurchaseRequisitionDetail", new { id = newPrId, mode = "edit" });
         }
         catch (InvalidOperationException ex)
         {
@@ -181,6 +199,41 @@ public class IndexModel : BasePageModel
         }
 
         return RedirectToPage("./Index", BuildRouteValues());
+    }
+
+    // Xử lý nạp dữ liệu nguồn cho popup Add AT theo flow Gen PR từ MR.
+    public IActionResult OnGetAddAtSource()
+    {
+        PagePerm = GetUserPermissions();
+        LoadPageActions();
+        if (!CanAddAt)
+        {
+            return new JsonResult(new { success = false, message = "You have no permission to use Add AT." });
+        }
+
+        try
+        {
+            var rows = LoadAddAtSourceRows();
+            var currencies = LoadCurrencyOptions();
+            var requestNo = GetSuggestedAddAtRequestNo();
+            var requestDate = DateTime.Today.ToString("yyyy-MM-dd");
+            var defaultCurrencyId = currencies.FirstOrDefault()?.Id ?? (byte)1;
+
+            return new JsonResult(new
+            {
+                success = true,
+                requestNo,
+                requestDate,
+                currencyId = defaultCurrencyId,
+                currencies,
+                rows
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Cannot load Add AT source rows.");
+            return new JsonResult(new { success = false, message = "Cannot load Add AT source data." });
+        }
     }
 
     // Xử lý xuất dữ liệu ra file Excel.
@@ -689,52 +742,383 @@ ORDER BY SupplierCode", conn);
         }
     }
 
-    // Thực hiện xử lý cho hàm AddDetails theo nghiệp vụ của màn hình.
-    private void AddDetails(int prId, IReadOnlyList<PurchaseRequisitionDetailInput> details)
+    // Nạp danh sách dòng MR đủ điều kiện để popup Add AT tạo PR mới.
+    private List<PurchaseRequisitionAddAtSourceRow> LoadAddAtSourceRows()
+    {
+        var rows = new List<PurchaseRequisitionAddAtSourceRow>();
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+
+        using var cmd = new SqlCommand(@"
+SELECT
+    d.REQUEST_NO,
+    i.ItemID,
+    ISNULL(i.ItemCode, '') AS ItemCode,
+    ISNULL(i.ItemName, '') AS ItemName,
+    ISNULL(i.Unit, '') AS Unit,
+    ISNULL(d.BUY, 0) AS BUY,
+    ISNULL(i.UnitPrice, 0) AS UnitPrice,
+    ISNULL(i.Specification, '') AS Specification,
+    ISNULL(d.NOTE, '') AS Note,
+    d.ID AS MRDetailID
+FROM dbo.MATERIAL_REQUEST m
+INNER JOIN dbo.MATERIAL_REQUEST_DETAIL d ON m.REQUEST_NO = d.REQUEST_NO
+INNER JOIN dbo.INV_ItemList i ON d.ITEMCODE = i.ItemCode
+WHERE ISNULL(d.BUY, 0) > 0
+  AND (d.PostedPR = 0 OR d.PostedPR IS NULL)
+  AND
+  (
+      (m.MATERIALSTATUSID = 3 AND ISNULL(d.BUY, 0) > 0)
+      OR
+      (m.MATERIALSTATUSID = 2 AND ISNULL(m.IS_AUTO, 0) = 1)
+  )
+ORDER BY d.REQUEST_NO, i.ItemCode", conn);
+
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            var buy = Convert.ToDecimal(rd["BUY"]);
+            rows.Add(new PurchaseRequisitionAddAtSourceRow
+            {
+                RequestNo = rd.IsDBNull(rd.GetOrdinal("REQUEST_NO")) ? 0 : Convert.ToDecimal(rd["REQUEST_NO"]),
+                ItemId = Convert.ToInt32(rd["ItemID"]),
+                ItemCode = Convert.ToString(rd["ItemCode"]) ?? string.Empty,
+                ItemName = Convert.ToString(rd["ItemName"]) ?? string.Empty,
+                Unit = Convert.ToString(rd["Unit"]) ?? string.Empty,
+                Buy = buy,
+                SugBuy = buy,
+                UnitPrice = Convert.ToDecimal(rd["UnitPrice"]),
+                Specification = Convert.ToString(rd["Specification"]) ?? string.Empty,
+                Note = Convert.ToString(rd["Note"]) ?? string.Empty,
+                MrDetailId = Convert.ToInt32(rd["MRDetailID"])
+            });
+        }
+
+        return rows;
+    }
+
+    // Nạp danh sách tiền tệ cho popup Add AT, nếu bảng rỗng thì dùng giá trị mặc định của hệ thống.
+    private List<PurchaseRequisitionCurrencyOption> LoadCurrencyOptions()
+    {
+        var currencies = new List<PurchaseRequisitionCurrencyOption>();
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+
+        using var cmd = new SqlCommand("SELECT CurrencyID, CurrencyName FROM dbo.MS_CurrencyFL ORDER BY CurrencyID", conn);
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            currencies.Add(new PurchaseRequisitionCurrencyOption
+            {
+                Id = Convert.ToByte(rd["CurrencyID"]),
+                Name = Convert.ToString(rd["CurrencyName"]) ?? string.Empty
+            });
+        }
+
+        if (currencies.Count == 0)
+        {
+            currencies.Add(new PurchaseRequisitionCurrencyOption
+            {
+                Id = 1,
+                Name = "VND"
+            });
+        }
+
+        return currencies;
+    }
+
+    // Sinh số PR cho popup Add AT theo stored procedure cũ của hệ thống.
+    private string GetSuggestedAddAtRequestNo()
+    {
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        return GetSuggestedAddAtRequestNo(conn, null);
+    }
+
+    // Sinh số PR trong cùng transaction để tránh lệch dữ liệu khi đang tạo mới chứng từ.
+    private static string GetSuggestedAddAtRequestNo(SqlConnection conn, SqlTransaction? trans)
+    {
+        using var cmd = new SqlCommand("EXEC dbo.HaiAutoNumPR NULL", conn, trans);
+        var result = Convert.ToString(cmd.ExecuteScalar());
+        return string.IsNullOrWhiteSpace(result) ? $"PR{DateTime.Now:ddMMyy}" : result.Trim();
+    }
+
+    // Xác định EmployeeID của người đang đăng nhập để gán làm người lập PR.
+    private int? ResolveCurrentEmployeeId(SqlConnection conn, SqlTransaction trans)
+    {
+        var employeeCode = User?.Identity?.Name;
+        if (string.IsNullOrWhiteSpace(employeeCode))
+        {
+            return null;
+        }
+
+        using var cmd = new SqlCommand("SELECT TOP 1 EmployeeID FROM dbo.MS_Employee WHERE EmployeeCode = @EmployeeCode", conn, trans);
+        cmd.Parameters.Add("@EmployeeCode", SqlDbType.VarChar, 20).Value = employeeCode.Trim();
+
+        var result = cmd.ExecuteScalar();
+        return result == null || result == DBNull.Value ? null : Convert.ToInt32(result);
+    }
+
+    // Tạo mới một PR từ các dòng MR được chọn trong popup Add AT.
+    private int CreatePurchaseRequisitionFromAddAt(IReadOnlyList<PurchaseRequisitionAddAtSourceRow> details)
     {
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
         using var trans = conn.BeginTransaction();
+        var savedFilePaths = new List<string>();
 
         try
         {
-            using (var checkCmd = new SqlCommand("SELECT COUNT(1) FROM dbo.PC_PR WHERE PRID = @PRID", conn, trans))
+            var requestDate = AddAtRequestDate?.Date ?? DateTime.Today;
+            var requestNo = string.IsNullOrWhiteSpace(AddAtRequestNo) ? GetSuggestedAddAtRequestNo(conn, trans) : AddAtRequestNo.Trim();
+            var purchaserId = ResolveCurrentEmployeeId(conn, trans);
+
+            using var headerCmd = new SqlCommand(@"
+INSERT INTO dbo.PC_PR
+(
+    RequestNo,
+    RequestDate,
+    [Description],
+    Currency,
+    [Status],
+    PurId,
+    IsAuto,
+    PostPO
+)
+OUTPUT INSERTED.PRID
+VALUES
+(
+    @RequestNo,
+    @RequestDate,
+    @Description,
+    @Currency,
+    1,
+    @PurId,
+    1,
+    0
+)", conn, trans);
+
+            headerCmd.Parameters.Add("@RequestNo", SqlDbType.VarChar, 50).Value = requestNo;
+            headerCmd.Parameters.Add("@RequestDate", SqlDbType.DateTime).Value = requestDate;
+            headerCmd.Parameters.Add("@Description", SqlDbType.NVarChar, 500).Value = AddAtDescription.Trim();
+            headerCmd.Parameters.Add("@Currency", SqlDbType.TinyInt).Value = AddAtCurrencyId <= 0 ? (byte)1 : AddAtCurrencyId;
+            headerCmd.Parameters.Add("@PurId", SqlDbType.Int).Value = purchaserId.HasValue ? purchaserId.Value : DBNull.Value;
+
+            var newPrId = Convert.ToInt32(headerCmd.ExecuteScalar() ?? 0);
+            if (newPrId <= 0)
             {
-                checkCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = prId;
-                var exists = Convert.ToInt32(checkCmd.ExecuteScalar() ?? 0);
-                if (exists <= 0)
-                {
-                    throw new InvalidOperationException("Selected requisition does not exist.");
-                }
+                throw new InvalidOperationException("Cannot create purchase requisition from Add AT.");
             }
 
-            // 2. Mỗi dòng được ghi vào PC_PRDetail bằng cùng cấu trúc với màn hình detail.
             foreach (var detail in details)
             {
-                InsertDetail(conn, trans, prId, detail);
+                InsertAddAtDetail(conn, trans, newPrId, detail);
+                UpdateMaterialRequestAfterAddAt(conn, trans, detail);
+            }
+
+            if (AddAtAttachment != null)
+            {
+                SaveAddAtAttachment(conn, trans, newPrId, purchaserId, AddAtAttachment, savedFilePaths);
             }
 
             trans.Commit();
+            return newPrId;
         }
         catch
         {
             trans.Rollback();
+            RemoveSavedFiles(savedFilePaths);
             throw;
         }
     }
 
+    // Lưu file đính kèm của Add AT vào thư mục cấu hình và ghi tên file vào bảng PC_PR_Doc.
+    private void SaveAddAtAttachment(SqlConnection conn, SqlTransaction trans, int prId, int? userId, IFormFile attachment, List<string> savedFilePaths)
+    {
+        if (attachment == null || attachment.Length <= 0)
+        {
+            return;
+        }
+
+        var uploadFolder = ResolveAddAtUploadFolder();
+        Directory.CreateDirectory(uploadFolder);
+
+        var savedFileName = BuildAttachmentFileName(attachment.FileName);
+        var fullPath = Path.Combine(uploadFolder, savedFileName);
+
+        using (var stream = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None))
+        {
+            attachment.CopyTo(stream);
+        }
+
+        savedFilePaths.Add(fullPath);
+
+        using var docCmd = new SqlCommand(@"
+INSERT INTO dbo.PC_PR_Doc
+(
+    PRID,
+    FilePath,
+    UploadDate,
+    UserID
+)
+VALUES
+(
+    @PRID,
+    @FilePath,
+    GETDATE(),
+    @UserID
+)", conn, trans);
+
+        docCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = prId;
+        docCmd.Parameters.Add("@FilePath", SqlDbType.NVarChar, 1000).Value = savedFileName;
+        docCmd.Parameters.Add("@UserID", SqlDbType.Int).Value = userId.HasValue ? userId.Value : DBNull.Value;
+        docCmd.ExecuteNonQuery();
+    }
+
+    // Xác định thư mục lưu file theo cấu hình FilePath trong appsettings.json.
+    private string ResolveAddAtUploadFolder()
+    {
+        var configuredPath = _config.GetValue<string>("FilePath");
+        if (string.IsNullOrWhiteSpace(configuredPath))
+        {
+            throw new InvalidOperationException("FilePath is missing in appsettings.json.");
+        }
+
+        return Path.IsPathRooted(configuredPath)
+            ? configuredPath
+            : Path.Combine(_webHostEnvironment.ContentRootPath, configuredPath);
+    }
+
+    // Sinh tên file mới có gắn timestamp để tránh trùng tên khi upload nhiều lần.
+    private static string BuildAttachmentFileName(string originalFileName)
+    {
+        var sourceName = Path.GetFileName(originalFileName);
+        var nameOnly = Path.GetFileNameWithoutExtension(sourceName);
+        var extension = Path.GetExtension(sourceName);
+        var safeName = string.Concat(nameOnly.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries)).Trim();
+        if (string.IsNullOrWhiteSpace(safeName))
+        {
+            safeName = "attachment";
+        }
+
+        var timeLong = DateTime.UtcNow.Ticks;
+        return $"{safeName}_{timeLong}{extension}";
+    }
+
+    // Xóa các file đã ghi ra đĩa nếu transaction lưu PR bị lỗi và phải rollback.
+    private static void RemoveSavedFiles(IEnumerable<string> savedFilePaths)
+    {
+        foreach (var path in savedFilePaths)
+        {
+            try
+            {
+                if (System.IO.File.Exists(path))
+                {
+                    System.IO.File.Delete(path);
+                }
+            }
+            catch
+            {
+                // Không chặn flow rollback nếu việc dọn file tạm bị lỗi.
+            }
+        }
+    }
+
+    // Ghi từng dòng MR đã chọn vào PC_PRDetail theo flow Gen PR cũ.
+    private static void InsertAddAtDetail(SqlConnection conn, SqlTransaction trans, int prId, PurchaseRequisitionAddAtSourceRow detail)
+    {
+        using var detailCmd = new SqlCommand(@"
+INSERT INTO dbo.PC_PRDetail
+(
+    PRID,
+    ItemID,
+    Quantity,
+    UnitPrice,
+    Remark,
+    RecQty,
+    OrdAmount,
+    RecAmount,
+    POed,
+    MRRequestNO,
+    SugQty,
+    SupplierID,
+    PoQuantity,
+    PoQuantitySug,
+    MRDetailID
+)
+VALUES
+(
+    @PRID,
+    @ItemID,
+    @Quantity,
+    @UnitPrice,
+    @Remark,
+    0,
+    @OrdAmount,
+    0,
+    0,
+    @MRRequestNO,
+    @SugQty,
+    NULL,
+    0,
+    @PoQuantitySug,
+    @MRDetailID
+)", conn, trans);
+
+        detailCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = prId;
+        detailCmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = detail.ItemId;
+        detailCmd.Parameters.Add("@Quantity", SqlDbType.Decimal).Value = detail.SugBuy;
+        detailCmd.Parameters.Add("@UnitPrice", SqlDbType.Decimal).Value = detail.UnitPrice;
+        detailCmd.Parameters.Add("@Remark", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(detail.Specification) ? DBNull.Value : detail.Specification.Trim();
+        detailCmd.Parameters.Add("@OrdAmount", SqlDbType.Decimal).Value = detail.SugBuy * detail.UnitPrice;
+        detailCmd.Parameters.Add("@MRRequestNO", SqlDbType.Decimal).Value = detail.RequestNo;
+        detailCmd.Parameters.Add("@SugQty", SqlDbType.Decimal).Value = detail.Buy;
+        detailCmd.Parameters.Add("@PoQuantitySug", SqlDbType.Decimal).Value = detail.SugBuy;
+        detailCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = detail.MrDetailId;
+        detailCmd.ExecuteNonQuery();
+    }
+
+    // Ghi một dòng chi tiết PR theo dữ liệu đang nhập ở màn hình chi tiết.
     internal static void InsertDetail(SqlConnection conn, SqlTransaction trans, int prId, PurchaseRequisitionDetailInput detail)
     {
         using var detailCmd = new SqlCommand(@"
 INSERT INTO dbo.PC_PRDetail
 (
-    PRID, ItemID, Quantity, UnitPrice, Remark, RecQty, OrdAmount, RecAmount,
-    POed, MRRequestNO, SugQty, SupplierID, PoQuantity, PoQuantitySug
+    PRID,
+    ItemID,
+    Quantity,
+    UnitPrice,
+    Remark,
+    RecQty,
+    OrdAmount,
+    RecAmount,
+    POed,
+    MRRequestNO,
+    SugQty,
+    SupplierID,
+    PoQuantity,
+    PoQuantitySug,
+    MRDetailID
 )
 VALUES
 (
-    @PRID, @ItemID, @Quantity, @UnitPrice, @Remark, 0, @OrdAmount, 0,
-    0, NULL, @SugQty, @SupplierID, 0, @PoQuantitySug
+    @PRID,
+    @ItemID,
+    @Quantity,
+    @UnitPrice,
+    @Remark,
+    0,
+    @OrdAmount,
+    0,
+    0,
+    @MRRequestNO,
+    @SugQty,
+    @SupplierID,
+    0,
+    @PoQuantitySug,
+    @MRDetailID
 )", conn, trans);
 
         detailCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = prId;
@@ -743,10 +1127,33 @@ VALUES
         detailCmd.Parameters.Add("@UnitPrice", SqlDbType.Decimal).Value = detail.UnitPrice;
         detailCmd.Parameters.Add("@Remark", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(detail.Remark) ? DBNull.Value : detail.Remark.Trim();
         detailCmd.Parameters.Add("@OrdAmount", SqlDbType.Decimal).Value = detail.QtyPur * detail.UnitPrice;
+        detailCmd.Parameters.Add("@MRRequestNO", SqlDbType.VarChar, 50).Value = string.IsNullOrWhiteSpace(detail.MrRequestNo) ? DBNull.Value : detail.MrRequestNo.Trim();
         detailCmd.Parameters.Add("@SugQty", SqlDbType.Decimal).Value = detail.QtyFromM;
         detailCmd.Parameters.Add("@SupplierID", SqlDbType.Int).Value = detail.SupplierId.HasValue ? detail.SupplierId.Value : DBNull.Value;
-        detailCmd.Parameters.Add("@PoQuantitySug", SqlDbType.Decimal).Value = detail.QtyFromM;
+        detailCmd.Parameters.Add("@PoQuantitySug", SqlDbType.Decimal).Value = detail.QtyPur;
+        detailCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = detail.MrDetailId.HasValue ? detail.MrDetailId.Value : DBNull.Value;
         detailCmd.ExecuteNonQuery();
+    }
+
+    // Cập nhật ngược lại dữ liệu MR sau khi một dòng đã được gom vào PR.
+    private static void UpdateMaterialRequestAfterAddAt(SqlConnection conn, SqlTransaction trans, PurchaseRequisitionAddAtSourceRow detail)
+    {
+        using var updateCmd = new SqlCommand(@"
+UPDATE dbo.MATERIAL_REQUEST_DETAIL
+SET BUY = @RemainBuy,
+    PostedPR = @PostedPR
+WHERE ID = @MRDetailID", conn, trans);
+
+        var remainBuy = detail.Buy - detail.SugBuy;
+        if (remainBuy < 0)
+        {
+            remainBuy = 0;
+        }
+
+        updateCmd.Parameters.Add("@RemainBuy", SqlDbType.Decimal).Value = remainBuy;
+        updateCmd.Parameters.Add("@PostedPR", SqlDbType.Bit).Value = remainBuy <= 0;
+        updateCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = detail.MrDetailId;
+        updateCmd.ExecuteNonQuery();
     }
 
     internal static void BindSearchParams(SqlCommand cmd, PurchaseRequisitionFilter filter)
@@ -969,42 +1376,78 @@ VALUES
         ModelState.Remove(key);
     }
 
-    // Thực hiện xử lý cho hàm ParseAddAtDetails theo nghiệp vụ của màn hình.
-    private List<PurchaseRequisitionDetailInput> ParseAddAtDetails()
+    // Phân tích danh sách dòng MR người dùng đã chọn trong popup Add AT.
+    private List<PurchaseRequisitionAddAtSourceRow> ParseAddAtSourceRows()
     {
-        if (string.IsNullOrWhiteSpace(AddAtDetailsJson)) return new List<PurchaseRequisitionDetailInput>();
+        if (string.IsNullOrWhiteSpace(AddAtDetailsJson)) return new List<PurchaseRequisitionAddAtSourceRow>();
 
         try
         {
-            var details = JsonSerializer.Deserialize<List<PurchaseRequisitionDetailInput>>(AddAtDetailsJson, new JsonSerializerOptions
+            var details = JsonSerializer.Deserialize<List<PurchaseRequisitionAddAtSourceRow>>(AddAtDetailsJson, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             });
-            return details ?? new List<PurchaseRequisitionDetailInput>();
+            return details ?? new List<PurchaseRequisitionAddAtSourceRow>();
         }
         catch
         {
             ModelState.AddModelError(string.Empty, "Detail data format is invalid.");
-            return new List<PurchaseRequisitionDetailInput>();
+            return new List<PurchaseRequisitionAddAtSourceRow>();
         }
     }
 
-    // Thực hiện xử lý cho hàm ValidateDetail theo nghiệp vụ của màn hình.
-    private void ValidateDetail(PurchaseRequisitionDetailInput detail, int rowNo)
+    // Kiểm tra từng dòng MR trước khi tạo PR từ popup Add AT.
+    private void ValidateAddAtSourceRow(PurchaseRequisitionAddAtSourceRow detail, int rowNo)
     {
         if (detail.ItemId <= 0)
         {
             ModelState.AddModelError(string.Empty, $"Row {rowNo}: Item is required.");
         }
 
-        if (detail.QtyPur <= 0)
+        if (detail.SugBuy <= 0)
         {
-            ModelState.AddModelError(string.Empty, $"Row {rowNo}: QtyPur must be greater than 0.");
+            ModelState.AddModelError(string.Empty, $"Row {rowNo}: SugBuy must be greater than 0.");
         }
 
-        if (detail.QtyFromM < 0 || detail.UnitPrice < 0)
+        if (detail.SugBuy > detail.Buy)
         {
-            ModelState.AddModelError(string.Empty, $"Row {rowNo}: QtyFromM and U.Price must be valid numbers.");
+            ModelState.AddModelError(string.Empty, $"Row {rowNo}: SugBuy cannot be greater than BUY.");
+        }
+
+        if (detail.Buy < 0 || detail.UnitPrice < 0)
+        {
+            ModelState.AddModelError(string.Empty, $"Row {rowNo}: BUY and UnitPrice must be valid numbers.");
+        }
+
+        if (detail.MrDetailId <= 0)
+        {
+            ModelState.AddModelError(string.Empty, $"Row {rowNo}: MR detail is invalid.");
+        }
+    }
+
+    // Kiểm tra loại file và dung lượng file đính kèm theo cấu hình trong appsettings.json.
+    private void ValidateAddAtAttachment()
+    {
+        if (AddAtAttachment == null || AddAtAttachment.Length <= 0)
+        {
+            return;
+        }
+
+        var allowedExtensions = (AllowedAttachmentExtensionsText ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => x.StartsWith('.') ? x.ToLowerInvariant() : $".{x.ToLowerInvariant()}")
+            .ToHashSet();
+
+        var fileExtension = Path.GetExtension(AddAtAttachment.FileName)?.ToLowerInvariant() ?? string.Empty;
+        if (allowedExtensions.Count > 0 && !allowedExtensions.Contains(fileExtension))
+        {
+            ModelState.AddModelError(string.Empty, $"Attachment file type is invalid. Allowed types: {string.Join(", ", allowedExtensions)}.");
+        }
+
+        var maxFileSizeBytes = MaxAttachmentSizeMb * 1024 * 1024L;
+        if (maxFileSizeBytes > 0 && AddAtAttachment.Length > maxFileSizeBytes)
+        {
+            ModelState.AddModelError(string.Empty, $"Attachment size cannot exceed {MaxAttachmentSizeMb} MB.");
         }
     }
 
@@ -1183,6 +1626,12 @@ public class PurchaseRequisitionSupplierLookup
     public string SupplierName { get; set; } = string.Empty;
 }
 
+public class PurchaseRequisitionCurrencyOption
+{
+    public byte Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
 public class PurchaseRequisitionDetailInput
 {
     public long DetailId { get; set; }
@@ -1196,7 +1645,27 @@ public class PurchaseRequisitionDetailInput
     public string? Remark { get; set; }
     public int? SupplierId { get; set; }
     public string SupplierText { get; set; } = string.Empty;
+    public string MrRequestNo { get; set; } = string.Empty;
+    public int? MrDetailId { get; set; }
 }
+
+public class PurchaseRequisitionAddAtSourceRow
+{
+    public decimal RequestNo { get; set; }
+    public int ItemId { get; set; }
+    public string ItemCode { get; set; } = string.Empty;
+    public string ItemName { get; set; } = string.Empty;
+    public string Unit { get; set; } = string.Empty;
+    public decimal Buy { get; set; }
+    public decimal SugBuy { get; set; }
+    public decimal UnitPrice { get; set; }
+    public string Specification { get; set; } = string.Empty;
+    public string Note { get; set; } = string.Empty;
+    public int MrDetailId { get; set; }
+}
+
+
+
 
 
 

@@ -7,17 +7,81 @@
             canViewDetail: false,
             canAddAt: false,
             canDisapproval: false,
-            detailUrlBase: ""
+            detailUrlBase: "",
+            allowedAttachmentExtensions: ".doc,.docx,.xls,.xlsx,.pdf,.jpg,.jpeg,.png",
+            maxAttachmentSizeMb: 10
         };
     }
 
+    function showDangerModal(message) {
+        const dangerModal = document.getElementById("prqDangerModal");
+        const messageEl = document.getElementById("prqDangerModalMessage");
+        if (!dangerModal || !messageEl || !window.jQuery) {
+            return;
+        }
+
+        messageEl.textContent = String(message ?? "").trim();
+        window.jQuery(dangerModal).modal("show");
+    }
+
     function toNumber(value) {
-        const n = Number.parseFloat(value);
+        const normalized = String(value ?? "")
+            .trim()
+            .replace(/,/g, "");
+        const n = Number.parseFloat(normalized);
         return Number.isFinite(n) ? n : 0;
     }
 
     function formatNumber(value) {
-        return toNumber(value).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        const number = toNumber(value);
+        const negative = number < 0;
+        const absolute = Math.abs(number);
+        const parts = absolute.toFixed(3).split(".");
+        const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        const decimalPart = parts[1].replace(/0+$/, "");
+        return `${negative ? "-" : ""}${integerPart}${decimalPart ? `.${decimalPart}` : ""}`;
+    }
+
+    function sanitizeNonNegativeDecimal(value) {
+        let normalized = String(value ?? "")
+            .replace(/,/g, "")
+            .replace(/[^0-9.]/g, "");
+
+        const firstDotIndex = normalized.indexOf(".");
+        if (firstDotIndex >= 0) {
+            normalized = normalized.slice(0, firstDotIndex + 1) + normalized.slice(firstDotIndex + 1).replace(/\./g, "");
+        }
+
+        return normalized;
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    function buildCollapsibleText(value, previewLength = 40) {
+        const text = String(value ?? "").trim();
+        if (!text) {
+            return "";
+        }
+
+        if (text.length <= previewLength) {
+            return `<div class="prq-description-cell prq-add-at-text-cell"><span class="prq-description-full">${escapeHtml(text)}</span></div>`;
+        }
+
+        const preview = `${escapeHtml(text.slice(0, previewLength))}...`;
+        const full = escapeHtml(text);
+        return `
+            <div class="prq-description-cell prq-add-at-text-cell">
+                <span class="prq-description-preview">${preview}</span>
+                <button type="button" class="prq-read-more">Read more</button>
+                <span class="prq-description-full d-none">${full}</span>
+            </div>`;
     }
 
     function buildDetailUrl(id, mode) {
@@ -257,181 +321,292 @@
     function initAddAt() {
         const addAtBtn = document.getElementById("prqAddAtBtn");
         const addAtModal = document.getElementById("prqAddAtModal");
-        const requestNoEl = document.getElementById("prqAddAtRequestNo");
-        const selectedPrIdEl = document.getElementById("SelectedPrId");
         const detailsJsonEl = document.getElementById("AddAtDetailsJson");
+        const requestNoHiddenEl = document.getElementById("AddAtRequestNo");
+        const requestDateHiddenEl = document.getElementById("AddAtRequestDate");
+        const currencyIdHiddenEl = document.getElementById("AddAtCurrencyId");
+        const requestNoDisplayEl = document.getElementById("prqAddAtRequestNoDisplay");
+        const requestDateDisplayEl = document.getElementById("prqAddAtRequestDateDisplay");
+        const currencySelectEl = document.getElementById("prqAddAtCurrencySelect");
+        const descriptionEl = document.getElementById("prqAddAtDescription");
+        const attachmentEl = document.getElementById("prqAddAtAttachments");
+        const attachmentErrorEl = document.getElementById("prqAddAtAttachmentError");
         const addAtForm = document.getElementById("prqAddAtForm");
         const rowsContainer = document.getElementById("prqAddAtDetailRows");
         const emptyRow = document.getElementById("prqAddAtDetailEmptyRow");
-        const detailModal = document.getElementById("prqAddAtDetailModal");
-        const addDetailBtn = document.getElementById("btnAddAtDetailConfirm");
-        const itemSelect = document.getElementById("addAtDetailItemId");
-        const unitInput = document.getElementById("addAtDetailUnit");
-        const supplierSelect = document.getElementById("addAtDetailSupplierId");
-        const qtyFromM = document.getElementById("addAtDetailQtyFromM");
-        const qtyPur = document.getElementById("addAtDetailQtyPur");
-        const unitPrice = document.getElementById("addAtDetailUnitPrice");
-        const amountInput = document.getElementById("addAtDetailAmount");
-        const remarkInput = document.getElementById("addAtDetailRemark");
-        if (!addAtBtn || !addAtModal || !requestNoEl || !selectedPrIdEl || !detailsJsonEl || !addAtForm || !rowsContainer || !emptyRow) return;
+        if (!addAtBtn || !addAtModal || !detailsJsonEl || !requestNoHiddenEl || !requestDateHiddenEl || !currencyIdHiddenEl || !requestNoDisplayEl || !requestDateDisplayEl || !currencySelectEl || !descriptionEl || !attachmentEl || !attachmentErrorEl || !addAtForm || !rowsContainer || !emptyRow) return;
 
-        const details = [];
-        const getSelectedRows = () => typeof window.getPrqSelectedRows === "function"
-            ? window.getPrqSelectedRows()
-            : Array.from(document.querySelectorAll(".prq-row")).filter((row) => row.querySelector(".prq-selector")?.checked);
+        let sourceRows = [];
+        let isLoading = false;
+        const config = getConfig();
+        const allowedExtensions = String(config.allowedAttachmentExtensions || "")
+            .split(",")
+            .map((item) => item.trim().toLowerCase())
+            .filter((item) => item);
+        const maxFileSizeBytes = Number(config.maxAttachmentSizeMb || 0) * 1024 * 1024;
 
-        const updateAddAtButtonState = () => {
-            addAtBtn.disabled = getSelectedRows().length !== 1 || !getConfig().canAddAt;
+        const showAttachmentError = (message) => {
+            attachmentErrorEl.textContent = message;
+            attachmentErrorEl.classList.remove("d-none");
         };
 
-        const syncHiddenInput = () => {
-            detailsJsonEl.value = JSON.stringify(details.map((x) => ({
-                itemId: x.itemId,
-                itemCode: x.itemCode,
-                itemName: x.itemName,
-                unit: x.unit,
-                qtyFromM: x.qtyFromM,
-                qtyPur: x.qtyPur,
-                unitPrice: x.unitPrice,
-                remark: x.remark,
-                supplierId: x.supplierId,
-                supplierText: x.supplierText
-            })));
+        const clearAttachmentError = () => {
+            attachmentErrorEl.textContent = "";
+            attachmentErrorEl.classList.add("d-none");
+        };
+
+        const validateAttachment = () => {
+            clearAttachmentError();
+
+            const file = attachmentEl.files && attachmentEl.files.length ? attachmentEl.files[0] : null;
+            if (!file) {
+                return true;
+            }
+
+            const fileName = String(file.name || "");
+            const dotIndex = fileName.lastIndexOf(".");
+            const extension = dotIndex >= 0 ? fileName.substring(dotIndex).toLowerCase() : "";
+            if (allowedExtensions.length && !allowedExtensions.includes(extension)) {
+                showAttachmentError(`Attachment file type is invalid. Allowed: ${config.allowedAttachmentExtensions}`);
+                attachmentEl.value = "";
+                return false;
+            }
+
+            if (maxFileSizeBytes > 0 && file.size > maxFileSizeBytes) {
+                showAttachmentError(`Attachment size cannot exceed ${config.maxAttachmentSizeMb} MB.`);
+                attachmentEl.value = "";
+                return false;
+            }
+
+            return true;
+        };
+
+        const updateAddAtButtonState = () => {
+            addAtBtn.disabled = !getConfig().canAddAt;
+        };
+
+        const setLoadingState = (loading) => {
+            isLoading = loading;
+            addAtBtn.disabled = loading || !getConfig().canAddAt;
+            const submitBtn = addAtForm.querySelector("button[type='submit']");
+            if (submitBtn) {
+                submitBtn.disabled = loading;
+            }
+
+            if (loading) {
+                emptyRow.style.display = "";
+                emptyRow.querySelector("td").textContent = "Loading MR rows...";
+            } else if (!sourceRows.length) {
+                emptyRow.style.display = "";
+                emptyRow.querySelector("td").textContent = "No MR rows";
+            }
+        };
+
+        const syncHiddenValues = () => {
+            requestNoHiddenEl.value = requestNoDisplayEl.value || "";
+            requestDateHiddenEl.value = requestDateDisplayEl.value || "";
+            currencyIdHiddenEl.value = currencySelectEl.value || "1";
         };
 
         const renderRows = () => {
-            rowsContainer.querySelectorAll("tr[data-row='1']").forEach((x) => x.remove());
-            if (details.length === 0) {
+            rowsContainer.querySelectorAll("tr[data-row='1']").forEach((row) => row.remove());
+            if (!sourceRows.length) {
                 emptyRow.style.display = "";
-                syncHiddenInput();
                 return;
             }
 
             emptyRow.style.display = "none";
-            details.forEach((d, index) => {
+            sourceRows.forEach((row, index) => {
                 const tr = document.createElement("tr");
                 tr.dataset.row = "1";
                 tr.innerHTML = `
-                    <td>${d.itemCode}</td>
-                    <td>${d.itemName}</td>
-                    <td class="prq-center">${d.unit}</td>
-                    <td class="prq-center">${formatNumber(d.qtyFromM)}</td>
-                    <td class="prq-center">${formatNumber(d.qtyPur)}</td>
-                    <td class="prq-center">${formatNumber(d.unitPrice)}</td>
-                    <td class="prq-center">${formatNumber(d.qtyPur * d.unitPrice)}</td>
-                    <td class="prq-center">${d.remark || ""}</td>
-                    <td>${d.supplierText || ""}</td>
-                    <td class="text-center"><button type="button" class="btn btn-xs btn-outline-danger border" data-remove-index="${index}">X</button></td>`;
+                    <td class="text-center">
+                        <input type="checkbox" class="prq-add-at-check" data-index="${index}" ${row.checked ? "checked" : ""} />
+                    </td>
+                    <td>${escapeHtml(row.requestNo)}</td>
+                    <td>${escapeHtml(row.itemCode)}</td>
+                    <td>${escapeHtml(row.itemName)}</td>
+                    <td class="prq-center">${formatNumber(row.buy)}</td>
+                    <td class="prq-center">
+                        <input type="text" inputmode="decimal" class="form-control form-control-sm prq-add-at-sugbuy" data-index="${index}" value="${formatNumber(row.sugBuy)}" />
+                    </td>
+                    <td class="prq-center">${escapeHtml(row.unit)}</td>
+                    <td class="prq-center">${formatNumber(row.unitPrice)}</td>
+                    <td>${buildCollapsibleText(row.specification, 36)}</td>
+                    <td>${buildCollapsibleText(row.note, 34)}</td>`;
                 rowsContainer.appendChild(tr);
             });
-
-            syncHiddenInput();
         };
 
-        const updateAmount = () => {
-            if (!amountInput || !qtyPur || !unitPrice) return;
-            amountInput.value = formatNumber(toNumber(qtyPur.value) * toNumber(unitPrice.value));
+        const syncSelectedRowsJson = () => {
+            const selectedRows = sourceRows
+                .filter((row) => row.checked)
+                .map((row) => ({
+                    requestNo: row.requestNo,
+                    itemId: row.itemId,
+                    itemCode: row.itemCode,
+                    itemName: row.itemName,
+                    unit: row.unit,
+                    buy: row.buy,
+                    sugBuy: row.sugBuy,
+                    unitPrice: row.unitPrice,
+                    specification: row.specification,
+                    note: row.note,
+                    mrDetailId: row.mrDetailId
+                }));
+            detailsJsonEl.value = JSON.stringify(selectedRows);
         };
 
-        const resetDetailFields = () => {
-            if (itemSelect) itemSelect.value = "";
-            if (unitInput) unitInput.value = "";
-            if (supplierSelect) supplierSelect.value = "";
-            if (qtyFromM) qtyFromM.value = "0";
-            if (qtyPur) qtyPur.value = "0";
-            if (unitPrice) unitPrice.value = "0";
-            if (remarkInput) remarkInput.value = "";
-            updateAmount();
+        const resetModal = () => {
+            sourceRows = [];
+            detailsJsonEl.value = "[]";
+            requestNoHiddenEl.value = "";
+            requestDateHiddenEl.value = "";
+            currencyIdHiddenEl.value = "1";
+            requestNoDisplayEl.value = "";
+            requestDateDisplayEl.value = "";
+            currencySelectEl.innerHTML = "";
+            descriptionEl.value = "";
+            attachmentEl.value = "";
+            clearAttachmentError();
+            renderRows();
+        };
+
+        const bindModalData = (payload) => {
+            requestNoDisplayEl.value = payload.requestNo || "";
+            requestDateDisplayEl.value = payload.requestDate || "";
+            currencySelectEl.innerHTML = "";
+
+            (payload.currencies || []).forEach((currency) => {
+                const option = document.createElement("option");
+                option.value = currency.id;
+                option.textContent = `${currency.name}`;
+                if (String(currency.id) === String(payload.currencyId)) {
+                    option.selected = true;
+                }
+                currencySelectEl.appendChild(option);
+            });
+
+            sourceRows = (payload.rows || []).map((row) => ({
+                requestNo: row.requestNo,
+                itemId: row.itemId,
+                itemCode: row.itemCode || "",
+                itemName: row.itemName || "",
+                unit: row.unit || "",
+                buy: toNumber(row.buy),
+                sugBuy: toNumber(row.sugBuy || row.buy),
+                unitPrice: toNumber(row.unitPrice),
+                specification: row.specification || "",
+                note: row.note || "",
+                mrDetailId: Number.parseInt(row.mrDetailId, 10) || 0,
+                checked: false
+            }));
+
+            syncHiddenValues();
+            renderRows();
+        };
+
+        const loadSourceRows = async () => {
+            setLoadingState(true);
+            try {
+                const response = await fetch(`${window.location.pathname}?handler=AddAtSource`, {
+                    headers: { "X-Requested-With": "XMLHttpRequest" }
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.success) {
+                    throw new Error(payload.message || "Cannot load Add AT source data.");
+                }
+                bindModalData(payload);
+            } catch (error) {
+                resetModal();
+                showDangerModal(error.message || "Cannot load Add AT source data.");
+                if (window.jQuery) {
+                    window.jQuery(addAtModal).modal("hide");
+                }
+            } finally {
+                setLoadingState(false);
+            }
         };
 
         addAtBtn.addEventListener("click", () => {
-            const selectedRows = getSelectedRows();
-            if (selectedRows.length !== 1) return;
-            const selectedRow = selectedRows[0];
-            selectedPrIdEl.value = selectedRow.getAttribute("data-prid") || "";
-            requestNoEl.textContent = selectedRow.getAttribute("data-request-no") || "-";
-            details.length = 0;
-            renderRows();
-            resetDetailFields();
-        });
-
-        rowsContainer.addEventListener("click", (ev) => {
-            const btn = ev.target.closest("button[data-remove-index]");
-            if (!btn) return;
-            const index = Number.parseInt(btn.getAttribute("data-remove-index"), 10);
-            if (!Number.isInteger(index) || index < 0 || index >= details.length) return;
-            details.splice(index, 1);
-            renderRows();
-        });
-
-        itemSelect?.addEventListener("change", () => {
-            const selected = itemSelect.selectedOptions[0];
-            if (unitInput) unitInput.value = selected ? (selected.dataset.unit || "") : "";
-        });
-
-        qtyPur?.addEventListener("input", updateAmount);
-        unitPrice?.addEventListener("input", updateAmount);
-        updateAmount();
-
-        addDetailBtn?.addEventListener("click", () => {
-            if (!itemSelect || !supplierSelect || !qtyFromM || !qtyPur || !unitPrice || !remarkInput) return;
-            const selectedItem = itemSelect.selectedOptions[0];
-            if (!selectedItem || !selectedItem.value) {
-                alert("Please select an item.");
-                itemSelect.focus();
-                return;
-            }
-            const qtyPurValue = toNumber(qtyPur.value);
-            if (qtyPurValue <= 0) {
-                alert("QtyPur must be greater than 0.");
-                qtyPur.focus();
-                return;
-            }
-            const supplierOption = supplierSelect.selectedOptions[0];
-            details.push({
-                itemId: Number.parseInt(selectedItem.value, 10),
-                itemCode: selectedItem.dataset.code || "",
-                itemName: selectedItem.dataset.name || "",
-                unit: selectedItem.dataset.unit || "",
-                qtyFromM: toNumber(qtyFromM.value),
-                qtyPur: qtyPurValue,
-                unitPrice: toNumber(unitPrice.value),
-                remark: remarkInput.value.trim(),
-                supplierId: supplierOption && supplierOption.value ? Number.parseInt(supplierOption.value, 10) : null,
-                supplierText: supplierOption && supplierOption.value ? supplierOption.text : ""
-            });
-            renderRows();
-            resetDetailFields();
+            resetModal();
             if (window.jQuery) {
-                window.jQuery(detailModal).modal("hide");
+                window.jQuery(addAtModal).modal("show");
+            }
+            loadSourceRows();
+        });
+
+        currencySelectEl.addEventListener("change", syncHiddenValues);
+        attachmentEl.addEventListener("change", validateAttachment);
+
+        rowsContainer.addEventListener("change", (ev) => {
+            const check = ev.target.closest(".prq-add-at-check");
+            if (check) {
+                const index = Number.parseInt(check.getAttribute("data-index"), 10);
+                if (Number.isInteger(index) && sourceRows[index]) {
+                    sourceRows[index].checked = check.checked;
+                }
+                return;
+            }
+
+            const sugBuyInput = ev.target.closest(".prq-add-at-sugbuy");
+            if (!sugBuyInput) return;
+
+            const index = Number.parseInt(sugBuyInput.getAttribute("data-index"), 10);
+            if (!Number.isInteger(index) || !sourceRows[index]) return;
+
+            const parsedValue = toNumber(sugBuyInput.value);
+            sourceRows[index].sugBuy = parsedValue;
+            sugBuyInput.value = formatNumber(parsedValue);
+        });
+
+        rowsContainer.addEventListener("input", (ev) => {
+            const sugBuyInput = ev.target.closest(".prq-add-at-sugbuy");
+            if (!sugBuyInput) return;
+
+            const sanitizedValue = sanitizeNonNegativeDecimal(sugBuyInput.value);
+            if (sugBuyInput.value !== sanitizedValue) {
+                sugBuyInput.value = sanitizedValue;
             }
         });
 
         addAtForm.addEventListener("submit", (ev) => {
-            const selectedRows = getSelectedRows();
-            if (selectedRows.length !== 1) {
+            if (isLoading) {
                 ev.preventDefault();
-                alert("Please select exactly one requisition row.");
                 return;
             }
-            if (details.length === 0) {
+
+            syncHiddenValues();
+
+            if (!validateAttachment()) {
                 ev.preventDefault();
-                alert("Please add at least one detail row.");
                 return;
             }
-            selectedPrIdEl.value = selectedRows[0].getAttribute("data-prid") || "";
-            syncHiddenInput();
+
+            const selectedRows = sourceRows.filter((row) => row.checked);
+            if (!selectedRows.length) {
+                ev.preventDefault();
+                showDangerModal("Please select at least one MR row.");
+                return;
+            }
+
+            const invalidRow = selectedRows.find((row) => row.sugBuy <= 0 || row.sugBuy > row.buy);
+            if (invalidRow) {
+                ev.preventDefault();
+                showDangerModal("SugBuy must be greater than 0 and cannot be greater than BUY.");
+                return;
+            }
+
+            syncSelectedRowsJson();
         });
 
         if (window.jQuery) {
             window.jQuery(addAtModal).on("hidden.bs.modal", () => {
-                details.length = 0;
-                renderRows();
-                resetDetailFields();
+                resetModal();
+                updateAddAtButtonState();
             });
         }
 
-        document.addEventListener("prq:selection-changed", updateAddAtButtonState);
         updateAddAtButtonState();
     }
 

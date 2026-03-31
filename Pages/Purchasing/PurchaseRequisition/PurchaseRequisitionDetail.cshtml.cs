@@ -1,8 +1,13 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿
+using System.ComponentModel.DataAnnotations;
 using System.Data;
+using System.Net;
+using System.Net.Mail;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Data.SqlClient;
 using SmartSam.Helpers;
 using SmartSam.Pages;
@@ -20,6 +25,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
     private readonly PermissionService _permissionService;
     private readonly ISecurityService _securityService;
     private readonly ILogger<PurchaseRequisitionDetailModel> _logger;
+    private PurchaseRequisitionWorkflowUserInfo _workflowUser = new PurchaseRequisitionWorkflowUserInfo();
 
     // Khởi tạo các service và thành phần cần dùng cho màn hình chi tiết phiếu đề nghị mua hàng.
     public PurchaseRequisitionDetailModel(IConfiguration config, PermissionService permissionService, ISecurityService securityService, ILogger<PurchaseRequisitionDetailModel> logger) : base(config)
@@ -30,8 +36,16 @@ public class PurchaseRequisitionDetailModel : BasePageModel
     }
 
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
-    public bool CanSave { get; set; }
+    public bool CanSave { get; private set; }
+    public bool CanApproveWorkflow { get; private set; }
+    public bool CanDisapproveWorkflow { get; private set; }
+    public bool CanResetToNew { get; private set; }
+    public bool CanMoveToMr { get; private set; }
+    public bool CanManageAttachments { get; private set; }
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
+    public decimal TotalAmount { get; private set; }
+    public string AllowedAttachmentExtensionsText => _config.GetValue<string>("AllowedExtensions") ?? ".doc,.docx,.xls,.xlsx,.pdf,.jpg,.jpeg,.png";
+    public int MaxAttachmentSizeMb => _config.GetValue<int?>("MaxFileSizeMb") ?? 10;
 
     [BindProperty(SupportsGet = true)]
     public string Mode { get; set; } = "add";
@@ -42,6 +56,12 @@ public class PurchaseRequisitionDetailModel : BasePageModel
     [BindProperty]
     public string DetailsJson { get; set; } = "[]";
 
+    [BindProperty]
+    public long SelectedDetailId { get; set; }
+
+    [BindProperty]
+    public IFormFile? AttachmentUpload { get; set; }
+
     [TempData]
     public string? Message { get; set; }
 
@@ -51,26 +71,24 @@ public class PurchaseRequisitionDetailModel : BasePageModel
     public List<SelectListItem> StatusList { get; set; } = new List<SelectListItem>();
     public List<PurchaseRequisitionItemLookup> ItemList { get; set; } = new List<PurchaseRequisitionItemLookup>();
     public List<PurchaseRequisitionSupplierLookup> SupplierList { get; set; } = new List<PurchaseRequisitionSupplierLookup>();
+    public List<PurchaseRequisitionAttachmentViewModel> AttachmentList { get; set; } = new List<PurchaseRequisitionAttachmentViewModel>();
 
-    // Xử lý tải dữ liệu ban đầu của màn hình.
+    // Tải dữ liệu ban đầu của màn hình chi tiết theo chế độ add, edit hoặc view.
     public IActionResult OnGet(int? id, string mode = "view")
     {
         PagePerm = GetUserPermissions();
         Mode = string.IsNullOrWhiteSpace(mode) ? "view" : mode.Trim().ToLowerInvariant();
-
-        // 2. Luôn nạp dữ liệu dropdown để màn hình hiển thị đầy đủ khi add, edit hoặc view.
         LoadAllDropdowns();
+        LoadCurrentWorkflowUser();
 
         if (id.HasValue && id.Value > 0)
         {
-            // 3. Trường hợp mở bản ghi sẵn có thì phải nạp header và detail trước.
             LoadPurchaseRequisition(id.Value);
             if (Requisition.Id <= 0)
             {
                 return NotFound();
             }
 
-            // 4. Quyền xem và sửa phải bám theo quyền hiệu lực của đúng trạng thái chứng từ.
             var effectivePermissions = GetEffectivePermissionsByStatus(Requisition.Status);
             if (!effectivePermissions.Contains(PermissionViewDetail))
             {
@@ -88,7 +106,6 @@ public class PurchaseRequisitionDetailModel : BasePageModel
         }
         else
         {
-            // 5. Trường hợp tạo mới phải kiểm tra quyền Add theo trạng thái khởi tạo mặc định.
             var effectivePermissions = GetEffectivePermissionsByStatus(1);
             if (!effectivePermissions.Contains(PermissionAdd))
             {
@@ -103,43 +120,57 @@ public class PurchaseRequisitionDetailModel : BasePageModel
                 RequestNo = GetSuggestedRequestNo(DateTime.Today),
                 RequestDate = DateTime.Today,
                 Currency = 1,
-                Status = StatusList.Count > 0 && byte.TryParse(StatusList[0].Value, out var statusId) ? statusId : (byte)1
+                Status = 1
             };
             DetailsJson = "[]";
+            TotalAmount = 0;
         }
 
-        // 6. Cờ CanSave quyết định form có được phép nhập liệu và lưu hay không.
-        CanSave = Mode == "add"
-            ? GetEffectivePermissionsByStatus(1).Contains(PermissionAdd)
-            : Mode == "edit" && GetEffectivePermissionsByStatus(Requisition.Status).Contains(PermissionEdit);
-
+        SetActionFlags();
         return Page();
     }
 
-    // Thực hiện xử lý cho hàm OnPost theo nghiệp vụ của màn hình.
+    // Lưu dữ liệu header và detail của phiếu đề nghị mua hàng.
     public IActionResult OnPost()
     {
         PagePerm = GetUserPermissions();
         LoadAllDropdowns();
+        LoadCurrentWorkflowUser();
 
         var isNew = Requisition.Id <= 0;
         Mode = isNew ? "add" : (string.IsNullOrWhiteSpace(Mode) ? "edit" : Mode.Trim().ToLowerInvariant());
 
-        // 2. Quyền lưu phụ thuộc vào việc đang tạo mới hay đang sửa bản ghi hiện hữu.
+        if (!isNew)
+        {
+            var requestNo = Requisition.RequestNo;
+            var requestDate = Requisition.RequestDate;
+            var description = Requisition.Description;
+            var currency = Requisition.Currency;
+            LoadExistingWorkflowData(Requisition.Id);
+            Requisition.RequestNo = requestNo;
+            Requisition.RequestDate = requestDate;
+            Requisition.Description = description;
+            Requisition.Currency = currency;
+        }
+
         var effectivePermissions = isNew
             ? GetEffectivePermissionsByStatus(1)
             : GetEffectivePermissionsByStatus(Requisition.Status);
         if (isNew && !effectivePermissions.Contains(PermissionAdd) || !isNew && !effectivePermissions.Contains(PermissionEdit))
         {
             ModelState.AddModelError(string.Empty, "You have no permission to save requisition.");
-            CanSave = false;
+            SetActionFlags();
             return Page();
         }
 
-        CanSave = !IsViewMode;
-
-        // 3. Parse các dòng chi tiết và kiểm tra dữ liệu bắt buộc trước khi lưu.
         var details = ParseDetails();
+        TotalAmount = details.Sum(x => x.QtyPur * x.UnitPrice);
+
+        if (string.IsNullOrWhiteSpace(Requisition.Description))
+        {
+            ModelState.AddModelError("Requisition.Description", "Description is required.");
+        }
+
         if (details.Count == 0)
         {
             ModelState.AddModelError(string.Empty, "Please add at least one detail row.");
@@ -152,12 +183,19 @@ public class PurchaseRequisitionDetailModel : BasePageModel
 
         if (!ModelState.IsValid)
         {
+            AttachmentList = Requisition.Id > 0 ? LoadAttachmentRows(Requisition.Id) : new List<PurchaseRequisitionAttachmentViewModel>();
+            Message = string.Join(" ", ModelState.Values
+                .SelectMany(x => x.Errors)
+                .Select(x => x.ErrorMessage)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct());
+            MessageType = "error";
+            SetActionFlags();
             return Page();
         }
 
         try
         {
-            // 4. Header và detail luôn được lưu trong cùng một transaction để tránh lệch dữ liệu.
             SavePurchaseRequisition(details);
             TempData["Message"] = "Purchase requisition saved successfully.";
             TempData["MessageType"] = "success";
@@ -166,17 +204,494 @@ public class PurchaseRequisitionDetailModel : BasePageModel
         catch (InvalidOperationException ex)
         {
             ModelState.AddModelError(string.Empty, ex.Message);
-            return Page();
+            Message = ex.Message;
+            MessageType = "error";
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Cannot save purchase requisition.");
             ModelState.AddModelError(string.Empty, $"Cannot save purchase requisition. {ex.Message}");
-            return Page();
+            Message = $"Cannot save purchase requisition. {ex.Message}";
+            MessageType = "error";
         }
+
+        AttachmentList = Requisition.Id > 0 ? LoadAttachmentRows(Requisition.Id) : new List<PurchaseRequisitionAttachmentViewModel>();
+        SetActionFlags();
+        return Page();
     }
 
-    // Thực hiện xử lý cho hàm LoadAllDropdowns theo nghiệp vụ của màn hình.
+    // Chuyển một dòng item từ PR trở lại MR theo đúng liên kết MRDetailID của dòng chi tiết.
+    public IActionResult OnPostToMr()
+    {
+        var prepareResult = PrepareExistingRecordForPost();
+        if (prepareResult != null)
+        {
+            return prepareResult;
+        }
+
+        if (!CanMoveToMr)
+        {
+            TempData["Message"] = "You have no permission to move item back to MR.";
+            TempData["MessageType"] = "warning";
+            return RedirectToCurrentDetail("edit");
+        }
+
+        if (SelectedDetailId <= 0)
+        {
+            TempData["Message"] = "Please select one detail row to move back to MR.";
+            TempData["MessageType"] = "warning";
+            return RedirectToCurrentDetail("edit");
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        using var trans = conn.BeginTransaction();
+
+        try
+        {
+            long recordId;
+            int mrDetailId;
+
+            using (var loadCmd = new SqlCommand(@"
+SELECT RecordID, MRDetailID
+FROM dbo.PC_PRDetail
+WHERE PRID = @PRID
+  AND RecordID = @RecordID", conn, trans))
+            {
+                loadCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
+                loadCmd.Parameters.Add("@RecordID", SqlDbType.BigInt).Value = SelectedDetailId;
+
+                using var rd = loadCmd.ExecuteReader();
+                if (!rd.Read())
+                {
+                    throw new InvalidOperationException("Detail row not found.");
+                }
+
+                recordId = Convert.ToInt64(rd["RecordID"]);
+                if (rd.IsDBNull(rd.GetOrdinal("MRDetailID")))
+                {
+                    throw new InvalidOperationException("Selected detail row has no MR link.");
+                }
+
+                mrDetailId = Convert.ToInt32(rd["MRDetailID"]);
+            }
+
+            using (var updateCmd = new SqlCommand(@"
+UPDATE dbo.MATERIAL_REQUEST_DETAIL
+SET PostedPR = 0
+WHERE ID = @MRDetailID", conn, trans))
+            {
+                updateCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = mrDetailId;
+                updateCmd.ExecuteNonQuery();
+            }
+
+            using (var deleteCmd = new SqlCommand(@"
+DELETE FROM dbo.PC_PRDetail
+WHERE PRID = @PRID
+  AND RecordID = @RecordID", conn, trans))
+            {
+                deleteCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
+                deleteCmd.Parameters.Add("@RecordID", SqlDbType.BigInt).Value = recordId;
+                deleteCmd.ExecuteNonQuery();
+            }
+
+            trans.Commit();
+            TempData["Message"] = "Selected item has been moved back to MR.";
+            TempData["MessageType"] = "success";
+        }
+        catch (Exception ex)
+        {
+            trans.Rollback();
+            TempData["Message"] = ex.Message;
+            TempData["MessageType"] = "error";
+        }
+
+        return RedirectToPage("./PurchaseRequisitionDetail", new { id = Requisition.Id, mode = "edit" });
+    }
+
+    // Đưa chứng từ về trạng thái New để bắt đầu lại quy trình duyệt.
+    public IActionResult OnPostCstNew()
+    {
+        var prepareResult = PrepareExistingRecordForPost();
+        if (prepareResult != null)
+        {
+            return prepareResult;
+        }
+
+        if (!CanResetToNew)
+        {
+            TempData["Message"] = "You have no permission to reset this requisition to New.";
+            TempData["MessageType"] = "warning";
+            return RedirectToCurrentDetail("edit");
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand(@"
+UPDATE dbo.PC_PR
+SET [Status] = 1,
+    CAId = NULL,
+    CAApproDate = NULL,
+    GDId = NULL,
+    GDApproDate = NULL,
+    edited = 1
+WHERE PRID = @PRID", conn);
+
+        cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
+        conn.Open();
+        cmd.ExecuteNonQuery();
+
+        TempData["Message"] = "Purchase requisition has been reset to New.";
+        TempData["MessageType"] = "success";
+        return RedirectToPage("./PurchaseRequisitionDetail", new { id = Requisition.Id, mode = "edit" });
+    }
+
+    // Duyệt chứng từ theo đúng vai trò PU, CFO hoặc BOD ở bước workflow hiện tại.
+    public IActionResult OnPostApprove()
+    {
+        var prepareResult = PrepareExistingRecordForPost();
+        if (prepareResult != null)
+        {
+            return prepareResult;
+        }
+
+        if (!CanApproveWorkflow)
+        {
+            TempData["Message"] = "You have no permission to approve this requisition.";
+            TempData["MessageType"] = "warning";
+            return RedirectToCurrentDetail();
+        }
+
+        string? notifySubject = null;
+        string? notifyBody = null;
+        List<string> recipients = new List<string>();
+        var approveDate = DateTime.Now.ToString("dd/MM/yyyy");
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        using var trans = conn.BeginTransaction();
+
+        try
+        {
+            if (CanApproveAsPurchaser())
+            {
+                using var cmd = new SqlCommand(@"
+UPDATE dbo.PC_PR
+SET [Status] = 2,
+    PurId = @EmployeeID,
+    PurApproDate = @ApproveDate,
+    edited = 1
+WHERE PRID = @PRID
+  AND ISNULL([Status], 1) = 1", conn, trans);
+
+                cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
+                cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = _workflowUser.EmployeeId;
+                cmd.Parameters.Add("@ApproveDate", SqlDbType.VarChar, 12).Value = approveDate;
+                if (cmd.ExecuteNonQuery() <= 0)
+                {
+                    throw new InvalidOperationException("Approve failed because status changed.");
+                }
+
+                recipients = GetEmailsByWorkflowRole(conn, trans, "CFO");
+                notifySubject = "[Purchase Requisition] Waiting for CFO approve";
+                notifyBody = BuildWorkflowNotifyBody("PURCHASE REQUISITION", "#007bff", "CFO", "waiting for your approval.");
+            }
+            else if (CanApproveAsCfo())
+            {
+                using var cmd = new SqlCommand(@"
+UPDATE dbo.PC_PR
+SET CAId = @EmployeeID,
+    CAApproDate = @ApproveDate,
+    edited = 1
+WHERE PRID = @PRID
+  AND ISNULL([Status], 0) = 2
+  AND CAId IS NULL", conn, trans);
+
+                cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
+                cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = _workflowUser.EmployeeId;
+                cmd.Parameters.Add("@ApproveDate", SqlDbType.VarChar, 12).Value = approveDate;
+                if (cmd.ExecuteNonQuery() <= 0)
+                {
+                    throw new InvalidOperationException("Approve failed because CFO step has been processed.");
+                }
+
+                recipients = GetEmailsByWorkflowRole(conn, trans, "BOD");
+                notifySubject = "[Purchase Requisition] Waiting for BOD approve";
+                notifyBody = BuildWorkflowNotifyBody("PURCHASE REQUISITION", "#17a2b8", "BOD", "waiting for your approval.");
+            }
+            else if (CanApproveAsBod())
+            {
+                using var cmd = new SqlCommand(@"
+UPDATE dbo.PC_PR
+SET GDId = @EmployeeID,
+    GDApproDate = @ApproveDate,
+    [Status] = 4,
+    edited = 1
+WHERE PRID = @PRID
+  AND ISNULL([Status], 0) = 2
+  AND CAId IS NOT NULL
+  AND GDId IS NULL", conn, trans);
+
+                cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
+                cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = _workflowUser.EmployeeId;
+                cmd.Parameters.Add("@ApproveDate", SqlDbType.VarChar, 12).Value = approveDate;
+                if (cmd.ExecuteNonQuery() <= 0)
+                {
+                    throw new InvalidOperationException("Approve failed because BOD step has been processed.");
+                }
+            }
+            else
+            {
+                throw new InvalidOperationException("Current user cannot approve at this step.");
+            }
+
+            trans.Commit();
+        }
+        catch (Exception ex)
+        {
+            trans.Rollback();
+            TempData["Message"] = ex.Message;
+            TempData["MessageType"] = "error";
+            return RedirectToCurrentDetail();
+        }
+
+        if (recipients.Count > 0 && !string.IsNullOrWhiteSpace(notifySubject) && !string.IsNullOrWhiteSpace(notifyBody))
+        {
+            TryQueueWorkflowNotifyEmail(recipients, notifySubject, notifyBody);
+        }
+
+        TempData["Message"] = "Purchase requisition approved successfully.";
+        TempData["MessageType"] = "success";
+        return RedirectToPage("./PurchaseRequisitionDetail", new { id = Requisition.Id, mode = "view" });
+    }
+
+    // Từ chối duyệt chứng từ và chuyển trạng thái sang Pending theo đúng bước đang xử lý.
+    public IActionResult OnPostDisapprove()
+    {
+        var prepareResult = PrepareExistingRecordForPost();
+        if (prepareResult != null)
+        {
+            return prepareResult;
+        }
+
+        if (!CanDisapproveWorkflow)
+        {
+            TempData["Message"] = "You have no permission to disapprove this requisition.";
+            TempData["MessageType"] = "warning";
+            return RedirectToCurrentDetail();
+        }
+
+        var approveDate = DateTime.Now.ToString("dd/MM/yyyy");
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+
+        if (CanApproveAsCfo())
+        {
+            using var cmd = new SqlCommand(@"
+UPDATE dbo.PC_PR
+SET [Status] = 3,
+    CAId = @EmployeeID,
+    CAApproDate = @ApproveDate,
+    edited = 1
+WHERE PRID = @PRID
+  AND ISNULL([Status], 0) = 2
+  AND CAId IS NULL", conn);
+
+            cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
+            cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = _workflowUser.EmployeeId;
+            cmd.Parameters.Add("@ApproveDate", SqlDbType.VarChar, 12).Value = approveDate;
+            cmd.ExecuteNonQuery();
+        }
+        else if (CanApproveAsBod())
+        {
+            using var cmd = new SqlCommand(@"
+UPDATE dbo.PC_PR
+SET [Status] = 3,
+    GDId = @EmployeeID,
+    GDApproDate = @ApproveDate,
+    edited = 1
+WHERE PRID = @PRID
+  AND ISNULL([Status], 0) = 2
+  AND CAId IS NOT NULL
+  AND GDId IS NULL", conn);
+
+            cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
+            cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = _workflowUser.EmployeeId;
+            cmd.Parameters.Add("@ApproveDate", SqlDbType.VarChar, 12).Value = approveDate;
+            cmd.ExecuteNonQuery();
+        }
+
+        TempData["Message"] = "Purchase requisition has been set to Pending.";
+        TempData["MessageType"] = "success";
+        return RedirectToPage("./PurchaseRequisitionDetail", new { id = Requisition.Id, mode = "view" });
+    }
+
+    // Upload file đính kèm cho phiếu PR và ghi tên file vào bảng PC_PR_Doc.
+    public IActionResult OnPostUploadAttachment()
+    {
+        var prepareResult = PrepareExistingRecordForPost();
+        if (prepareResult != null)
+        {
+            return prepareResult;
+        }
+
+        if (!CanManageAttachments)
+        {
+            TempData["Message"] = "You have no permission to upload attachment.";
+            TempData["MessageType"] = "warning";
+            return RedirectToCurrentDetail("edit");
+        }
+
+        if (AttachmentUpload == null || AttachmentUpload.Length <= 0)
+        {
+            TempData["Message"] = "Please select one file to upload.";
+            TempData["MessageType"] = "warning";
+            return RedirectToCurrentDetail("edit");
+        }
+
+        var validationMessage = ValidateAttachment(AttachmentUpload);
+        if (!string.IsNullOrWhiteSpace(validationMessage))
+        {
+            TempData["Message"] = validationMessage;
+            TempData["MessageType"] = "error";
+            return RedirectToCurrentDetail("edit");
+        }
+
+        var savedFilePaths = new List<string>();
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        using var trans = conn.BeginTransaction();
+
+        try
+        {
+            SaveAttachment(conn, trans, Requisition.Id, _workflowUser.EmployeeId, AttachmentUpload, savedFilePaths);
+            trans.Commit();
+            TempData["Message"] = "Attachment uploaded successfully.";
+            TempData["MessageType"] = "success";
+        }
+        catch (Exception ex)
+        {
+            trans.Rollback();
+            RemoveSavedFiles(savedFilePaths);
+            TempData["Message"] = ex.Message;
+            TempData["MessageType"] = "error";
+        }
+
+        return RedirectToCurrentDetail("edit");
+    }
+
+    // Xóa file đính kèm cũ của PR khỏi cả bảng PC_PR_Doc và thư mục lưu file vật lý.
+    public IActionResult OnPostDeleteAttachment(int docId)
+    {
+        var prepareResult = PrepareExistingRecordForPost();
+        if (prepareResult != null)
+        {
+            return prepareResult;
+        }
+
+        if (!CanManageAttachments)
+        {
+            TempData["Message"] = "You have no permission to delete attachment.";
+            TempData["MessageType"] = "warning";
+            return RedirectToCurrentDetail("edit");
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        using var trans = conn.BeginTransaction();
+
+        try
+        {
+            string? fileName = null;
+
+            using (var loadCmd = new SqlCommand(@"
+SELECT FilePath
+FROM dbo.PC_PR_Doc
+WHERE DocID = @DocID
+  AND PRID = @PRID", conn, trans))
+            {
+                loadCmd.Parameters.Add("@DocID", SqlDbType.Int).Value = docId;
+                loadCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
+                fileName = Convert.ToString(loadCmd.ExecuteScalar());
+            }
+
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                throw new InvalidOperationException("Attachment is not found.");
+            }
+
+            using (var deleteCmd = new SqlCommand(@"
+DELETE FROM dbo.PC_PR_Doc
+WHERE DocID = @DocID
+  AND PRID = @PRID", conn, trans))
+            {
+                deleteCmd.Parameters.Add("@DocID", SqlDbType.Int).Value = docId;
+                deleteCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
+                deleteCmd.ExecuteNonQuery();
+            }
+
+            trans.Commit();
+
+            var fullPath = Path.Combine(ResolveUploadFolder(), fileName);
+            if (System.IO.File.Exists(fullPath))
+            {
+                System.IO.File.Delete(fullPath);
+            }
+
+            TempData["Message"] = "Attachment deleted successfully.";
+            TempData["MessageType"] = "success";
+        }
+        catch (Exception ex)
+        {
+            trans.Rollback();
+            TempData["Message"] = ex.Message;
+            TempData["MessageType"] = "error";
+        }
+
+        return RedirectToCurrentDetail("edit");
+    }
+
+    // Tải file đính kèm đã lưu của PR theo DocID.
+    public IActionResult OnGetDownloadAttachment(int docId, int id)
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.AllowedNos.Contains(PermissionViewDetail))
+        {
+            return RedirectToPage("./Index");
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand(@"
+SELECT FilePath
+FROM dbo.PC_PR_Doc
+WHERE DocID = @DocID
+  AND PRID = @PRID", conn);
+
+        cmd.Parameters.Add("@DocID", SqlDbType.Int).Value = docId;
+        cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = id;
+        conn.Open();
+
+        var fileName = Convert.ToString(cmd.ExecuteScalar()) ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return NotFound();
+        }
+
+        var fullPath = Path.Combine(ResolveUploadFolder(), fileName);
+        if (!System.IO.File.Exists(fullPath))
+        {
+            return NotFound();
+        }
+
+        var provider = new FileExtensionContentTypeProvider();
+        if (!provider.TryGetContentType(fullPath, out var contentType))
+        {
+            contentType = "application/octet-stream";
+        }
+
+        return File(System.IO.File.ReadAllBytes(fullPath), contentType, fileName);
+    }
+
+    // Nạp toàn bộ dropdown dùng chung cho form header, detail và file đính kèm.
     private void LoadAllDropdowns()
     {
         LoadStatusList();
@@ -184,16 +699,25 @@ public class PurchaseRequisitionDetailModel : BasePageModel
         LoadSupplierList();
     }
 
-    // Thực hiện xử lý cho hàm LoadPurchaseRequisition theo nghiệp vụ của màn hình.
+    // Nạp đầy đủ dữ liệu header, detail, file đính kèm và tổng tiền của một PR hiện có.
     private void LoadPurchaseRequisition(int id)
     {
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
 
-        // 1. Nạp thông tin header của phiếu đề nghị mua hàng.
         using (var cmd = new SqlCommand(@"
-SELECT PRID, ISNULL(RequestNo, '') AS RequestNo, RequestDate, ISNULL([Description], '') AS [Description],
-       ISNULL(Currency, 1) AS Currency, ISNULL([Status], 1) AS [Status]
+SELECT PRID,
+       ISNULL(RequestNo, '') AS RequestNo,
+       RequestDate,
+       ISNULL([Description], '') AS [Description],
+       ISNULL(Currency, 1) AS Currency,
+       ISNULL([Status], 1) AS [Status],
+       PurId,
+       ISNULL(PurApproDate, '') AS PurApproDate,
+       CAId,
+       ISNULL(CAApproDate, '') AS CAApproDate,
+       GDId,
+       ISNULL(GDApproDate, '') AS GDApproDate
 FROM dbo.PC_PR
 WHERE PRID = @PRID", conn))
         {
@@ -206,22 +730,74 @@ WHERE PRID = @PRID", conn))
                     Id = Convert.ToInt32(rd["PRID"]),
                     RequestNo = Convert.ToString(rd["RequestNo"]) ?? string.Empty,
                     RequestDate = rd.IsDBNull(rd.GetOrdinal("RequestDate")) ? DateTime.Today : Convert.ToDateTime(rd["RequestDate"]),
-                    Description = Convert.ToString(rd["Description"]) ?? string.Empty,
+                    Description = Convert.ToString(rd["Description"]),
                     Currency = Convert.ToInt32(rd["Currency"]),
-                    Status = Convert.ToByte(rd["Status"])
+                    Status = Convert.ToByte(rd["Status"]),
+                    PurId = rd.IsDBNull(rd.GetOrdinal("PurId")) ? null : Convert.ToInt32(rd["PurId"]),
+                    PurApproveDate = Convert.ToString(rd["PurApproDate"]) ?? string.Empty,
+                    CAId = rd.IsDBNull(rd.GetOrdinal("CAId")) ? null : Convert.ToInt32(rd["CAId"]),
+                    CAApproveDate = Convert.ToString(rd["CAApproDate"]) ?? string.Empty,
+                    GDId = rd.IsDBNull(rd.GetOrdinal("GDId")) ? null : Convert.ToInt32(rd["GDId"]),
+                    GDApproveDate = Convert.ToString(rd["GDApproDate"]) ?? string.Empty
                 };
             }
         }
 
         if (Requisition.Id > 0)
         {
-            // 2. Sau khi có header thì nạp tiếp các dòng vật tư chi tiết để đổ ra bảng item.
             var details = LoadDetailRows(conn, Requisition.Id);
             DetailsJson = JsonSerializer.Serialize(details);
+            TotalAmount = details.Sum(x => x.QtyPur * x.UnitPrice);
+            AttachmentList = LoadAttachmentRows(Requisition.Id);
         }
     }
 
-    // Thực hiện xử lý cho hàm LoadDetailRows theo nghiệp vụ của màn hình.
+    // Nạp dữ liệu workflow hiện tại của chứng từ để dùng cho các handler post.
+    private void LoadExistingWorkflowData(int prId)
+    {
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand(@"
+SELECT PRID,
+       ISNULL([Status], 1) AS [Status],
+       PurId,
+       ISNULL(PurApproDate, '') AS PurApproDate,
+       CAId,
+       ISNULL(CAApproDate, '') AS CAApproDate,
+       GDId,
+       ISNULL(GDApproDate, '') AS GDApproDate,
+       ISNULL(RequestNo, '') AS RequestNo,
+       ISNULL([Description], '') AS [Description],
+       RequestDate,
+       ISNULL(Currency, 1) AS Currency
+FROM dbo.PC_PR
+WHERE PRID = @PRID", conn);
+
+        cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = prId;
+        conn.Open();
+        using var rd = cmd.ExecuteReader();
+        if (!rd.Read())
+        {
+            throw new InvalidOperationException("Purchase requisition not found.");
+        }
+
+        Requisition = new PurchaseRequisitionHeader
+        {
+            Id = Convert.ToInt32(rd["PRID"]),
+            Status = Convert.ToByte(rd["Status"]),
+            PurId = rd.IsDBNull(rd.GetOrdinal("PurId")) ? null : Convert.ToInt32(rd["PurId"]),
+            PurApproveDate = Convert.ToString(rd["PurApproDate"]) ?? string.Empty,
+            CAId = rd.IsDBNull(rd.GetOrdinal("CAId")) ? null : Convert.ToInt32(rd["CAId"]),
+            CAApproveDate = Convert.ToString(rd["CAApproDate"]) ?? string.Empty,
+            GDId = rd.IsDBNull(rd.GetOrdinal("GDId")) ? null : Convert.ToInt32(rd["GDId"]),
+            GDApproveDate = Convert.ToString(rd["GDApproDate"]) ?? string.Empty,
+            RequestNo = Convert.ToString(rd["RequestNo"]) ?? string.Empty,
+            Description = Convert.ToString(rd["Description"]),
+            RequestDate = rd.IsDBNull(rd.GetOrdinal("RequestDate")) ? DateTime.Today : Convert.ToDateTime(rd["RequestDate"]),
+            Currency = Convert.ToInt32(rd["Currency"])
+        };
+    }
+
+    // Nạp toàn bộ dòng item chi tiết, bao gồm cả liên kết ngược về MR để phục vụ thao tác To MR.
     private List<PurchaseRequisitionDetailInput> LoadDetailRows(SqlConnection conn, int prId)
     {
         var rows = new List<PurchaseRequisitionDetailInput>();
@@ -237,7 +813,9 @@ SELECT d.RecordID,
        ISNULL(d.UnitPrice, 0) AS UnitPrice,
        ISNULL(d.Remark, '') AS Remark,
        d.SupplierID,
-       CASE WHEN s.SupplierID IS NULL THEN '' ELSE ISNULL(s.SupplierCode, '') + ' - ' + ISNULL(s.SupplierName, '') END AS SupplierText
+       CASE WHEN s.SupplierID IS NULL THEN '' ELSE ISNULL(s.SupplierCode, '') + ' - ' + ISNULL(s.SupplierName, '') END AS SupplierText,
+       ISNULL(d.MRRequestNO, '') AS MRRequestNO,
+       d.MRDetailID
 FROM dbo.PC_PRDetail d
 LEFT JOIN dbo.INV_ItemList i ON d.ItemID = i.ItemID
 LEFT JOIN dbo.PC_Suppliers s ON d.SupplierID = s.SupplierID
@@ -260,14 +838,53 @@ ORDER BY d.RecordID", conn);
                 UnitPrice = Convert.ToDecimal(rd["UnitPrice"]),
                 Remark = Convert.ToString(rd["Remark"]),
                 SupplierId = rd.IsDBNull(rd.GetOrdinal("SupplierID")) ? null : Convert.ToInt32(rd["SupplierID"]),
-                SupplierText = Convert.ToString(rd["SupplierText"]) ?? string.Empty
+                SupplierText = Convert.ToString(rd["SupplierText"]) ?? string.Empty,
+                MrRequestNo = Convert.ToString(rd["MRRequestNO"]) ?? string.Empty,
+                MrDetailId = rd.IsDBNull(rd.GetOrdinal("MRDetailID")) ? null : Convert.ToInt32(rd["MRDetailID"])
             });
         }
 
         return rows;
     }
 
-    // Thực hiện xử lý cho hàm LoadStatusList theo nghiệp vụ của màn hình.
+    // Nạp danh sách file đính kèm hiện có của PR để hiển thị trong modal Attached Files.
+    private List<PurchaseRequisitionAttachmentViewModel> LoadAttachmentRows(int prId)
+    {
+        var rows = new List<PurchaseRequisitionAttachmentViewModel>();
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand(@"
+SELECT d.DocID,
+       d.PRID,
+       ISNULL(d.FilePath, '') AS FilePath,
+       d.UploadDate,
+       d.UserID,
+       ISNULL(e.EmployeeCode, '') AS EmployeeCode
+FROM dbo.PC_PR_Doc d
+LEFT JOIN dbo.MS_Employee e ON d.UserID = e.EmployeeID
+WHERE d.PRID = @PRID
+ORDER BY d.UploadDate DESC, d.DocID DESC", conn);
+
+        cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = prId;
+        conn.Open();
+
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            rows.Add(new PurchaseRequisitionAttachmentViewModel
+            {
+                DocId = Convert.ToInt32(rd["DocID"]),
+                PrId = Convert.ToInt32(rd["PRID"]),
+                FilePath = Convert.ToString(rd["FilePath"]) ?? string.Empty,
+                UploadDate = rd.IsDBNull(rd.GetOrdinal("UploadDate")) ? null : Convert.ToDateTime(rd["UploadDate"]),
+                UserCode = Convert.ToString(rd["EmployeeCode"]) ?? string.Empty
+            });
+        }
+
+        return rows;
+    }
+
+    // Nạp danh sách trạng thái PR từ bảng danh mục trạng thái.
     private void LoadStatusList()
     {
         StatusList = LoadListFromSql(
@@ -276,7 +893,7 @@ ORDER BY d.RecordID", conn);
             "PRStatusName");
     }
 
-    // Thực hiện xử lý cho hàm LoadItemList theo nghiệp vụ của màn hình.
+    // Nạp danh sách vật tư có thể chọn thêm vào PR bằng màn hình chi tiết.
     private void LoadItemList()
     {
         ItemList = new List<PurchaseRequisitionItemLookup>();
@@ -303,7 +920,7 @@ ORDER BY ItemCode";
         }
     }
 
-    // Thực hiện xử lý cho hàm LoadSupplierList theo nghiệp vụ của màn hình.
+    // Nạp danh sách supplier còn hiệu lực để chọn cho từng item chi tiết nếu cần.
     private void LoadSupplierList()
     {
         SupplierList = new List<PurchaseRequisitionSupplierLookup>();
@@ -329,7 +946,7 @@ ORDER BY SupplierCode";
         }
     }
 
-    // Thực hiện xử lý cho hàm GetSuggestedRequestNo theo nghiệp vụ của màn hình.
+    // Sinh số PR mới theo pattern PRxx/MMyy để dùng cho chứng từ add mới.
     private string GetSuggestedRequestNo(DateTime requestDate)
     {
         var suffix = requestDate.ToString("MMyy");
@@ -348,7 +965,7 @@ WHERE RequestNo LIKE @Prefix", conn);
         return $"PR{(maxNo + 1):00}/{suffix}";
     }
 
-    // Thực hiện xử lý cho hàm SavePurchaseRequisition theo nghiệp vụ của màn hình.
+    // Lưu header và toàn bộ detail hiện tại của PR trong cùng một transaction.
     private void SavePurchaseRequisition(IReadOnlyList<PurchaseRequisitionDetailInput> details)
     {
         var operatorCode = User.Identity?.Name?.Trim() ?? string.Empty;
@@ -360,7 +977,6 @@ WHERE RequestNo LIKE @Prefix", conn);
 
         try
         {
-            // 2. RequestNo là duy nhất, không được phép trùng với bản ghi khác.
             using (var checkCmd = new SqlCommand(@"
 SELECT COUNT(1)
 FROM dbo.PC_PR
@@ -378,7 +994,6 @@ WHERE RequestNo = @RequestNo
 
             if (isNew)
             {
-                // 3. Khi tạo mới, hệ thống tự gán Purchaser theo tài khoản đăng nhập.
                 var purId = ResolvePurchaserId(conn, trans, operatorCode);
                 using var headerCmd = new SqlCommand(@"
 INSERT INTO dbo.PC_PR
@@ -395,7 +1010,7 @@ SELECT CAST(SCOPE_IDENTITY() AS int);", conn, trans);
 
                 headerCmd.Parameters.Add("@RequestNo", SqlDbType.VarChar, 20).Value = Requisition.RequestNo.Trim();
                 headerCmd.Parameters.Add("@RequestDate", SqlDbType.DateTime).Value = Requisition.RequestDate.Date;
-                headerCmd.Parameters.Add("@Description", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(Requisition.Description) ? DBNull.Value : Requisition.Description.Trim();
+                headerCmd.Parameters.Add("@Description", SqlDbType.NVarChar, 500).Value = Requisition.Description!.Trim();
                 headerCmd.Parameters.Add("@Currency", SqlDbType.Int).Value = Requisition.Currency;
                 headerCmd.Parameters.Add("@Status", SqlDbType.TinyInt).Value = Requisition.Status;
                 headerCmd.Parameters.Add("@PurId", SqlDbType.Int).Value = purId.HasValue ? purId.Value : DBNull.Value;
@@ -403,7 +1018,6 @@ SELECT CAST(SCOPE_IDENTITY() AS int);", conn, trans);
             }
             else
             {
-                // 4. Khi sửa, header được cập nhật lại và toàn bộ detail cũ được thay bằng danh sách mới.
                 using var headerCmd = new SqlCommand(@"
 UPDATE dbo.PC_PR
 SET RequestNo = @RequestNo,
@@ -417,7 +1031,7 @@ WHERE PRID = @PRID", conn, trans);
                 headerCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
                 headerCmd.Parameters.Add("@RequestNo", SqlDbType.VarChar, 20).Value = Requisition.RequestNo.Trim();
                 headerCmd.Parameters.Add("@RequestDate", SqlDbType.DateTime).Value = Requisition.RequestDate.Date;
-                headerCmd.Parameters.Add("@Description", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(Requisition.Description) ? DBNull.Value : Requisition.Description.Trim();
+                headerCmd.Parameters.Add("@Description", SqlDbType.NVarChar, 500).Value = Requisition.Description!.Trim();
                 headerCmd.Parameters.Add("@Currency", SqlDbType.Int).Value = Requisition.Currency;
                 headerCmd.Parameters.Add("@Status", SqlDbType.TinyInt).Value = Requisition.Status;
                 headerCmd.ExecuteNonQuery();
@@ -427,7 +1041,6 @@ WHERE PRID = @PRID", conn, trans);
                 deleteCmd.ExecuteNonQuery();
             }
 
-            // 5. Sau khi lưu header thì ghi lại toàn bộ detail hiện tại của chứng từ.
             foreach (var detail in details)
             {
                 IndexModel.InsertDetail(conn, trans, Requisition.Id, detail);
@@ -442,10 +1055,9 @@ WHERE PRID = @PRID", conn, trans);
         }
     }
 
-    // Thực hiện xử lý cho hàm ResolvePurchaserId theo nghiệp vụ của màn hình.
+    // Xác định EmployeeID của Purchaser để gắn cho PR khi tạo mới chứng từ.
     private static int? ResolvePurchaserId(SqlConnection conn, SqlTransaction trans, string operatorCode)
     {
-        // 2. Nếu không tìm thấy thì fallback về các mã đang được dùng để test trong hệ thống.
         using var cmd = new SqlCommand(@"
 SELECT TOP 1 EmployeeID
 FROM dbo.MS_Employee
@@ -464,10 +1076,13 @@ END", conn, trans);
         return result == null || result == DBNull.Value ? null : Convert.ToInt32(result);
     }
 
-    // Thực hiện xử lý cho hàm ParseDetails theo nghiệp vụ của màn hình.
+    // Parse JSON detail do frontend gửi lên thành danh sách object để backend kiểm tra và lưu.
     private List<PurchaseRequisitionDetailInput> ParseDetails()
     {
-        if (string.IsNullOrWhiteSpace(DetailsJson)) return new List<PurchaseRequisitionDetailInput>();
+        if (string.IsNullOrWhiteSpace(DetailsJson))
+        {
+            return new List<PurchaseRequisitionDetailInput>();
+        }
 
         try
         {
@@ -484,7 +1099,7 @@ END", conn, trans);
         }
     }
 
-    // Thực hiện xử lý cho hàm ValidateDetail theo nghiệp vụ của màn hình.
+    // Kiểm tra dữ liệu của từng dòng item trước khi lưu.
     private void ValidateDetail(PurchaseRequisitionDetailInput detail, int rowNo)
     {
         if (detail.ItemId <= 0)
@@ -503,7 +1118,130 @@ END", conn, trans);
         }
     }
 
-    // Lấy tập quyền thực tế của người dùng trên chức năng hiện tại.
+    // Nạp thông tin vai trò workflow của user hiện tại từ bảng MS_Employee.
+    private void LoadCurrentWorkflowUser()
+    {
+        _workflowUser = new PurchaseRequisitionWorkflowUserInfo();
+        var employeeCode = User.Identity?.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(employeeCode))
+        {
+            return;
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand(@"
+SELECT TOP 1 EmployeeID,
+       ISNULL(EmployeeCode, '') AS EmployeeCode,
+       ISNULL(DeptID, 0) AS DeptID,
+       ISNULL(IsPurchaser, 0) AS IsPurchaser,
+       ISNULL(IsCFO, 0) AS IsCFO,
+       ISNULL(IsBOD, 0) AS IsBOD
+FROM dbo.MS_Employee
+WHERE EmployeeCode = @EmployeeCode", conn);
+
+        cmd.Parameters.Add("@EmployeeCode", SqlDbType.VarChar, 50).Value = employeeCode;
+        conn.Open();
+        using var rd = cmd.ExecuteReader();
+        if (!rd.Read())
+        {
+            return;
+        }
+
+        _workflowUser = new PurchaseRequisitionWorkflowUserInfo
+        {
+            EmployeeId = Convert.ToInt32(rd["EmployeeID"]),
+            EmployeeCode = Convert.ToString(rd["EmployeeCode"]) ?? string.Empty,
+            DeptId = Convert.ToInt32(rd["DeptID"]),
+            IsPurchaser = Convert.ToBoolean(rd["IsPurchaser"]),
+            IsCFO = Convert.ToBoolean(rd["IsCFO"]),
+            IsBOD = Convert.ToBoolean(rd["IsBOD"])
+        };
+    }
+
+    // Xác định các nút được phép hiển thị theo trạng thái chứng từ và vai trò workflow hiện tại.
+    private void SetActionFlags()
+    {
+        var effectivePermissions = GetEffectivePermissionsByStatus(Requisition.Status <= 0 ? 1 : Requisition.Status);
+
+        CanSave = Mode == "add"
+            ? effectivePermissions.Contains(PermissionAdd)
+            : Mode == "edit" && effectivePermissions.Contains(PermissionEdit);
+        CanApproveWorkflow = CanApproveCurrentStep();
+        CanDisapproveWorkflow = CanApproveAsCfo() || CanApproveAsBod();
+        CanResetToNew = Requisition.Id > 0 && Requisition.Status != 1 && (_workflowUser.IsPurchaser || IsAdminRole());
+        CanMoveToMr = Requisition.Id > 0 && CanSave && Requisition.Status == 1;
+        CanManageAttachments = Requisition.Id > 0;
+    }
+
+    // Xác định user hiện tại có đang ở bước PU duyệt đầu tiên hay không.
+    private bool CanApproveAsPurchaser()
+    {
+        return Requisition.Id > 0 && Requisition.Status == 1 && (_workflowUser.IsPurchaser || IsAdminRole());
+    }
+
+    // Xác định user hiện tại có đang ở bước CFO duyệt hay không.
+    private bool CanApproveAsCfo()
+    {
+        return Requisition.Id > 0
+            && Requisition.Status == 2
+            && !Requisition.CAId.HasValue
+            && (_workflowUser.IsCFO || IsAdminRole());
+    }
+
+    // Xác định user hiện tại có đang ở bước BOD duyệt hay không.
+    private bool CanApproveAsBod()
+    {
+        return Requisition.Id > 0
+            && Requisition.Status == 2
+            && Requisition.CAId.HasValue
+            && !Requisition.GDId.HasValue
+            && (_workflowUser.IsBOD || IsAdminRole());
+    }
+
+    // Xác định có được bật nút Approve trong bước workflow hiện tại hay không.
+    private bool CanApproveCurrentStep()
+    {
+        return CanApproveAsPurchaser() || CanApproveAsCfo() || CanApproveAsBod();
+    }
+
+    // Chuẩn bị dữ liệu chung cho các handler post làm việc với chứng từ hiện hữu.
+    private IActionResult? PrepareExistingRecordForPost()
+    {
+        PagePerm = GetUserPermissions();
+        LoadAllDropdowns();
+        LoadCurrentWorkflowUser();
+
+        if (Requisition.Id <= 0)
+        {
+            TempData["Message"] = "Purchase requisition is not found.";
+            TempData["MessageType"] = "warning";
+            return RedirectToPage("./Index");
+        }
+
+        try
+        {
+            LoadExistingWorkflowData(Requisition.Id);
+            AttachmentList = LoadAttachmentRows(Requisition.Id);
+            SetActionFlags();
+        }
+        catch (Exception ex)
+        {
+            TempData["Message"] = ex.Message;
+            TempData["MessageType"] = "error";
+            return RedirectToPage("./Index");
+        }
+
+        return null;
+    }
+
+    // Điều hướng quay lại đúng record hiện tại sau khi xử lý workflow hoặc file đính kèm.
+    private IActionResult RedirectToCurrentDetail(string? mode = null)
+    {
+        var currentMode = string.IsNullOrWhiteSpace(mode) ? "view" : mode.Trim().ToLowerInvariant();
+        return RedirectToPage("./PurchaseRequisitionDetail", new { id = Requisition.Id, mode = currentMode });
+    }
+
+    // Lấy tập quyền tĩnh của user trên function Purchase Requisition Detail.
     private PagePermissions GetUserPermissions()
     {
         var isAdmin = IsAdminRole();
@@ -512,19 +1250,17 @@ END", conn, trans);
 
         if (isAdmin)
         {
-            // 1. Admin được cấp danh sách quyền đầy đủ để giao diện mở toàn bộ chức năng.
             permsObj.AllowedNos = Enumerable.Range(1, 20).ToList();
         }
         else
         {
-            // 2. User thường lấy quyền tĩnh của page theo RoleID và FunctionID.
             permsObj.AllowedNos = _permissionService.GetPermissionsForPage(roleId, FUNCTION_ID);
         }
 
         return permsObj;
     }
 
-    // Thực hiện xử lý cho hàm GetEffectivePermissionsByStatus theo nghiệp vụ của màn hình.
+    // Lấy quyền hiệu lực theo trạng thái PR hiện tại để quyết định add, edit hay view.
     private List<int> GetEffectivePermissionsByStatus(int status)
     {
         var isAdmin = IsAdminRole();
@@ -532,24 +1268,304 @@ END", conn, trans);
 
         if (isAdmin)
         {
-            // 1. Admin luôn có đầy đủ quyền hiệu lực trên mọi trạng thái.
             return Enumerable.Range(1, 20).ToList();
         }
 
-        // 2. User thường phải lấy quyền hiệu lực qua SecurityService theo trạng thái hiện tại.
         return _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, status);
     }
 
-    // Thực hiện xử lý cho hàm GetCurrentRoleId theo nghiệp vụ của màn hình.
+    // Lấy RoleID hiện tại từ claim đăng nhập.
     private int GetCurrentRoleId()
     {
         return int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
     }
 
-    // Thực hiện xử lý cho hàm IsAdminRole theo nghiệp vụ của màn hình.
+    // Xác định user hiện tại có phải admin role hay không.
     private bool IsAdminRole()
     {
         return User.FindFirst("IsAdminRole")?.Value == "True";
+    }
+
+    // Lấy danh sách email của người duyệt theo vai trò workflow hiện tại.
+    private List<string> GetEmailsByWorkflowRole(SqlConnection conn, SqlTransaction trans, string workflowRole)
+    {
+        if (string.Equals(workflowRole, "CFO", StringComparison.OrdinalIgnoreCase))
+        {
+            return GetEmailsByFlag(conn, trans, "IsCFO");
+        }
+
+        if (string.Equals(workflowRole, "BOD", StringComparison.OrdinalIgnoreCase))
+        {
+            return GetBodEmails(conn, trans);
+        }
+
+        return new List<string>();
+    }
+
+    // Lấy email theo một cờ bool trong MS_Employee như IsCFO hoặc IsBOD.
+    private static List<string> GetEmailsByFlag(SqlConnection conn, SqlTransaction trans, string flagColumn)
+    {
+        var rows = new List<string>();
+
+        using var cmd = new SqlCommand($@"
+SELECT DISTINCT LTRIM(RTRIM(TheEmail))
+FROM dbo.MS_Employee
+WHERE ISNULL({flagColumn}, 0) = 1
+  AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
+  AND ISNULL(IsActive, 0) = 1", conn, trans);
+
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            var email = Convert.ToString(rd[0]) ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                rows.Add(email.Trim());
+            }
+        }
+
+        return rows.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    // Lấy email BOD, ưu tiên bảng cấu hình SYS_Funtion_LevelProcess nếu hệ thống có bảng này.
+    private List<string> GetBodEmails(SqlConnection conn, SqlTransaction trans)
+    {
+        var rows = new List<string>();
+
+        using var cmd = new SqlCommand(@"
+IF OBJECT_ID('dbo.SYS_Funtion_LevelProcess', 'U') IS NOT NULL
+BEGIN
+    IF EXISTS
+    (
+        SELECT 1
+        FROM sys.columns
+        WHERE object_id = OBJECT_ID('dbo.SYS_Funtion_LevelProcess')
+          AND name = 'Level'
+    )
+    BEGIN
+        SELECT DISTINCT LTRIM(RTRIM(e.TheEmail)) AS TheEmail
+        FROM dbo.MS_Employee e
+        WHERE ISNULL(e.IsBOD, 0) = 1
+          AND ISNULL(LTRIM(RTRIM(e.TheEmail)), '') <> ''
+          AND ISNULL(e.IsActive, 0) = 1;
+        RETURN;
+    END
+END
+
+SELECT DISTINCT LTRIM(RTRIM(TheEmail))
+FROM dbo.MS_Employee
+WHERE ISNULL(IsBOD, 0) = 1
+  AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
+  AND ISNULL(IsActive, 0) = 1", conn, trans);
+
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            var email = Convert.ToString(rd[0]) ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                rows.Add(email.Trim());
+            }
+        }
+
+        return rows.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    // Tạo nội dung mail thông báo workflow cho bước duyệt kế tiếp.
+    private string BuildWorkflowNotifyBody(string title, string color, string roleName, string actionText)
+    {
+        var detailUrl = Url.Page("/Purchasing/PurchaseRequisition/PurchaseRequisitionDetail", values: new
+        {
+            id = Requisition.Id,
+            mode = "view"
+        });
+
+        var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl)
+            ? string.Empty
+            : $"{Request.Scheme}://{Request.Host}{detailUrl}";
+
+        var body = $@"
+<p>Dear {WebUtility.HtmlEncode(roleName)},</p>
+<p>Purchase Requisition <b>{WebUtility.HtmlEncode(Requisition.RequestNo)}</b> is {WebUtility.HtmlEncode(actionText)}</p>
+<ul>
+  <li>Date: <b>{Requisition.RequestDate:dd/MM/yyyy}</b></li>
+  <li>Description: <b>{WebUtility.HtmlEncode(Requisition.Description ?? string.Empty)}</b></li>
+  <li>Total Amount: <b>{TotalAmount:#,##0.00}</b></li>
+</ul>
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Purchase Requisition Detail</a></p>")}
+<p>SmartSam System</p>";
+
+        return EmailTemplateHelper.WrapInNotifyTemplate(title, color, DateTime.Now, body);
+    }
+
+    // Đẩy tác vụ gửi mail ra nền để người dùng không phải chờ kết quả SMTP.
+    private void TryQueueWorkflowNotifyEmail(List<string> recipients, string subject, string htmlBody)
+    {
+        var senderEmail = _config.GetValue<string>("EmailSettings:SenderEmail");
+        var password = _config.GetValue<string>("EmailSettings:Password");
+        var mailServer = _config.GetValue<string>("EmailSettings:MailServer");
+        var mailPort = _config.GetValue<int?>("EmailSettings:MailPort") ?? 0;
+
+        if (recipients.Count == 0 ||
+            string.IsNullOrWhiteSpace(senderEmail) ||
+            string.IsNullOrWhiteSpace(password) ||
+            string.IsNullOrWhiteSpace(mailServer) ||
+            mailPort <= 0)
+        {
+            return;
+        }
+
+        _ = SendNotifyEmailAsync(new PurchaseRequisitionWorkflowNotifyRequestViewModel
+        {
+            SenderEmail = senderEmail,
+            Password = password,
+            MailServer = mailServer,
+            MailPort = mailPort,
+            Subject = subject,
+            HtmlBody = htmlBody,
+            Recipients = recipients
+        });
+    }
+
+    // Gửi mail workflow bằng SMTP với body HTML theo template chung.
+    private async Task SendNotifyEmailAsync(PurchaseRequisitionWorkflowNotifyRequestViewModel notifyRequest)
+    {
+        try
+        {
+            using var mail = new MailMessage
+            {
+                From = new MailAddress(notifyRequest.SenderEmail, "SmartSam System"),
+                Subject = notifyRequest.Subject,
+                Body = notifyRequest.HtmlBody,
+                IsBodyHtml = true
+            };
+
+            foreach (var recipient in notifyRequest.Recipients.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                mail.To.Add(recipient);
+            }
+
+            using var smtp = new SmtpClient(notifyRequest.MailServer, notifyRequest.MailPort)
+            {
+                EnableSsl = true,
+                Credentials = new NetworkCredential(notifyRequest.SenderEmail, notifyRequest.Password)
+            };
+
+            await smtp.SendMailAsync(mail);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Cannot send workflow email for purchase requisition {PrId}.", Requisition.Id);
+        }
+    }
+
+    // Kiểm tra file upload theo danh sách extension và giới hạn dung lượng cấu hình trong appsettings.json.
+    private string? ValidateAttachment(IFormFile file)
+    {
+        var allowedExtensions = AllowedAttachmentExtensionsText
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => x.StartsWith('.') ? x.ToLowerInvariant() : $".{x.ToLowerInvariant()}")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var extension = Path.GetExtension(file.FileName) ?? string.Empty;
+        if (!allowedExtensions.Contains(extension))
+        {
+            return $"Attached file extension is invalid. Allowed: {AllowedAttachmentExtensionsText}";
+        }
+
+        var maxBytes = MaxAttachmentSizeMb * 1024L * 1024L;
+        if (file.Length > maxBytes)
+        {
+            return $"Attached file size must not exceed {MaxAttachmentSizeMb} MB.";
+        }
+
+        return null;
+    }
+
+    // Lưu file đính kèm vật lý và ghi tên file vào bảng PC_PR_Doc.
+    private void SaveAttachment(SqlConnection conn, SqlTransaction trans, int prId, int? userId, IFormFile file, List<string> savedFilePaths)
+    {
+        var uploadFolder = ResolveUploadFolder();
+        Directory.CreateDirectory(uploadFolder);
+
+        var savedFileName = BuildAttachmentFileName(file.FileName);
+        var fullPath = Path.Combine(uploadFolder, savedFileName);
+
+        using (var stream = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None))
+        {
+            file.CopyTo(stream);
+        }
+
+        savedFilePaths.Add(fullPath);
+
+        using var cmd = new SqlCommand(@"
+INSERT INTO dbo.PC_PR_Doc
+(
+    PRID,
+    FilePath,
+    UploadDate,
+    UserID
+)
+VALUES
+(
+    @PRID,
+    @FilePath,
+    GETDATE(),
+    @UserID
+)", conn, trans);
+
+        cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = prId;
+        cmd.Parameters.Add("@FilePath", SqlDbType.NVarChar, 1000).Value = savedFileName;
+        cmd.Parameters.Add("@UserID", SqlDbType.Int).Value = userId.HasValue ? userId.Value : DBNull.Value;
+        cmd.ExecuteNonQuery();
+    }
+
+    // Xác định thư mục lưu file đính kèm từ cấu hình FilePath.
+    private string ResolveUploadFolder()
+    {
+        var configuredPath = _config.GetValue<string>("FilePath");
+        if (string.IsNullOrWhiteSpace(configuredPath))
+        {
+            throw new InvalidOperationException("FilePath is missing in appsettings.json.");
+        }
+
+        return Path.IsPathRooted(configuredPath)
+            ? configuredPath
+            : Path.Combine(Directory.GetCurrentDirectory(), configuredPath);
+    }
+
+    // Sinh tên file mới có thêm ticks để tránh trùng tên khi upload.
+    private static string BuildAttachmentFileName(string originalFileName)
+    {
+        var sourceName = Path.GetFileName(originalFileName);
+        var nameOnly = Path.GetFileNameWithoutExtension(sourceName);
+        var extension = Path.GetExtension(sourceName);
+        var safeName = string.Concat(nameOnly.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries)).Trim();
+        if (string.IsNullOrWhiteSpace(safeName))
+        {
+            safeName = "attachment";
+        }
+
+        return $"{safeName}_{DateTime.UtcNow.Ticks}{extension}";
+    }
+
+    // Xóa file vật lý đã lưu nếu transaction insert file đính kèm bị lỗi và phải rollback.
+    private static void RemoveSavedFiles(IEnumerable<string> savedFilePaths)
+    {
+        foreach (var path in savedFilePaths)
+        {
+            try
+            {
+                if (System.IO.File.Exists(path))
+                {
+                    System.IO.File.Delete(path);
+                }
+            }
+            catch
+            {
+                // Không chặn luồng chính nếu dọn file tạm bị lỗi.
+            }
+        }
     }
 }
 
@@ -564,9 +1580,46 @@ public class PurchaseRequisitionHeader
     [DataType(DataType.Date)]
     public DateTime RequestDate { get; set; } = DateTime.Today;
 
+    [Required(ErrorMessage = "Description is required.")]
     [StringLength(500)]
     public string? Description { get; set; }
 
     public int Currency { get; set; } = 1;
     public byte Status { get; set; }
+    public int? PurId { get; set; }
+    public string PurApproveDate { get; set; } = string.Empty;
+    public int? CAId { get; set; }
+    public string CAApproveDate { get; set; } = string.Empty;
+    public int? GDId { get; set; }
+    public string GDApproveDate { get; set; } = string.Empty;
+}
+
+public class PurchaseRequisitionWorkflowUserInfo
+{
+    public int EmployeeId { get; set; }
+    public string EmployeeCode { get; set; } = string.Empty;
+    public int DeptId { get; set; }
+    public bool IsPurchaser { get; set; }
+    public bool IsCFO { get; set; }
+    public bool IsBOD { get; set; }
+}
+
+public class PurchaseRequisitionAttachmentViewModel
+{
+    public int DocId { get; set; }
+    public int PrId { get; set; }
+    public string FilePath { get; set; } = string.Empty;
+    public DateTime? UploadDate { get; set; }
+    public string UserCode { get; set; } = string.Empty;
+}
+
+public class PurchaseRequisitionWorkflowNotifyRequestViewModel
+{
+    public string SenderEmail { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+    public string MailServer { get; set; } = string.Empty;
+    public int MailPort { get; set; }
+    public string Subject { get; set; } = string.Empty;
+    public string HtmlBody { get; set; } = string.Empty;
+    public List<string> Recipients { get; set; } = new List<string>();
 }
