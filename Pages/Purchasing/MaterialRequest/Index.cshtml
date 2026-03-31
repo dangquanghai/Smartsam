@@ -218,7 +218,7 @@
                         {
                             <button type="button" id="btnCreateAuto" class="btn btn-danger btn-sm">CreateAT</button>
                         }
-                        @if (User.Identity?.IsAuthenticated == true)
+                        @if (Model.CanCreateMr)
                         {
                             <button type="button" id="btnAdd" class="btn btn-success btn-sm">
                                 <i class="fas fa-plus"></i> Create MR
@@ -430,19 +430,4 @@
 @section Scripts {
     @Html.AntiForgeryToken()
     <script src="~/js/Purchasing/MaterialRequest/index.js" asp-append-version="true"></script>
-    <script>
-        $(function () {
-            const defaultPageSize = @Model.DefaultPageSize;
-
-            window.initSimpleDateRange('MrDateRange', '#Filter_FromDate', '#Filter_ToDate', {
-                linkedCalendars: false
-            });
-
-            const fromDate = $('#Filter_FromDate').val();
-            const toDate = $('#Filter_ToDate').val();
-            if (fromDate && toDate) {
-                window.setDateRangeValue('MrDateRange', fromDate, toDate);
-            }
-        });
-    </script>
 }

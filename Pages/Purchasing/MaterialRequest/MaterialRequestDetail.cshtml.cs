@@ -99,10 +99,10 @@ public class MaterialRequestDetailModel : BasePageModel
         {
             if (IsEdit)
             {
-                return (IsAdminUser() || HasPermission(PermissionEdit)) && CurrentStatusId == StatusJustCreated;
+                return CanEditDraftMaterialRequest() && CurrentStatusId == StatusJustCreated;
             }
 
-            return User.Identity?.IsAuthenticated == true || IsAdminUser();
+            return CanEditDraftMaterialRequest();
         }
     }
 
@@ -118,12 +118,17 @@ public class MaterialRequestDetailModel : BasePageModel
 
     public bool CanSubmit
     {
-        get { return IsEdit && (IsAdminUser() || HasPermission(PermissionEdit)) && CurrentStatusId == StatusJustCreated; }
+        get { return IsEdit && CanEditDraftMaterialRequest() && CurrentStatusId == StatusJustCreated; }
     }
 
     public bool CanApprove
     {
         get { return IsEdit && CanApproveStatus(CurrentStatusId, Input.IsAuto); }
+    }
+
+    public bool CanIssue
+    {
+        get { return IsEdit && CurrentStatusId == StatusCollectedToPr; }
     }
 
     public bool CanCalculate
@@ -160,6 +165,11 @@ public class MaterialRequestDetailModel : BasePageModel
 
         if (!IsEdit)
         {
+            if (!CanEditDraftMaterialRequest())
+            {
+                return Forbid();
+            }
+
             if (StoreGroupLocked)
             {
                 Input.StoreGroup = _dataScope.StoreGroup ?? NoScopeStoreGroup;
@@ -327,6 +337,11 @@ public class MaterialRequestDetailModel : BasePageModel
         return await HandleCalculateAsync(cancellationToken);
     }
 
+    public async Task<IActionResult> OnPostIssue(CancellationToken cancellationToken)
+    {
+        return await HandleWorkflowActionAsync(MaterialRequestWorkflowAction.Issue, cancellationToken);
+    }
+
     public async Task<IActionResult> OnPostReject(CancellationToken cancellationToken)
     {
         if (ParseRejectItemLineIds().Count > 0)
@@ -379,6 +394,11 @@ public class MaterialRequestDetailModel : BasePageModel
         var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
         PagePerm = GetUserPermissions();
         var isAuto = existing.IsAuto;
+        if (action == MaterialRequestWorkflowAction.Submit && !CanEditDraftMaterialRequest())
+        {
+            WarningMessage = "You do not have permission to submit this draft.";
+            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
+        }
         var transition = ResolveTransition(action, currentStatus, isAuto);
         if (transition is null)
         {
@@ -642,12 +662,12 @@ public class MaterialRequestDetailModel : BasePageModel
             }
 
             var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
-            if ((!IsAdminUser() && !HasPermission(PermissionEdit)) || currentStatus != StatusJustCreated)
+            if (!CanEditDraftMaterialRequest() || currentStatus != StatusJustCreated)
             {
                 return new JsonResult(new { success = false, message = "You cannot add item at current status." });
             }
         }
-        else if (User.Identity?.IsAuthenticated != true)
+        else if (!CanEditDraftMaterialRequest())
         {
             return new JsonResult(new { success = false, message = "Access denied." });
         }
@@ -976,6 +996,32 @@ public class MaterialRequestDetailModel : BasePageModel
             || HasPermission(7);
     }
 
+    /// <summary>
+    /// Check if the user can create or edit a draft MR.
+    /// Normal scoped users are allowed. Workflow users need Edit permission.
+    /// </summary>
+    /// <returns>True if draft MR actions are allowed.</returns>
+    private bool CanEditDraftMaterialRequest()
+    {
+        if (IsAdminUser())
+        {
+            return true;
+        }
+
+        var isWorkflowUser = _dataScope.IsHeadDept
+            || _dataScope.IsPurchaser
+            || _dataScope.IsCFO
+            || _dataScope.IsBOD
+            || _dataScope.ApprovalLevel >= 2;
+
+        if (!isWorkflowUser)
+        {
+            return User.Identity?.IsAuthenticated == true;
+        }
+
+        return HasPermission(PermissionEdit);
+    }
+
     private bool HasPermission(int permissionNo)
     {
         return PagePerm.HasPermission(permissionNo);
@@ -1075,6 +1121,11 @@ public class MaterialRequestDetailModel : BasePageModel
             return CanApproveStatus(currentStatus, isAuto);
         }
 
+        if (action == MaterialRequestWorkflowAction.Issue)
+        {
+            return currentStatus == StatusCollectedToPr;
+        }
+
         if (action == MaterialRequestWorkflowAction.Reject)
         {
             return CanRejectStatus(currentStatus, isAuto);
@@ -1138,6 +1189,16 @@ public class MaterialRequestDetailModel : BasePageModel
                     null,
                     true,
                     true);
+        }
+
+        if (action == MaterialRequestWorkflowAction.Issue && currentStatus == StatusCollectedToPr)
+        {
+            return new MaterialRequestWorkflowTransition(
+                    StatusIssued,
+                    "Material Request issued.",
+                    null,
+                    null,
+                    null);
         }
 
         if (action == MaterialRequestWorkflowAction.Reject &&
@@ -1223,6 +1284,7 @@ internal enum MaterialRequestWorkflowAction
 {
     Submit,
     Approve,
+    Issue,
     Reject
 }
 

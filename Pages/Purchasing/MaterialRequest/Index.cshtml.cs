@@ -94,6 +94,7 @@ public class IndexModel : BasePageModel
     public List<SelectListItem> Statuses { get; set; } = new List<SelectListItem>();
    public List<MaterialRequestListRowDto> Rows { get; set; } = new List<MaterialRequestListRowDto>();
     public bool CanCreateAutoMr => CanCreateAutoMrCore();
+    public bool CanCreateMr => AllowCreate();
 
     public int TotalRecords { get; set; }
     public int TotalPages
@@ -157,11 +158,11 @@ public class IndexModel : BasePageModel
         }
 
         ApplyDefaultInboxStatusIfNeeded();
+        ApplyDefaultBuyFilterIfNeeded();
         ViewData["CanShowPcCondition"] = AllowShowPcCondition();
         ViewData["CanShowStoreCondition"] = AllowShowStoreCondition();
         ViewData["StoreGroupLocked"] = IsStoreGroupLocked();
         LoadFilters();
-        LoadRowsAsync(cancellationToken).GetAwaiter().GetResult();
         ViewData["DefaultPageSize"] = DefaultPageSize;
     }
 
@@ -593,7 +594,8 @@ public class IndexModel : BasePageModel
             StatusIds = isStoremanMode ? new List<int>() : (Filter.StatusIds ?? new List<int>()),
             ItemCode = isStoremanMode && !string.IsNullOrWhiteSpace(Filter.ItemCode) ? Filter.ItemCode.Trim() : null,
             NoIssue = isStoremanMode && Filter.IssueLessThanOrder ? 1 : null,
-            IsAuto = isStoremanMode ? null : (Filter.AutoOnly ? true : null),
+            // Check = show Auto MR only. Uncheck = hide Auto MR and keep non-auto rows.
+            IsAuto = isStoremanMode ? null : (Filter.AutoOnly ? true : false),
             BuyGreaterThanZero = isStoremanMode ? null : (Filter.BuyGreaterThanZero ? true : null),
             FromDate = Filter.FromDate?.Date,
             ToDate = Filter.ToDate?.Date,
@@ -762,7 +764,7 @@ public class IndexModel : BasePageModel
     /// <returns>True neu duoc tao MR thu cong.</returns>
     private bool AllowCreate()
     {
-        return User.Identity?.IsAuthenticated == true || IsAdminUser();
+        return CanCreateDraftMaterialRequest();
     }
 
     /// <summary>
@@ -782,6 +784,32 @@ public class IndexModel : BasePageModel
     {
         return IsAdminUser()
             || (_dataScope.IsInventoryControlInDep && _dataScope.StoreGroup.HasValue);
+    }
+
+    /// <summary>
+    /// Check if the user can create or edit a draft MR.
+    /// Normal scoped users are allowed. Workflow users need Edit permission.
+    /// </summary>
+    /// <returns>True if draft MR actions are allowed.</returns>
+    private bool CanCreateDraftMaterialRequest()
+    {
+        if (IsAdminUser())
+        {
+            return true;
+        }
+
+        var isWorkflowUser = _dataScope.IsHeadDept
+            || _dataScope.IsPurchaser
+            || _dataScope.IsCFO
+            || _dataScope.IsBOD
+            || _dataScope.ApprovalLevel >= 2;
+
+        if (!isWorkflowUser)
+        {
+            return User.Identity?.IsAuthenticated == true;
+        }
+
+        return HasPermission(PermissionEdit);
     }
 
     /// <summary>
@@ -864,17 +892,29 @@ public class IndexModel : BasePageModel
     /// </summary>
     private void ApplyDefaultInboxStatusIfNeeded()
     {
-        if (CanShowAllRequests())
-        {
-            return;
-        }
-
         if (Filter.StatusIds is { Count: > 0 })
         {
             return;
         }
 
         Filter.StatusIds = new List<int> { GetDefaultInboxStatusId() };
+    }
+
+    /// <summary>
+    /// Bat loc Buy > 0 mac dinh cho CFO / cap approval cao khi page vua load.
+    /// User van co the bo chon sau khi form da hien ra.
+    /// </summary>
+    private void ApplyDefaultBuyFilterIfNeeded()
+    {
+        if (Request.Query.ContainsKey("Filter.BuyGreaterThanZero"))
+        {
+            return;
+        }
+
+        if (_dataScope.IsCFO || _dataScope.ApprovalLevel >= 3)
+        {
+            Filter.BuyGreaterThanZero = true;
+        }
     }
 
     /// <summary>
@@ -888,14 +928,14 @@ public class IndexModel : BasePageModel
             return 0;
         }
 
-        if (_dataScope.IsPurchaser || _dataScope.ApprovalLevel >= 2)
-        {
-            return 1;
-        }
-
         if (_dataScope.IsCFO || _dataScope.ApprovalLevel >= 3)
         {
             return 2;
+        }
+
+        if (_dataScope.IsPurchaser || _dataScope.ApprovalLevel >= 2)
+        {
+            return 1;
         }
 
         return StatusJustCreated;
@@ -2444,24 +2484,39 @@ public class MaterialRequestService
         int? storeGroup = null,
         CancellationToken cancellationToken = default)
     {
-        const string sql = @"
-            SELECT TOP 100
-                i.ItemCode,
-                i.ItemName,
-                ISNULL(i.Unit, '') AS Unit,
-                ISNULL(MAX(b.IsQ), 0) AS InStock,
-                i.KPGroupItem,
-                CAST(1 AS decimal(18,2)) AS OrderQty
-            FROM dbo.INV_ItemList i
-            LEFT JOIN dbo.INV_ItemBalanceACC_TMP b ON b.ItemCode = i.ItemCode
-            WHERE
-                (@ItemCode IS NULL OR i.ItemCode LIKE '%' + @ItemCode + '%')
-                AND (@ItemName IS NULL OR i.ItemName LIKE '%' + @ItemName + '%')
-                AND (i.IsActive = 1 OR i.IsActive IS NULL)
-                AND (@CheckBalanceInStore = 0 OR ISNULL(b.IsQ, 0) > 0)
-                AND (@StoreGroup IS NULL OR @StoreGroup = 0 OR i.KPGroupItem = @StoreGroup)
-            GROUP BY i.ItemCode, i.ItemName, i.Unit, i.KPGroupItem
-            ORDER BY i.ItemCode";
+        var sql = checkBalanceInStore
+            ? @"
+                SELECT TOP 100
+                    i.ItemCode,
+                    i.ItemName,
+                    ISNULL(i.Unit, '') AS Unit,
+                    ISNULL(MAX(b.IsQ), 0) AS InStock,
+                    i.KPGroupItem,
+                    CAST(1 AS decimal(18,2)) AS OrderQty
+                FROM dbo.INV_ItemList i
+                LEFT JOIN dbo.INV_ItemBalanceACC_TMP b ON b.ItemCode = i.ItemCode
+                WHERE
+                    (@ItemCode IS NULL OR i.ItemCode LIKE '%' + @ItemCode + '%')
+                    AND (@ItemName IS NULL OR i.ItemName LIKE '%' + @ItemName + '%')
+                    AND (i.IsActive = 1 OR i.IsActive IS NULL)
+                    AND (@StoreGroup IS NULL OR @StoreGroup = 0 OR i.KPGroupItem = @StoreGroup)
+                GROUP BY i.ItemCode, i.ItemName, i.Unit, i.KPGroupItem
+                ORDER BY i.ItemCode"
+            : @"
+                SELECT TOP 100
+                    i.ItemCode,
+                    i.ItemName,
+                    ISNULL(i.Unit, '') AS Unit,
+                    CAST(NULL AS decimal(18,2)) AS InStock,
+                    i.KPGroupItem,
+                    CAST(1 AS decimal(18,2)) AS OrderQty
+                FROM dbo.INV_ItemList i
+                WHERE
+                    (@ItemCode IS NULL OR i.ItemCode LIKE '%' + @ItemCode + '%')
+                    AND (@ItemName IS NULL OR i.ItemName LIKE '%' + @ItemName + '%')
+                    AND (i.IsActive = 1 OR i.IsActive IS NULL)
+                    AND (@StoreGroup IS NULL OR @StoreGroup = 0 OR i.KPGroupItem = @StoreGroup)
+                ORDER BY i.ItemCode";
 
         var rows = await Helper.QueryAsync(
             _connectionString,

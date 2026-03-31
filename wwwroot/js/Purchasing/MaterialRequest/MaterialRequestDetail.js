@@ -34,6 +34,7 @@
         $('#rejectItemLineIdsJsonInput').val('');
 
         const isRejectButton = submitter && submitter.id === 'mrRejectBtn';
+        const isIssueButton = submitter && submitter.id === 'mrIssueBtn';
         const $selectedRows = $tableBody.find('.mr-line-row.is-selected');
         const lineCount = getMrLineCount($tableBody);
 
@@ -48,6 +49,11 @@
         }
         else if (submitter && submitter.id === 'mrRejectBtn') {
             if (!window.confirm('Are you sure to reject this Material Request?')) {
+                return;
+            }
+        }
+        else if (isIssueButton) {
+            if (!window.confirm('Are you sure to mark this Material Request as ISSUED?')) {
                 return;
             }
         }
@@ -136,6 +142,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
     const isHeadApproved = currentStatusId === 1;
     const isPurchaserChecked = currentStatusId === 2;
     const isCfoApproved = currentStatusId === 3;
+    const isCollectedToPr = currentStatusId === 4;
 
     const showEditActions = isDraft && !isViewMode && canSave;
     const showSubmitAction = isDraft && !isViewMode && canSubmit;
@@ -158,11 +165,12 @@ function initializePage(mode, currentStatusId, actionPerm) {
     $('#mrRejectBtn')
         .toggle(showWorkflowActions)
         .prop('disabled', !showWorkflowActions || (!canApprove && !canReject));
+    $('#mrIssueBtn')
+        .toggle(isCollectedToPr)
+        .prop('disabled', !isCollectedToPr);
 
-    // Validation helpers
-    $('#NoIssueCheck').off('change').on('change', function () {
-        $('#Input_NoIssue').val(this.checked ? '1' : '0');
-    });
+    // Display only.
+    $('#NoIssueCheck').prop('disabled', true);
 
     // Lock inputs by mode and rights
     $tableBody.off('click.mrLine').on('click.mrLine', '.mr-line-row', function (event) {
@@ -431,7 +439,6 @@ function validateMainForm(actionMode) {
 
         const numberChecks = [
             { selector: '.mr-line-notrec', label: 'NotRec' },
-            { selector: '.mr-line-in', label: 'In' },
             { selector: '.mr-line-accin', label: 'Acc.In' },
             { selector: '.mr-line-buy', label: 'Buy' },
             { selector: '.mr-line-price', label: 'Price' }
