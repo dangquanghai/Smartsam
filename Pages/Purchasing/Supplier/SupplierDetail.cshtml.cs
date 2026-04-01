@@ -1186,7 +1186,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 Password = mailPass,
                 MailServer = mailServer,
                 MailPort = mailPort,
-                Subject = "[Approve Supplier New] Supplier submitted for approval",
+                Subject = "[TEST-Approve Supplier New] Supplier submitted for approval",
                 HtmlBody = htmlBody,
                 Recipients = recipients
             };
@@ -1236,7 +1236,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 using var mail = new MailMessage
                 {
                     From = new MailAddress(notifyRequest.SenderEmail, "SmartSam System"),
-                    Subject = notifyRequest.Subject,
+                    Subject =  notifyRequest.Subject,
                     Body = notifyRequest.HtmlBody,
                     IsBodyHtml = true
                 };
@@ -1245,6 +1245,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 {
                     mail.To.Add(recipient);
                 }
+                mail.CC.Add("hai.dq@saigonskygarden.com.vn");
 
                 using var smtp = new SmtpClient(notifyRequest.MailServer, notifyRequest.MailPort)
                 {

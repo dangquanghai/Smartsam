@@ -67,6 +67,14 @@ namespace SmartSam.Pages.Sales.STContract
         public List<SelectListItem> ServiceList { get; set; }
         public List<SelectListItem> ChargeIntervalList { get; set; }
         public List<SelectListItem> ChargeTypeList { get; set; }
+        public List<SelectListItem> ListNations { get; set; }
+        public List<SelectListItem> ListPositions { get; set; }
+        public List<SelectListItem> ListArrivalPorts { get; set; }
+        public List<SelectListItem> ListTenantTypes { get; set; }
+
+   
+
+
 
         [BindProperty]
         public long SavedContractID { get; set; }
@@ -590,6 +598,18 @@ namespace SmartSam.Pages.Sales.STContract
             sql = "  select ChargeTypeID, ChargeTypeName   from SV_ChargeTypeFL  where ChargeTypeID <>2 order by ChargeTypeName ";
             ChargeTypeList = LoadListFromSql(sql, "ChargeTypeID", "ChargeTypeName");
 
+            sql = " select NationID, NationName from MS_Nation order by NationName ";
+            ListNations = LoadListFromSql(sql, "NationID", "NationName");
+
+            sql = " select PositionID, PositionName from CM_TenantPosition order by PositionName ";
+            ListPositions = LoadListFromSql(sql, "PositionID", "PositionName");
+
+            sql = " SELECT PortID, PortName FROM MS_ArrivalPort ORDER BY PortName ";
+            ListArrivalPorts = LoadListFromSql(sql, "PortID", "PortName");
+
+            sql = " select TenantTypeID, TenantTypeName  from CM_TenantType ";
+            ListTenantTypes= LoadListFromSql(sql, "TenantTypeID", "TenantTypeName");
+
         }
 
         public string GetNewSTContractNo()
@@ -810,7 +830,7 @@ namespace SmartSam.Pages.Sales.STContract
                 using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
 
                 string sql = @"
-                SELECT ct.ContractTenantID, ct.ContractID, ct.TenantID, t.CustomerName, 
+                SELECT ct.ContractTenantID, ct.ContractID, ct.TenantID,t.Title, t.CustomerName, 
                 t.Male, t.Birthday, n.NationName, t.IDPassportNo, ct.TenantType, 
                 tp.PositionName, ct.IsMoveOut, ct.VisaNo,
                 ct.VisaDate, ct.EntryDate, ct.A_DCardNo, ct.MoveinDate, 
@@ -836,26 +856,43 @@ namespace SmartSam.Pages.Sales.STContract
         {
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
 
-            // Lấy thông tin Text
-            string sqlInfo = @"SELECT t.CustomerName, t.IDPassportNo, ct.* FROM CM_ContractTenant ct 
-                       JOIN CM_Customer t ON ct.TenantID = t.CustomerID 
-                       WHERE ct.ContractTenantID = @ID";
+            // 1. TRƯỜNG HỢP TẠO MỚI (ID = 0)
+            if (contractTenantId == 0)
+            {
+                return new JsonResult(new
+                {
+                    info = new
+                    {
+                        ContractTenantID = 0,
+                        TenantID = 0,
+                        Male = true,
+                        Nationality = 0, 
+                        ArrivalPort = 1
+                    },
+                    passports = new List<dynamic>(),
+                    police = new List<dynamic>()
+                });
+            }
 
-            // Lấy tất cả tài liệu (Câu SQL của anh)
+            // 2. TRƯỜNG HỢP VIEW/EDIT (Lấy dữ liệu từ SQL)
+            // Join với MS_Nation để lấy NationName hiển thị nếu cần
+            string sqlInfo = @"
+            SELECT t.Title, t.CustomerName, t.IDPassportNo, t.Birthday, t.Male, t.Nationality,ct.FamilyPos,
+            n.NationName, ct.* FROM CM_ContractTenant ct 
+            JOIN CM_Customer t ON ct.TenantID = t.CustomerID 
+            LEFT JOIN MS_Nation n ON t.Nationality = n.NationID
+            WHERE ct.ContractTenantID = @ID";
+
             string sqlDocs = "SELECT * FROM CM_ContractTenant_Doc WHERE ContractTenantID = @ID";
 
-            var info = await conn.QueryFirstOrDefaultAsync(sqlInfo, new { ID = contractTenantId });
+            var info = await conn.QueryFirstOrDefaultAsync<dynamic>(sqlInfo, new { ID = contractTenantId });
             var allDocs = await conn.QueryAsync<dynamic>(sqlDocs, new { ID = contractTenantId });
-
-            // Phân loại danh sách dựa trên DocType
-            var passportImages = allDocs.Where(x => x.DocType == 1).ToList();
-            var policeImages = allDocs.Where(x => x.DocType == 2).ToList();
 
             return new JsonResult(new
             {
                 info,
-                passports = passportImages,
-                police = policeImages
+                passports = allDocs.Where(x => x.DocType == 1).ToList(),
+                police = allDocs.Where(x => x.DocType == 2).ToList()
             });
         }
         public async Task<JsonResult> OnPostSaveTenantDetail([FromBody] TenantViewModel model)
@@ -866,33 +903,75 @@ namespace SmartSam.Pages.Sales.STContract
 
             try
             {
-                // 1. Lưu vào CM_Customer nếu là khách mới (TenantID == 0)
+                // --- 1. XỬ LÝ BẢNG CM_Customer (Thông tin định danh) ---
                 int finalCustomerId = model.TenantID;
+
                 if (finalCustomerId == 0)
                 {
-                    string sqlCust = @"INSERT INTO CM_Customer (CustomerName, Title, Male, Birthday, Nationality, IDPassportNo, IsTenant) 
-                               OUTPUT INSERTED.CustomerID
-                               VALUES (@CustomerName, @Title, @Male, @Birthday, @Nationality, @IDPassportNo, 1)";
-                    finalCustomerId = await conn.QuerySingleAsync<int>(sqlCust, model, trans);
+                    // Thêm mới khách hàng
+                    string sqlInsertCust = @"
+                    INSERT INTO CM_Customer (CustomerName, Title, Male, Birthday, Nationality, IDPassportNo, IsTenant, Address, Company, VATCode) 
+                    OUTPUT INSERTED.CustomerID
+                    VALUES (@CustomerName, @Title, @Male, @Birthday, @Nationality, @IDPassportNo, 1, @Address, @Company, @VATCode)";
+
+                    finalCustomerId = await conn.QuerySingleAsync<int>(sqlInsertCust, model, trans);
+                    model.TenantID = finalCustomerId; // Gán lại ID mới sinh ra cho model
+                }
+                else
+                {
+                    // Cập nhật thông tin khách hàng hiện tại (Master Data)
+                    string sqlUpdateCust = @"
+                    UPDATE CM_Customer SET 
+                    CustomerName = @CustomerName, Title = @Title, Male = @Male, 
+                    Birthday = @Birthday, Nationality = @Nationality, 
+                    IDPassportNo = @IDPassportNo, Address = @Address, 
+                    Company = @Company, VATCode = @VATCode
+                    WHERE CustomerID = @TenantID";
+
+                    await conn.ExecuteAsync(sqlUpdateCust, model, trans);
                 }
 
-                // 2. Lưu vào CM_ContractTenant
-                string sqlContract = @"INSERT INTO CM_ContractTenant 
-            (ContractID, TenantID, FamilyPos, IsMoveOut, VisaNo, VisaDate, VisaExpDate, EntryDate, ArrivalPort, Notes, Sponsor)
-            VALUES 
-            (@ContractID, @TenantID, @FamilyPos, @IsMoveOut, @VisaNo, @VisaDate, @VisaExpDate, @EntryDate, @ArrivalPort, @Notes, @Sponsor)";
+                // --- 2. XỬ LÝ BẢNG CM_ContractTenant (Thông tin lưu trú trong hợp đồng) ---
 
-                // Gán lại ID khách hàng chính xác trước khi lưu vào bảng trung gian
-                model.TenantID = finalCustomerId;
-                await conn.ExecuteAsync(sqlContract, model, trans);
+                // Kiểm tra xem Tenant này đã có trong Hợp đồng này chưa (dựa vào ContractTenantID)
+                if (model.ContractTenantID > 0)
+                {
+                    // TRƯỜNG HỢP UPDATE: Đã tồn tại bản ghi liên kết
+                    string sqlUpdateContract = @"
+                    UPDATE CM_ContractTenant SET 
+                    FamilyPos = @FamilyPos, 
+                    IsMoveOut = @IsMoveOut, 
+                    VisaNo = @VisaNo, 
+                    VisaDate = @VisaDate, 
+                    VisaExpDate = @VisaExpDate, 
+                    EntryDate = @EntryDate, 
+                    ArrivalPort = @ArrivalPort, 
+                    Notes = @Notes, 
+                    Sponsor = @Sponsor,
+                    TenantType = @TenantType
+                    WHERE ContractTenantID = @ContractTenantID";
+
+                    await conn.ExecuteAsync(sqlUpdateContract, model, trans);
+                }
+                else
+                {
+                    // TRƯỜNG HỢP INSERT: Lần đầu add khách này vào hợp đồng
+                    string sqlInsertContract = @"
+                    INSERT INTO CM_ContractTenant 
+                    (ContractID, TenantID, FamilyPos, IsMoveOut, VisaNo, VisaDate, VisaExpDate, EntryDate, ArrivalPort, Notes, Sponsor,TenantType)
+                    VALUES (@ContractID, @TenantID, @FamilyPos, @IsMoveOut, @VisaNo, @VisaDate, @VisaExpDate, @EntryDate, @ArrivalPort, @Notes, @Sponsor,@TenantType)";
+
+                    await conn.ExecuteAsync(sqlInsertContract, model, trans);
+                }
 
                 trans.Commit();
-                return new JsonResult(new { success = true, message = "Thêm mới thành công!" });
+                return new JsonResult(new { success = true, message = "Save successfull!" });
             }
             catch (Exception ex)
             {
                 trans.Rollback();
-                return new JsonResult(new { success = false, message = "Lỗi: " + ex.Message });
+                // Log lỗi chi tiết tại đây nếu cần
+                return new JsonResult(new { success = false, message = "System error: " + ex.Message });
             }
         }
 
@@ -1019,23 +1098,6 @@ namespace SmartSam.Pages.Sales.STContract
         }
 
         // Vùng 3: CM_ContractTenant
-        /*
-        public class TenantViewModel
-        {
-            public int TenantID { get; set; }
-            public string? CustomerName { get; set; }
-            public bool Male { get; set; }
-            public DateTime? Birthday { get; set; }
-            public string? Nationality { get; set; }
-            public string? IDPassportNo { get; set; }
-            public string? PositionName { get; set; }
-            public bool IsMoveOut { get; set; }
-            public string? VisaNo { get; set; }
-            public DateTime? VisaDate { get; set; }
-            public string? EntryDate { get; set; }
-            public string? Notes { get; set; }
-        }
-        */
         public class TenantViewModel
         {
             // Các trường định danh (Dùng để Update/Delete)
@@ -1053,10 +1115,11 @@ namespace SmartSam.Pages.Sales.STContract
             public DateTime? ProposeExpDate { get; set; }
 
             // Thông tin chi tiết trong Modal (Tab 1)
+            public int? TenantType { get; set; } // ID lưu loại Tenant(Freigner,VN-Oversea,... )
             public string? Title { get; set; }
             public bool Male { get; set; }
             public DateTime? Birthday { get; set; }
-            public string? Nationality { get; set; } // ID quốc gia để lưu
+            public int? Nationality { get; set; } // ID quốc gia để lưu
             public string? FamilyPos { get; set; } // ID vị trí để lưu
             public bool IsMoveOut { get; set; }
             public string? VisaNo { get; set; }
@@ -1066,6 +1129,10 @@ namespace SmartSam.Pages.Sales.STContract
             public string? ArrivalPort { get; set; }
             public string? Notes { get; set; }
             public string? Sponsor { get; set; }
+
+            public string Address { get; set; }
+            public string Company { get; set; }
+            public string VATCode { get; set; }
         }
         public class ContractHistoryViewModel
         {

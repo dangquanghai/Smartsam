@@ -524,7 +524,7 @@ function loadTenantsGrid() {
                         <td class="text-center">
                             <input type="radio" name="selectedTenant" value="${ctId}" class="rd-tenant">
                         </td>
-                        <td><strong>${item.customerName || item.CustomerName || ""}</strong></td>
+                        <td>${item.Title || ''}</td>  <td>${item.CustomerName}</td>
                         <td class="text-center">${fDate(item.birthday || item.Birthday)}</td>
                         <td>${item.nationName || item.NationName || ""}</td>
                         <td>${item.idPassportNo || item.IDPassportNo || ""}</td>
@@ -561,106 +561,170 @@ $('#btnRemoveTenant').click(function () {
 $(document).on('click', '#tableTenants tbody tr', function () {
     $(this).find('input[type="radio"]').prop('checked', true);
 });
-
 function openTenantModal(mode) {
-    var ctId = $('input[name="selectedTenant"]:checked').val();
-    if (!ctId) {
-        alert("Please select a tenant from the list first!");
-        return;
-    }
+    // 1. Reset Form và ID về mặc định (0)
+    $('#formTenantDetail')[0].reset();
+    $('#txtContractTenantID').val(0);
+    $('#txtCustomerID').val(0);
+    $('#passport_gallery, #police_gallery').empty();
 
-    // Reset về Tab đầu tiên khi mở modal
-    $('#tenantTab a[href="#info"]').tab('show');
+    // Reset các trạng thái khóa/mở input
+    $('#modalTenantDetail input, #modalTenantDetail select, #modalTenantDetail textarea').prop('disabled', false).prop('readonly', false);
+    $('.upload-zone').show();
+    $('#btnSaveTenantDetail').show(); // Đảm bảo nút save luôn hiện trước khi check mode
 
-    $.ajax({
-        url: '?handler=GetFullTenantDetail',
-        type: 'GET',
-        data: { contractTenantId: ctId },
-        success: function (res) {
-            // LƯU Ý: res bây giờ gồm { info: ..., docs: [...] }
-            var info = res.info;
-            var docs = res.docs;
+    var ctId = 0;
 
-            // 1. Mapping dữ liệu từ CM_Customer & CM_ContractTenant (vào Tab 1)
-            $('#txtCustomerID').val(info.customerID);
-            $('#txtTitle').val(info.title);
-            $('#txtCustomerName').val(info.customerName);
-            $('#ddlMale').val(info.male ? "true" : "false");
-            $('#txtBirthday').val(info.birthday ? new Date(info.birthday).toLocaleDateString('vi-VN') : '');
-            $('#txtNationality').val(info.nationName);
-            $('#txtIDPassportNo').val(info.idPassportNo);
-            $('#txtPassportUntilDate').val(info.passportUntilDate ? new Date(info.passportUntilDate).toLocaleDateString('vi-VN') : '');
-            $('#txtCompany').val(info.company);
-            $('#txtVATCode').val(info.vatCode);
-            $('#txtAddress').val(info.address);
+    // 2. Xử lý logic theo Mode
+    if (mode === 'edit' || mode === 'view') {
+        var selectedRadio = $('input[name="selectedTenant"]:checked');
+        ctId = selectedRadio.val();
 
-            $('#ddlFamilyPos').val(info.familyPos);
-            $('#chkIsMoveOut').prop('checked', info.isMoveOut);
-            $('#txtVisaNo').val(info.visaNo);
-            $('#txtVisaExpDate').val(info.visaExpDate ? info.visaExpDate.split('T')[0] : '');
-            $('#txtEntryDate').val(info.entryDate ? info.entryDate.split('T')[0] : '');
-            $('#ddlArrivalPort').val(info.arrivalPort);
-            $('#txtProposeExpDate').val(info.proposeExpDate ? info.proposeExpDate.split('T')[0] : '');
-            $('#txtPermitExpDate').val(info.permitExpDate ? info.permitExpDate.split('T')[0] : '');
-            $('#txtADCardNo').val(info.a_DCardNo);
-            $('#txtLastRegDate').val(info.lastRegDate ? info.lastRegDate.split('T')[0] : '');
-            var note = info.notes || ""; // Tránh bị hiện chữ "null"
-            $('#txtNotes').val(note);
-            $('#txtSponsor').val(info.sponsor);
-
-            // 2. Xử lý Hình ảnh (Vào Tab 2 & Tab 3)
-            var htmlPassport = '';
-            var htmlPolice = '';
-
-            if (docs && docs.length > 0) {
-                $.each(docs, function (i, doc) {
-                    var imgItem = `
-                        <div class="col-md-3 mb-2">
-                            <div class="card shadow-sm">
-                                <a href="${doc.filePath}" target="_blank">
-                                    <img src="${doc.filePath}" class="card-img-top img-thumbnail" style="height:150px; object-fit:cover">
-                                </a>
-                                <div class="card-footer p-1 text-center">
-                                    <button type="button" class="btn btn-xs btn-danger" onclick="deleteDoc(${doc.id})">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>`;
-
-                    if (doc.docType == 1) { // 1 là Passport
-                        htmlPassport += imgItem;
-                    } else if (doc.docType == 2) { // 2 là Công an
-                        htmlPolice += imgItem;
-                    }
-                });
-            }
-
-            // Đổ vào gallery, nếu trống thì hiện thông báo nhẹ
-            $('#passport_gallery').html(htmlPassport || '<div class="col-12 text-muted p-3">Chưa có hình Passport.</div>');
-            $('#police_gallery').html(htmlPolice || '<div class="col-12 text-muted p-3">Chưa có hình đăng ký công an.</div>');
-
-            // 3. Hiển thị Modal
-            $('#modalTenantDetail').modal('show');
+        if (!ctId || ctId == 0) {
+            alert("Vui lòng chọn một khách thuê trong danh sách!");
+            return;
         }
-    });
+
+        // Gọi AJAX lấy dữ liệu cũ
+        $.ajax({
+            url: '?handler=GetFullTenantDetail',
+            type: 'GET',
+            data: { contractTenantId: ctId },
+            success: function (res) {
+                var info = res.info;
+                if (!info) return;
+
+                // Đổ dữ liệu vào Input
+                $('#txtContractTenantID').val(info.ContractTenantID || 0);
+                $('#txtCustomerID').val(info.TenantID || 0);
+                $('#txtTitle').val(info.Title || "");
+                $('#txtCustomerName').val(info.CustomerName || "");
+
+                if (info.Birthday) $('#txtBirthday').val(info.Birthday.split('T')[0]);
+                if (info.PassportUntilDate) $('#txtPassportUntilDate').val(info.PassportUntilDate.split('T')[0]);
+
+                $('#ddlNationality').val(info.Nationality || "").trigger('change');
+                $('#txtIDPassportNo').val(info.IDPassportNo || "");
+                $('#txtCompany').val(info.Company || "");
+                $('#txtVATCode').val(info.VATCode || "");
+                $('#txtAddress').val(info.Address || "");
+
+                $('#ddlTenantType').val(info.TenantType || "1");
+                $('#ddlFamilyPos').val(info.FamilyPos || 0);
+                $('#chkIsMoveOut').prop('checked', info.IsMoveOut === true);
+                $('#txtVisaNo').val(info.VisaNo || "");
+
+                if (info.VisaDate) $('#txtVisaDate').val(info.VisaDate.split('T')[0]);
+                if (info.VisaExpDate) $('#txtVisaExpDate').val(info.VisaExpDate.split('T')[0]);
+                if (info.EntryDate) $('#txtEntryDate').val(info.EntryDate.split('T')[0]);
+                if (info.LastRegDate) $('#txtLastRegDate').val(info.LastRegDate.split('T')[0]);
+
+                $('#ddlArrivalPort').val(info.ArrivalPort || 0);
+                $('#txtADCardNo').val(info.A_DCardNo || "");
+                $('#txtSponsor').val(info.Sponsor || "");
+                $('#txtNotes').val(info.Notes || "");
+
+                // Xử lý hình ảnh
+                renderGalleries(res.passports, res.police);
+
+                // Chế độ View (Khóa toàn bộ)
+                if (mode === 'view') {
+                    $('#modalTenantDetailTitle').text("View Tenant Detail");
+                    $('#btnSaveTenantDetail').hide();
+                    $('#modalTenantDetail input, #modalTenantDetail select, #modalTenantDetail textarea').prop('disabled', true);
+                    $('.upload-zone').hide();
+                } else {
+                    $('#modalTenantDetailTitle').text("Edit Tenant Detail");
+                }
+
+                $('#modalTenantDetail').modal('show');
+            }
+        });
+    }
+    else if (mode === 'add') {
+        // Chế độ thêm mới: Không gọi AJAX, chỉ hiện Modal trống
+        $('#modalTenantDetailTitle').text("Add New Tenant");
+        $('#txtContractTenantID').val(0); // Đảm bảo chắc chắn là 0 để C# chạy lệnh INSERT
+        $('.upload-zone').hide(); // Thường ẩn upload ảnh khi chưa có ID khách
+        $('#modalTenantDetail').modal('show');
+    }
 }
+function renderGalleries(passports, police) {
+    // 1. Xử lý Tab Passport (DocType = 1)
+    var htmlPassport = '';
+    if (passports && passports.length > 0) {
+        $.each(passports, function (i, doc) {
+            htmlPassport += createImgItem(doc);
+        });
+    } else {
+        htmlPassport = '<div class="col-12 text-muted p-3 text-center">Chưa có hình Passport.</div>';
+    }
+    $('#passport_gallery').html(htmlPassport);
+
+    // 2. Xử lý Tab Công an (DocType = 2)
+    var htmlPolice = '';
+    if (police && police.length > 0) {
+        $.each(police, function (i, doc) {
+            htmlPolice += createImgItem(doc);
+        });
+    } else {
+        htmlPolice = '<div class="col-12 text-muted p-3 text-center">Chưa có hồ sơ đăng ký công an.</div>';
+    }
+    $('#police_gallery').html(htmlPolice);
+}
+
+// Hàm con để tạo HTML cho từng tấm ảnh
+function createImgItem(doc) {
+    // doc.FilePath là đường dẫn lưu trong DB (vừa tạo ở bảng CM_ContractTenant_Doc)
+    return `
+        <div class="col-md-4 col-sm-6 mb-3" id="doc_item_${doc.id}">
+            <div class="card shadow-sm border">
+                <div class="card-body p-1 text-center">
+                    <a href="${doc.FilePath}" target="_blank">
+                        <img src="${doc.FilePath}" class="img-fluid rounded" style="height:150px; object-fit:contain; width:100%;">
+                    </a>
+                </div>
+                <div class="card-footer p-1 d-flex justify-content-between align-items-center bg-light">
+                    <small class="text-muted ml-1">${new Date(doc.UploadDate).toLocaleDateString('vi-VN')}</small>
+                    <button type="button" class="btn btn-xs btn-outline-danger" title="Xóa ảnh" onclick="deleteDoc(${doc.id})">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </div>`;
+}
+
 $('#btnSaveTenantDetail').click(function () {
     // Thu thập dữ liệu từ các control trong Modal
     var tenantData = {
         ContractID: $('#hfContractID').val(), // Lấy từ hidden field của trang chính
         TenantID: $('#txtCustomerID').val() || 0,
-        CustomerName: $('#txtCustomerName').val(),
         Title: $('#txtTitle').val(),
+        CustomerName: $('#txtCustomerName').val(),
         Male: $('#ddlMale').val() === "true",
         Birthday: $('#txtBirthday').val(),
+        TenantType: $('#ddlTenantType').val(),
         Nationality: $('#ddlNationality').val(), // Nếu anh dùng Select2/Dropdown
         IDPassportNo: $('#txtIDPassportNo').val(),
+        PassportUntilDate: $('#txtPassportUntilDate').val(), 
+
+        Address: $('#txtAddress').val(), // Tên này phải khớp với Class C#
+        Company: $('#txtCompany').val(),
+        VATCode: $('#txtVATCode').val(),
+
         FamilyPos: $('#ddlFamilyPos').val(),
         IsMoveOut: $('#chkIsMoveOut').is(':checked'),
         VisaNo: $('#txtVisaNo').val(),
+
+        VisaDate: $('#txtVisaDate').val(),
         VisaExpDate: $('#txtVisaExpDate').val(),
+
         EntryDate: $('#txtEntryDate').val(),
+        ArrivalPort: $('#ddlArrivalPort').val(),
+
+        A_DCardNo: $('#txtADCardNo').val(),      // Lấy từ input txtADCardNo
+        LastRegDate: $('#txtLastRegDate').val(), // Lấy từ input txtLastRegDate
+
         Notes: $('#txtNotes').val(),
         Sponsor: $('#txtSponsor').val()
     };
