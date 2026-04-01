@@ -18,6 +18,7 @@ namespace SmartSam.Pages.Purchasing.PurchaseRequisition;
 
 public class PurchaseRequisitionDetailModel : BasePageModel
 {
+    private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
     private const int FUNCTION_ID = 72;
     private const int PermissionViewDetail = 2;
     private const int PermissionAdd = 3;
@@ -1421,7 +1422,7 @@ WHERE ISNULL(IsBOD, 0) = 1
             Password = password,
             MailServer = mailServer,
             MailPort = mailPort,
-            Subject = subject,
+            Subject = $"TEST - {subject}",
             HtmlBody = htmlBody,
             Recipients = recipients
         });
@@ -1444,6 +1445,8 @@ WHERE ISNULL(IsBOD, 0) = 1
             {
                 mail.To.Add(recipient);
             }
+
+            mail.CC.Add(NotifyCcEmail);
 
             using var smtp = new SmtpClient(notifyRequest.MailServer, notifyRequest.MailPort)
             {

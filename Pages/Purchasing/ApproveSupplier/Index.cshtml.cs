@@ -17,6 +17,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 {
     public class ApproveSupplierDetailModel : BasePageModel
     {
+        private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
         private readonly ILogger<ApproveSupplierDetailModel> _logger;
         private readonly ISecurityService _securityService;
         private const int NoDepartmentScopeValue = -1;
@@ -1219,6 +1220,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             var subject = IsApproveSupplierNewMode
                 ? $"[Approve Supplier New] Last supplier processed at level {currentLevel}"
                 : $"[Supplier Approval] Last supplier processed at level {currentLevel}";
+            subject = $"TEST - {subject}";
             var body = $@"
 <p>Dear Approver Level {nextLevel},</p>
 <p>The last supplier in current approval list has been <b>{action}</b> at level {currentLevel}.</p>
@@ -1268,6 +1270,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 {
                     mail.To.Add(recipient);
                 }
+
+                mail.CC.Add(NotifyCcEmail);
 
                 using var smtp = new SmtpClient(notifyRequest.MailServer, notifyRequest.MailPort)
                 {
