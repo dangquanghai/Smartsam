@@ -16,7 +16,8 @@
               data-can-calculate="@Model.CanCalculate.ToString().ToLowerInvariant()"
               data-can-approve="@Model.CanApprove.ToString().ToLowerInvariant()"
               data-can-reject="@Model.CanReject.ToString().ToLowerInvariant()"
-              data-store-group-locked="@Model.StoreGroupLocked.ToString().ToLowerInvariant()">
+              data-store-group-locked="@Model.StoreGroupLocked.ToString().ToLowerInvariant()"
+              data-hide-zero-buy-lines="@Model.HideZeroBuyLines.ToString().ToLowerInvariant()">
               <input type="hidden" asp-for="Id" />
               <input type="hidden" asp-for="LinesJson" id="linesJsonInput" />
               <input type="hidden" asp-for="RejectItemLineIdsJson" id="rejectItemLineIdsJsonInput" />

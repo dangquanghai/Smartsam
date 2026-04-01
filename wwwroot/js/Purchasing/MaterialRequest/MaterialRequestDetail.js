@@ -122,6 +122,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
     const canCalculate = !!actionPerm.canCalculate;
     const canApprove = !!actionPerm.canApprove;
     const canReject = !!actionPerm.canReject;
+    const hideZeroBuyLines = toBoolData($form.data('hide-zero-buy-lines'));
 
     const isViewMode = mode === 'view';
     const disableEditFields = isViewMode || !canSave;
@@ -171,6 +172,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
 
     // Display only.
     $('#NoIssueCheck').prop('disabled', true);
+    applyBuyZeroLineVisibility($tableBody, hideZeroBuyLines);
 
     // Lock inputs by mode and rights
     $tableBody.off('click.mrLine').on('click.mrLine', '.mr-line-row', function (event) {
@@ -407,7 +409,9 @@ function validateMainForm(actionMode) {
         return true;
     }
 
-    const $rows = $('#mrLineTableBody').find('.mr-line-row');
+    const $rows = $('#mrLineTableBody').find('.mr-line-row').filter(function () {
+        return !$(this).hasClass('mr-line-hidden-by-buy-filter');
+    });
     if ($rows.length === 0) {
         alert('Please add at least one item.');
         return false;
@@ -497,6 +501,19 @@ function toNullableInt(value) {
 function toNumber(value) {
     const parsed = Number.parseFloat((value || '').toString().trim());
     return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function applyBuyZeroLineVisibility($tableBody, hideZeroBuyLines) {
+    if ($tableBody.length === 0) return;
+
+    $tableBody.find('.mr-line-row').each(function () {
+        const $row = $(this);
+        const buyValue = toNumber($row.find('.mr-line-buy').val());
+        const shouldHide = !!hideZeroBuyLines && buyValue <= 0;
+
+        $row.toggleClass('mr-line-hidden-by-buy-filter', shouldHide);
+        $row.toggleClass('d-none', shouldHide);
+    });
 }
 
 function refreshLineIndexes($tableBody) {
