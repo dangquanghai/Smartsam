@@ -364,7 +364,7 @@ WHERE PRID = @PRID", conn);
 
         string? notifySubject = null;
         string? notifyBody = null;
-        List<string> recipients = new List<string>();
+        List<PurchaseRequisitionNotifyRecipientViewModel> recipients = new List<PurchaseRequisitionNotifyRecipientViewModel>();
         var approveDate = DateTime.Now.ToString("dd/MM/yyyy");
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -394,7 +394,7 @@ WHERE PRID = @PRID
 
                 recipients = GetEmailsByWorkflowRole(conn, trans, "CFO");
                 notifySubject = "[Purchase Requisition] Waiting for CFO approve";
-                notifyBody = BuildWorkflowNotifyBody("PURCHASE REQUISITION", "#007bff", "CFO", "waiting for your approval.");
+                notifyBody = BuildWorkflowNotifyBody("PURCHASE REQUISITION", "#007bff", recipients, "waiting for your approval.");
             }
             else if (CanApproveAsCfo())
             {
@@ -417,7 +417,7 @@ WHERE PRID = @PRID
 
                 recipients = GetEmailsByWorkflowRole(conn, trans, "BOD");
                 notifySubject = "[Purchase Requisition] Waiting for BOD approve";
-                notifyBody = BuildWorkflowNotifyBody("PURCHASE REQUISITION", "#17a2b8", "BOD", "waiting for your approval.");
+                notifyBody = BuildWorkflowNotifyBody("PURCHASE REQUISITION", "#17a2b8", recipients, "waiting for your approval.");
             }
             else if (CanApproveAsBod())
             {
@@ -1287,8 +1287,8 @@ WHERE EmployeeCode = @EmployeeCode", conn);
         return User.FindFirst("IsAdminRole")?.Value == "True";
     }
 
-    // Lấy danh sách email của người duyệt theo vai trò workflow hiện tại.
-    private List<string> GetEmailsByWorkflowRole(SqlConnection conn, SqlTransaction trans, string workflowRole)
+    // Lấy danh sách người nhận mail theo vai trò workflow hiện tại.
+    private List<PurchaseRequisitionNotifyRecipientViewModel> GetEmailsByWorkflowRole(SqlConnection conn, SqlTransaction trans, string workflowRole)
     {
         if (string.Equals(workflowRole, "CFO", StringComparison.OrdinalIgnoreCase))
         {
@@ -1300,16 +1300,19 @@ WHERE EmployeeCode = @EmployeeCode", conn);
             return GetBodEmails(conn, trans);
         }
 
-        return new List<string>();
+        return new List<PurchaseRequisitionNotifyRecipientViewModel>();
     }
 
-    // Lấy email theo một cờ bool trong MS_Employee như IsCFO hoặc IsBOD.
-    private static List<string> GetEmailsByFlag(SqlConnection conn, SqlTransaction trans, string flagColumn)
+    // Lấy danh sách người nhận mail theo một cờ bool trong MS_Employee như IsCFO hoặc IsBOD.
+    private static List<PurchaseRequisitionNotifyRecipientViewModel> GetEmailsByFlag(SqlConnection conn, SqlTransaction trans, string flagColumn)
     {
-        var rows = new List<string>();
+        var rows = new List<PurchaseRequisitionNotifyRecipientViewModel>();
 
         using var cmd = new SqlCommand($@"
-SELECT DISTINCT LTRIM(RTRIM(TheEmail))
+SELECT DISTINCT
+    LTRIM(RTRIM(TheEmail)) AS TheEmail,
+    LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode,
+    LTRIM(RTRIM(EmployeeName)) AS EmployeeName
 FROM dbo.MS_Employee
 WHERE ISNULL({flagColumn}, 0) = 1
   AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
@@ -1318,20 +1321,28 @@ WHERE ISNULL({flagColumn}, 0) = 1
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
-            var email = Convert.ToString(rd[0]) ?? string.Empty;
+            var email = Convert.ToString(rd["TheEmail"]) ?? string.Empty;
             if (!string.IsNullOrWhiteSpace(email))
             {
-                rows.Add(email.Trim());
+                rows.Add(new PurchaseRequisitionNotifyRecipientViewModel
+                {
+                    Email = email.Trim(),
+                    EmployeeCode = Convert.ToString(rd["EmployeeCode"])?.Trim() ?? string.Empty,
+                    EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty
+                });
             }
         }
 
-        return rows.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return rows
+            .GroupBy(x => x.Email, StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.First())
+            .ToList();
     }
 
-    // Lấy email BOD, ưu tiên bảng cấu hình SYS_Funtion_LevelProcess nếu hệ thống có bảng này.
-    private List<string> GetBodEmails(SqlConnection conn, SqlTransaction trans)
+    // Lấy danh sách người nhận mail của BOD, ưu tiên bảng cấu hình SYS_Funtion_LevelProcess nếu hệ thống có bảng này.
+    private List<PurchaseRequisitionNotifyRecipientViewModel> GetBodEmails(SqlConnection conn, SqlTransaction trans)
     {
-        var rows = new List<string>();
+        var rows = new List<PurchaseRequisitionNotifyRecipientViewModel>();
 
         using var cmd = new SqlCommand(@"
 IF OBJECT_ID('dbo.SYS_Funtion_LevelProcess', 'U') IS NOT NULL
@@ -1344,7 +1355,10 @@ BEGIN
           AND name = 'Level'
     )
     BEGIN
-        SELECT DISTINCT LTRIM(RTRIM(e.TheEmail)) AS TheEmail
+        SELECT DISTINCT
+            LTRIM(RTRIM(e.TheEmail)) AS TheEmail,
+            LTRIM(RTRIM(e.EmployeeCode)) AS EmployeeCode,
+            LTRIM(RTRIM(e.EmployeeName)) AS EmployeeName
         FROM dbo.MS_Employee e
         WHERE ISNULL(e.IsBOD, 0) = 1
           AND ISNULL(LTRIM(RTRIM(e.TheEmail)), '') <> ''
@@ -1353,7 +1367,10 @@ BEGIN
     END
 END
 
-SELECT DISTINCT LTRIM(RTRIM(TheEmail))
+SELECT DISTINCT
+    LTRIM(RTRIM(TheEmail)) AS TheEmail,
+    LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode,
+    LTRIM(RTRIM(EmployeeName)) AS EmployeeName
 FROM dbo.MS_Employee
 WHERE ISNULL(IsBOD, 0) = 1
   AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
@@ -1362,18 +1379,26 @@ WHERE ISNULL(IsBOD, 0) = 1
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
-            var email = Convert.ToString(rd[0]) ?? string.Empty;
+            var email = Convert.ToString(rd["TheEmail"]) ?? string.Empty;
             if (!string.IsNullOrWhiteSpace(email))
             {
-                rows.Add(email.Trim());
+                rows.Add(new PurchaseRequisitionNotifyRecipientViewModel
+                {
+                    Email = email.Trim(),
+                    EmployeeCode = Convert.ToString(rd["EmployeeCode"])?.Trim() ?? string.Empty,
+                    EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty
+                });
             }
         }
 
-        return rows.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return rows
+            .GroupBy(x => x.Email, StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.First())
+            .ToList();
     }
 
     // Tạo nội dung mail thông báo workflow cho bước duyệt kế tiếp.
-    private string BuildWorkflowNotifyBody(string title, string color, string roleName, string actionText)
+    private string BuildWorkflowNotifyBody(string title, string color, IReadOnlyCollection<PurchaseRequisitionNotifyRecipientViewModel> recipients, string actionText)
     {
         var detailUrl = Url.Page("/Purchasing/PurchaseRequisition/PurchaseRequisitionDetail", values: new
         {
@@ -1384,9 +1409,16 @@ WHERE ISNULL(IsBOD, 0) = 1
         var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl)
             ? string.Empty
             : $"{Request.Scheme}://{Request.Host}{detailUrl}";
+        var recipientDisplayNames = string.Join(", ", recipients.Select(x =>
+        {
+            var employeeName = string.IsNullOrWhiteSpace(x.EmployeeName) ? x.Email : x.EmployeeName;
+            return string.IsNullOrWhiteSpace(x.EmployeeCode)
+                ? employeeName
+                : $"{employeeName} ({x.EmployeeCode})";
+        }));
 
         var body = $@"
-<p>Dear {WebUtility.HtmlEncode(roleName)},</p>
+<p>Dear {WebUtility.HtmlEncode(recipientDisplayNames)},</p>
 <p>Purchase Requisition <b>{WebUtility.HtmlEncode(Requisition.RequestNo)}</b> is {WebUtility.HtmlEncode(actionText)}</p>
 <ul>
   <li>Date: <b>{Requisition.RequestDate:dd/MM/yyyy}</b></li>
@@ -1400,7 +1432,7 @@ WHERE ISNULL(IsBOD, 0) = 1
     }
 
     // Đẩy tác vụ gửi mail ra nền để người dùng không phải chờ kết quả SMTP.
-    private void TryQueueWorkflowNotifyEmail(List<string> recipients, string subject, string htmlBody)
+    private void TryQueueWorkflowNotifyEmail(List<PurchaseRequisitionNotifyRecipientViewModel> recipients, string subject, string htmlBody)
     {
         var senderEmail = _config.GetValue<string>("EmailSettings:SenderEmail");
         var password = _config.GetValue<string>("EmailSettings:Password");
@@ -1424,7 +1456,7 @@ WHERE ISNULL(IsBOD, 0) = 1
             MailPort = mailPort,
             Subject = $"TEST - {subject}",
             HtmlBody = htmlBody,
-            Recipients = recipients
+            Recipients = recipients.Select(x => x.Email).ToList()
         });
     }
 
@@ -1625,4 +1657,11 @@ public class PurchaseRequisitionWorkflowNotifyRequestViewModel
     public string Subject { get; set; } = string.Empty;
     public string HtmlBody { get; set; } = string.Empty;
     public List<string> Recipients { get; set; } = new List<string>();
+}
+
+public class PurchaseRequisitionNotifyRecipientViewModel
+{
+    public string Email { get; set; } = string.Empty;
+    public string EmployeeCode { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
 }

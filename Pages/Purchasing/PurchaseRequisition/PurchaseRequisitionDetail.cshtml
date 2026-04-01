@@ -30,39 +30,30 @@
                         <div class="alert @alertClass mb-2 py-2">@Model.Message</div>
                     }
 
-                    <div class="prq-detail-grid mb-3">
-                        <label>No.<span class="required-mark">*</span></label>
-                        <div>
+                    <div class="row prq-detail-form-row mb-3">
+                        <div class="col-lg-3 col-md-6 prq-detail-form-col">
+                            <label class="prq-detail-label">No.<span class="required-mark">*</span></label>
                             <input asp-for="Requisition.RequestNo" class="form-control form-control-sm vni-font" readonly />
                             <span asp-validation-for="Requisition.RequestNo" class="text-danger small"></span>
                         </div>
-
-                        <label>Currency<span class="required-mark">*</span></label>
-                        <div>
+                        <div class="col-lg-3 col-md-6 prq-detail-form-col">
+                            <label class="prq-detail-label">Date<span class="required-mark">*</span></label>
+                            <input asp-for="Requisition.RequestDate" type="date" class="form-control form-control-sm" readonly="@(Model.IsViewMode ? "readonly" : null)" />
+                        </div>
+                        <div class="col-lg-3 col-md-6 prq-detail-form-col">
+                            <label class="prq-detail-label">Status</label>
+                            <select asp-for="Requisition.Status" asp-items="Model.StatusList" class="form-control form-control-sm" disabled></select>
+                        </div>
+                        <div class="col-lg-3 col-md-6 prq-detail-form-col">
+                            <label class="prq-detail-label">Currency<span class="required-mark">*</span></label>
                             <select asp-for="Requisition.Currency" class="form-control form-control-sm" disabled>
                                 <option value="1">VND</option>
                             </select>
                         </div>
-
-                        <label>Status</label>
-                        <div>
-                            <select asp-for="Requisition.Status" asp-items="Model.StatusList" class="form-control form-control-sm" disabled></select>
-                        </div>
-
-                        <label>Date<span class="required-mark">*</span></label>
-                        <div>
-                            <input asp-for="Requisition.RequestDate" type="date" class="form-control form-control-sm" readonly="@(Model.IsViewMode ? "readonly" : null)" />
-                        </div>
-
-                        <label>Total Amount</label>
-                        <div>
-                            <input id="prqTotalAmount" class="form-control form-control-sm text-right vni-font" value="@Model.TotalAmount.ToString("#,##0.00")" readonly />
-                        </div>
-
                     </div>
-                    <div class="prq-detail-grid mb-3">
-                        <label class="align-self-start pt-1">Description<span class="required-mark">*</span></label>
-                        <div class="prq-detail-span-full">
+                    <div class="row prq-detail-form-row mb-3">
+                        <div class="col-lg-12 col-md-12 prq-detail-form-col">
+                            <label class="prq-detail-label">Description<span class="required-mark">*</span></label>
                             <textarea asp-for="Requisition.Description" rows="3" class="form-control form-control-sm vni-font" readonly="@(Model.IsViewMode ? "readonly" : null)"></textarea>
                             <span asp-validation-for="Requisition.Description" class="text-danger small"></span>
                         </div>
@@ -96,6 +87,7 @@
                                 <i class="fas fa-undo"></i> CST New
                             </button>
                         }
+                        <label>Total Amount: @Model.TotalAmount.ToString("#,##0.00")</label>
                     </div>
 
                     <div class="table-responsive prq-detail-table-wrap">
@@ -166,55 +158,34 @@
                 </div>
                 <div class="modal-body pb-2">
                     <div id="detailAddError" class="text-danger small mb-2" style="display:none;"></div>
-                    <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label class="mb-1">Item<span class="required-mark">*</span></label>
-                            <select id="detailItemId" class="form-control form-control-sm">
-                                <option value="">-- Select item --</option>
+                    <div class="table-responsive prq-add-detail-table-wrap">
+                        <table class="table table-sm table-bordered table-hover mb-0" id="prqAddDetailTable">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th style="width:50px;" class="prq-center">Check</th>
+                                    <th style="width:140px;">Item Code</th>
+                                    <th>Item Name</th>
+                                    <th style="width:90px;" class="prq-center">Unit</th>
+                                    <th style="width:110px;" class="prq-center">SubQty<span class="required-mark">*</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
                                 @foreach (var item in Model.ItemList)
                                 {
-                                    <option value="@item.Id" data-code="@item.ItemCode" data-name="@item.ItemName" data-unit="@item.Unit">@item.ItemCode - @item.ItemName</option>
+                                    <tr data-add-detail-row="1" data-item-id="@item.Id" data-item-code="@item.ItemCode" data-item-name="@item.ItemName" data-unit="@item.Unit">
+                                        <td class="prq-center">
+                                            <input type="checkbox" class="prq-add-detail-check" />
+                                        </td>
+                                        <td>@item.ItemCode</td>
+                                        <td>@item.ItemName</td>
+                                        <td class="prq-center">@item.Unit</td>
+                                        <td class="prq-center">
+                                            <input type="text" inputmode="decimal" class="form-control form-control-sm prq-add-detail-subqty" value="0" />
+                                        </td>
+                                    </tr>
                                 }
-                            </select>
-                        </div>
-                        <div class="form-group col-md-2">
-                            <label class="mb-1">Unit</label>
-                            <input id="detailUnit" class="form-control form-control-sm vni-font" readonly />
-                        </div>
-                        <div class="form-group col-md-4">
-                            <label class="mb-1">Supplier</label>
-                            <select id="detailSupplierId" class="form-control form-control-sm">
-                                <option value="">-- Select supplier --</option>
-                                @foreach (var supplier in Model.SupplierList)
-                                {
-                                    <option value="@supplier.Id">@supplier.SupplierCode - @supplier.SupplierName</option>
-                                }
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group col-md-3">
-                            <label class="mb-1">QtyFromM</label>
-                            <input id="detailQtyFromM" type="text" inputmode="decimal" class="form-control form-control-sm" value="0" />
-                        </div>
-                        <div class="form-group col-md-3">
-                            <label class="mb-1">QtyPur<span class="required-mark">*</span></label>
-                            <input id="detailQtyPur" type="text" inputmode="decimal" class="form-control form-control-sm" value="0" />
-                        </div>
-                        <div class="form-group col-md-3">
-                            <label class="mb-1">U.Price</label>
-                            <input id="detailUnitPrice" type="text" inputmode="decimal" class="form-control form-control-sm" value="0" />
-                        </div>
-                        <div class="form-group col-md-3">
-                            <label class="mb-1">Amount</label>
-                            <input id="detailAmount" class="form-control form-control-sm vni-font" readonly />
-                        </div>
-                    </div>
-
-                    <div class="form-group mb-1">
-                        <label class="mb-1">Remark</label>
-                        <input id="detailRemark" class="form-control form-control-sm vni-font" maxlength="500" />
+                            </tbody>
+                        </table>
                     </div>
                 </div>
                 <div class="modal-footer py-2">

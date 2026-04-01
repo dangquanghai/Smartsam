@@ -92,14 +92,7 @@
         const detailAttachmentInput = document.getElementById("detailAttachmentUpload");
         const detailAttachmentError = document.getElementById("detailAttachmentError");
         const detailAttachmentUploadButton = document.getElementById("btnDetailAttachmentUpload");
-        const itemSelect = document.getElementById("detailItemId");
-        const unitInput = document.getElementById("detailUnit");
-        const supplierSelect = document.getElementById("detailSupplierId");
-        const qtyFromM = document.getElementById("detailQtyFromM");
-        const qtyPur = document.getElementById("detailQtyPur");
-        const unitPrice = document.getElementById("detailUnitPrice");
-        const amountInput = document.getElementById("detailAmount");
-        const remarkInput = document.getElementById("detailRemark");
+        const addDetailRows = Array.from(document.querySelectorAll("tr[data-add-detail-row='1']"));
         if (!detailsJsonEl || !rowsContainer || !emptyRow) return;
 
         let details = [];
@@ -279,11 +272,6 @@
             renderRows();
         }
 
-        const updateAmount = () => {
-            if (!amountInput || !qtyPur || !unitPrice) return;
-            amountInput.value = formatAmount(toNumber(qtyPur.value) * toNumber(unitPrice.value));
-        };
-
         const isDuplicateDetail = (itemId, supplierId) => {
             return details.some((detail) =>
                 Number(detail.itemId) === Number(itemId) &&
@@ -298,14 +286,17 @@
         };
 
         const resetDetailFields = () => {
-            if (itemSelect) itemSelect.value = "";
-            if (unitInput) unitInput.value = "";
-            if (supplierSelect) supplierSelect.value = "";
-            if (qtyFromM) qtyFromM.value = "0";
-            if (qtyPur) qtyPur.value = "0";
-            if (unitPrice) unitPrice.value = "0";
-            if (remarkInput) remarkInput.value = "";
-            updateAmount();
+            addDetailRows.forEach((row) => {
+                const checkbox = row.querySelector(".prq-add-detail-check");
+                const subQtyInput = row.querySelector(".prq-add-detail-subqty");
+                row.classList.remove("prq-detail-row-selected");
+                if (checkbox) {
+                    checkbox.checked = false;
+                }
+                if (subQtyInput) {
+                    subQtyInput.value = "0";
+                }
+            });
             hideAddDetailError();
         };
 
@@ -338,81 +329,76 @@
             }
         });
 
-        itemSelect?.addEventListener("change", () => {
-            hideAddDetailError();
-            const selected = itemSelect.selectedOptions[0];
-            if (unitInput) {
-                unitInput.value = selected ? (selected.dataset.unit || "") : "";
-            }
+        addDetailRows.forEach((row) => {
+            const checkbox = row.querySelector(".prq-add-detail-check");
+            const subQtyInput = row.querySelector(".prq-add-detail-subqty");
+            checkbox?.addEventListener("change", () => {
+                row.classList.toggle("prq-detail-row-selected", checkbox.checked);
+                hideAddDetailError();
+            });
+            subQtyInput?.addEventListener("input", hideAddDetailError);
+            subQtyInput?.addEventListener("blur", () => normalizeInputValue(subQtyInput));
+            row.addEventListener("click", (event) => {
+                if (event.target.closest("input")) return;
+                if (!checkbox) return;
+                checkbox.checked = !checkbox.checked;
+                row.classList.toggle("prq-detail-row-selected", checkbox.checked);
+                hideAddDetailError();
+            });
         });
-
-        qtyPur?.addEventListener("input", () => {
-            hideAddDetailError();
-            updateAmount();
-        });
-        unitPrice?.addEventListener("input", updateAmount);
-        qtyFromM?.addEventListener("blur", () => normalizeInputValue(qtyFromM));
-        qtyPur?.addEventListener("blur", () => normalizeInputValue(qtyPur));
-        unitPrice?.addEventListener("blur", () => normalizeInputValue(unitPrice));
-        updateAmount();
 
         addDetailBtn?.addEventListener("click", () => {
-            if (!itemSelect || !qtyFromM || !qtyPur || !unitPrice || !remarkInput) return;
             hideAddDetailError();
 
-            const selectedItem = itemSelect.selectedOptions[0];
-            if (!selectedItem || !selectedItem.value) {
-                showAddDetailError("Cannot add detail because no item has been selected.");
-                itemSelect.focus();
-                return;
-            }
-
-            const qtyFromMValue = toNumber(qtyFromM.value);
-            const qtyPurValue = toNumber(qtyPur.value);
-            const unitPriceValue = toNumber(unitPrice.value);
-
-            if (qtyFromMValue < 0) {
-                showAddDetailError("Cannot add detail because QtyFromM must not be less than 0.");
-                qtyFromM.focus();
-                return;
-            }
-
-            if (qtyPurValue <= 0) {
-                showAddDetailError("Cannot add detail because QtyPur must be greater than 0.");
-                qtyPur.focus();
-                return;
-            }
-
-            if (unitPriceValue < 0) {
-                showAddDetailError("Cannot add detail because U.Price must not be less than 0.");
-                unitPrice.focus();
-                return;
-            }
-
-            const supplierOption = supplierSelect?.selectedOptions[0];
-            const supplierId = supplierOption && supplierOption.value ? Number.parseInt(supplierOption.value, 10) : null;
-            if (isDuplicateDetail(selectedItem.value, supplierId)) {
-                showAddDetailError("Cannot add detail because this item already exists in the unsaved detail list.");
-                itemSelect.focus();
-                return;
-            }
-
-            details.push({
-                tempKey: `tmp-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-                detailId: 0,
-                itemId: Number.parseInt(selectedItem.value, 10),
-                itemCode: selectedItem.dataset.code || "",
-                itemName: selectedItem.dataset.name || "",
-                unit: selectedItem.dataset.unit || "",
-                qtyFromM: qtyFromMValue,
-                qtyPur: qtyPurValue,
-                unitPrice: unitPriceValue,
-                remark: remarkInput.value.trim(),
-                supplierId: supplierId,
-                supplierText: supplierOption && supplierOption.value ? supplierOption.text : "",
-                mrRequestNo: "",
-                mrDetailId: null
+            const selectedRows = addDetailRows.filter((row) => {
+                const checkbox = row.querySelector(".prq-add-detail-check");
+                return !!checkbox && checkbox.checked;
             });
+
+            if (selectedRows.length === 0) {
+                showAddDetailError("Cannot add detail because no item has been selected.");
+                return;
+            }
+
+            const newDetails = [];
+            for (const row of selectedRows) {
+                const itemId = Number.parseInt(row.getAttribute("data-item-id") || "0", 10);
+                const itemCode = row.getAttribute("data-item-code") || "";
+                const itemName = row.getAttribute("data-item-name") || "";
+                const unit = row.getAttribute("data-unit") || "";
+                const subQtyInput = row.querySelector(".prq-add-detail-subqty");
+                const qtyPurValue = toNumber(subQtyInput ? subQtyInput.value : "0");
+
+                if (qtyPurValue <= 0) {
+                    showAddDetailError(`Cannot add detail because SubQty for item ${itemCode} must be greater than 0.`);
+                    subQtyInput?.focus();
+                    return;
+                }
+
+                if (isDuplicateDetail(itemId, null)) {
+                    showAddDetailError(`Cannot add detail because item ${itemCode} already exists in the unsaved detail list.`);
+                    return;
+                }
+
+                newDetails.push({
+                    tempKey: `tmp-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                    detailId: 0,
+                    itemId: itemId,
+                    itemCode: itemCode,
+                    itemName: itemName,
+                    unit: unit,
+                    qtyFromM: 0,
+                    qtyPur: qtyPurValue,
+                    unitPrice: 0,
+                    remark: "",
+                    supplierId: null,
+                    supplierText: "",
+                    mrRequestNo: "",
+                    mrDetailId: null
+                });
+            }
+
+            details.push(...newDetails);
             renderRows();
             resetDetailFields();
             if (window.jQuery && detailModal) {
