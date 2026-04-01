@@ -10,23 +10,74 @@
         return `${window.location.pathname}${window.location.search || ''}`;
     }
 
-    function syncBrowserUrlToSearchState(page) {
+    function initializeSearchDateRange() {
+        if (typeof window.initSimpleDateRange !== 'function') {
+            return;
+        }
+
+        window.initSimpleDateRange('MrDateRange', '#Filter_FromDate', '#Filter_ToDate', {
+            linkedCalendars: false
+        });
+
+        const fromDate = $('#Filter_FromDate').val();
+        const toDate = $('#Filter_ToDate').val();
+        if (fromDate && toDate && typeof window.setDateRangeValue === 'function') {
+            window.setDateRangeValue('MrDateRange', fromDate, toDate);
+        }
+    }
+
+    function syncBrowserUrlToSearchState(page, filter) {
         const form = document.getElementById('mrSearchForm');
         if (!form || !window.history || typeof window.history.replaceState !== 'function') {
             return;
         }
 
-        const pageIndexInput = form.querySelector('input[name="Filter.PageIndex"]');
-        if (pageIndexInput) {
-            pageIndexInput.value = String(page > 0 ? page : 1);
+        const params = new URLSearchParams();
+        params.set('Filter.PageIndex', String(page > 0 ? page : 1));
+        params.set('Filter.PageSize', String(pageSize));
+
+        const requestNo = (filter && filter.requestNo ? filter.requestNo : '').toString().trim();
+        if (requestNo) {
+            params.set('Filter.RequestNo', requestNo);
         }
 
-        const pageSizeInput = form.querySelector('input[name="Filter.PageSize"]');
-        if (pageSizeInput) {
-            pageSizeInput.value = String(pageSize);
+        const storeGroup = filter && Number.isFinite(filter.storeGroup) ? filter.storeGroup : null;
+        if (storeGroup !== null) {
+            params.set('Filter.StoreGroup', String(storeGroup));
         }
 
-        const params = new URLSearchParams(new FormData(form));
+        const statusIds = Array.isArray(filter && filter.statusIds) ? filter.statusIds : [];
+        statusIds.forEach((statusId) => {
+            if (Number.isFinite(statusId)) {
+                params.append('Filter.StatusIds', String(statusId));
+            }
+        });
+
+        const itemCode = (filter && filter.itemCode ? filter.itemCode : '').toString().trim();
+        if (itemCode) {
+            params.set('Filter.ItemCode', itemCode);
+        }
+
+        params.set('Filter.IssueLessThanOrder', filter && filter.issueLessThanOrder ? 'true' : 'false');
+        params.set('Filter.BuyGreaterThanZero', filter && filter.buyGreaterThanZero ? 'true' : 'false');
+        params.set('Filter.AutoOnly', filter && filter.autoOnly ? 'true' : 'false');
+
+        const fromDate = (filter && filter.fromDate ? filter.fromDate : '').toString().trim();
+        if (fromDate) {
+            params.set('Filter.FromDate', fromDate);
+        }
+
+        const toDate = (filter && filter.toDate ? filter.toDate : '').toString().trim();
+        if (toDate) {
+            params.set('Filter.ToDate', toDate);
+        }
+
+        const accordingToKeyword = (filter && filter.accordingToKeyword ? filter.accordingToKeyword : '').toString().trim();
+        if (accordingToKeyword) {
+            params.set('Filter.AccordingToKeyword', accordingToKeyword);
+        }
+
+        params.set('Filter.ConditionMode', (filter && filter.conditionMode) || 'allUsers');
         const query = params.toString();
         const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
         window.history.replaceState({}, '', nextUrl);
@@ -94,7 +145,7 @@
                     currentDataRows = response.data || [];
                     renderContracts(response.data);
                     updatePagination(response.total, response.page, response.pageSize, response.totalPages);
-                    syncBrowserUrlToSearchState(response.page || page);
+                    syncBrowserUrlToSearchState(response.page || page, filter);
                     resetActions();
                 } else {
                     showError('Search failed: ' + (response && response.message ? response.message : ''));
@@ -278,8 +329,15 @@
     function initializePage() {
         console.log('Initializing page components...');
 
+        const pageSizeRaw = ($('#mrSearchForm input[name="Filter.PageSize"]').val() || '').toString().trim();
+        const parsedPageSize = Number.parseInt(pageSizeRaw, 10);
+        if (Number.isFinite(parsedPageSize) && parsedPageSize > 0) {
+            pageSize = parsedPageSize;
+        }
+
         initConditionModeSwitcher();
         initStatusCheckboxDropdown();
+        initializeSearchDateRange();
         initCreateMrPopup();
         initCreateAutoMrPopup();
 
@@ -306,7 +364,7 @@
             performSearch(1);
         });
 
-        // 4. Tự động Search lần đầu khi load trang
+        // 4. Tu dong search lan dau khi da khoi tao xong date range
         const initialPage = parseInt($('#mrSearchForm input[name="Filter.PageIndex"]').val() || '1', 10);
         performSearch(Number.isFinite(initialPage) && initialPage > 0 ? initialPage : 1);
     }
@@ -638,6 +696,16 @@
         const $filterStoreGroup = $('#Filter_StoreGroup');
         const $descInput = $('#createAutoDescription');
         const $form = $('#createAutoMrForm');
+        const $dateRange = $('#CreateAutoDateRange');
+        const $dateCreate = $('input[name="CreateAutoDateCreate"]');
+        const $fromDate = $('input[name="CreateAutoFromDate"]');
+        const $toDate = $('input[name="CreateAutoToDate"]');
+
+        if ($dateRange.length > 0) {
+            window.initSimpleDateRange('CreateAutoDateRange', 'input[name="CreateAutoFromDate"]', 'input[name="CreateAutoToDate"]', {
+                linkedCalendars: false
+            });
+        }
 
         function setDefaults() {
             if ($filterStoreGroup.length > 0 && $storeGroupSelect.length > 0) {
@@ -648,6 +716,30 @@
                 const now = new Date();
                 const month = String(now.getMonth() + 1).padStart(2, '0');
                 $descInput.val(`Auto MR ${month}/${now.getFullYear()}`);
+            }
+
+            if ($dateCreate.length > 0 && !$dateCreate.val()) {
+                const now = new Date();
+                $dateCreate.val(now.toISOString().slice(0, 10));
+            }
+
+            if ($fromDate.length > 0 && !$fromDate.val()) {
+                const now = new Date();
+                now.setMonth(now.getMonth() - 3);
+                $fromDate.val(now.toISOString().slice(0, 10));
+            }
+
+            if ($toDate.length > 0 && !$toDate.val()) {
+                const now = new Date();
+                $toDate.val(now.toISOString().slice(0, 10));
+            }
+
+            if ($dateRange.length > 0) {
+                const fromValue = ($fromDate.val() || '').toString().trim();
+                const toValue = ($toDate.val() || '').toString().trim();
+                if (fromValue && toValue) {
+                    window.setDateRangeValue('CreateAutoDateRange', fromValue, toValue);
+                }
             }
         }
 

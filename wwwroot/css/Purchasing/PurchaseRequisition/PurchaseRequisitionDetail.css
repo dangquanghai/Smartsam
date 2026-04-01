@@ -1,7 +1,7 @@
-.prq-detail-grid {
+﻿.prq-detail-grid {
     display: grid;
-    grid-template-columns: max-content minmax(120px, 1fr) max-content minmax(100px, 1fr) max-content minmax(120px, 1fr) max-content minmax(120px, 1fr);
-    column-gap: 0.5rem;
+    grid-template-columns: max-content minmax(180px, 1fr) max-content minmax(180px, 1fr) max-content minmax(180px, 1fr);
+    column-gap: 0.75rem;
     row-gap: 0.5rem;
     align-items: center;
 }
@@ -18,7 +18,12 @@
 }
 
 .prq-detail-span-full {
-    grid-column: 2 / 9;
+    grid-column: 2 / 7;
+}
+
+.required-mark {
+    color: #dc3545;
+    margin-left: 2px;
 }
 
 .prq-detail-table-wrap {
@@ -38,16 +43,61 @@
     vertical-align: middle;
 }
 
+.prq-toolbar-top .btn,
+.prq-detail-record-total {
+    margin-bottom: 0.35rem;
+}
+
+.prq-detail-record-total {
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.prq-detail-row-selected {
+    background-color: #fff3cd !important;
+}
+
+.prq-detail-row-unsaved {
+    background-color: #eef7ff;
+}
+
+.text-transparent {
+    color: transparent;
+}
+
+.prq-attachment-note {
+    font-size: 0.8rem;
+    color: #6c757d;
+    font-weight: 400;
+}
+
+.prq-attachment-delete-form {
+    margin: 0;
+}
+
 .btn-action-add {
     background-color: #28a745;
     border-color: #28a745;
     color: #fff;
 }
 
-.btn-action-save {
+.btn-action-save,
+.btn-action-approve {
     background-color: #007bff;
     border-color: #007bff;
     color: #fff;
+}
+
+.btn-action-disapprove {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: #fff;
+}
+
+.btn-action-secondary {
+    background-color: #f8f9fa;
+    border-color: #ced4da;
+    color: #495057;
 }
 
 .btn-action-close {
@@ -58,7 +108,7 @@
 
 @media (max-width: 1199.98px) {
     .prq-detail-grid {
-        grid-template-columns: 130px minmax(0, 1fr);
+        grid-template-columns: 140px minmax(0, 1fr);
     }
 
     .prq-detail-span-full {

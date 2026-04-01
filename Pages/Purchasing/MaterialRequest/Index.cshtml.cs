@@ -33,6 +33,7 @@ public class IndexModel : BasePageModel
     private const string ConditionModeAllUsers = "allUsers";
     private const string ConditionModeStoreman = "storeman";
 
+
     private EmployeeMaterialScopeDto _dataScope = new EmployeeMaterialScopeDto();
     private bool _isAdminRole;
 
@@ -44,6 +45,7 @@ public class IndexModel : BasePageModel
     }
 
     [BindProperty(SupportsGet = true)]
+
     public MaterialRequestFilter Filter { get; set; } = new();
 
     public int DefaultPageSize
@@ -66,6 +68,18 @@ public class IndexModel : BasePageModel
     [BindProperty]
     public int? CreateAutoStoreGroup { get; set; }
 
+    [BindProperty]
+    public DateTime? CreateAutoDateCreate { get; set; }
+
+    [BindProperty]
+    public DateTime? CreateAutoFromDate { get; set; }
+
+    [BindProperty]
+    public DateTime? CreateAutoToDate { get; set; }
+
+    [BindProperty]
+    public long? CreateAutoRequestNoPreview { get; set; }
+
     [TempData]
     public string? SuccessMessage { get; set; }
 
@@ -78,7 +92,9 @@ public class IndexModel : BasePageModel
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
     public List<SelectListItem> StoreGroups { get; set; } = new List<SelectListItem>();
     public List<SelectListItem> Statuses { get; set; } = new List<SelectListItem>();
-    public List<MaterialRequestListRowDto> Rows { get; set; } = new List<MaterialRequestListRowDto>();
+   public List<MaterialRequestListRowDto> Rows { get; set; } = new List<MaterialRequestListRowDto>();
+    public bool CanCreateAutoMr => CanCreateAutoMrCore();
+    public bool CanCreateMr => AllowCreate();
 
     public int TotalRecords { get; set; }
     public int TotalPages
@@ -107,6 +123,9 @@ public class IndexModel : BasePageModel
     // ==========================================
     // 1. PAGE LOAD (GET)
     // ==========================================
+    /// <summary>
+    /// Xu ly GET cho trang danh sach MaterialRequest.
+    /// </summary>
     public void OnGet()
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
@@ -123,6 +142,7 @@ public class IndexModel : BasePageModel
 
         ApplyTempDataMessagesToModelState();
         NormalizeConditionMode();
+        PopulateCreateAutoDefaults(cancellationToken);
         if (Filter.PageSize <= 0)
         {
             Filter.PageSize = DefaultPageSize;
@@ -137,17 +157,23 @@ public class IndexModel : BasePageModel
             Filter.ToDate = DateTime.Today.Date;
         }
 
+        ApplyDefaultInboxStatusIfNeeded();
+        ApplyDefaultBuyFilterIfNeeded();
         ViewData["CanShowPcCondition"] = AllowShowPcCondition();
         ViewData["CanShowStoreCondition"] = AllowShowStoreCondition();
         ViewData["StoreGroupLocked"] = IsStoreGroupLocked();
         LoadFilters();
-        LoadRowsAsync(cancellationToken).GetAwaiter().GetResult();
         ViewData["DefaultPageSize"] = DefaultPageSize;
     }
 
     // ==========================================
     // 2. AJAX SEARCH AND ITEM ACTIONS
     // ==========================================
+    /// <summary>
+    /// Tim danh sach MaterialRequest theo bo loc.
+    /// </summary>
+    /// <param name="request">Du lieu tim kiem tu client.</param>
+    /// <returns>Ket qua JSON de render bang.</returns>
     public IActionResult OnPostSearch([FromBody] MaterialRequestSearchRequest request)
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
@@ -188,6 +214,7 @@ public class IndexModel : BasePageModel
         Filter.PageSize = request.PageSize <= 0 ? DefaultPageSize : Math.Min(request.PageSize, 200);
 
         NormalizeConditionMode();
+        ApplyDefaultInboxStatusIfNeeded();
 
         var result = _materialRequestService.SearchPagedAsync(BuildCriteria(includePaging: true), cancellationToken).GetAwaiter().GetResult();
         var totalPages = Filter.PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(result.TotalCount / (double)Filter.PageSize));
@@ -198,8 +225,9 @@ public class IndexModel : BasePageModel
             var effectivePerms = PagePerm.AllowedNos;
 
             var canEditRow = effectivePerms.Contains(PermissionEdit) && statusId == StatusJustCreated;
-            var canApprove = CanApproveStatus(statusId);
-            var canReject = CanRejectStatus(statusId);
+            var isAuto = r.IsAuto;
+            var canApprove = CanApproveStatus(statusId, isAuto);
+            var canReject = CanRejectStatus(statusId, isAuto);
 
             return new
             {
@@ -231,6 +259,14 @@ public class IndexModel : BasePageModel
     // ==========================================
     // 3. MATERIAL REQUEST CREATION ACTIONS
     // ==========================================
+    /// <summary>
+    /// Lay danh sach item cho popup tim kiem.
+    /// </summary>
+    /// <param name="itemCode">Ma item can tim.</param>
+    /// <param name="itemName">Ten item can tim.</param>
+    /// <param name="checkBalanceInStore">Co kiem tra ton kho hay khong.</param>
+    /// <param name="storeGroup">Store Group ap dung.</param>
+    /// <returns>Ket qua JSON cho lookup.</returns>
     public IActionResult OnGetSearchItems(string? itemCode, string? itemName, bool checkBalanceInStore = false, int? storeGroup = null)
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
@@ -252,6 +288,10 @@ public class IndexModel : BasePageModel
         return new JsonResult(new { success = true, data = items });
     }
 
+    /// <summary>
+    /// Tao MR thu cong tu popup.
+    /// </summary>
+    /// <returns>Chuyen ve man detail cua request moi.</returns>
     public IActionResult OnPostCreateMr()
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
@@ -334,6 +374,13 @@ public class IndexModel : BasePageModel
         }
     }
 
+    /// <summary>
+    /// Tao Auto MR tu form Generate MR.
+    /// Ham nay doc du lieu tu popup Generate MR, kiem tra scope hien tai cua user,
+    /// lay dung Store Group dang ap dung cho user do, sau do goi service de tao
+    /// header moi va fill detail bang rule legacy.
+    /// </summary>
+    /// <returns>Chuyen ve man detail cua request moi.</returns>
     public IActionResult OnPostCreateAuto()
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
@@ -341,12 +388,15 @@ public class IndexModel : BasePageModel
 
         PagePerm = new PagePermissions();
         PagePerm = GetUserPermissions();
+        // Doc scope truoc de biet Store Group nao dang ap dung cho user hien tai.
         LoadUserScopeAsync(cancellationToken).GetAwaiter().GetResult();
         if (!CanAccessPage() || !AllowCreateAuto())
         {
             return Forbid();
         }
 
+        // Auto MR chi nam tren 1 Store Group. Neu scope bi khoa thi dung group hien tai,
+        // con neu scope mo thi form van can co mot group dang duoc chon hop le.
         if (IsStoreGroupLocked() && !_dataScope.StoreGroup.HasValue)
         {
             WarningMessage = "Store Group scope is required.";
@@ -363,35 +413,25 @@ public class IndexModel : BasePageModel
             return RedirectToPage("./Index");
         }
 
-        var lines = _materialRequestService.BuildAutoLinesAsync(scopedStoreGroup.Value, cancellationToken).GetAwaiter().GetResult().ToList();
-        if (lines.Count == 0)
-        {
-            WarningMessage = "No item template found for Auto MR.";
-            return RedirectToPage("./Index");
-        }
-
+        // Lay gia tri tu popup, neu nguoi dung khong nhap thi dung mac dinh an toan.
+        var dateCreate = CreateAutoDateCreate ?? DateTime.Today;
+        var fromDate = CreateAutoFromDate ?? dateCreate.AddMonths(-3);
+        var toDate = CreateAutoToDate ?? dateCreate;
+        // Theo form Generate MR, if user does not type text then use month text.
         var description = string.IsNullOrWhiteSpace(CreateAutoDescription)
-            ? $"Auto MR {DateTime.Today:MM/yyyy}"
+            ? $"Auto MR {dateCreate:MM/yyyy}"
             : CreateAutoDescription.Trim();
-
-        var header = new MaterialRequestDetailDto
-        {
-            StoreGroup = scopedStoreGroup,
-            DateCreate = DateTime.Today,
-            FromDate = DateTime.Today.AddMonths(-3),
-            ToDate = DateTime.Today,
-            AccordingTo = description,
-            MaterialStatusId = StatusJustCreated,
-            NoIssue = 0,
-            IsAuto = true,
-            Approval = false,
-            ApprovalEnd = false,
-            PostPr = false
-        };
 
         try
         {
-            var requestNo = _materialRequestService.SaveAsync(null, header, lines, cancellationToken).GetAwaiter().GetResult();
+            // Auto MR uses the old DB rule.
+            var requestNo = _materialRequestService.CreateAutoRequestAsync(
+                scopedStoreGroup.Value,
+                dateCreate,
+                fromDate,
+                toDate,
+                description,
+                cancellationToken).GetAwaiter().GetResult();
             SuccessMessage = "Auto Material Request created successfully.";
             return RedirectToPage("./MaterialRequestDetail", new { id = requestNo, mode = "edit" });
         }
@@ -405,6 +445,9 @@ public class IndexModel : BasePageModel
     // ==========================================
     // 4. FILTER AND DROPDOWN HELPERS
     // ==========================================
+    /// <summary>
+    /// Nap danh sach bo loc va dropdown cho trang.
+    /// </summary>
     private void LoadFilters()
     {
         var stores = LoadListFromSql(
@@ -462,9 +505,58 @@ public class IndexModel : BasePageModel
         }
     }
 
+    /// <summary>
+    /// Nap gia tri mac dinh cho form Generate MR.
+    /// </summary>
+    /// <param name="cancellationToken">Token de huy yeu cau neu can.</param>
+    private void PopulateCreateAutoDefaults(CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!CreateAutoRequestNoPreview.HasValue || CreateAutoRequestNoPreview.Value <= 0)
+            {
+                var connectionString = _config.GetConnectionString("DefaultConnection")
+                    ?? throw new InvalidOperationException("Missing connection string: DefaultConnection");
+                var previewValue = Helper.ExecuteScalarAsync(
+                    connectionString,
+                    "SELECT ISNULL(MAX(REQUEST_NO), 0) + 1 FROM dbo.MATERIAL_REQUEST",
+                    cancellationToken: cancellationToken).GetAwaiter().GetResult();
+                CreateAutoRequestNoPreview = Convert.ToInt64(previewValue ?? 0L);
+            }
+        }
+        catch
+        {
+            CreateAutoRequestNoPreview = null;
+        }
+
+        if (!CreateAutoDateCreate.HasValue)
+        {
+            CreateAutoDateCreate = DateTime.Today;
+        }
+
+        if (!CreateAutoFromDate.HasValue)
+        {
+            CreateAutoFromDate = CreateAutoDateCreate.Value.AddMonths(-3);
+        }
+
+        if (!CreateAutoToDate.HasValue)
+        {
+            CreateAutoToDate = CreateAutoDateCreate.Value;
+        }
+
+        if (string.IsNullOrWhiteSpace(CreateAutoDescription))
+        {
+            CreateAutoDescription = $"Auto MR {CreateAutoDateCreate.Value:MM/yyyy}";
+        }
+    }
+
     // ==========================================
     // 5. SHARED DATA TRANSFORM HELPERS
     // ==========================================
+    /// <summary>
+    /// Nap du lieu grid theo bo loc hien tai.
+    /// </summary>
+    /// <param name="cancellationToken">Token de huy yeu cau neu can.</param>
     private async Task LoadRowsAsync(CancellationToken cancellationToken)
     {
         if (Filter.PageSize <= 0) Filter.PageSize = DefaultPageSize;
@@ -483,6 +575,11 @@ public class IndexModel : BasePageModel
         Rows = result.Rows;
     }
 
+    /// <summary>
+    /// Tao criteria de query danh sach.
+    /// </summary>
+    /// <param name="includePaging">Co them phan trang hay khong.</param>
+    /// <returns>Criteria cho query.</returns>
     private MaterialRequestFilterCriteria BuildCriteria(bool includePaging)
     {
         var scopedStoreGroup = IsStoreGroupLocked()
@@ -497,7 +594,8 @@ public class IndexModel : BasePageModel
             StatusIds = isStoremanMode ? new List<int>() : (Filter.StatusIds ?? new List<int>()),
             ItemCode = isStoremanMode && !string.IsNullOrWhiteSpace(Filter.ItemCode) ? Filter.ItemCode.Trim() : null,
             NoIssue = isStoremanMode && Filter.IssueLessThanOrder ? 1 : null,
-            IsAuto = isStoremanMode ? null : (Filter.AutoOnly ? true : null),
+            // Check = show Auto MR only. Uncheck = hide Auto MR and keep non-auto rows.
+            IsAuto = isStoremanMode ? null : (Filter.AutoOnly ? true : false),
             BuyGreaterThanZero = isStoremanMode ? null : (Filter.BuyGreaterThanZero ? true : null),
             FromDate = Filter.FromDate?.Date,
             ToDate = Filter.ToDate?.Date,
@@ -507,6 +605,9 @@ public class IndexModel : BasePageModel
         };
     }
 
+    /// <summary>
+    /// Chuan hoa mode loc cua trang.
+    /// </summary>
     private void NormalizeConditionMode()
     {
         if (AllowShowStoreCondition() && !AllowShowPcCondition())
@@ -536,6 +637,10 @@ public class IndexModel : BasePageModel
         Filter.ConditionMode = ConditionModeStoreman;
     }
 
+    /// <summary>
+    /// Nap scope va quyen cua user hien tai.
+    /// </summary>
+    /// <param name="cancellationToken">Token de huy yeu cau neu can.</param>
     private async Task LoadUserScopeAsync(CancellationToken cancellationToken)
     {
         _isAdminRole = IsAdminUser();
@@ -548,6 +653,10 @@ public class IndexModel : BasePageModel
         _dataScope = await _materialRequestService.GetEmployeeScopeAsync(User.Identity?.Name, cancellationToken);
     }
 
+    /// <summary>
+    /// Lay quyen page cua user.
+    /// </summary>
+    /// <returns>Thong tin quyen trang.</returns>
     private PagePermissions GetUserPermissions()
     {
         bool isAdmin = IsAdminUser();
@@ -567,6 +676,10 @@ public class IndexModel : BasePageModel
         return permsObj;
     }
 
+    /// <summary>
+    /// Kiem tra user co la admin hay khong.
+    /// </summary>
+    /// <returns>True neu la admin.</returns>
     private bool IsAdminUser()
     {
         var adminClaim = (User.FindFirst("IsAdminRole")?.Value ?? string.Empty).Trim();
@@ -619,6 +732,10 @@ public class IndexModel : BasePageModel
         }
     }
 
+    /// <summary>
+    /// Kiem tra user co duoc vao trang hay khong.
+    /// </summary>
+    /// <returns>True neu co quyen vao trang.</returns>
     private bool CanAccessPage()
     {
         return User.Identity?.IsAuthenticated == true
@@ -631,46 +748,132 @@ public class IndexModel : BasePageModel
             || HasPermission(7);
     }
 
+    /// <summary>
+    /// Kiem tra user co quyen so can dung hay khong.
+    /// </summary>
+    /// <param name="permissionNo">So quyen can kiem tra.</param>
+    /// <returns>True neu co quyen.</returns>
     private bool HasPermission(int permissionNo)
     {
         return PagePerm.HasPermission(permissionNo);
     }
 
+    /// <summary>
+    /// Kiem tra co hien nut Create MR hay khong.
+    /// </summary>
+    /// <returns>True neu duoc tao MR thu cong.</returns>
     private bool AllowCreate()
     {
-        return User.Identity?.IsAuthenticated == true || IsAdminUser();
+        return CanCreateDraftMaterialRequest();
     }
 
+    /// <summary>
+    /// Kiem tra co hien nut CreateAT hay khong.
+    /// </summary>
+    /// <returns>True neu duoc tao Auto MR.</returns>
     private bool AllowCreateAuto()
     {
-        return IsAdminUser() || HasPermission(PermissionCreateAuto);
+        return CanCreateAutoMrCore();
     }
 
+    /// <summary>
+    /// Kiem tra dieu kien nghiep vu de tao Auto MR.
+    /// </summary>
+    /// <returns>True neu user duoc tao Auto MR.</returns>
+    private bool CanCreateAutoMrCore()
+    {
+        return IsAdminUser()
+            || (_dataScope.IsInventoryControlInDep && _dataScope.StoreGroup.HasValue);
+    }
+
+    /// <summary>
+    /// Check if the user can create or edit a draft MR.
+    /// Normal scoped users are allowed. Workflow users need Edit permission.
+    /// </summary>
+    /// <returns>True if draft MR actions are allowed.</returns>
+    private bool CanCreateDraftMaterialRequest()
+    {
+        if (IsAdminUser())
+        {
+            return true;
+        }
+
+        var isWorkflowUser = _dataScope.IsHeadDept
+            || _dataScope.IsPurchaser
+            || _dataScope.IsCFO
+            || _dataScope.IsBOD
+            || _dataScope.ApprovalLevel >= 2;
+
+        if (!isWorkflowUser)
+        {
+            return User.Identity?.IsAuthenticated == true;
+        }
+
+        return HasPermission(PermissionEdit);
+    }
+
+    /// <summary>
+    /// Kiem tra co duoc sua MR hay khong.
+    /// </summary>
+    /// <returns>True neu duoc edit.</returns>
     private bool AllowEdit()
     {
         return IsAdminUser() || HasPermission(PermissionEdit);
     }
 
-    private bool AllowShowAll()
+    /// <summary>
+    /// Kiem tra co xem duoc tat ca MR hay khong.
+    /// </summary>
+    /// <returns>True neu duoc xem all MR.</returns>
+    private bool CanShowAllRequests()
     {
-        return IsAdminUser() || HasPermission(PermissionShowAll) || _dataScope.ApprovalLevel >= 2;
+        return IsAdminUser()
+            || HasPermission(PermissionShowAll);
     }
 
+    /// <summary>
+    /// Kiem tra co mo het Store Group hay khong.
+    /// </summary>
+    /// <returns>True neu duoc mo scope Store Group.</returns>
+    private bool CanAccessAllStoreGroups()
+    {
+        return IsAdminUser()
+            || _dataScope.IsPurchaser
+            || _dataScope.IsCFO
+            || _dataScope.IsBOD
+            || _dataScope.ApprovalLevel >= 2;
+    }
+
+    /// <summary>
+    /// Kiem tra dieu kien xem nhom PC.
+    /// </summary>
+    /// <returns>True neu co the xem PC condition.</returns>
     private bool AllowShowPcCondition()
     {
         return User.Identity?.IsAuthenticated == true;
     }
 
+    /// <summary>
+    /// Kiem tra dieu kien xem nhom Store.
+    /// </summary>
+    /// <returns>True neu co the xem Store condition.</returns>
     private bool AllowShowStoreCondition()
     {
         return IsAdminUser() || HasPermission(PermissionShowStore);
     }
 
+    /// <summary>
+    /// Kiem tra Store Group co bi khoa theo scope khong.
+    /// </summary>
+    /// <returns>True neu Store Group dang bi khoa.</returns>
     private bool IsStoreGroupLocked()
     {
-        return !AllowShowAll();
+        return !CanAccessAllStoreGroups();
     }
 
+    /// <summary>
+    /// Day message tu TempData vao ModelState.
+    /// </summary>
     private void ApplyTempDataMessagesToModelState()
     {
         if (!string.IsNullOrWhiteSpace(ErrorMessage))
@@ -684,45 +887,108 @@ public class IndexModel : BasePageModel
         }
     }
 
-    private bool CanApproveStatus(int statusId)
+    /// <summary>
+    /// Dat status inbox mac dinh neu user chua chon gi.
+    /// </summary>
+    private void ApplyDefaultInboxStatusIfNeeded()
+    {
+        if (Filter.StatusIds is { Count: > 0 })
+        {
+            return;
+        }
+
+        Filter.StatusIds = new List<int> { GetDefaultInboxStatusId() };
+    }
+
+    /// <summary>
+    /// Bat loc Buy > 0 mac dinh cho CFO / cap approval cao khi page vua load.
+    /// User van co the bo chon sau khi form da hien ra.
+    /// </summary>
+    private void ApplyDefaultBuyFilterIfNeeded()
+    {
+        if (Request.Query.ContainsKey("Filter.BuyGreaterThanZero"))
+        {
+            return;
+        }
+
+        if (_dataScope.IsCFO || _dataScope.ApprovalLevel >= 3)
+        {
+            Filter.BuyGreaterThanZero = true;
+        }
+    }
+
+    /// <summary>
+    /// Lay status inbox mac dinh theo role.
+    /// </summary>
+    /// <returns>Status mac dinh.</returns>
+    private int GetDefaultInboxStatusId()
+    {
+        if (_dataScope.IsHeadDept)
+        {
+            return 0;
+        }
+
+        if (_dataScope.IsCFO || _dataScope.ApprovalLevel >= 3)
+        {
+            return 2;
+        }
+
+        if (_dataScope.IsPurchaser || _dataScope.ApprovalLevel >= 2)
+        {
+            return 1;
+        }
+
+        return StatusJustCreated;
+    }
+
+    /// <summary>
+    /// Kiem tra status nao duoc phe duyet.
+    /// </summary>
+    /// <param name="statusId">Status cua MR.</param>
+    /// <param name="isAuto">True neu la Auto MR.</param>
+    /// <returns>True neu duoc approve.</returns>
+    private bool CanApproveStatus(int statusId, bool isAuto)
     {
         if (_isAdminRole)
         {
             return true;
         }
 
-        if (statusId == 1)
+        return statusId switch
         {
-            return _dataScope.IsHeadDept || _dataScope.ApprovalLevel >= 2;
-        }
-
-        if (statusId == 2)
-        {
-            return _dataScope.ApprovalLevel >= 2;
-        }
-
-        if (statusId == 3)
-        {
-            return _dataScope.ApprovalLevel >= 3;
-        }
-
-        return false;
+            1 => _dataScope.IsHeadDept,
+            2 => _dataScope.IsPurchaser,
+            3 => !isAuto && _dataScope.IsCFO,
+            _ => false
+        };
     }
 
-    private bool CanRejectStatus(int statusId)
+    /// <summary>
+    /// Kiem tra status nao duoc reject.
+    /// </summary>
+    /// <param name="statusId">Status cua MR.</param>
+    /// <param name="isAuto">True neu la Auto MR.</param>
+    /// <returns>True neu duoc reject.</returns>
+    private bool CanRejectStatus(int statusId, bool isAuto)
     {
         if (_isAdminRole)
         {
             return true;
         }
-        if (statusId is not (1 or 2 or 3))
+        return statusId switch
         {
-            return false;
-        }
-
-        return _dataScope.IsHeadDept || _dataScope.ApprovalLevel >= 2;
+            1 => _dataScope.IsHeadDept,
+            2 => _dataScope.IsPurchaser,
+            3 => !isAuto && _dataScope.IsCFO,
+            _ => false
+        };
     }
 
+    /// <summary>
+    /// Doc danh sach item tu JSON cua form tao MR.
+    /// </summary>
+    /// <param name="json">Chuoi JSON tu client.</param>
+    /// <returns>Danh sach item da doc.</returns>
     private static List<MaterialRequestItemLookupDto> ParseCreateItems(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
@@ -752,6 +1018,11 @@ public class IndexModel : BasePageModel
         }
     }
 
+    /// <summary>
+    /// Doi item lookup sang detail line.
+    /// </summary>
+    /// <param name="items">Danh sach item lookup.</param>
+    /// <returns>Danh sach line de save.</returns>
     private static List<MaterialRequestLineDto> MapItemsToCreateLines(IEnumerable<MaterialRequestItemLookupDto> items)
     {
         var result = new List<MaterialRequestLineDto>();
@@ -773,6 +1044,7 @@ public class IndexModel : BasePageModel
                 InStock = item.InStock,
                 AccIn = 0,
                 Buy = 0,
+                NormMain = 0,
                 Price = 0,
                 Note = string.Empty,
                 NewItem = false,
@@ -790,6 +1062,9 @@ public class MaterialRequestFilter
 {
     public string? RequestNo { get; set; }
     public int? StoreGroup { get; set; }
+    /// <summary>
+    /// Ham List<int>.
+    /// </summary>
     public List<int> StatusIds { get; set; } = new List<int>();
     public string? ItemCode { get; set; }
     public bool IssueLessThanOrder { get; set; }
@@ -844,6 +1119,9 @@ public class MaterialRequestFilterCriteria
 
 public class MaterialRequestSearchResultDto
 {
+    /// <summary>
+    /// Ham List<MaterialRequestListRowDto>.
+    /// </summary>
     public List<MaterialRequestListRowDto> Rows { get; set; } = new List<MaterialRequestListRowDto>();
     public int TotalCount { get; set; }
 }
@@ -919,6 +1197,7 @@ public class MaterialRequestLineDto
     public decimal? InStock { get; set; }
     public decimal? AccIn { get; set; }
     public decimal? Buy { get; set; }
+    public decimal? NormMain { get; set; }
     public decimal? Price { get; set; }
 
     [StringLength(255, ErrorMessage = "Note must be at most 255 characters.")]
@@ -926,6 +1205,7 @@ public class MaterialRequestLineDto
 
     public bool NewItem { get; set; }
     public bool Selected { get; set; }
+    public decimal? Issued { get; set; }
 }
 
 public class MaterialRequestLineReadonlySnapshotDto
@@ -963,12 +1243,18 @@ public class MaterialRequestItemLookupDto
 public class MaterialRequestService
 {
     private readonly string _connectionString;
+    /// <summary>
+    /// Ham MaterialRequestService.
+    /// </summary>
     public MaterialRequestService(IConfiguration configuration)
     {
         _connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Missing connection string: DefaultConnection");
     }
 
+    /// <summary>
+    /// Lay scope cua employee cho MaterialRequest.
+    /// </summary>
     public async Task<EmployeeMaterialScopeDto> GetEmployeeScopeAsync(string? employeeCode, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(employeeCode))
@@ -1007,6 +1293,9 @@ public class MaterialRequestService
             cancellationToken) ?? new EmployeeMaterialScopeDto();
     }
 
+    /// <summary>
+    /// Lay danh sach Store Group.
+    /// </summary>
     public async Task<IReadOnlyList<MaterialRequestLookupOptionDto>> GetStoreGroupsAsync(CancellationToken cancellationToken = default)
     {
         const string sql = @"
@@ -1034,6 +1323,9 @@ public class MaterialRequestService
         return rows;
     }
 
+    /// <summary>
+    /// Lay danh sach status MR.
+    /// </summary>
     public async Task<IReadOnlyList<MaterialRequestLookupOptionDto>> GetStatusesAsync(CancellationToken cancellationToken = default)
     {
         const string sql = @"
@@ -1055,6 +1347,98 @@ public class MaterialRequestService
         return rows;
     }
 
+    /// <summary>
+    /// Tao Auto MR theo rule cu: lay so moi, tao header moi, roi goi HaiGenMR de fill detail.
+    /// </summary>
+    /// <param name="storeGroup">Store Group hien tai duoc dung de tao Auto MR.</param>
+    /// <param name="dateCreate">Ngay tao MR.</param>
+    /// <param name="fromDate">Ngay bat dau ky lay lieu.</param>
+    /// <param name="toDate">Ngay ket thuc ky lay lieu.</param>
+    /// <param name="accordingTo">Noi dung According/Description cua MR.</param>
+    /// <param name="cancellationToken">Token de huy yeu cau neu can.</param>
+    /// <returns>Request No moi vua tao.</returns>
+    public async Task<long> CreateAutoRequestAsync(
+        int storeGroup,
+        DateTime dateCreate,
+        DateTime fromDate,
+        DateTime toDate,
+        string accordingTo,
+        CancellationToken cancellationToken = default)
+    {
+        // Legacy luong nay can giu request no, header insert, va proc fill detail trong cung transaction.
+        var normalizedAccording = string.IsNullOrWhiteSpace(accordingTo)
+            ? $"Auto MR {dateCreate:MM/yyyy}"
+            : accordingTo.Trim();
+
+        if (normalizedAccording.Length > 50)
+        {
+            normalizedAccording = normalizedAccording[..50];
+        }
+
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync(cancellationToken);
+        await using var tx = await conn.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            // Xin Request No tiep theo trong cung transaction de tranh trung so khi nhieu nguoi bam Generate cung luc.
+            var requestNo = await GetNextRequestNoAsync(conn, (SqlTransaction)tx, cancellationToken);
+
+            // HaiGenMR khong tu tao header. No can mot dong header san co de update lai sau do fill detail.
+            const string insertHeaderSql = @"
+                INSERT INTO dbo.MATERIAL_REQUEST
+                (
+                    REQUEST_NO, STORE_GROUP, DATE_CREATE, ACCORDINGTO, APPROVAL, POST_PR, IS_AUTO,
+                    FROM_DATE, TO_DATE, APPROVAL_END, MATERIALSTATUSID, PRNO, NO_ISSUE
+                )
+                VALUES
+                (
+                    @RequestNo, @StoreGroup, @DateCreate, @AccordingTo, 0, 0, 1,
+                    @FromDate, @ToDate, 0, -1, NULL, 0
+                )";
+
+            await using (var insertCmd = new SqlCommand(insertHeaderSql, conn, (SqlTransaction)tx))
+            {
+                AddNumeric18_0Param(insertCmd, "@RequestNo", requestNo);
+                AddNumeric18_0Param(insertCmd, "@StoreGroup", storeGroup);
+                AddDateTimeParam(insertCmd, "@DateCreate", dateCreate);
+                Helper.AddParameter(insertCmd, "@AccordingTo", normalizedAccording, SqlDbType.VarChar, 50);
+                AddDateTimeParam(insertCmd, "@FromDate", fromDate);
+                AddDateTimeParam(insertCmd, "@ToDate", toDate);
+                await insertCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            // Goi proc legacy de tinh va insert detail lines theo dung rule cu cua DB.
+            // Proc nay se update header ben tren va do ra cac dong detail can mua.
+            await using (var procCmd = new SqlCommand("dbo.HaiGenMR", conn, (SqlTransaction)tx))
+            {
+                procCmd.CommandType = CommandType.StoredProcedure;
+                AddNumeric18_0Param(procCmd, "@ReQuestNo", requestNo);
+                AddDateTimeParam(procCmd, "@DateCreate", dateCreate);
+                Helper.AddParameter(procCmd, "@According", normalizedAccording, SqlDbType.VarChar, 50);
+                AddDateTimeParam(procCmd, "@FromDate", fromDate);
+                AddDateTimeParam(procCmd, "@ToDate", toDate);
+                AddNumeric18_0Param(procCmd, "@KPGroup", storeGroup);
+                AddNumeric18_0Param(procCmd, "@MainGRStore", 1);
+
+                await procCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            // Chi commit khi ca header insert va proc fill detail deu thanh cong.
+            await tx.CommitAsync(cancellationToken);
+            return requestNo;
+        }
+        catch
+        {
+            // Neu co loi o bat ky buoc nao thi rollback het de khong de lai MR do.
+            await tx.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Tim danh sach MR theo bo loc va phan trang.
+    /// </summary>
     public async Task<MaterialRequestSearchResultDto> SearchPagedAsync(MaterialRequestFilterCriteria criteria, CancellationToken cancellationToken = default)
     {
         var pageIndex = criteria.PageIndex.GetValueOrDefault() <= 0 ? 1 : criteria.PageIndex!.Value;
@@ -1167,6 +1551,9 @@ public class MaterialRequestService
         };
     }
 
+    /// <summary>
+    /// Lay header cua MR.
+    /// </summary>
     public async Task<MaterialRequestDetailDto?> GetDetailAsync(long requestNo, CancellationToken cancellationToken = default)
     {
         const string sql = @"
@@ -1210,6 +1597,9 @@ public class MaterialRequestService
             cancellationToken);
     }
 
+    /// <summary>
+    /// Lay danh sach detail line cua MR.
+    /// </summary>
     public async Task<IReadOnlyList<MaterialRequestLineDto>> GetLinesAsync(long requestNo, CancellationToken cancellationToken = default)
     {
         const string sql = @"
@@ -1223,10 +1613,12 @@ public class MaterialRequestService
                 d.INSTOCK,
                 d.acctualyInventory,
                 d.BUY,
+                ISNULL(d.NORM_Q_MAIN, 0) AS NORM_Q_MAIN,
                 d.PRICE,
                 d.NOTE,
                 ISNULL(d.NEW_ITEM, 0) AS NEW_ITEM,
-                ISNULL(d.SELECTED, 0) AS SELECTED
+                ISNULL(d.SELECTED, 0) AS SELECTED,
+                ISNULL(d.ISSUED, 0) AS ISSUED
             FROM dbo.MATERIAL_REQUEST_DETAIL d
             LEFT JOIN dbo.INV_ItemList i ON i.ItemCode = d.ITEMCODE
             WHERE REQUEST_NO = @RequestNo
@@ -1246,10 +1638,12 @@ public class MaterialRequestService
                 InStock = rd.IsDBNull(6) ? null : Convert.ToDecimal(rd[6]),
                 AccIn = rd.IsDBNull(7) ? null : Convert.ToDecimal(rd[7]),
                 Buy = rd.IsDBNull(8) ? null : Convert.ToDecimal(rd[8]),
-                Price = rd.IsDBNull(9) ? null : Convert.ToDecimal(rd[9]),
-                Note = rd[10]?.ToString(),
-                NewItem = !rd.IsDBNull(11) && Convert.ToBoolean(rd[11]),
-                Selected = !rd.IsDBNull(12) && Convert.ToBoolean(rd[12])
+                NormMain = rd.IsDBNull(9) ? null : Convert.ToDecimal(rd[9]),
+                Price = rd.IsDBNull(10) ? null : Convert.ToDecimal(rd[10]),
+                Note = rd[11]?.ToString(),
+                NewItem = !rd.IsDBNull(12) && Convert.ToBoolean(rd[12]),
+                Selected = !rd.IsDBNull(13) && Convert.ToBoolean(rd[13]),
+                Issued = rd.IsDBNull(14) ? null : Convert.ToDecimal(rd[14])
             },
             cmd => AddNumeric18_0Param(cmd, "@RequestNo", requestNo),
             cancellationToken);
@@ -1257,6 +1651,9 @@ public class MaterialRequestService
         return rows;
     }
 
+    /// <summary>
+    /// Lay snapshot chi doc cua cac line da luu.
+    /// </summary>
     public async Task<Dictionary<string, MaterialRequestLineReadonlySnapshotDto>> GetLineReadonlySnapshotsAsync(long requestNo, CancellationToken cancellationToken = default)
     {
         const string sql = @"
@@ -1303,6 +1700,83 @@ public class MaterialRequestService
         return snapshots;
     }
 
+    /// <summary>
+    /// Tinh lai cac line cho Purchaser.
+    /// </summary>
+    public async Task CalculatePurchaserLinesAsync(
+        long requestNo,
+        int storeGroup,
+        IList<MaterialRequestLineDto> lines,
+        CancellationToken cancellationToken = default)
+    {
+        if (lines.Count == 0)
+        {
+            return;
+        }
+
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync(cancellationToken);
+
+        foreach (var line in lines)
+        {
+            var itemCode = (line.ItemCode ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(itemCode))
+            {
+                continue;
+            }
+
+            if (itemCode.StartsWith("ORDER", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var normMain = 0m;
+            var normDept = 0m;
+            var rawInventory = 0m;
+            var reservedQty = 0m;
+            int? itemId = null;
+
+            await using (var itemCmd = new SqlCommand(@"
+                SELECT TOP 1
+                    i.ItemID,
+                    CAST(COALESCE(NULLIF(i.StoreNormInMain, 0), NULLIF(i.ReOrderPoint, 0), 1) AS decimal(18,2)) AS NormMain,
+                    CAST(ISNULL(kgi.ReOrderPoint, 0) AS decimal(18,2)) AS NormDept
+                FROM dbo.INV_ItemList i
+                LEFT JOIN dbo.INV_KPGroupIndex kgi
+                    ON kgi.ItemID = i.ItemID
+                   AND kgi.KPGroupID = @StoreGroup
+                WHERE i.ItemCode = @ItemCode", conn))
+            {
+                Helper.AddParameter(itemCmd, "@ItemCode", itemCode, SqlDbType.VarChar, 20);
+                Helper.AddParameter(itemCmd, "@StoreGroup", storeGroup, SqlDbType.Int);
+
+                await using var reader = await itemCmd.ExecuteReaderAsync(cancellationToken);
+                if (await reader.ReadAsync(cancellationToken))
+                {
+                    itemId = reader.IsDBNull(0) ? (int?)null : Convert.ToInt32(reader[0]);
+                    normMain = reader.IsDBNull(1) ? 0m : Convert.ToDecimal(reader[1]);
+                    normDept = reader.IsDBNull(2) ? 0m : Convert.ToDecimal(reader[2]);
+                }
+            }
+
+            if (itemId.HasValue)
+            {
+                rawInventory = await GetMainInventoryAsync(conn, itemId.Value, storeGroup, cancellationToken);
+            }
+
+            reservedQty = await GetReservedQtyAsync(conn, requestNo, itemCode, cancellationToken);
+
+            line.NormMain = normMain;
+            line.NotReceipt = reservedQty;
+            line.AccIn = rawInventory;
+            line.InStock = rawInventory - reservedQty;
+            line.Buy = (line.OrderQty ?? 0m) + normMain + normDept - (line.InStock ?? 0m);
+        }
+    }
+
+    /// <summary>
+    /// Lay don vi cua item.
+    /// </summary>
     public async Task<Dictionary<string, string>> GetItemUnitsAsync(IEnumerable<string> itemCodes, CancellationToken cancellationToken = default)
     {
         var normalizedCodes = itemCodes
@@ -1354,6 +1828,96 @@ public class MaterialRequestService
         return unitMap;
     }
 
+    /// <summary>
+    /// Lay ton kho chinh cua item.
+    /// </summary>
+    private static async Task<decimal> GetMainInventoryAsync(SqlConnection conn, int itemId, int storeGroup, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            SELECT
+                ISNULL(bg.BGQty, 0)
+                + ISNULL(rcv.RecQty, 0)
+                - ISNULL(iss.IssQty, 0) AS EndQty
+            FROM
+                (
+                    SELECT SUM(bg.BGQuantity) AS BGQty
+                    FROM dbo.INV_ItemStoreBG bg
+                    INNER JOIN dbo.INV_StoreList sl ON bg.StoreID = sl.StoreID
+                    INNER JOIN dbo.INV_KPGroup kp ON sl.DeptID = kp.KPGroupID
+                    WHERE bg.[Year] = YEAR(GETDATE())
+                      AND bg.ItemID = @ItemID
+                      AND kp.KPGroupID = @StoreGroup
+                      AND sl.StoreID <> 23
+                      AND sl.StoreID <> 24
+                ) bg
+            CROSS APPLY
+                (
+                    SELECT SUM(fd.Act_Qty) AS RecQty
+                    FROM dbo.INV_ItemFlowDetail fd
+                    INNER JOIN dbo.INV_ItemFlow f ON fd.FlowID = f.FlowID
+                    INNER JOIN dbo.INV_StoreList sl ON f.ToStore = sl.StoreID
+                    INNER JOIN dbo.INV_KPGroup kp ON sl.DeptID = kp.KPGroupID
+                    WHERE (f.FlowType = 2 OR f.FlowType = 3)
+                      AND YEAR(f.FlowDate) = YEAR(GETDATE())
+                      AND fd.ItemID = @ItemID
+                      AND kp.KPGroupID = @StoreGroup
+                      AND sl.StoreID <> 23
+                      AND sl.StoreID <> 24
+                ) rcv
+            CROSS APPLY
+                (
+                    SELECT SUM(fd.Act_Qty) AS IssQty
+                    FROM dbo.INV_ItemFlowDetail fd
+                    INNER JOIN dbo.INV_ItemFlow f ON fd.FlowID = f.FlowID
+                    INNER JOIN dbo.INV_StoreList sl ON f.FromStore = sl.StoreID
+                    INNER JOIN dbo.INV_KPGroup kp ON sl.DeptID = kp.KPGroupID
+                    WHERE (f.FlowType = 1 OR f.FlowType = 3)
+                      AND YEAR(f.FlowDate) = YEAR(GETDATE())
+                      AND fd.ItemID = @ItemID
+                      AND kp.KPGroupID = @StoreGroup
+                      AND sl.StoreID <> 23
+                      AND sl.StoreID <> 24
+                ) iss";
+
+        await using var cmd = new SqlCommand(sql, conn);
+        Helper.AddParameter(cmd, "@ItemID", itemId, SqlDbType.Int);
+        Helper.AddParameter(cmd, "@StoreGroup", storeGroup, SqlDbType.Int);
+
+        var value = await cmd.ExecuteScalarAsync(cancellationToken);
+        return value == null || value == DBNull.Value ? 0m : Convert.ToDecimal(value);
+    }
+
+    /// <summary>
+    /// Lay so luong da giu o cac MR khac.
+    /// </summary>
+    private static async Task<decimal> GetReservedQtyAsync(SqlConnection conn, long requestNo, string itemCode, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            SELECT ISNULL(SUM(
+                CASE
+                    WHEN ISNULL(d.NEW_ORDER, 0) - ISNULL(d.ISSUED, 0) > 0
+                        THEN ISNULL(d.NEW_ORDER, 0) - ISNULL(d.ISSUED, 0)
+                    ELSE 0
+                END
+            ), 0)
+            FROM dbo.MATERIAL_REQUEST r
+            INNER JOIN dbo.MATERIAL_REQUEST_DETAIL d ON r.REQUEST_NO = d.REQUEST_NO
+            WHERE d.ITEMCODE = @ItemCode
+              AND r.REQUEST_NO <> @RequestNo
+              AND ISNULL(r.NO_ISSUE, 0) = 0
+              AND r.MATERIALSTATUSID BETWEEN 2 AND 4";
+
+        await using var cmd = new SqlCommand(sql, conn);
+        AddNumeric18_0Param(cmd, "@RequestNo", requestNo);
+        Helper.AddParameter(cmd, "@ItemCode", itemCode, SqlDbType.VarChar, 20);
+
+        var value = await cmd.ExecuteScalarAsync(cancellationToken);
+        return value == null || value == DBNull.Value ? 0m : Convert.ToDecimal(value);
+    }
+
+    /// <summary>
+    /// Luu MR vao database.
+    /// </summary>
     public async Task<long> SaveAsync(long? requestNo, MaterialRequestDetailDto header, IReadOnlyList<MaterialRequestLineDto> lines, CancellationToken cancellationToken = default)
     {
         await using var conn = new SqlConnection(_connectionString);
@@ -1431,7 +1995,7 @@ public class MaterialRequestService
                     (
                         @RequestNo, @ItemCode, @Unit, 0, 0, 0, 0,
                         0, @NotReceipt, @OrderQty, @InStock, @AccIn, @Buy, 0,
-                        @NewItem, @Selected, 0, @Price, @Note, 0, 0, 0, 0
+                        @NewItem, @Selected, @NormMain, @Price, @Note, 0, 0, 0, 0
                     )";
 
                 foreach (var line in lines)
@@ -1445,6 +2009,7 @@ public class MaterialRequestService
                     AddDecimal18_2Param(lineCmd, "@InStock", line.InStock ?? 0m);
                     AddDecimal18_2Param(lineCmd, "@AccIn", line.AccIn ?? 0m);
                     AddDecimal18_2Param(lineCmd, "@Buy", line.Buy ?? 0m);
+                    AddDecimal18_2Param(lineCmd, "@NormMain", line.NormMain ?? 0m);
                     AddDecimal18_2Param(lineCmd, "@Price", line.Price ?? 0m);
                     Helper.AddParameter(lineCmd, "@Note", (line.Note ?? string.Empty).Trim(), SqlDbType.VarChar, 255);
                     Helper.AddParameter(lineCmd, "@NewItem", line.NewItem, SqlDbType.Bit);
@@ -1464,6 +2029,454 @@ public class MaterialRequestService
         }
     }
 
+    /// <summary>
+    /// Xu ly reject theo flow legacy.
+    /// </summary>
+    public async Task<long> ProcessLegacyRejectAsync(
+        MaterialRequestDetailDto sourceHeader,
+        IReadOnlyList<MaterialRequestLineDto> sourceLines,
+        IReadOnlyCollection<int> selectedLineIds,
+        string? rejectReason,
+        string operatorCode,
+        CancellationToken cancellationToken = default)
+    {
+        if (!sourceHeader.StoreGroup.HasValue)
+        {
+            throw new InvalidOperationException("Store Group scope is required.");
+        }
+
+        var normalizedLineIds = selectedLineIds
+            .Where(x => x > 0)
+            .Distinct()
+            .ToList();
+
+            if (normalizedLineIds.Count == 0)
+            {
+                throw new InvalidOperationException("Please select item row(s) to reject.");
+            }
+
+        var selectedLines = sourceLines
+            .Where(line => line.Id.HasValue && normalizedLineIds.Contains(line.Id.Value))
+            .ToList();
+
+        if (selectedLines.Count == 0)
+        {
+            throw new InvalidOperationException("Please select item row(s) to reject.");
+        }
+
+        var normalizedSourceLines = NormalizeLines(sourceLines);
+        var currentStatus = sourceHeader.MaterialStatusId ?? -1;
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync(cancellationToken);
+        await using var tx = await conn.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            var employeeId = await ResolveEmployeeIdAsync(conn, (SqlTransaction)tx, operatorCode, cancellationToken);
+            var allSelected = selectedLines.Count == normalizedSourceLines.Count;
+
+            if (normalizedSourceLines.Count == 1 || allSelected)
+            {
+                await UpdateHeaderStatusOnlyAsync(
+                    conn,
+                    (SqlTransaction)tx,
+                    sourceHeader.RequestNo,
+                    5,
+                    cancellationToken);
+            }
+            else
+            {
+                var rejectedNo = await FindRejectedPoolRequestNoAsync(
+                    conn,
+                    (SqlTransaction)tx,
+                    sourceHeader.StoreGroup.Value,
+                    cancellationToken);
+
+                if (!rejectedNo.HasValue)
+                {
+                    var rejectedHeader = new MaterialRequestDetailDto
+                    {
+                        StoreGroup = sourceHeader.StoreGroup,
+                        DateCreate = DateTime.Now,
+                        AccordingTo = "This request contain items that were reject from another requests",
+                        Approval = false,
+                        ApprovalEnd = true,
+                        PostPr = false,
+                        IsAuto = false,
+                        FromDate = sourceHeader.FromDate,
+                        ToDate = sourceHeader.ToDate,
+                        MaterialStatusId = 5,
+                        PrNo = null,
+                        NoIssue = sourceHeader.NoIssue
+                    };
+
+                    rejectedNo = await SaveRequestCoreAsync(conn, (SqlTransaction)tx, null, rejectedHeader, Array.Empty<MaterialRequestLineDto>(), cancellationToken);
+                    await InsertSuperRequestAsync(conn, (SqlTransaction)tx, rejectedNo.Value, employeeId, DateTime.Now, "Reject request", cancellationToken);
+                }
+
+                await MoveLinesToRequestAsync(
+                    conn,
+                    (SqlTransaction)tx,
+                    rejectedNo.Value,
+                    selectedLines,
+                    sourceHeader.RequestNo,
+                    string.Empty,
+                    operatorCode,
+                    cancellationToken);
+            }
+
+            await tx.CommitAsync(cancellationToken);
+            return sourceHeader.RequestNo;
+        }
+        catch
+        {
+            await tx.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Luu MR theo core flow.
+    /// </summary>
+    private async Task<long> SaveRequestCoreAsync(
+        SqlConnection conn,
+        SqlTransaction tx,
+        long? requestNo,
+        MaterialRequestDetailDto header,
+        IReadOnlyList<MaterialRequestLineDto> lines,
+        CancellationToken cancellationToken)
+    {
+        var resolvedRequestNo = requestNo ?? await GetNextRequestNoAsync(conn, tx, cancellationToken);
+        var statusId = header.MaterialStatusId ?? await GetDefaultStatusIdAsync(conn, tx, cancellationToken);
+
+        if (requestNo.HasValue)
+        {
+            const string updateSql = @"
+                UPDATE dbo.MATERIAL_REQUEST
+                SET
+                    STORE_GROUP = @StoreGroup,
+                    DATE_CREATE = @DateCreate,
+                    ACCORDINGTO = @AccordingTo,
+                    APPROVAL = @Approval,
+                    POST_PR = @PostPr,
+                    IS_AUTO = @IsAuto,
+                    FROM_DATE = @FromDate,
+                    TO_DATE = @ToDate,
+                    APPROVAL_END = @ApprovalEnd,
+                    MATERIALSTATUSID = @StatusId,
+                    PRNO = @PrNo,
+                    NO_ISSUE = @NoIssue
+                WHERE REQUEST_NO = @RequestNo";
+
+            await using var updateCmd = new SqlCommand(updateSql, conn, tx);
+            BindHeaderParams(updateCmd, resolvedRequestNo, header, statusId);
+            var updated = await updateCmd.ExecuteNonQueryAsync(cancellationToken);
+            if (updated == 0)
+            {
+                throw new InvalidOperationException("Material Request not found.");
+            }
+        }
+        else
+        {
+            const string insertSql = @"
+                INSERT INTO dbo.MATERIAL_REQUEST
+                (
+                    REQUEST_NO, STORE_GROUP, DATE_CREATE, ACCORDINGTO, APPROVAL, POST_PR, IS_AUTO,
+                    FROM_DATE, TO_DATE, APPROVAL_END, MATERIALSTATUSID, PRNO, NO_ISSUE
+                )
+                VALUES
+                (
+                    @RequestNo, @StoreGroup, @DateCreate, @AccordingTo, @Approval, @PostPr, @IsAuto,
+                    @FromDate, @ToDate, @ApprovalEnd, @StatusId, @PrNo, @NoIssue
+                )";
+
+            await using var insertCmd = new SqlCommand(insertSql, conn, tx);
+            BindHeaderParams(insertCmd, resolvedRequestNo, header, statusId);
+            await insertCmd.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        const string deleteLineSql = "DELETE FROM dbo.MATERIAL_REQUEST_DETAIL WHERE REQUEST_NO = @RequestNo";
+        await using (var deleteCmd = new SqlCommand(deleteLineSql, conn, tx))
+        {
+            AddNumeric18_0Param(deleteCmd, "@RequestNo", resolvedRequestNo);
+            await deleteCmd.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        if (lines.Count > 0)
+        {
+            const string insertLineSql = @"
+                INSERT INTO dbo.MATERIAL_REQUEST_DETAIL
+                (
+                    REQUEST_NO, ITEMCODE, UNIT, BEGIN_Q, RECEIPT_Q, USING_Q, END_Q,
+                    NORM_Q, NOT_RECEIPT, NEW_ORDER, INSTOCK, acctualyInventory, BUY, ISSUED,
+                    NEW_ITEM, SELECTED, NORM_Q_MAIN, PRICE, NOTE, PostedPR, ManualCheck, TempStore, CreatedAsset
+                )
+                VALUES
+                (
+                    @RequestNo, @ItemCode, @Unit, 0, 0, 0, 0,
+                    0, @NotReceipt, @OrderQty, @InStock, @AccIn, @Buy, 0,
+                    @NewItem, @Selected, @NormMain, @Price, @Note, 0, 0, 0, 0
+                )";
+
+            foreach (var line in lines)
+            {
+                await using var lineCmd = new SqlCommand(insertLineSql, conn, tx);
+                AddNumeric18_0Param(lineCmd, "@RequestNo", resolvedRequestNo);
+                Helper.AddParameter(lineCmd, "@ItemCode", (line.ItemCode ?? string.Empty).Trim(), SqlDbType.VarChar, 20);
+                Helper.AddParameter(lineCmd, "@Unit", (line.Unit ?? string.Empty).Trim(), SqlDbType.VarChar, 50);
+                AddDecimal18_2Param(lineCmd, "@OrderQty", line.OrderQty ?? 0m);
+                AddDecimal18_2Param(lineCmd, "@NotReceipt", line.NotReceipt ?? 0m);
+                AddDecimal18_2Param(lineCmd, "@InStock", line.InStock ?? 0m);
+                AddDecimal18_2Param(lineCmd, "@AccIn", line.AccIn ?? 0m);
+                AddDecimal18_2Param(lineCmd, "@Buy", line.Buy ?? 0m);
+                AddDecimal18_2Param(lineCmd, "@NormMain", line.NormMain ?? 0m);
+                AddDecimal18_2Param(lineCmd, "@Price", line.Price ?? 0m);
+                Helper.AddParameter(lineCmd, "@Note", (line.Note ?? string.Empty).Trim(), SqlDbType.VarChar, 255);
+                Helper.AddParameter(lineCmd, "@NewItem", line.NewItem, SqlDbType.Bit);
+                Helper.AddParameter(lineCmd, "@Selected", line.Selected, SqlDbType.Bit);
+                await lineCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+        }
+
+        return resolvedRequestNo;
+    }
+
+    /// <summary>
+    /// Tim request status 5 phu hop de lam reject pool.
+    /// </summary>
+    private static async Task<long?> FindRejectedPoolRequestNoAsync(SqlConnection conn, SqlTransaction tx, int storeGroup, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            SELECT TOP 1 REQUEST_NO
+            FROM dbo.MATERIAL_REQUEST
+            WHERE MATERIALSTATUSID = 5
+              AND STORE_GROUP = @StoreGroup
+            ORDER BY REQUEST_NO DESC";
+
+        await using var cmd = new SqlCommand(sql, conn, tx);
+        Helper.AddParameter(cmd, "@StoreGroup", storeGroup, SqlDbType.Int);
+        var value = await cmd.ExecuteScalarAsync(cancellationToken);
+        return value == null || value == DBNull.Value ? null : Convert.ToInt64(value);
+    }
+
+    /// <summary>
+    /// Cap nhat header MR ma khong doi line.
+    /// </summary>
+    private static async Task UpdateHeaderStatusOnlyAsync(
+        SqlConnection conn,
+        SqlTransaction tx,
+        long requestNo,
+        int statusId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            UPDATE dbo.MATERIAL_REQUEST
+            SET MATERIALSTATUSID = @StatusId,
+                APPROVAL = CASE WHEN @StatusId = 5 THEN 0 ELSE APPROVAL END,
+                APPROVAL_END = CASE WHEN @StatusId = 5 THEN 1 ELSE APPROVAL_END END,
+                POST_PR = CASE WHEN @StatusId = 5 THEN 0 ELSE POST_PR END
+            WHERE REQUEST_NO = @RequestNo";
+
+        await using var cmd = new SqlCommand(sql, conn, tx);
+        AddNumeric18_0Param(cmd, "@RequestNo", requestNo);
+        Helper.AddParameter(cmd, "@StatusId", statusId, SqlDbType.Int);
+        await cmd.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Chuyen cac line sang request khac.
+    /// </summary>
+    private static async Task MoveLinesToRequestAsync(
+        SqlConnection conn,
+        SqlTransaction tx,
+        long targetRequestNo,
+        IReadOnlyList<MaterialRequestLineDto> lines,
+        long sourceRequestNo,
+        string rejectReason,
+        string operatorCode,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            UPDATE dbo.MATERIAL_REQUEST_DETAIL
+            SET REQUEST_NO = @TargetRequestNo,
+                NOTE = @Note
+            WHERE ID = @LineId";
+
+        foreach (var line in lines)
+        {
+            if (!line.Id.HasValue || line.Id.Value <= 0)
+            {
+                continue;
+            }
+
+            await using var cmd = new SqlCommand(sql, conn, tx);
+            AddNumeric18_0Param(cmd, "@TargetRequestNo", targetRequestNo);
+            AddNumeric18_0Param(cmd, "@LineId", line.Id.Value);
+            Helper.AddParameter(cmd, "@Note", BuildRejectNote(line, sourceRequestNo, rejectReason, operatorCode), SqlDbType.VarChar, 255);
+            await cmd.ExecuteNonQueryAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Lay EmployeeID theo ma employee.
+    /// </summary>
+    private static async Task<int> ResolveEmployeeIdAsync(SqlConnection conn, SqlTransaction tx, string employeeCode, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            SELECT TOP 1 EmployeeID
+            FROM dbo.MS_Employee
+            WHERE EmployeeCode = @EmployeeCode";
+
+        await using var cmd = new SqlCommand(sql, conn, tx);
+        Helper.AddParameter(cmd, "@EmployeeCode", employeeCode, SqlDbType.VarChar, 50);
+        var value = await cmd.ExecuteScalarAsync(cancellationToken);
+        return value == null || value == DBNull.Value ? 0 : Convert.ToInt32(value);
+    }
+
+    /// <summary>
+    /// Ghi log vao SUPER_REQUEST.
+    /// </summary>
+    private static async Task InsertSuperRequestAsync(SqlConnection conn, SqlTransaction tx, long requestNo, int employeeId, DateTime timeEffective, string note, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            INSERT INTO dbo.SUPER_REQUEST
+            (
+                RequestNo, EmployeeID, TimeEffective, TypeEffective, Note
+            )
+            VALUES
+            (
+                @RequestNo, @EmployeeID, @TimeEffective, 5, @Note
+            )";
+
+        await using var cmd = new SqlCommand(sql, conn, tx);
+        AddNumeric18_0Param(cmd, "@RequestNo", requestNo);
+        Helper.AddParameter(cmd, "@EmployeeID", employeeId, SqlDbType.Int);
+        Helper.AddParameter(cmd, "@TimeEffective", timeEffective, SqlDbType.DateTime);
+        Helper.AddParameter(cmd, "@Note", note, SqlDbType.VarChar, 50);
+        await cmd.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Tao ban sao header cho luong luu.
+    /// </summary>
+    private static MaterialRequestDetailDto CloneHeader(MaterialRequestDetailDto source)
+    {
+        return new MaterialRequestDetailDto
+        {
+            RequestNo = source.RequestNo,
+            StoreGroup = source.StoreGroup,
+            DateCreate = source.DateCreate,
+            AccordingTo = source.AccordingTo,
+            Approval = source.Approval,
+            ApprovalEnd = source.ApprovalEnd,
+            PostPr = source.PostPr,
+            IsAuto = source.IsAuto,
+            FromDate = source.FromDate,
+            ToDate = source.ToDate,
+            MaterialStatusId = source.MaterialStatusId,
+            PrNo = source.PrNo,
+            NoIssue = source.NoIssue
+        };
+    }
+
+    /// <summary>
+    /// Tao header rejected de luu vao pool.
+    /// </summary>
+    private static MaterialRequestDetailDto CloneRejectedHeader(MaterialRequestDetailDto source, DateTime now)
+    {
+        var header = CloneHeader(source);
+        header.DateCreate = now;
+        header.AccordingTo = "This request contain items that were reject from another requests";
+        header.MaterialStatusId = 5;
+        header.Approval = false;
+        header.ApprovalEnd = true;
+        header.PostPr = false;
+        header.IsAuto = false;
+        return header;
+    }
+
+    /// <summary>
+    /// Chuan hoa danh sach line truoc khi save.
+    /// </summary>
+    private static List<MaterialRequestLineDto> NormalizeLines(IEnumerable<MaterialRequestLineDto> lines)
+    {
+        var result = new List<MaterialRequestLineDto>();
+
+        foreach (var line in lines)
+        {
+            var itemCode = (line.ItemCode ?? string.Empty).Trim();
+            var itemName = (line.ItemName ?? string.Empty).Trim();
+            var unit = (line.Unit ?? string.Empty).Trim();
+            var note = (line.Note ?? string.Empty).Trim();
+
+            var isBlank = string.IsNullOrWhiteSpace(itemCode)
+                && string.IsNullOrWhiteSpace(itemName)
+                && string.IsNullOrWhiteSpace(unit)
+                && string.IsNullOrWhiteSpace(note)
+                && !(line.OrderQty.HasValue && line.OrderQty.Value != 0)
+                && !(line.NotReceipt.HasValue && line.NotReceipt.Value != 0)
+                && !(line.InStock.HasValue && line.InStock.Value != 0)
+                && !(line.AccIn.HasValue && line.AccIn.Value != 0)
+                && !(line.Buy.HasValue && line.Buy.Value != 0)
+                && !(line.Price.HasValue && line.Price.Value != 0);
+
+            if (isBlank)
+            {
+                continue;
+            }
+
+            result.Add(new MaterialRequestLineDto
+            {
+                Id = line.Id,
+                ItemCode = itemCode,
+                ItemName = itemName,
+                Unit = unit,
+                OrderQty = line.OrderQty ?? 0,
+                NotReceipt = line.NotReceipt ?? 0,
+                InStock = line.InStock ?? 0,
+                AccIn = line.AccIn ?? 0,
+                Buy = line.Buy ?? 0,
+                NormMain = line.NormMain ?? 0,
+                Price = line.Price ?? 0,
+                Note = note,
+                NewItem = line.NewItem,
+                Selected = line.Selected,
+                Issued = line.Issued
+            });
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Tao note reject theo format legacy.
+    /// </summary>
+    private static string BuildRejectNote(MaterialRequestLineDto source, long requestNo, string rejectReason, string operatorCode)
+    {
+        var noteParts = new List<string>
+        {
+            $"rejected from request {requestNo}"
+        };
+
+        var originalNote = (source.Note ?? string.Empty).Trim();
+        if (!string.IsNullOrWhiteSpace(originalNote))
+        {
+            noteParts.Add(originalNote);
+        }
+
+        noteParts.Add($"-{operatorCode}");
+        var note = string.Join(" ", noteParts);
+        if (note.Length > 255)
+        {
+            note = note.Substring(0, 255);
+        }
+
+        return note;
+    }
+
+    /// <summary>
+    /// Tim item trong popup search.
+    /// </summary>
     public async Task<IReadOnlyList<MaterialRequestItemLookupDto>> SearchItemsAsync(
         string? itemCode,
         string? itemName,
@@ -1471,24 +2484,39 @@ public class MaterialRequestService
         int? storeGroup = null,
         CancellationToken cancellationToken = default)
     {
-        const string sql = @"
-            SELECT TOP 100
-                i.ItemCode,
-                i.ItemName,
-                ISNULL(i.Unit, '') AS Unit,
-                ISNULL(MAX(b.IsQ), 0) AS InStock,
-                i.KPGroupItem,
-                CAST(1 AS decimal(18,2)) AS OrderQty
-            FROM dbo.INV_ItemList i
-            LEFT JOIN dbo.INV_ItemBalanceACC_TMP b ON b.ItemCode = i.ItemCode
-            WHERE
-                (@ItemCode IS NULL OR i.ItemCode LIKE '%' + @ItemCode + '%')
-                AND (@ItemName IS NULL OR i.ItemName LIKE '%' + @ItemName + '%')
-                AND (i.IsActive = 1 OR i.IsActive IS NULL)
-                AND (@CheckBalanceInStore = 0 OR ISNULL(b.IsQ, 0) > 0)
-                AND (@StoreGroup IS NULL OR @StoreGroup = 0 OR i.KPGroupItem = @StoreGroup)
-            GROUP BY i.ItemCode, i.ItemName, i.Unit, i.KPGroupItem
-            ORDER BY i.ItemCode";
+        var sql = checkBalanceInStore
+            ? @"
+                SELECT TOP 100
+                    i.ItemCode,
+                    i.ItemName,
+                    ISNULL(i.Unit, '') AS Unit,
+                    ISNULL(MAX(b.IsQ), 0) AS InStock,
+                    i.KPGroupItem,
+                    CAST(1 AS decimal(18,2)) AS OrderQty
+                FROM dbo.INV_ItemList i
+                LEFT JOIN dbo.INV_ItemBalanceACC_TMP b ON b.ItemCode = i.ItemCode
+                WHERE
+                    (@ItemCode IS NULL OR i.ItemCode LIKE '%' + @ItemCode + '%')
+                    AND (@ItemName IS NULL OR i.ItemName LIKE '%' + @ItemName + '%')
+                    AND (i.IsActive = 1 OR i.IsActive IS NULL)
+                    AND (@StoreGroup IS NULL OR @StoreGroup = 0 OR i.KPGroupItem = @StoreGroup)
+                GROUP BY i.ItemCode, i.ItemName, i.Unit, i.KPGroupItem
+                ORDER BY i.ItemCode"
+            : @"
+                SELECT TOP 100
+                    i.ItemCode,
+                    i.ItemName,
+                    ISNULL(i.Unit, '') AS Unit,
+                    CAST(NULL AS decimal(18,2)) AS InStock,
+                    i.KPGroupItem,
+                    CAST(1 AS decimal(18,2)) AS OrderQty
+                FROM dbo.INV_ItemList i
+                WHERE
+                    (@ItemCode IS NULL OR i.ItemCode LIKE '%' + @ItemCode + '%')
+                    AND (@ItemName IS NULL OR i.ItemName LIKE '%' + @ItemName + '%')
+                    AND (i.IsActive = 1 OR i.IsActive IS NULL)
+                    AND (@StoreGroup IS NULL OR @StoreGroup = 0 OR i.KPGroupItem = @StoreGroup)
+                ORDER BY i.ItemCode";
 
         var rows = await Helper.QueryAsync(
             _connectionString,
@@ -1514,6 +2542,9 @@ public class MaterialRequestService
         return rows;
     }
 
+    /// <summary>
+    /// Tao item moi nhanh.
+    /// </summary>
     public async Task<MaterialRequestItemLookupDto> CreateQuickItemAsync(string itemName, string? unit, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(itemName))
@@ -1563,6 +2594,9 @@ public class MaterialRequestService
         }
     }
 
+    /// <summary>
+    /// Gan tham so tim kiem vao SqlCommand.
+    /// </summary>
     private static void BindSearchParams(SqlCommand cmd, MaterialRequestFilterCriteria criteria, IReadOnlyList<int> statusIds)
     {
         Helper.AddParameter(cmd, "@RequestNo", string.IsNullOrWhiteSpace(criteria.RequestNo) ? null : criteria.RequestNo.Trim(), SqlDbType.VarChar, 50);
@@ -1581,6 +2615,9 @@ public class MaterialRequestService
         }
     }
 
+    /// <summary>
+    /// Gan tham so header vao SqlCommand.
+    /// </summary>
     private static void BindHeaderParams(SqlCommand cmd, long requestNo, MaterialRequestDetailDto header, int statusId)
     {
         AddNumeric18_0Param(cmd, "@RequestNo", requestNo);
@@ -1598,6 +2635,9 @@ public class MaterialRequestService
         Helper.AddParameter(cmd, "@NoIssue", header.NoIssue, SqlDbType.Int);
     }
 
+    /// <summary>
+    /// Tao dieu kien SQL cho danh sach status.
+    /// </summary>
     private static string BuildStatusFilterSql(IReadOnlyList<int> statusIds)
     {
         if (statusIds.Count == 0)
@@ -1610,14 +2650,26 @@ public class MaterialRequestService
         return $"r.MATERIALSTATUSID IN ({string.Join(", ", parameters)})";
     }
 
+    /// <summary>
+    /// Lay Request No tiep theo.
+    /// Ham nay giu lock trong transaction de tranh trung so khi nhieu nguoi tao cung luc.
+    /// </summary>
+    /// <param name="conn">SqlConnection dang mo.</param>
+    /// <param name="tx">Transaction dang dung de giu lock.</param>
+    /// <param name="cancellationToken">Token de huy yeu cau neu can.</param>
+    /// <returns>Request No tiep theo.</returns>
     private static async Task<long> GetNextRequestNoAsync(SqlConnection conn, SqlTransaction tx, CancellationToken cancellationToken)
     {
+        // UPDLOCK de chuan bi sua, HOLDLOCK de giu lock den cuoi transaction.
         const string sql = "SELECT ISNULL(MAX(REQUEST_NO), 0) + 1 FROM dbo.MATERIAL_REQUEST WITH (UPDLOCK, HOLDLOCK)";
         await using var cmd = new SqlCommand(sql, conn, tx);
         var value = await cmd.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt64(value);
     }
 
+    /// <summary>
+    /// Lay status mac dinh neu trang thai chua co.
+    /// </summary>
     private static async Task<int> GetDefaultStatusIdAsync(SqlConnection conn, SqlTransaction tx, CancellationToken cancellationToken)
     {
         const string sql = "SELECT ISNULL(MIN(MaterialStatusID), -1) FROM dbo.MaterialStatus";
@@ -1626,6 +2678,9 @@ public class MaterialRequestService
         return Convert.ToInt32(value);
     }
 
+    /// <summary>
+    /// Tao ma item nhanh.
+    /// </summary>
     private static async Task<string> GenerateQuickItemCodeAsync(SqlConnection conn, SqlTransaction tx, CancellationToken cancellationToken)
     {
         for (var i = 0; i < 50; i++)
@@ -1651,6 +2706,9 @@ public class MaterialRequestService
         throw new InvalidOperationException("Cannot generate Item Code. Please retry.");
     }
 
+    /// <summary>
+    /// Tao danh sach detail line cho Auto MR.
+    /// </summary>
     public async Task<IReadOnlyList<MaterialRequestLineDto>> BuildAutoLinesAsync(int storeGroup, CancellationToken cancellationToken = default)
     {
         const string sql = @"
@@ -1658,7 +2716,7 @@ public class MaterialRequestService
                 i.ItemCode,
                 i.ItemName,
                 ISNULL(i.Unit, '') AS Unit,
-                CAST(ISNULL(NULLIF(i.StoreNormInMain, 0), NULLIF(i.ReOrderPoint, 0), 1) AS decimal(18,2)) AS OrderQty
+                CAST(COALESCE(NULLIF(i.StoreNormInMain, 0), NULLIF(i.ReOrderPoint, 0), 1) AS decimal(18,2)) AS OrderQty
             FROM dbo.INV_ItemList i
             WHERE
                 (i.IsActive = 1 OR i.IsActive IS NULL)
@@ -1687,6 +2745,7 @@ public class MaterialRequestService
                     InStock = 0,
                     AccIn = 0,
                     Buy = 0,
+                    NormMain = 0,
                     Price = 0,
                     Note = string.Empty,
                     NewItem = false,
@@ -1699,6 +2758,9 @@ public class MaterialRequestService
         return rows;
     }
 
+    /// <summary>
+    /// Them tham so decimal 18,0 vao SqlCommand.
+    /// </summary>
     private static void AddNumeric18_0Param(SqlCommand cmd, string name, object? value)
     {
         var p = cmd.Parameters.Add(name, SqlDbType.Decimal);
@@ -1707,6 +2769,9 @@ public class MaterialRequestService
         p.Value = value is null ? DBNull.Value : Convert.ToDecimal(value);
     }
 
+    /// <summary>
+    /// Them tham so decimal 18,2 vao SqlCommand.
+    /// </summary>
     private static void AddDecimal18_2Param(SqlCommand cmd, string name, object? value)
     {
         var p = cmd.Parameters.Add(name, SqlDbType.Decimal);
@@ -1714,6 +2779,13 @@ public class MaterialRequestService
         p.Scale = 2;
         p.Value = value is null ? DBNull.Value : Convert.ToDecimal(value);
     }
+
+    /// <summary>
+    /// Them tham so DateTime vao SqlCommand.
+    /// </summary>
+    private static void AddDateTimeParam(SqlCommand cmd, string name, DateTime value)
+    {
+        var p = cmd.Parameters.Add(name, SqlDbType.DateTime);
+        p.Value = value;
+    }
 }
-
-

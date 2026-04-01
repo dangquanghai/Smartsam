@@ -54,6 +54,12 @@ public class MaterialRequestDetailModel : BasePageModel
     public string? LinesJson { get; set; }
 
     [BindProperty]
+    public string? RejectItemLineIdsJson { get; set; }
+
+    [BindProperty]
+    public string? RejectItemReason { get; set; }
+
+    [BindProperty]
     public List<MaterialRequestLineDto> Lines { get; set; } = new List<MaterialRequestLineDto>();
 
     [TempData]
@@ -75,9 +81,16 @@ public class MaterialRequestDetailModel : BasePageModel
         get { return Id.HasValue && Id.Value > 0; }
     }
 
-    public bool CanShowAll
+    public bool CanAccessAllStoreGroups
     {
-        get { return IsAdminUser() || HasPermission(PermissionShowAll) || _dataScope.ApprovalLevel >= 2; }
+        get
+        {
+            return IsAdminUser()
+                || _dataScope.IsPurchaser
+                || _dataScope.IsCFO
+                || _dataScope.IsBOD
+                || _dataScope.ApprovalLevel >= 2;
+        }
     }
 
     public bool CanSave
@@ -86,16 +99,16 @@ public class MaterialRequestDetailModel : BasePageModel
         {
             if (IsEdit)
             {
-                return (IsAdminUser() || HasPermission(PermissionEdit)) && CurrentStatusId == StatusJustCreated;
+                return CanEditDraftMaterialRequest() && CurrentStatusId == StatusJustCreated;
             }
 
-            return User.Identity?.IsAuthenticated == true || IsAdminUser();
+            return CanEditDraftMaterialRequest();
         }
     }
 
     public bool StoreGroupLocked
     {
-        get { return !CanShowAll; }
+        get { return !CanAccessAllStoreGroups; }
     }
 
     public int CurrentStatusId
@@ -105,17 +118,27 @@ public class MaterialRequestDetailModel : BasePageModel
 
     public bool CanSubmit
     {
-        get { return IsEdit && (IsAdminUser() || HasPermission(PermissionEdit)) && CurrentStatusId == StatusJustCreated; }
+        get { return IsEdit && CanEditDraftMaterialRequest() && CurrentStatusId == StatusJustCreated; }
     }
 
     public bool CanApprove
     {
-        get { return IsEdit && CanApproveStatus(CurrentStatusId); }
+        get { return IsEdit && CanApproveStatus(CurrentStatusId, Input.IsAuto); }
+    }
+
+    public bool CanIssue
+    {
+        get { return IsEdit && CurrentStatusId == StatusCollectedToPr; }
+    }
+
+    public bool CanCalculate
+    {
+        get { return IsEdit && CurrentStatusId == StatusHeadDeptApproved && (IsAdminUser() || _dataScope.IsPurchaser); }
     }
 
     public bool CanReject
     {
-        get { return IsEdit && CanRejectStatus(CurrentStatusId); }
+        get { return IsEdit && CanRejectStatus(CurrentStatusId, Input.IsAuto); }
     }
 
     public string BackToListUrl
@@ -142,6 +165,11 @@ public class MaterialRequestDetailModel : BasePageModel
 
         if (!IsEdit)
         {
+            if (!CanEditDraftMaterialRequest())
+            {
+                return Forbid();
+            }
+
             if (StoreGroupLocked)
             {
                 Input.StoreGroup = _dataScope.StoreGroup ?? NoScopeStoreGroup;
@@ -242,14 +270,47 @@ public class MaterialRequestDetailModel : BasePageModel
 
         try
         {
-            var savedNo = await _materialRequestService.SaveAsync(IsEdit ? Id : null, Input, lines, cancellationToken);
-            SuccessMessage = IsEdit ? "Saved successfully." : "Material Request created successfully.";
+        var actionMode = Request.Form["workflowActionModeInput"].ToString();
+        var draftSaveAction = Request.Form["DraftSaveAction"].ToString();
+        if (IsEdit && existing is not null)
+        {
+            Input.IsAuto = existing.IsAuto;
+        }
+        else
+        {
+            Input.IsAuto = false;
+        }
+        var savedNo = await _materialRequestService.SaveAsync(IsEdit ? Id : null, Input, lines, cancellationToken);
+            var isDraftSave = string.Equals(actionMode, "draft-save", StringComparison.OrdinalIgnoreCase);
+            var successMessage = isDraftSave
+                ? GetDraftSaveSuccessMessage(draftSaveAction)
+                : (IsEdit ? "Saved successfully." : "Material Request created successfully.");
+
+            if (isDraftSave && IsAjaxRequest())
+            {
+                return new JsonResult(new
+                {
+                    success = true,
+                    requestNo = savedNo,
+                    message = successMessage
+                });
+            }
+
+            SuccessMessage = successMessage;
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(savedNo));
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[MaterialRequest][Save] {ex}");
             Lines = lines;
+            if (IsAjaxRequest() && string.Equals(Request.Form["workflowActionModeInput"].ToString(), "draft-save", StringComparison.OrdinalIgnoreCase))
+            {
+                return new JsonResult(new
+                {
+                    success = false,
+                    message = ex is InvalidOperationException ? ex.Message : $"Cannot save Material Request. {ex.Message}"
+                });
+            }
             ModelState.AddModelError(string.Empty, ex is InvalidOperationException ? ex.Message : $"Cannot save Material Request. {ex.Message}");
             return Page();
         }
@@ -271,9 +332,29 @@ public class MaterialRequestDetailModel : BasePageModel
         return await HandleWorkflowActionAsync(MaterialRequestWorkflowAction.Approve, cancellationToken);
     }
 
+    public async Task<IActionResult> OnPostCalculate(CancellationToken cancellationToken)
+    {
+        return await HandleCalculateAsync(cancellationToken);
+    }
+
+    public async Task<IActionResult> OnPostIssue(CancellationToken cancellationToken)
+    {
+        return await HandleWorkflowActionAsync(MaterialRequestWorkflowAction.Issue, cancellationToken);
+    }
+
     public async Task<IActionResult> OnPostReject(CancellationToken cancellationToken)
     {
+        if (ParseRejectItemLineIds().Count > 0)
+        {
+            return await HandleRejectItemAsync(cancellationToken);
+        }
+
         return await HandleWorkflowActionAsync(MaterialRequestWorkflowAction.Reject, cancellationToken);
+    }
+
+    public async Task<IActionResult> OnPostRejectItem(CancellationToken cancellationToken)
+    {
+        return await HandleRejectItemAsync(cancellationToken);
     }
 
     // ==========================================
@@ -312,14 +393,20 @@ public class MaterialRequestDetailModel : BasePageModel
 
         var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
         PagePerm = GetUserPermissions();
-        var transition = ResolveTransition(action, currentStatus);
+        var isAuto = existing.IsAuto;
+        if (action == MaterialRequestWorkflowAction.Submit && !CanEditDraftMaterialRequest())
+        {
+            WarningMessage = "You do not have permission to submit this draft.";
+            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
+        }
+        var transition = ResolveTransition(action, currentStatus, isAuto);
         if (transition is null)
         {
             WarningMessage = "Invalid workflow action for current status.";
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
         }
 
-        if (!CanExecuteTransition(action, currentStatus))
+        if (!CanExecuteTransition(action, currentStatus, isAuto))
         {
             WarningMessage = "You do not have permission for this workflow action.";
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
@@ -328,15 +415,20 @@ public class MaterialRequestDetailModel : BasePageModel
         List<MaterialRequestLineDto> lines;
         MaterialRequestDetailDto toSave;
 
+        lines = ResolvePostedLines();
+        if (lines.Count == 0)
+        {
+            lines = (await _materialRequestService.GetLinesAsync(Id!.Value, cancellationToken)).ToList();
+        }
+
+        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken);
+
         if (action == MaterialRequestWorkflowAction.Submit)
         {
-            lines = ResolvePostedLines();
-            await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken);
             toSave = MergeEditableInput(existing, Input);
         }
         else
         {
-            lines = (await _materialRequestService.GetLinesAsync(Id!.Value, cancellationToken)).ToList();
             toSave = CloneHeader(existing);
         }
 
@@ -358,6 +450,180 @@ public class MaterialRequestDetailModel : BasePageModel
                 ? ex.Message
                 : $"Cannot process workflow action. {ex.Message}";
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
+        }
+    }
+
+    private async Task<IActionResult> HandleRejectItemAsync(CancellationToken cancellationToken)
+    {
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
+        PagePerm = new PagePermissions();
+        PagePerm = GetUserPermissions();
+        await LoadUserScopeAsync(cancellationToken);
+        if (!CanAccessPage())
+        {
+            return Forbid();
+        }
+
+        if (!IsEdit)
+        {
+            WarningMessage = "Please save Material Request first.";
+            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(null));
+        }
+
+        LoadDropdowns();
+
+        if (StoreGroupLocked)
+        {
+            Input.StoreGroup = _dataScope.StoreGroup ?? NoScopeStoreGroup;
+        }
+
+        var existing = await _materialRequestService.GetDetailAsync(Id!.Value, cancellationToken);
+        if (existing is null)
+        {
+            ErrorMessage = "Material Request not found.";
+            return RedirectToPage("./Index");
+        }
+
+        var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
+        var isAuto = existing.IsAuto;
+        if (!CanRejectStatus(currentStatus, isAuto))
+        {
+            WarningMessage = "You do not have permission for this workflow action.";
+            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
+        }
+
+        var rejectedLineIds = ParseRejectItemLineIds();
+        if (rejectedLineIds.Count == 0)
+        {
+            WarningMessage = "Please select item row(s) to reject.";
+            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
+        }
+
+        var lines = ResolvePostedLines();
+        if (lines.Count == 0)
+        {
+            lines = (await _materialRequestService.GetLinesAsync(Id!.Value, cancellationToken)).ToList();
+        }
+
+        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken);
+
+        try
+        {
+            var savedNo = await _materialRequestService.ProcessLegacyRejectAsync(
+                existing,
+                lines,
+                rejectedLineIds,
+                RejectItemReason,
+                User.Identity?.Name ?? string.Empty,
+                cancellationToken);
+            SuccessMessage = "Selected item(s) rejected.";
+            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(savedNo));
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[MaterialRequest][RejectItem] {ex}");
+            ErrorMessage = ex is InvalidOperationException
+                ? ex.Message
+                : $"Cannot reject item(s). {ex.Message}";
+            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
+        }
+    }
+
+    private async Task<IActionResult> HandleCalculateAsync(CancellationToken cancellationToken)
+    {
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
+        PagePerm = new PagePermissions();
+        PagePerm = GetUserPermissions();
+        await LoadUserScopeAsync(cancellationToken);
+        if (!CanAccessPage())
+        {
+            return Forbid();
+        }
+
+        if (!IsEdit)
+        {
+            WarningMessage = "Please save Material Request first.";
+            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(null));
+        }
+
+        LoadDropdowns();
+
+        if (StoreGroupLocked)
+        {
+            Input.StoreGroup = _dataScope.StoreGroup ?? NoScopeStoreGroup;
+        }
+
+        var existing = await _materialRequestService.GetDetailAsync(Id!.Value, cancellationToken);
+        if (existing is null)
+        {
+            ErrorMessage = "Material Request not found.";
+            return RedirectToPage("./Index");
+        }
+
+        var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
+        if (!CanCalculateStatus(currentStatus))
+        {
+            WarningMessage = "You do not have permission for this workflow action.";
+            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
+        }
+
+        var lines = ResolvePostedLines();
+        if (lines.Count == 0)
+        {
+            lines = (await _materialRequestService.GetLinesAsync(Id!.Value, cancellationToken)).ToList();
+        }
+
+        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken);
+
+        var storeGroup = existing.StoreGroup ?? Input.StoreGroup ?? _dataScope.StoreGroup;
+        if (!storeGroup.HasValue)
+        {
+            WarningMessage = "Store Group scope is required.";
+            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
+        }
+
+        await _materialRequestService.CalculatePurchaserLinesAsync(Id.Value, storeGroup.Value, lines, cancellationToken);
+
+        try
+        {
+            var savedNo = await _materialRequestService.SaveAsync(Id, CloneHeader(existing), lines, cancellationToken);
+            SuccessMessage = "Calculate completed.";
+            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(savedNo));
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[MaterialRequest][Calculate] {ex}");
+            ErrorMessage = ex is InvalidOperationException
+                ? ex.Message
+                : $"Cannot calculate Material Request. {ex.Message}";
+            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
+        }
+    }
+
+    private List<int> ParseRejectItemLineIds()
+    {
+        if (string.IsNullOrWhiteSpace(RejectItemLineIdsJson))
+        {
+            return new List<int>();
+        }
+
+        try
+        {
+            var lineIds = JsonSerializer.Deserialize<List<int?>>(RejectItemLineIdsJson, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            return lineIds?
+                .Where(x => x.HasValue && x.Value > 0)
+                .Select(x => x!.Value)
+                .Distinct()
+                .ToList()
+                ?? new List<int>();
+        }
+        catch
+        {
+            return new List<int>();
         }
     }
 
@@ -396,12 +662,12 @@ public class MaterialRequestDetailModel : BasePageModel
             }
 
             var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
-            if ((!IsAdminUser() && !HasPermission(PermissionEdit)) || currentStatus != StatusJustCreated)
+            if (!CanEditDraftMaterialRequest() || currentStatus != StatusJustCreated)
             {
                 return new JsonResult(new { success = false, message = "You cannot add item at current status." });
             }
         }
-        else if (User.Identity?.IsAuthenticated != true)
+        else if (!CanEditDraftMaterialRequest())
         {
             return new JsonResult(new { success = false, message = "Access denied." });
         }
@@ -607,6 +873,7 @@ public class MaterialRequestDetailModel : BasePageModel
                 InStock = line.InStock ?? 0,
                 AccIn = line.AccIn ?? 0,
                 Buy = line.Buy ?? 0,
+                NormMain = line.NormMain ?? 0,
                 Price = line.Price ?? 0,
                 Note = note,
                 NewItem = line.NewItem,
@@ -615,6 +882,22 @@ public class MaterialRequestDetailModel : BasePageModel
         }
 
         return result;
+    }
+
+    private static string GetDraftSaveSuccessMessage(string? draftSaveAction)
+    {
+        return (draftSaveAction ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "add-detail" => "Item added and saved.",
+            "remove-item" => "Item removed and saved.",
+            "create-new-item" => "New item created and saved.",
+            _ => "Line changes saved."
+        };
+    }
+
+    private bool IsAjaxRequest()
+    {
+        return string.Equals(Request.Headers["X-Requested-With"].ToString(), "XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task LoadUserScopeAsync(CancellationToken cancellationToken)
@@ -713,6 +996,32 @@ public class MaterialRequestDetailModel : BasePageModel
             || HasPermission(7);
     }
 
+    /// <summary>
+    /// Check if the user can create or edit a draft MR.
+    /// Normal scoped users are allowed. Workflow users need Edit permission.
+    /// </summary>
+    /// <returns>True if draft MR actions are allowed.</returns>
+    private bool CanEditDraftMaterialRequest()
+    {
+        if (IsAdminUser())
+        {
+            return true;
+        }
+
+        var isWorkflowUser = _dataScope.IsHeadDept
+            || _dataScope.IsPurchaser
+            || _dataScope.IsCFO
+            || _dataScope.IsBOD
+            || _dataScope.ApprovalLevel >= 2;
+
+        if (!isWorkflowUser)
+        {
+            return User.Identity?.IsAuthenticated == true;
+        }
+
+        return HasPermission(PermissionEdit);
+    }
+
     private bool HasPermission(int permissionNo)
     {
         return PagePerm.HasPermission(permissionNo);
@@ -758,51 +1067,49 @@ public class MaterialRequestDetailModel : BasePageModel
         };
     }
 
-    private bool CanApproveStatus(int statusId)
+    private bool CanApproveStatus(int statusId, bool isAuto)
     {
         if (_isAdminRole)
         {
             return true;
         }
 
-        if (statusId == StatusSubmittedToHead)
+        return statusId switch
         {
-            return _dataScope.IsHeadDept || _dataScope.ApprovalLevel >= 2;
-        }
-
-        if (statusId == StatusHeadDeptApproved)
-        {
-            return _dataScope.ApprovalLevel >= 2;
-        }
-
-        if (statusId == StatusPurchaserChecked)
-        {
-            return _dataScope.ApprovalLevel >= 3;
-        }
-
-        if (statusId == StatusCfoApproved)
-        {
-            return _dataScope.ApprovalLevel >= 3;
-        }
-
-        return false;
+            StatusSubmittedToHead => _dataScope.IsHeadDept,
+            StatusHeadDeptApproved => _dataScope.IsPurchaser,
+            StatusPurchaserChecked => !isAuto && _dataScope.IsCFO,
+            _ => false
+        };
     }
 
-    private bool CanRejectStatus(int statusId)
+    private bool CanRejectStatus(int statusId, bool isAuto)
     {
         if (_isAdminRole)
         {
             return true;
         }
-        if (statusId is not (StatusSubmittedToHead or StatusHeadDeptApproved or StatusPurchaserChecked or StatusCfoApproved))
+
+        return statusId switch
+        {
+            StatusSubmittedToHead => _dataScope.IsHeadDept,
+            StatusHeadDeptApproved => _dataScope.IsPurchaser,
+            StatusPurchaserChecked => !isAuto && _dataScope.IsCFO,
+            _ => false
+        };
+    }
+
+    private bool CanCalculateStatus(int statusId)
+    {
+        if (!_isAdminRole && !_dataScope.IsPurchaser)
         {
             return false;
         }
 
-        return _dataScope.IsHeadDept || _dataScope.ApprovalLevel >= 2;
+        return statusId == StatusHeadDeptApproved;
     }
 
-    private bool CanExecuteTransition(MaterialRequestWorkflowAction action, int currentStatus)
+    private bool CanExecuteTransition(MaterialRequestWorkflowAction action, int currentStatus, bool isAuto)
     {
         if (action == MaterialRequestWorkflowAction.Submit)
         {
@@ -811,18 +1118,23 @@ public class MaterialRequestDetailModel : BasePageModel
 
         if (action == MaterialRequestWorkflowAction.Approve)
         {
-            return CanApproveStatus(currentStatus);
+            return CanApproveStatus(currentStatus, isAuto);
+        }
+
+        if (action == MaterialRequestWorkflowAction.Issue)
+        {
+            return currentStatus == StatusCollectedToPr;
         }
 
         if (action == MaterialRequestWorkflowAction.Reject)
         {
-            return CanRejectStatus(currentStatus);
+            return CanRejectStatus(currentStatus, isAuto);
         }
 
         return false;
     }
 
-    private static MaterialRequestWorkflowTransition? ResolveTransition(MaterialRequestWorkflowAction action, int currentStatus)
+    private static MaterialRequestWorkflowTransition? ResolveTransition(MaterialRequestWorkflowAction action, int currentStatus, bool isAuto)
     {
         if (action == MaterialRequestWorkflowAction.Submit && currentStatus == StatusJustCreated)
         {
@@ -856,6 +1168,11 @@ public class MaterialRequestDetailModel : BasePageModel
 
         if (action == MaterialRequestWorkflowAction.Approve && currentStatus == StatusPurchaserChecked)
         {
+            if (isAuto)
+            {
+                return null;
+            }
+
             return new MaterialRequestWorkflowTransition(
                     StatusCfoApproved,
                     "Approved by CFO.",
@@ -874,10 +1191,20 @@ public class MaterialRequestDetailModel : BasePageModel
                     true);
         }
 
+        if (action == MaterialRequestWorkflowAction.Issue && currentStatus == StatusCollectedToPr)
+        {
+            return new MaterialRequestWorkflowTransition(
+                    StatusIssued,
+                    "Material Request issued.",
+                    null,
+                    null,
+                    null);
+        }
+
         if (action == MaterialRequestWorkflowAction.Reject &&
             (currentStatus == StatusSubmittedToHead ||
              currentStatus == StatusHeadDeptApproved ||
-             currentStatus == StatusPurchaserChecked ||
+             (currentStatus == StatusPurchaserChecked && !isAuto) ||
              currentStatus == StatusCfoApproved))
         {
             return new MaterialRequestWorkflowTransition(
@@ -896,8 +1223,20 @@ public class MaterialRequestDetailModel : BasePageModel
         return new
         {
             id = requestNo,
+            mode = ResolveDetailMode(),
             returnUrl = ReturnUrl
         };
+    }
+
+    private string ResolveDetailMode()
+    {
+        var mode = Request.Query["mode"].ToString();
+        if (!string.IsNullOrWhiteSpace(mode))
+        {
+            return mode;
+        }
+
+        return IsEdit ? "edit" : "add";
     }
 
     private string ResolveBackToListUrl()
@@ -945,6 +1284,7 @@ internal enum MaterialRequestWorkflowAction
 {
     Submit,
     Approve,
+    Issue,
     Reject
 }
 

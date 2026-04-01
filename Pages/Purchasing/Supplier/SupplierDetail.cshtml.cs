@@ -1136,7 +1136,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         {
             // 1. Sau khi submit, supplier mới luôn chuyển sang Status = 1 nên cấp duyệt tiếp theo là level 2.
             const int nextLevel = 2;
-            var recipients = GetEmailsByLevelCheck(nextLevel);
+            var recipients = GetEmailsByLevelCheck(nextLevel, supplier.DeptID);
             if (recipients.Count == 0)
             {
                 return;
@@ -1194,19 +1194,26 @@ namespace SmartSam.Pages.Purchasing.Supplier
             _ = SendNotifyEmailAsync(notifyRequest);
         }
 
-        private List<string> GetEmailsByLevelCheck(int levelCheckSupplier)
+        private List<string> GetEmailsByLevelCheck(int levelCheckSupplier, int? deptId)
         {
             var rows = new List<string>();
+
+            if (!deptId.HasValue)
+            {
+                return rows;
+            }
 
             using var conn = new SqlConnection(_connectionString);
             using var cmd = new SqlCommand(@"
                 SELECT DISTINCT LTRIM(RTRIM(TheEmail))
                 FROM dbo.MS_Employee
                 WHERE LevelCheckSupplier = @LevelCheckSupplier
+                  AND DeptID = @DeptID
                   AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
                   AND ISNULL(IsActive, 0) = 1", conn);
 
             cmd.Parameters.AddWithValue("@LevelCheckSupplier", levelCheckSupplier);
+            cmd.Parameters.AddWithValue("@DeptID", deptId.Value);
             conn.Open();
 
             using var rd = cmd.ExecuteReader();

@@ -60,12 +60,12 @@
 
                             <div class="form-group mb-2">
                                 <label>Request No.</label>
-                                <input name="RequestNo" value="@Model.Filter.RequestNo" class="form-control form-control-sm vni-font" />
+                                <input id="Filter_RequestNo" name="RequestNo" value="@Model.Filter.RequestNo" class="form-control form-control-sm vni-font" />
                             </div>
 
                             <div class="form-group mb-2">
                                 <label>Status</label>
-                                <select name="StatusId" class="form-control form-control-sm">
+                                <select id="Filter_StatusId" name="StatusId" class="form-control form-control-sm">
                                     @foreach (var status in Model.StatusList)
                                     {
                                         var isSelectedStatus = string.IsNullOrWhiteSpace(status.Value)
@@ -78,7 +78,7 @@
 
                             <div class="form-group mb-2">
                                 <label>Description</label>
-                                <input name="Description" value="@Model.Filter.Description" class="form-control form-control-sm vni-font" />
+                                <input id="Filter_Description" name="Description" value="@Model.Filter.Description" class="form-control form-control-sm vni-font" />
                             </div>
 
                             <div class="form-group mb-1">
@@ -227,7 +227,7 @@
                     <div class="card-footer p-2 text-center module-action-bar prq-action-bar">
                         @if (Model.CanAddAt)
                         {
-                            <button type="button" id="prqAddAtBtn" class="btn btn-sm btn-action-copy border mx-1 my-1" disabled data-toggle="modal" data-target="#prqAddAtModal"><i class="fas fa-file-signature"></i> Add AT</button>
+                            <button type="button" id="prqAddAtBtn" class="btn btn-sm btn-action-copy border mx-1 my-1"><i class="fas fa-file-signature"></i> Add AT</button>
                         }
                         @if (Model.CanAddNew)
                         {
@@ -253,9 +253,9 @@
 <div class="modal fade" id="prqAddAtModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content">
-            <form method="post" asp-page="./Index" asp-page-handler="AddAt" id="prqAddAtForm">
+            <form method="post" enctype="multipart/form-data" asp-page="./Index" asp-page-handler="AddAt" id="prqAddAtForm">
                 <div class="modal-header py-2">
-                    <h5 class="modal-title font-weight-bold">No. <span id="prqAddAtRequestNo">-</span></h5>
+                    <h5 class="modal-title font-weight-bold">Gen PR</h5>
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                         <span aria-hidden="true">&times;</span>
                     </button>
@@ -263,8 +263,10 @@
                 <div class="modal-body pb-2">
                     <div asp-validation-summary="All" class="text-danger small mb-2"></div>
 
-                    <input asp-for="SelectedPrId" type="hidden" id="SelectedPrId" />
                     <input asp-for="AddAtDetailsJson" type="hidden" id="AddAtDetailsJson" />
+                    <input asp-for="AddAtRequestNo" type="hidden" id="AddAtRequestNo" />
+                    <input asp-for="AddAtRequestDate" type="hidden" id="AddAtRequestDate" />
+                    <input asp-for="AddAtCurrencyId" type="hidden" id="AddAtCurrencyId" />
                     <input type="hidden" name="RequestNo" value="@Model.Filter.RequestNo" />
                     <input type="hidden" name="StatusId" value="@Model.Filter.StatusId" />
                     <input type="hidden" name="Description" value="@Model.Filter.Description" />
@@ -274,12 +276,37 @@
                     <input type="hidden" name="PageNumber" value="@Model.Filter.Page" />
                     <input type="hidden" name="PageSize" value="@Model.Filter.PageSize" />
 
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label class="mb-1">No.</label>
+                            <input id="prqAddAtRequestNoDisplay" class="form-control form-control-sm vni-font" readonly />
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label class="mb-1">Date</label>
+                            <input id="prqAddAtRequestDateDisplay" class="form-control form-control-sm" readonly />
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label class="mb-1">Currency</label>
+                            <select id="prqAddAtCurrencySelect" class="form-control form-control-sm"></select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-12">
+                            <label class="mb-1">Description</label>
+                            <textarea asp-for="AddAtDescription" id="prqAddAtDescription" rows="2" class="form-control form-control-sm vni-font" maxlength="500"></textarea>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-12">
+                            <label class="mb-1">Attached Files <span class="prq-add-at-file-note">Allowed: @Model.AllowedAttachmentExtensionsText | Max size: @Model.MaxAttachmentSizeMb MB</span></label>
+                            <input asp-for="AddAtAttachment" type="file" id="prqAddAtAttachments" class="form-control form-control-sm prq-add-at-file-input" accept="@Model.AllowedAttachmentExtensionsText" />
+                            <div id="prqAddAtAttachmentError" class="prq-add-at-file-error d-none"></div>
+                        </div>
+                    </div>
+
                     <div class="mb-2">
-                        <button type="button" class="btn btn-sm btn-action-add border mr-2" data-toggle="modal" data-target="#prqAddAtDetailModal">
-                            <i class="fas fa-plus"></i> Add Detail
-                        </button>
                         <button type="submit" class="btn btn-sm btn-action-save border mr-2">
-                            <i class="fas fa-save"></i> Save
+                            <i class="fas fa-check"></i> OK
                         </button>
                         <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
                             <i class="fas fa-times"></i> Close
@@ -290,21 +317,21 @@
                         <table class="table table-sm table-bordered table-hover mb-0 text-nowrap">
                             <thead class="thead-light">
                                 <tr>
+                                    <th style="width:70px;">Check</th>
+                                    <th style="width:110px;">RequestNo</th>
                                     <th style="width:140px;">Item Code</th>
                                     <th>Item Name</th>
+                                    <th style="width:90px;" class="prq-center">BUY</th>
+                                    <th style="width:110px;" class="prq-center">SugBuy</th>
                                     <th style="width:80px;" class="prq-center">Unit</th>
-                                    <th style="width:90px;" class="prq-center">QtyFromM</th>
-                                    <th style="width:90px;" class="prq-center">QtyPur</th>
                                     <th style="width:100px;" class="prq-center">U.Price</th>
-                                    <th style="width:120px;" class="prq-center">Amount</th>
-                                    <th style="width:220px;" class="prq-center">Remark</th>
-                                    <th style="width:180px;">Supplier</th>
-                                    <th style="width:60px;"></th>
+                                    <th style="width:220px;">Specification</th>
+                                    <th style="width:260px;">Note</th>
                                 </tr>
                             </thead>
                             <tbody id="prqAddAtDetailRows">
                                 <tr id="prqAddAtDetailEmptyRow">
-                                    <td colspan="10" class="text-center text-muted">No detail rows</td>
+                                    <td colspan="10" class="text-center text-muted">No MR rows</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -315,71 +342,19 @@
     </div>
 </div>
 
-<div class="modal fade" id="prqAddAtDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header py-2">
-                <h5 class="modal-title font-weight-bold">Add Detail</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+<div class="modal fade" id="prqDangerModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-danger">
+            <div class="modal-header bg-danger text-white py-2">
+                <h5 class="modal-title">Thông báo lỗi</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="modal-body pb-2">
-                <div class="form-row">
-                    <div class="form-group col-md-6">
-                        <label class="mb-1">Item</label>
-                        <select id="addAtDetailItemId" class="form-control form-control-sm">
-                            <option value="">-- Select item --</option>
-                            @foreach (var item in Model.ItemList)
-                            {
-                                <option value="@item.Id" data-code="@item.ItemCode" data-name="@item.ItemName" data-unit="@item.Unit">@item.ItemCode - @item.ItemName</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="form-group col-md-2">
-                        <label class="mb-1">Unit</label>
-                        <input id="addAtDetailUnit" class="form-control form-control-sm vni-font" readonly />
-                    </div>
-                    <div class="form-group col-md-4">
-                        <label class="mb-1">Supplier</label>
-                        <select id="addAtDetailSupplierId" class="form-control form-control-sm">
-                            <option value="">-- Select supplier --</option>
-                            @foreach (var supplier in Model.SupplierList)
-                            {
-                                <option value="@supplier.Id">@supplier.SupplierCode - @supplier.SupplierName</option>
-                            }
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group col-md-3">
-                        <label class="mb-1">QtyFromM</label>
-                        <input id="addAtDetailQtyFromM" type="number" min="0" step="0.01" class="form-control form-control-sm" value="0" />
-                    </div>
-                    <div class="form-group col-md-3">
-                        <label class="mb-1">QtyPur</label>
-                        <input id="addAtDetailQtyPur" type="number" min="0" step="0.01" class="form-control form-control-sm" value="0" />
-                    </div>
-                    <div class="form-group col-md-3">
-                        <label class="mb-1">U.Price</label>
-                        <input id="addAtDetailUnitPrice" type="number" min="0" step="0.01" class="form-control form-control-sm" value="0" />
-                    </div>
-                    <div class="form-group col-md-3">
-                        <label class="mb-1">Amount</label>
-                        <input id="addAtDetailAmount" class="form-control form-control-sm vni-font" readonly />
-                    </div>
-                </div>
-
-                <div class="form-group mb-1">
-                    <label class="mb-1">Remark</label>
-                    <input id="addAtDetailRemark" class="form-control form-control-sm vni-font" maxlength="500" />
-                </div>
+            <div class="modal-body">
+                <div id="prqDangerModalMessage" class="text-danger"></div>
             </div>
             <div class="modal-footer py-2">
-                <button type="button" class="btn btn-sm btn-action-add border mr-2" id="btnAddAtDetailConfirm">
-                    <i class="fas fa-plus"></i> Add
-                </button>
                 <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
                     <i class="fas fa-times"></i> Close
                 </button>
@@ -400,7 +375,9 @@
             canViewDetail: @(Model.CanViewDetailRequisition ? "true" : "false"),
             canAddAt: @(Model.CanAddAt ? "true" : "false"),
             canDisapproval: @(Model.PagePerm.HasPermission(6) ? "true" : "false"),
-            detailUrlBase: '@Url.Page("./PurchaseRequisitionDetail")'
+            detailUrlBase: '@Url.Page("./PurchaseRequisitionDetail")',
+            allowedAttachmentExtensions: '@Model.AllowedAttachmentExtensionsText',
+            maxAttachmentSizeMb: @Model.MaxAttachmentSizeMb
         };
     </script>
     <script src="~/js/Purchasing/PurchaseRequisition/index.js" asp-append-version="true"></script>

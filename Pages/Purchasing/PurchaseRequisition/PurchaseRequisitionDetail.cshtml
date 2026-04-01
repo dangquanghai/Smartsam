@@ -1,4 +1,4 @@
-@page "{id?}"
+﻿@page "{id?}"
 @model SmartSam.Pages.Purchasing.PurchaseRequisition.PurchaseRequisitionDetailModel
 @{
     ViewData["Title"] = "Purchase Requisition Detail";
@@ -17,6 +17,7 @@
             <input asp-for="Mode" type="hidden" />
             <input asp-for="Requisition.Id" type="hidden" />
             <input asp-for="DetailsJson" type="hidden" id="DetailsJson" />
+            <input asp-for="SelectedDetailId" type="hidden" id="SelectedDetailId" />
 
             <div class="card card-primary card-outline">
                 <div class="card-header py-2">
@@ -30,54 +31,78 @@
                     }
 
                     <div class="prq-detail-grid mb-3">
-                        <label>No.</label>
+                        <label>No.<span class="required-mark">*</span></label>
                         <div>
-                            <input asp-for="Requisition.RequestNo" class="form-control form-control-sm vni-font" readonly="@(Model.IsViewMode ? "readonly" : null)" />
+                            <input asp-for="Requisition.RequestNo" class="form-control form-control-sm vni-font" readonly />
                             <span asp-validation-for="Requisition.RequestNo" class="text-danger small"></span>
                         </div>
 
-                        <label>Currency</label>
+                        <label>Currency<span class="required-mark">*</span></label>
                         <div>
-                            <select asp-for="Requisition.Currency" class="form-control form-control-sm" disabled="@(Model.IsViewMode ? "disabled" : null)">
+                            <select asp-for="Requisition.Currency" class="form-control form-control-sm" disabled>
                                 <option value="1">VND</option>
                             </select>
                         </div>
 
-                        <label>Date</label>
+                        <label>Status</label>
+                        <div>
+                            <select asp-for="Requisition.Status" asp-items="Model.StatusList" class="form-control form-control-sm" disabled></select>
+                        </div>
+
+                        <label>Date<span class="required-mark">*</span></label>
                         <div>
                             <input asp-for="Requisition.RequestDate" type="date" class="form-control form-control-sm" readonly="@(Model.IsViewMode ? "readonly" : null)" />
                         </div>
 
-                        <label>Status</label>
+                        <label>Total Amount</label>
                         <div>
-                            <select asp-for="Requisition.Status" asp-items="Model.StatusList" class="form-control form-control-sm" disabled="@(Model.IsViewMode ? "disabled" : null)"></select>
+                            <input id="prqTotalAmount" class="form-control form-control-sm text-right vni-font" value="@Model.TotalAmount.ToString("#,##0.00")" readonly />
                         </div>
 
-                        <label>Description</label>
+                    </div>
+                    <div class="prq-detail-grid mb-3">
+                        <label class="align-self-start pt-1">Description<span class="required-mark">*</span></label>
                         <div class="prq-detail-span-full">
-                            <textarea asp-for="Requisition.Description" rows="2" class="form-control form-control-sm vni-font" readonly="@(Model.IsViewMode ? "readonly" : null)"></textarea>
+                            <textarea asp-for="Requisition.Description" rows="3" class="form-control form-control-sm vni-font" readonly="@(Model.IsViewMode ? "readonly" : null)"></textarea>
+                            <span asp-validation-for="Requisition.Description" class="text-danger small"></span>
                         </div>
                     </div>
 
-                    <div class="mb-2">
+                    <div class="mb-2 prq-toolbar-top">
                         @if (Model.CanSave)
                         {
-                            <button type="button" class="btn btn-sm btn-action-add border mr-2" data-toggle="modal" data-target="#prqAddDetailModal">
-                                <i class="fas fa-plus"></i> Add Detail
-                            </button>
                             <button type="submit" class="btn btn-sm btn-action-save border mr-2">
                                 <i class="fas fa-save"></i> Save
                             </button>
                         }
-                        <a asp-page="./Index" class="btn btn-sm btn-action-close border">
+                        @if (Model.CanApproveWorkflow)
+                        {
+                            <button type="submit" class="btn btn-sm btn-action-approve border mr-2" formaction="@Url.Page("./PurchaseRequisitionDetail", "Approve", new { id = Model.Requisition.Id, mode = Model.Mode })" formnovalidate>
+                                <i class="fas fa-check"></i> Approve
+                            </button>
+                        }
+                        @if (Model.CanDisapproveWorkflow)
+                        {
+                            <button type="submit" class="btn btn-sm btn-action-disapprove border mr-2" formaction="@Url.Page("./PurchaseRequisitionDetail", "Disapprove", new { id = Model.Requisition.Id, mode = Model.Mode })" formnovalidate>
+                                <i class="fas fa-ban"></i> Disapprove
+                            </button>
+                        }
+                        <a asp-page="./Index" class="btn btn-sm btn-action-close border mr-2">
                             <i class="fas fa-times"></i> Close
                         </a>
+                        @if (Model.CanResetToNew)
+                        {
+                            <button type="submit" class="btn btn-sm btn-action-secondary border" formaction="@Url.Page("./PurchaseRequisitionDetail", "CstNew", new { id = Model.Requisition.Id, mode = Model.Mode })" formnovalidate>
+                                <i class="fas fa-undo"></i> CST New
+                            </button>
+                        }
                     </div>
 
                     <div class="table-responsive prq-detail-table-wrap">
-                        <table class="table table-sm table-bordered table-hover mb-0 text-nowrap">
+                        <table class="table table-sm table-bordered table-hover mb-0 text-nowrap" id="prqDetailTable">
                             <thead class="thead-light">
                                 <tr>
+                                    <th style="width:40px;" class="prq-center"></th>
                                     <th style="width:140px;">Item Code</th>
                                     <th>Item Name</th>
                                     <th style="width:80px;" class="prq-center">Unit</th>
@@ -95,10 +120,32 @@
                             </thead>
                             <tbody id="prqDetailRows">
                                 <tr id="prqDetailEmptyRow">
-                                    <td colspan="@(Model.CanSave ? 10 : 9)" class="text-center text-muted">No detail rows</td>
+                                    <td colspan="@(Model.CanSave ? 11 : 10)" class="text-center text-muted">No detail rows</td>
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+
+                    <div class="mt-2 d-flex align-items-center flex-wrap">
+                        @if (Model.CanSave)
+                        {
+                            <button type="button" class="btn btn-sm btn-action-add border mr-2 mb-2" data-toggle="modal" data-target="#prqAddDetailModal">
+                                <i class="fas fa-plus"></i> Add Detail
+                            </button>
+                        }
+                        @if (Model.CanMoveToMr)
+                        {
+                            <button type="submit" id="btnToMr" class="btn btn-sm btn-action-secondary border mr-2 mb-2" formaction="@Url.Page("./PurchaseRequisitionDetail", "ToMr", new { id = Model.Requisition.Id, mode = Model.Mode })" formnovalidate disabled>
+                                <i class="fas fa-reply"></i> To MR
+                            </button>
+                        }
+                        @if (Model.CanManageAttachments)
+                        {
+                            <button type="button" class="btn btn-sm btn-action-secondary border mr-2 mb-2" data-toggle="modal" data-target="#prqAttachmentModal">
+                                <i class="fas fa-paperclip"></i> Attached Files
+                            </button>
+                        }
+                        <div class="ml-auto mb-2 prq-detail-record-total">Total Record(s): <span id="prqDetailRecordCount">0</span></div>
                     </div>
                 </div>
             </div>
@@ -118,9 +165,10 @@
                     </button>
                 </div>
                 <div class="modal-body pb-2">
+                    <div id="detailAddError" class="text-danger small mb-2" style="display:none;"></div>
                     <div class="form-row">
                         <div class="form-group col-md-6">
-                            <label class="mb-1">Item</label>
+                            <label class="mb-1">Item<span class="required-mark">*</span></label>
                             <select id="detailItemId" class="form-control form-control-sm">
                                 <option value="">-- Select item --</option>
                                 @foreach (var item in Model.ItemList)
@@ -148,15 +196,15 @@
                     <div class="form-row">
                         <div class="form-group col-md-3">
                             <label class="mb-1">QtyFromM</label>
-                            <input id="detailQtyFromM" type="number" min="0" step="0.01" class="form-control form-control-sm" value="0" />
+                            <input id="detailQtyFromM" type="text" inputmode="decimal" class="form-control form-control-sm" value="0" />
                         </div>
                         <div class="form-group col-md-3">
-                            <label class="mb-1">QtyPur</label>
-                            <input id="detailQtyPur" type="number" min="0" step="0.01" class="form-control form-control-sm" value="0" />
+                            <label class="mb-1">QtyPur<span class="required-mark">*</span></label>
+                            <input id="detailQtyPur" type="text" inputmode="decimal" class="form-control form-control-sm" value="0" />
                         </div>
                         <div class="form-group col-md-3">
                             <label class="mb-1">U.Price</label>
-                            <input id="detailUnitPrice" type="number" min="0" step="0.01" class="form-control form-control-sm" value="0" />
+                            <input id="detailUnitPrice" type="text" inputmode="decimal" class="form-control form-control-sm" value="0" />
                         </div>
                         <div class="form-group col-md-3">
                             <label class="mb-1">Amount</label>
@@ -182,6 +230,82 @@
     </div>
 }
 
+@if (Model.CanManageAttachments)
+{
+    <div class="modal fade" id="prqAttachmentModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title">Attached Files</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body pb-2">
+                    @if (Model.AttachmentList.Count == 0)
+                    {
+                        <div class="text-muted small mb-3">No attached files.</div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive mb-3">
+                            <table class="table table-sm table-bordered mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>File</th>
+                                        <th style="width:160px;">Upload Date</th>
+                                        <th style="width:120px;">User</th>
+                                        <th style="width:90px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var attachment in Model.AttachmentList)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <a asp-page="./PurchaseRequisitionDetail" asp-page-handler="DownloadAttachment" asp-route-id="@Model.Requisition.Id" asp-route-docId="@attachment.DocId">@attachment.FilePath</a>
+                                            </td>
+                                            <td>@attachment.UploadDate?.ToString("dd/MM/yyyy HH:mm")</td>
+                                            <td>@attachment.UserCode</td>
+                                            <td class="text-center">
+                                                <form method="post" action="@Url.Page("./PurchaseRequisitionDetail", "DeleteAttachment", new { id = Model.Requisition.Id, mode = Model.Mode, docId = attachment.DocId })">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit" class="btn btn-sm btn-action-disapprove border px-2" formnovalidate>
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+
+                    @if (Model.CanManageAttachments)
+                    {
+                        <form method="post" enctype="multipart/form-data" action="@Url.Page("./PurchaseRequisitionDetail", "UploadAttachment", new { id = Model.Requisition.Id, mode = Model.Mode })">
+                            @Html.AntiForgeryToken()
+                            <input asp-for="Requisition.Id" type="hidden" />
+                            <input asp-for="Mode" type="hidden" />
+                            <div class="form-group mb-0">
+                                <label class="mb-1">Attached Files <span class="prq-attachment-note">Allowed: @Model.AllowedAttachmentExtensionsText | Max size: @Model.MaxAttachmentSizeMb MB</span></label>
+                                <input asp-for="AttachmentUpload" type="file" class="form-control-file prq-attachment-input" id="detailAttachmentUpload" accept="@Model.AllowedAttachmentExtensionsText" />
+                                <div id="detailAttachmentError" class="text-danger small mt-1" style="display:none;"></div>
+                                <div class="mt-2">
+                                    <button type="submit" class="btn btn-sm btn-action-add border" id="btnDetailAttachmentUpload">
+                                        <i class="fas fa-upload"></i> Upload
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @section Styles {
     <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Purchasing/PurchaseRequisition/PurchaseRequisitionDetail.css" asp-append-version="true" />
@@ -190,7 +314,10 @@
 @section Scripts {
     <script>
         window.purchaseRequisitionDetailPage = {
-            canSave: @(Model.CanSave ? "true" : "false")
+            canSave: @(Model.CanSave ? "true" : "false"),
+            canMoveToMr: @(Model.CanMoveToMr ? "true" : "false"),
+            allowedAttachmentExtensions: "@Model.AllowedAttachmentExtensionsText",
+            maxAttachmentSizeMb: @Model.MaxAttachmentSizeMb
         };
     </script>
     <script src="~/js/Purchasing/PurchaseRequisition/PurchaseRequisitionDetail.js" asp-append-version="true"></script>
