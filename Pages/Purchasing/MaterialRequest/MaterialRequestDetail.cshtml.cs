@@ -4,7 +4,6 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Data.SqlClient;
 using SmartSam.Helpers;
 using SmartSam.Pages;
@@ -155,18 +154,7 @@ public class MaterialRequestDetailModel : BasePageModel
     {
         get
         {
-            if (!_dataScope.IsCFO || CurrentStatusId < StatusPurchaserChecked)
-            {
-                return false;
-            }
-
-            var returnUrlBuyFilter = ResolveReturnUrlBuyGreaterThanZero();
-            if (returnUrlBuyFilter.HasValue)
-            {
-                return returnUrlBuyFilter.Value;
-            }
-
-            return true;
+            return _dataScope.IsCFO && CurrentStatusId >= StatusPurchaserChecked;
         }
     }
 
@@ -1624,41 +1612,6 @@ public class MaterialRequestDetailModel : BasePageModel
 
         return trimmed;
     }
-
-    private bool? ResolveReturnUrlBuyGreaterThanZero()
-    {
-        if (string.IsNullOrWhiteSpace(ReturnUrl))
-        {
-            return null;
-        }
-
-        var trimmed = ReturnUrl.Trim();
-        var questionMarkIndex = trimmed.IndexOf('?', StringComparison.Ordinal);
-        if (questionMarkIndex < 0 || questionMarkIndex >= trimmed.Length - 1)
-        {
-            return null;
-        }
-
-        var queryValues = QueryHelpers.ParseQuery(trimmed.Substring(questionMarkIndex + 1));
-        if (!queryValues.TryGetValue("Filter.BuyGreaterThanZero", out var values) || values.Count == 0)
-        {
-            return null;
-        }
-
-        var raw = values[0].ToString().Trim();
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return null;
-        }
-
-        if (bool.TryParse(raw, out var parsed))
-        {
-            return parsed;
-        }
-
-        return null;
-    }
-
 
     private void ApplyTempDataMessagesToModelState()
     {
