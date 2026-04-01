@@ -17,6 +17,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 {
     public class ApproveSupplierDetailModel : BasePageModel
     {
+        // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
         private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
         private readonly ILogger<ApproveSupplierDetailModel> _logger;
         private readonly ISecurityService _securityService;
@@ -1139,40 +1140,46 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return cmd.ExecuteNonQuery() > 0;
         }
 
-        // Lấy danh sách email nhận thông báo theo cấp duyệt và phòng ban.
-        private List<string> GetEmailsByLevelCheck(int levelCheckSupplier, int? deptId)
+        // Lấy danh sách người nhận mail theo cấp duyệt kế tiếp.
+        private List<ApproveSupplierNotifyRecipientViewModel> GetEmailsByLevelCheck(int levelCheckSupplier, int? deptId)
         {
-            var rows = new List<string>();
+            var rows = new List<ApproveSupplierNotifyRecipientViewModel>();
 
-            if (!deptId.HasValue)
-            {
-                return rows;
-            }
+            var useDepartmentFilter = IsApproveSupplierNewMode && deptId.HasValue;
 
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
             using var cmd = new SqlCommand(@"
-                SELECT DISTINCT LTRIM(RTRIM(TheEmail))
+                SELECT DISTINCT
+                    LTRIM(RTRIM(TheEmail)) AS TheEmail,
+                    LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode,
+                    LTRIM(RTRIM(EmployeeName)) AS EmployeeName
                 FROM dbo.MS_Employee
                 WHERE LevelCheckSupplier = @LevelCheckSupplier
-                  AND DeptID = @DeptID
+                  AND (@UseDepartmentFilter = 0 OR DeptID = @DeptID)
                   AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
                   AND ISNULL(IsActive, 0) = 1", conn);
 
             cmd.Parameters.AddWithValue("@LevelCheckSupplier", levelCheckSupplier);
-            cmd.Parameters.AddWithValue("@DeptID", deptId.Value);
+            cmd.Parameters.Add("@UseDepartmentFilter", SqlDbType.Bit).Value = useDepartmentFilter;
+            cmd.Parameters.Add("@DeptID", SqlDbType.Int).Value = deptId.HasValue ? deptId.Value : DBNull.Value;
             conn.Open();
 
             using var rd = cmd.ExecuteReader();
             while (rd.Read())
             {
-                var email = Convert.ToString(rd[0]) ?? string.Empty;
+                var email = Convert.ToString(rd["TheEmail"]) ?? string.Empty;
                 if (!string.IsNullOrWhiteSpace(email))
                 {
-                    rows.Add(email.Trim());
+                    rows.Add(new ApproveSupplierNotifyRecipientViewModel
+                    {
+                        Email = email.Trim(),
+                        EmployeeCode = Convert.ToString(rd["EmployeeCode"])?.Trim() ?? string.Empty,
+                        EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty
+                    });
                 }
             }
 
-            return rows.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            return rows;
         }
 
         // Tạo yêu cầu gửi mail thông báo cho cấp duyệt tiếp theo.
@@ -1205,6 +1212,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             var operatorCode = User.Identity?.Name?.Trim() ?? "SYSTEM";
             var supplierCode = string.IsNullOrWhiteSpace(supplier.SupplierCode) ? supplier.SupplierID.ToString() : supplier.SupplierCode;
             var supplierName = string.IsNullOrWhiteSpace(supplier.SupplierName) ? "-" : supplier.SupplierName;
+            var recipientDisplayNames = string.Join(", ", recipients.Select(BuildRecipientDisplayName));
 
             // 1. Dùng chung một page duyệt supplier, chỉ phân biệt bằng tham số type=new
             var detailUrl = Url.Page("/Purchasing/ApproveSupplier/Index", values: new
@@ -1222,7 +1230,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 : $"[Supplier Approval] Last supplier processed at level {currentLevel}";
             subject = $"TEST - {subject}";
             var body = $@"
-<p>Dear Approver Level {nextLevel},</p>
+<p>Dear {{RECIPIENT_LABEL}},</p>
 <p>The last supplier in current approval list has been <b>{action}</b> at level {currentLevel}.</p>
 <ul>
   <li>Supplier Code: <b>{WebUtility.HtmlEncode(supplierCode)}</b></li>
@@ -1246,7 +1254,10 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 MailPort = mailPort,
                 Subject = subject,
                 HtmlBody = htmlBody,
-                Recipients = recipients
+                Recipients = recipients.Select(x => x.Email).ToList(),
+                RecipientDetails = recipients,
+                DefaultRecipientLabel = recipientDisplayNames,
+                SendIndividually = true
             };
 
             _ = SendNotifyEmailAsync(notifyRequest);
@@ -1258,34 +1269,71 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         {
             try
             {
-                using var mail = new MailMessage
+                if (notifyRequest.SendIndividually && notifyRequest.RecipientDetails.Count > 0)
                 {
-                    From = new MailAddress(notifyRequest.SenderEmail, "SmartSam System"),
-                    Subject = notifyRequest.Subject,
-                    Body = notifyRequest.HtmlBody,
-                    IsBodyHtml = true
-                };
+                    foreach (var recipient in notifyRequest.RecipientDetails)
+                    {
+                        using var mail = new MailMessage
+                        {
+                            From = new MailAddress(notifyRequest.SenderEmail, "SmartSam System"),
+                            Subject = notifyRequest.Subject,
+                            Body = notifyRequest.HtmlBody.Replace("{RECIPIENT_LABEL}", WebUtility.HtmlEncode(BuildRecipientDisplayName(recipient))),
+                            IsBodyHtml = true
+                        };
 
-                foreach (var recipient in notifyRequest.Recipients)
+                        mail.To.Add(recipient.Email);
+                        mail.CC.Add(NotifyCcEmail);
+
+                        using var smtp = new SmtpClient(notifyRequest.MailServer, notifyRequest.MailPort)
+                        {
+                            EnableSsl = true,
+                            Credentials = new NetworkCredential(notifyRequest.SenderEmail, notifyRequest.Password)
+                        };
+
+                        await smtp.SendMailAsync(mail);
+                    }
+                }
+                else
                 {
-                    mail.To.Add(recipient);
+                    using var mail = new MailMessage
+                    {
+                        From = new MailAddress(notifyRequest.SenderEmail, "SmartSam System"),
+                        Subject = notifyRequest.Subject,
+                        Body = notifyRequest.HtmlBody.Replace("{RECIPIENT_LABEL}", WebUtility.HtmlEncode(notifyRequest.DefaultRecipientLabel)),
+                        IsBodyHtml = true
+                    };
+
+                    foreach (var recipient in notifyRequest.Recipients)
+                    {
+                        mail.To.Add(recipient);
+                    }
+
+                    mail.CC.Add(NotifyCcEmail);
+
+                    using var smtp = new SmtpClient(notifyRequest.MailServer, notifyRequest.MailPort)
+                    {
+                        EnableSsl = true,
+                        Credentials = new NetworkCredential(notifyRequest.SenderEmail, notifyRequest.Password)
+                    };
+
+                    await smtp.SendMailAsync(mail);
                 }
 
-                mail.CC.Add(NotifyCcEmail);
-
-                using var smtp = new SmtpClient(notifyRequest.MailServer, notifyRequest.MailPort)
-                {
-                    EnableSsl = true,
-                    Credentials = new NetworkCredential(notifyRequest.SenderEmail, notifyRequest.Password)
-                };
-
-                await smtp.SendMailAsync(mail);
                 _logger.LogInformation("Notification email sent to level {NextLevel}.", notifyRequest.NextLevel);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Cannot send notification email to level {NextLevel}.", notifyRequest.NextLevel);
             }
+        }
+
+        // Chuẩn hóa tên hiển thị của người nhận trong nội dung mail.
+        private static string BuildRecipientDisplayName(ApproveSupplierNotifyRecipientViewModel recipient)
+        {
+            var employeeName = string.IsNullOrWhiteSpace(recipient.EmployeeName) ? recipient.Email : recipient.EmployeeName;
+            return string.IsNullOrWhiteSpace(recipient.EmployeeCode)
+                ? employeeName
+                : $"{employeeName} ({recipient.EmployeeCode})";
         }
 
         // Gán thông báo tạm thời để hiển thị lại sau khi redirect.
@@ -1760,6 +1808,16 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public string Subject { get; set; } = string.Empty;
         public string HtmlBody { get; set; } = string.Empty;
         public List<string> Recipients { get; set; } = new List<string>();
+        public List<ApproveSupplierNotifyRecipientViewModel> RecipientDetails { get; set; } = new List<ApproveSupplierNotifyRecipientViewModel>();
+        public string DefaultRecipientLabel { get; set; } = string.Empty;
+        public bool SendIndividually { get; set; }
+    }
+
+    public class ApproveSupplierNotifyRecipientViewModel
+    {
+        public string Email { get; set; } = string.Empty;
+        public string EmployeeCode { get; set; } = string.Empty;
+        public string EmployeeName { get; set; } = string.Empty;
     }
 
     public class ApproveSupplierValidationViewModel
