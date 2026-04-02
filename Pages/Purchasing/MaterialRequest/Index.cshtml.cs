@@ -262,12 +262,12 @@ public class IndexModel : BasePageModel
     /// <summary>
     /// Lay danh sach item cho popup tim kiem.
     /// </summary>
-    /// <param name="itemCode">Ma item can tim.</param>
-    /// <param name="itemName">Ten item can tim.</param>
+    /// <param name="keyword">Tu khoa tim item theo ma hoac ten.</param>
+    /// <param name="itemCode">Thong so cu de giu tuong thich.</param>
+    /// <param name="itemName">Thong so cu de giu tuong thich.</param>
     /// <param name="checkBalanceInStore">Co kiem tra ton kho hay khong.</param>
-    /// <param name="storeGroup">Store Group ap dung.</param>
     /// <returns>Ket qua JSON cho lookup.</returns>
-    public IActionResult OnGetSearchItems(string? itemCode, string? itemName, bool checkBalanceInStore = false, int? storeGroup = null)
+    public IActionResult OnGetSearchItems(string? keyword, string? itemCode, string? itemName, bool checkBalanceInStore = false)
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
@@ -280,10 +280,12 @@ public class IndexModel : BasePageModel
             return new JsonResult(new { success = false, message = "Access denied." });
         }
 
-        var scopedStoreGroup = IsStoreGroupLocked()
-            ? (_dataScope.StoreGroup ?? NoScopeStoreGroup)
-            : (storeGroup ?? Filter.StoreGroup);
-        var items = _materialRequestService.SearchItemsAsync(itemCode, itemName, checkBalanceInStore, scopedStoreGroup, cancellationToken).GetAwaiter().GetResult();
+        var normalizedKeyword = !string.IsNullOrWhiteSpace(keyword)
+            ? keyword
+            : !string.IsNullOrWhiteSpace(itemCode)
+                ? itemCode
+                : itemName;
+        var items = _materialRequestService.SearchItemsAsync(normalizedKeyword, checkBalanceInStore, cancellationToken).GetAwaiter().GetResult();
 
         return new JsonResult(new { success = true, data = items });
     }
@@ -2478,10 +2480,8 @@ public class MaterialRequestService
     /// Tim item trong popup search.
     /// </summary>
     public async Task<IReadOnlyList<MaterialRequestItemLookupDto>> SearchItemsAsync(
-        string? itemCode,
-        string? itemName,
+        string? keyword,
         bool checkBalanceInStore = false,
-        int? storeGroup = null,
         CancellationToken cancellationToken = default)
     {
         var sql = checkBalanceInStore
@@ -2490,17 +2490,17 @@ public class MaterialRequestService
                     i.ItemCode,
                     i.ItemName,
                     ISNULL(i.Unit, '') AS Unit,
-                    ISNULL(MAX(b.IsQ), 0) AS InStock,
+                    ISNULL(dbo.GetItemBalance(i.ItemID, 1, YEAR(GETDATE())), 0) AS InStock,
                     i.KPGroupItem,
                     CAST(1 AS decimal(18,2)) AS OrderQty
                 FROM dbo.INV_ItemList i
-                LEFT JOIN dbo.INV_ItemBalanceACC_TMP b ON b.ItemCode = i.ItemCode
                 WHERE
-                    (@ItemCode IS NULL OR i.ItemCode LIKE '%' + @ItemCode + '%')
-                    AND (@ItemName IS NULL OR i.ItemName LIKE '%' + @ItemName + '%')
+                    (
+                        @Keyword IS NULL
+                        OR i.ItemCode LIKE '%' + @Keyword + '%'
+                        OR i.ItemName LIKE '%' + @Keyword + '%'
+                    )
                     AND (i.IsActive = 1 OR i.IsActive IS NULL)
-                    AND (@StoreGroup IS NULL OR @StoreGroup = 0 OR i.KPGroupItem = @StoreGroup)
-                GROUP BY i.ItemCode, i.ItemName, i.Unit, i.KPGroupItem
                 ORDER BY i.ItemCode"
             : @"
                 SELECT TOP 100
@@ -2512,10 +2512,12 @@ public class MaterialRequestService
                     CAST(1 AS decimal(18,2)) AS OrderQty
                 FROM dbo.INV_ItemList i
                 WHERE
-                    (@ItemCode IS NULL OR i.ItemCode LIKE '%' + @ItemCode + '%')
-                    AND (@ItemName IS NULL OR i.ItemName LIKE '%' + @ItemName + '%')
+                    (
+                        @Keyword IS NULL
+                        OR i.ItemCode LIKE '%' + @Keyword + '%'
+                        OR i.ItemName LIKE '%' + @Keyword + '%'
+                    )
                     AND (i.IsActive = 1 OR i.IsActive IS NULL)
-                    AND (@StoreGroup IS NULL OR @StoreGroup = 0 OR i.KPGroupItem = @StoreGroup)
                 ORDER BY i.ItemCode";
 
         var rows = await Helper.QueryAsync(
@@ -2532,10 +2534,7 @@ public class MaterialRequestService
             },
             cmd =>
             {
-                Helper.AddParameter(cmd, "@ItemCode", string.IsNullOrWhiteSpace(itemCode) ? null : itemCode.Trim(), SqlDbType.VarChar, 20);
-                Helper.AddParameter(cmd, "@ItemName", string.IsNullOrWhiteSpace(itemName) ? null : itemName.Trim(), SqlDbType.VarChar, 150);
-                Helper.AddParameter(cmd, "@CheckBalanceInStore", checkBalanceInStore, SqlDbType.Bit);
-                Helper.AddParameter(cmd, "@StoreGroup", storeGroup, SqlDbType.Int);
+                Helper.AddParameter(cmd, "@Keyword", string.IsNullOrWhiteSpace(keyword) ? null : keyword.Trim(), SqlDbType.VarChar, 150);
             },
             cancellationToken);
 

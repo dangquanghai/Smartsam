@@ -172,18 +172,25 @@
 
         items.forEach(function (item, index) {
             const r = item.data || {};
+            const perms = item.actions || {};
             const requestNo = r.requestNo ?? r.RequestNo;
+            const canAccess = perms.canAccess === true;
+            const requestNoHtml = canAccess
+                ? `<a href="javascript:void(0)" class="mr-request-link text-primary font-weight-bold" style="text-decoration:underline">
+                        ${requestNo || ''}
+                    </a>`
+                : `<span class="font-weight-bold">
+                        ${requestNo || ''}
+                    </span>`;
             const row = `
-            <tr data-id="${requestNo || ''}" data-index="${index}" tabindex="0" style="cursor:pointer">
+            <tr data-id="${requestNo || ''}" data-index="${index}" tabindex="0" style="cursor:${canAccess ? 'pointer' : 'default'}">
                 <td><input type="radio" name="selectedMr" value="${index}"></td>
                 <td style="white-space:nowrap">
-                    <a href="javascript:void(0)" class="mr-request-link text-primary font-weight-bold" style="text-decoration:underline">
-                        ${requestNo || ''}
-                    </a>
+                    ${requestNoHtml}
                 </td>
                 <td>${r.dateCreateDisplay || r.DateCreateDisplay || ''}</td>
-                <td style="white-space:nowrap">${r.accordingTo || r.AccordingTo || ''}</td>
-                <td style="white-space:nowrap">${r.kpGroupName || r.KPGroupName || r.kPGroupName || ''}</td>
+                <td class="vni-font" style="white-space:nowrap">${r.accordingTo || r.AccordingTo || ''}</td>
+                <td class="vni-font" style="white-space:nowrap">${r.kpGroupName || r.KPGroupName || r.kPGroupName || ''}</td>
                 <td>${r.materialStatusName || r.MaterialStatusName || ''}</td>
                 <td>${r.prNo || r.PrNo || ''}</td>
                 <td style="display:none">${r.materialStatusId || r.MaterialStatusId || ''}</td>
@@ -214,12 +221,12 @@
         const perms = item.actions;
         const requestNo = item.data.requestNo || item.data.RequestNo;
 
-        if (perms.canAccess === true) {
-            const mode = perms.accessMode || 'view';
-            window.location.href = buildDetailUrl(requestNo, mode);
-        } else {
-            alert('You have no right to view this request.');
+        if (perms.canAccess !== true) {
+            return;
         }
+
+        const mode = perms.accessMode || 'view';
+        window.location.href = buildDetailUrl(requestNo, mode);
     }
 
     // Sử dụng delegation để bắt sự kiện cho link được tạo động
@@ -463,8 +470,7 @@
         const $moveRightBtn = $('#createMrMoveRightBtn');
         const $moveLeftBtn = $('#createMrMoveLeftBtn');
         const $confirmBtn = $('#createMrConfirmBtn');
-        const $itemCodeInput = $('#createMrItemCode');
-        const $itemNameInput = $('#createMrItemName');
+        const $keywordInput = $('#createMrKeyword');
         const $checkBalanceInput = $('#createMrCheckBalance');
         const $searchBody = $('#createMrSearchResultBody');
         const $selectedBody = $('#createMrSelectedBody');
@@ -522,8 +528,7 @@
             redrawSelected();
             showValidation('');
             $descriptionInput.val('');
-            $itemCodeInput.val('');
-            $itemNameInput.val('');
+            $keywordInput.val('');
 
             const storeGroupValue = getCurrentStoreGroupValue();
             $storeGroupPostInput.val(storeGroupValue === null ? '' : String(storeGroupValue));
@@ -533,17 +538,16 @@
 
         $searchBtn.off('click').on('click', async function () {
             showValidation('');
-            const itemCode = ($itemCodeInput.val() || '').toString().trim();
-            const itemName = ($itemNameInput.val() || '').toString().trim();
+            const keyword = ($keywordInput.val() || '').toString().trim();
 
-            if (itemCode.length < 2 && itemName.length < 5) {
-                showValidation('Enter at least 2 characters for Item Code or 5 characters for Item Name.');
+            if (keyword.length < 3) {
+                showValidation('Enter at least 3 characters for Item Code or Item Name.');
                 renderSearchRows($searchBody.get(0), [], 'Enter item code or item name, then click Search.');
                 return;
             }
 
             try {
-                const items = await searchItems(itemCode, itemName, $checkBalanceInput.is(':checked'), getCurrentStoreGroupValue());
+                const items = await searchItems(keyword, $checkBalanceInput.is(':checked'));
                 renderSearchRows($searchBody.get(0), items);
             } catch (err) {
                 console.error(err);
@@ -552,14 +556,7 @@
             }
         });
 
-        $itemCodeInput.off('keydown').on('keydown', function (event) {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                $searchBtn.trigger('click');
-            }
-        });
-
-        $itemNameInput.off('keydown').on('keydown', function (event) {
+        $keywordInput.off('keydown').on('keydown', function (event) {
             if (event.key === 'Enter') {
                 event.preventDefault();
                 $searchBtn.trigger('click');
@@ -757,16 +754,12 @@
         });
     }
 
-    function searchItems(itemCode, itemName, checkBalanceInStore, storeGroup) {
+    function searchItems(keyword, checkBalanceInStore) {
         return new Promise(function (resolve, reject) {
             const url = new URL(window.location.href);
             url.searchParams.set('handler', 'SearchItems');
-            if (itemCode) url.searchParams.set('itemCode', itemCode);
-            if (itemName) url.searchParams.set('itemName', itemName);
+            if (keyword) url.searchParams.set('keyword', keyword);
             if (checkBalanceInStore) url.searchParams.set('checkBalanceInStore', 'true');
-            if (storeGroup !== null && storeGroup !== undefined && Number.isFinite(storeGroup)) {
-                url.searchParams.set('storeGroup', String(storeGroup));
-            }
 
             $.ajax({
                 url: url.toString(),

@@ -11,6 +11,7 @@
         canSubmit: toBoolData($form.data('can-submit')),
         canCalculate: toBoolData($form.data('can-calculate')),
         canApprove: toBoolData($form.data('can-approve')),
+        canIssue: toBoolData($form.data('can-issue')),
         canReject: toBoolData($form.data('can-reject'))
     };
 
@@ -121,6 +122,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
     const canSubmit = !!actionPerm.canSubmit;
     const canCalculate = !!actionPerm.canCalculate;
     const canApprove = !!actionPerm.canApprove;
+    const canIssue = !!actionPerm.canIssue;
     const canReject = !!actionPerm.canReject;
     const hideZeroBuyLines = toBoolData($form.data('hide-zero-buy-lines'));
 
@@ -168,7 +170,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
         .prop('disabled', !showWorkflowActions || (!canApprove && !canReject));
     $('#mrIssueBtn')
         .toggle(isCollectedToPr)
-        .prop('disabled', !isCollectedToPr);
+        .prop('disabled', !isCollectedToPr || !canIssue);
 
     // Display only.
     $('#NoIssueCheck').prop('disabled', true);
@@ -226,18 +228,21 @@ function initializePage(mode, currentStatusId, actionPerm) {
         runItemLookupSearch();
     });
 
-    // Select a row in the grid
-    $('#lookupResultBody').off('click.mrAddItem').on('click.mrAddItem', '.lookup-add-item-btn', function () {
-        const $tr = $(this).closest('tr');
-        if ($tr.length === 0) return;
+    $('#lookupResultBody').off('click.mrLookupAdd').on('click.mrLookupAdd', '.mr-lookup-add-btn', function () {
+        const tr = this.closest('tr');
+        if (!tr || !tr.dataset.itemCode) return;
+
+        const orderInput = tr.querySelector('.mr-lookup-order-input');
+        const rawOrder = orderInput ? Number.parseFloat((orderInput.value || '').toString().trim()) : 1;
+        const orderQty = Number.isFinite(rawOrder) && rawOrder > 0 ? rawOrder : 1;
 
         const added = addItemToGrid($tableBody, {
-            itemCode: $tr.data('item-code') || '',
-            itemName: $tr.data('item-name') || '',
-            unit: $tr.data('unit') || '',
-            orderQty: 1,
+            itemCode: tr.dataset.itemCode || '',
+            itemName: tr.dataset.itemName || '',
+            unit: tr.dataset.unit || '',
+            orderQty: orderQty,
             notReceipt: 0,
-            inStock: 0,
+            inStock: Number.parseFloat(tr.dataset.inStock || '0') || 0,
             accIn: 0,
             buy: 0,
             price: 0,
@@ -301,10 +306,8 @@ function initializePage(mode, currentStatusId, actionPerm) {
         runItemLookupSearch();
     });
 
-    $('#lookupCheckStore').off('change').on('change', function () {
-        if (($('#lookupKeyword').val() || '').toString().trim().length > 0) {
-            runItemLookupSearch();
-        }
+    $('#lookupKeyword').off('input').on('input', function () {
+        toggleLookupValidation(false);
     });
 
     // Add item from lookup to the grid
@@ -751,6 +754,12 @@ function showDetailErrorMessage(message) {
 async function runItemLookupSearch() {
     try {
         const keyword = ($('#lookupKeyword').val() || '').toString().trim();
+        if (keyword.length < 3) {
+            renderLookupResults($('#lookupResultBody'), []);
+            toggleLookupValidation(true);
+            return;
+        }
+        toggleLookupValidation(false);
         const checkBalance = $('#lookupCheckStore').is(':checked');
         const rows = await searchItems(keyword, checkBalance);
         renderLookupResults($('#lookupResultBody'), rows);
@@ -763,27 +772,38 @@ async function runItemLookupSearch() {
 function renderLookupResults($resultBody, items) {
     $resultBody.empty();
     if (!items || items.length === 0) {
-        $resultBody.append('<tr><td colspan="4" class="text-center text-muted">No data</td></tr>');
+        $resultBody.append('<tr><td colspan="6" class="text-center text-muted">No data</td></tr>');
         return;
     }
 
     items.forEach(function (item) {
-        const $tr = $(
-            `<tr>
-                <td>${escapeHtml(item.itemCode || '')}</td>
-                <td>${escapeHtml(item.itemName || '')}</td>
-                <td>${escapeHtml(item.unit || '')}</td>
-                <td class="text-center">
-                    <button type="button" class="btn btn-sm btn-outline-primary lookup-add-item-btn">Add</button>
-                </td>
-            </tr>`
-        );
+        const $tr = $('<tr></tr>');
+        $tr.append(`<td>${escapeHtml(item.itemCode || '')}</td>`);
+        $tr.append(`<td class="vni-font">${escapeHtml(item.itemName || '')}</td>`);
+        $tr.append(`<td>${escapeHtml(item.unit || '')}</td>`);
+        $tr.append(`<td class="text-center">${formatLookupNumber(item.inStock)}</td>`);
+        $tr.append(`<td><input type="number" min="0.01" step="0.01" class="form-control form-control-sm mr-lookup-order-input" value="${item.orderQty && item.orderQty > 0 ? item.orderQty : 1}"></td>`);
+        $tr.append('<td class="text-center"><button type="button" class="btn btn-sm btn-primary mr-lookup-add-btn">Add Detail</button></td>');
 
         $tr.attr('data-item-code', item.itemCode || '');
         $tr.attr('data-item-name', item.itemName || '');
         $tr.attr('data-unit', item.unit || '');
+        $tr.attr('data-inStock', item.inStock || 0);
         $resultBody.append($tr);
     });
+}
+
+function toggleLookupValidation(forceShow) {
+    const keyword = ($('#lookupKeyword').val() || '').toString().trim();
+    const shouldShow = forceShow ? keyword.length < 3 : keyword.length > 0 && keyword.length < 3;
+    $('#lookupValidation').toggleClass('d-none', !shouldShow);
+}
+
+function formatLookupNumber(value) {
+    const parsed = Number.parseFloat((value || 0).toString());
+    if (!Number.isFinite(parsed)) return '0';
+    if (Number.isInteger(parsed)) return parsed.toString();
+    return parsed.toFixed(2).replace(/\.?0+$/, '');
 }
 
 function searchItems(keyword, checkBalanceInStore) {

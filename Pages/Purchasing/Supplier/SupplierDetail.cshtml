@@ -75,52 +75,56 @@
                                         </div>
                                     </div>
 
-                                    <div class="row no-gutters align-items-center mb-2">
-                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Phone</label></div>
+                                    <div class="row no-gutters align-items-start mb-2">
+                                        <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Email</label></div>
                                         <div class="col-3">
-                                            <input asp-for="Input.Phone" class="form-control form-control-sm" tabindex="4" />
+                                            <input asp-for="Input.Email" class="form-control form-control-sm" tabindex="4" />
                                         </div>
-                                        <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Fax</label></div>
+                                        <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Phone</label></div>
                                         <div class="col-5">
-                                            <input asp-for="Input.Fax" class="form-control form-control-sm" tabindex="5" />
+                                            <div class="supplier-cert-dept-wrap">
+                                                <input asp-for="Input.Phone" class="form-control form-control-sm supplier-cert-input" tabindex="5" />
+                                                <label class="col-form-label-sm mb-0 supplier-dept-label">Fax</label>
+                                                <input asp-for="Input.Fax" class="form-control form-control-sm supplier-dept-select" tabindex="6" />
+                                            </div>
                                         </div>
                                     </div>
 
                                     <div class="row no-gutters align-items-center mb-2">
                                         <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Contact Person</label></div>
                                         <div class="col-3">
-                                            <input asp-for="Input.Contact" class="form-control form-control-sm vni-font" tabindex="6" />
+                                            <input asp-for="Input.Contact" class="form-control form-control-sm vni-font" tabindex="7" />
                                         </div>
                                         <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Position</label></div>
                                         <div class="col-5">
-                                            <input asp-for="Input.Position" class="form-control form-control-sm vni-font" tabindex="7" />
+                                            <input asp-for="Input.Position" class="form-control form-control-sm vni-font" tabindex="8" />
                                         </div>
                                     </div>
 
                                     <div class="row no-gutters align-items-center mb-2">
                                         <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Mobile</label></div>
                                         <div class="col-3">
-                                            <input asp-for="Input.Mobile" class="form-control form-control-sm" tabindex="8" />
+                                            <input asp-for="Input.Mobile" class="form-control form-control-sm" tabindex="9" />
                                         </div>
                                         <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Business</label></div>
                                         <div class="col-5">
-                                            <input asp-for="Input.Business" class="form-control form-control-sm vni-font" tabindex="9" />
+                                            <input asp-for="Input.Business" class="form-control form-control-sm vni-font" tabindex="10" />
                                         </div>
                                     </div>
 
                                     <div class="row no-gutters align-items-center mb-2 supplier-row-doc-cert-dept">
                                         <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Document</label></div>
                                         <div class="col-3 supplier-checkbox-wrap">
-                                            <input asp-for="Input.Document" type="checkbox" tabindex="10" style="width:16px;height:16px;@(Model.CanSave ? "cursor:pointer;" : "")" />
+                                            <input asp-for="Input.Document" type="checkbox" tabindex="11" style="width:16px;height:16px;@(Model.CanSave ? "cursor:pointer;" : "")" />
                                         </div>
                                         <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Certificate</label></div>
                                         <div class="col-5">
                                             <div class="supplier-cert-dept-wrap">
-                                                <input asp-for="Input.Certificate" class="form-control form-control-sm supplier-cert-input" tabindex="11" />
+                                                <input asp-for="Input.Certificate" class="form-control form-control-sm supplier-cert-input" tabindex="12" />
                                                 <label class="col-form-label-sm mb-0 supplier-dept-label">
                                                     Dept<span class="supplier-required-mark">*</span>
                                                 </label>
-                                                <select asp-for="Input.DeptID" asp-items="Model.Departments" class="form-control form-control-sm supplier-dept-select" tabindex="12"></select>
+                                                <select asp-for="Input.DeptID" asp-items="Model.Departments" class="form-control form-control-sm supplier-dept-select" tabindex="13"></select>
                                             </div>
                                         </div>
                                     </div>
@@ -128,27 +132,27 @@
                                     <div class="row no-gutters align-items-center mb-2">
                                         <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Service</label></div>
                                         <div class="col-10">
-                                            <input asp-for="Input.Service" class="form-control form-control-sm vni-font" tabindex="13" />
+                                            <input asp-for="Input.Service" class="form-control form-control-sm vni-font" tabindex="14" />
                                         </div>
                                     </div>
 
                                     <div class="row no-gutters align-items-start mb-2">
                                         <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">Comment</label></div>
                                         <div class="col-10">
-                                            <textarea asp-for="Input.Comment" class="form-control form-control-sm vni-font" rows="2" tabindex="14"></textarea>
+                                            <textarea asp-for="Input.Comment" class="form-control form-control-sm vni-font" rows="2" tabindex="15"></textarea>
                                         </div>
                                     </div>
 
                                     <div class="row no-gutters align-items-center mb-0">
                                         <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">CodeOfAcc</label></div>
                                         <div class="col-3">
-                                            <input asp-for="Input.CodeOfAcc" class="form-control form-control-sm vni-font" tabindex="15" />
+                                            <input asp-for="Input.CodeOfAcc" class="form-control form-control-sm vni-font" tabindex="16" />
                                         </div>
                                         <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">IsNew</label></div>
                                         <div class="col-5">
                                             <div class="supplier-cert-dept-wrap supplier-status-dept-align">
                                                 <div class="supplier-cert-input supplier-checkbox-wrap supplier-isnew-cell">
-                                                    <input asp-for="Input.IsNew" type="checkbox" tabindex="16" style="width:16px;height:16px;@(Model.CanSave ? "cursor:pointer;" : "")" />
+                                                    <input asp-for="Input.IsNew" type="checkbox" tabindex="17" style="width:16px;height:16px;@(Model.CanSave ? "cursor:pointer;" : "")" />
                                                 </div>
                                                 <label class="col-form-label-sm mb-0 supplier-dept-label">Status</label>
                                                 <input type="text" class="form-control form-control-sm supplier-dept-select supplier-status-readonly" value="@statusText" readonly />
