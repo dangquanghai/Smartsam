@@ -53,12 +53,12 @@
                         <div class="mb-2">
                             <div class="row no-gutters align-items-start mb-2">
                                 <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">Supplier Code<span class="required-mark">*</span></label></div>
-                                <div class="col-2 pr-3">
+                                <div class="col-3 pr-3">
                                     <input asp-for="EditSupplier.SupplierCode" class="form-control form-control-sm vni-font" readonly="@(editAll ? null : "readonly")" required="@(editAll ? "required" : null)" />
                                     <span asp-validation-for="EditSupplier.SupplierCode" class="text-danger small"></span>
                                 </div>
                                 <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">Supplier Name<span class="required-mark">*</span></label></div>
-                                <div class="col-8">
+                                <div class="col-7">
                                     <input asp-for="EditSupplier.SupplierName" class="form-control form-control-sm vni-font" readonly="@(editAll ? null : "readonly")" required="@(editAll ? "required" : null)" />
                                     <span asp-validation-for="EditSupplier.SupplierName" class="text-danger small"></span>
                                 </div>
@@ -66,7 +66,7 @@
 
                             <div class="row no-gutters align-items-center mb-2">
                                 <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">Business</label></div>
-                                <div class="col-8 pr-3">
+                                <div class="col-7 pr-3">
                                     <input asp-for="EditSupplier.Business" class="form-control form-control-sm vni-font" readonly="@(editAll ? null : "readonly")" />
                                 </div>
                                 <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">IsNew</label></div>
@@ -77,7 +77,7 @@
 
                             <div class="row no-gutters align-items-center mb-2">
                                 <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">Certificate</label></div>
-                                <div class="col-8 pr-3">
+                                <div class="col-7 pr-3">
                                     <input asp-for="EditSupplier.Certificate" class="form-control form-control-sm vni-font" readonly="@(editAll ? null : "readonly")" />
                                 </div>
                                 <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">Document</label></div>
@@ -111,11 +111,11 @@
 
                             <div class="row no-gutters align-items-center mb-2">
                                 <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">Contact</label></div>
-                                <div class="col-5 pr-3">
+                                <div class="col-3 pr-3">
                                     <input asp-for="EditSupplier.Contact" class="form-control form-control-sm vni-font" readonly="@(editAll ? null : "readonly")" />
                                 </div>
                                 <div class="col-1 text-left pr-2"><label class="col-form-label-sm mb-0">Position</label></div>
-                                <div class="col-5">
+                                <div class="col-3 pr-3">
                                     <input asp-for="EditSupplier.Position" class="form-control form-control-sm vni-font" readonly="@(editAll ? null : "readonly")" />
                                 </div>
                             </div>

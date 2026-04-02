@@ -1,8 +1,11 @@
-﻿using System.Text.Json;
+using System.Net;
+using System.Net.Mail;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
+using SmartSam.Helpers;
 using SmartSam.Pages;
 using SmartSam.Services;
 using SmartSam.Services.Interfaces;
@@ -15,6 +18,7 @@ public class MaterialRequestDetailModel : BasePageModel
     private readonly MaterialRequestService _materialRequestService;
     private readonly ISecurityService _securityService;
     private readonly PermissionService _permissionService;
+    private readonly ILogger<MaterialRequestDetailModel> _logger;
 
     private const int MaterialRequestFunctionId = 104;
     private const int PermissionCreate = 1;
@@ -34,11 +38,16 @@ public class MaterialRequestDetailModel : BasePageModel
     private EmployeeMaterialScopeDto _dataScope = new EmployeeMaterialScopeDto();
     private bool _isAdminRole;
 
-    public MaterialRequestDetailModel(ISecurityService securityService, IConfiguration configuration, PermissionService permissionService) : base(configuration)
+        public MaterialRequestDetailModel(
+        ISecurityService securityService,
+        IConfiguration configuration,
+        PermissionService permissionService,
+        ILogger<MaterialRequestDetailModel> logger) : base(configuration)
     {
         _materialRequestService = new MaterialRequestService(configuration);
         _securityService = securityService;
         _permissionService = permissionService;
+        _logger = logger;
     }
 
     [BindProperty(SupportsGet = true)]
@@ -139,6 +148,14 @@ public class MaterialRequestDetailModel : BasePageModel
     public bool CanReject
     {
         get { return IsEdit && CanRejectStatus(CurrentStatusId, Input.IsAuto); }
+    }
+
+    public bool HideZeroBuyLines
+    {
+        get
+        {
+            return _dataScope.IsCFO && CurrentStatusId >= StatusPurchaserChecked;
+        }
     }
 
     public string BackToListUrl
@@ -440,6 +457,7 @@ public class MaterialRequestDetailModel : BasePageModel
             if (transition.PostPr.HasValue) toSave.PostPr = transition.PostPr.Value;
 
             var savedNo = await _materialRequestService.SaveAsync(Id, toSave, lines, cancellationToken);
+            TryQueueWorkflowNotifyEmail(action, currentStatus, toSave, isAuto);
             SuccessMessage = transition.SuccessMessage;
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(savedNo));
         }
@@ -1134,6 +1152,337 @@ public class MaterialRequestDetailModel : BasePageModel
         return false;
     }
 
+    private void TryQueueWorkflowNotifyEmail(
+        MaterialRequestWorkflowAction action,
+        int currentStatus,
+        MaterialRequestDetailDto header,
+        bool isAuto)
+    {
+        var notifyRequest = BuildWorkflowNotifyRequest(action, currentStatus, header, isAuto);
+        if (notifyRequest is null)
+        {
+            return;
+        }
+
+        if (notifyRequest.Recipients.Count == 0 ||
+            string.IsNullOrWhiteSpace(notifyRequest.SenderEmail) ||
+            string.IsNullOrWhiteSpace(notifyRequest.Password) ||
+            string.IsNullOrWhiteSpace(notifyRequest.MailServer) ||
+            notifyRequest.MailPort <= 0)
+        {
+            return;
+        }
+
+        _ = SendNotifyEmailAsync(notifyRequest, header.RequestNo);
+    }
+
+    private MaterialRequestWorkflowNotifyRequestViewModel? BuildWorkflowNotifyRequest(
+        MaterialRequestWorkflowAction action,
+        int currentStatus,
+        MaterialRequestDetailDto header,
+        bool isAuto)
+    {
+        if (action == MaterialRequestWorkflowAction.Submit && currentStatus == StatusJustCreated)
+        {
+            var recipients = GetHeadDeptRecipientsByStoreGroup(header.StoreGroup);
+            if (recipients.Count == 0)
+            {
+                return null;
+            }
+
+            return CreateWorkflowNotifyRequest(
+                header,
+                recipients,
+                "[Material Request] Waiting for Head Dept approval",
+                "MATERIAL REQUEST",
+                "#17a2b8",
+                "has been submitted and is waiting for your approval.",
+                "Submit");
+        }
+
+        if (action == MaterialRequestWorkflowAction.Approve && currentStatus == StatusSubmittedToHead)
+        {
+            var recipients = GetRecipientsByEmployeeFlag("IsPurchaser");
+            if (recipients.Count == 0)
+            {
+                return null;
+            }
+
+            return CreateWorkflowNotifyRequest(
+                header,
+                recipients,
+                "[Material Request] Waiting for Purchaser check",
+                "MATERIAL REQUEST",
+                "#007bff",
+                "has been approved by Head Dept and is waiting for your check.",
+                "Head approval");
+        }
+
+        if (action == MaterialRequestWorkflowAction.Approve && currentStatus == StatusHeadDeptApproved && !isAuto)
+        {
+            var recipients = GetRecipientsByEmployeeFlag("IsCFO");
+            if (recipients.Count == 0)
+            {
+                return null;
+            }
+
+            return CreateWorkflowNotifyRequest(
+                header,
+                recipients,
+                "[Material Request] Waiting for CFO approval",
+                "MATERIAL REQUEST",
+                "#007bff",
+                "has been checked by Purchaser and is waiting for your approval.",
+                "Purchaser check");
+        }
+
+        return null;
+    }
+
+    private MaterialRequestWorkflowNotifyRequestViewModel CreateWorkflowNotifyRequest(
+        MaterialRequestDetailDto header,
+        List<MaterialRequestWorkflowRecipientViewModel> recipients,
+        string subject,
+        string title,
+        string color,
+        string actionText,
+        string stepLabel)
+    {
+        var requestNo = header.RequestNo > 0 ? header.RequestNo.ToString() : string.Empty;
+        var storeGroupText = ResolveStoreGroupText(header.StoreGroup);
+        var detailUrl = Url.Page("/Purchasing/MaterialRequest/MaterialRequestDetail", values: new
+        {
+            id = header.RequestNo,
+            mode = "view"
+        });
+
+        var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl)
+            ? string.Empty
+            : $"{Request.Scheme}://{Request.Host}{detailUrl}";
+        var body = $@"
+        <p>Dear {{RECIPIENT_LABEL}},</p>
+        <p>Material Request <b>{WebUtility.HtmlEncode(requestNo)}</b> {WebUtility.HtmlEncode(actionText)}</p>
+        <ul>
+        <li>Request No: <b>{WebUtility.HtmlEncode(requestNo)}</b></li>
+        <li>Date: <b>{header.DateCreate:dd/MM/yyyy}</b></li>
+        <li>Store Group: <b>{WebUtility.HtmlEncode(storeGroupText)}</b></li>
+        <li>According To: <b>{WebUtility.HtmlEncode(header.AccordingTo ?? string.Empty)}</b></li>
+        <li>Step: <b>{WebUtility.HtmlEncode(stepLabel)}</b></li>
+        </ul>
+        {(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Material Request Detail</a></p>")}
+        <p>SmartSam System</p>";
+
+        var htmlBody = EmailTemplateHelper.WrapInNotifyTemplate(title, color, DateTime.Now, body);
+        var senderEmail = _config.GetValue<string>("EmailSettings:SenderEmail") ?? string.Empty;
+        var password = _config.GetValue<string>("EmailSettings:Password") ?? string.Empty;
+        var mailServer = _config.GetValue<string>("EmailSettings:MailServer") ?? string.Empty;
+        var mailPort = _config.GetValue<int?>("EmailSettings:MailPort") ?? 0;
+
+        return new MaterialRequestWorkflowNotifyRequestViewModel
+        {
+            SenderEmail = senderEmail,
+            Password = password,
+            MailServer = mailServer,
+            MailPort = mailPort,
+            Subject = AddTestSubjectPrefix(subject),
+            HtmlBody = htmlBody,
+            Recipients = DeduplicateRecipients(recipients),
+            CcRecipients = new List<string> { TestCcEmail }
+        };
+    }
+
+    // Load Head Dept recipients for the Store Group and keep the email plus display label together.
+    private List<MaterialRequestWorkflowRecipientViewModel> GetHeadDeptRecipientsByStoreGroup(int? storeGroup)
+    {
+        var rows = new List<MaterialRequestWorkflowRecipientViewModel>();
+        if (!storeGroup.HasValue || storeGroup.Value <= 0)
+        {
+            return rows;
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand(@"
+        SELECT
+            LTRIM(RTRIM(e.TheEmail)) AS Email,
+            LTRIM(RTRIM(e.EmployeeName)) AS EmployeeName,
+            LTRIM(RTRIM(e.EmployeeCode)) AS EmployeeCode
+        FROM dbo.INV_KPGroup kp
+        INNER JOIN dbo.MS_Employee e ON e.DeptID = kp.DepID
+        WHERE kp.KPGroupID = @StoreGroup
+        AND ISNULL(e.HeadDept, 0) = 1
+        AND ISNULL(LTRIM(RTRIM(e.TheEmail)), '') <> ''
+        AND ISNULL(e.IsActive, 0) = 1
+        ORDER BY LTRIM(RTRIM(e.TheEmail)), LTRIM(RTRIM(e.EmployeeCode))", conn);
+        cmd.Parameters.Add("@StoreGroup", SqlDbType.Int).Value = storeGroup.Value;
+
+        conn.Open();
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            var email = Convert.ToString(rd["Email"]) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                continue;
+            }
+
+            rows.Add(new MaterialRequestWorkflowRecipientViewModel
+            {
+                Email = email.Trim(),
+                DisplayLabel = BuildRecipientLabel(
+                    Convert.ToString(rd["EmployeeName"]),
+                    Convert.ToString(rd["EmployeeCode"]))
+            });
+        }
+
+        return DeduplicateRecipients(rows);
+    }
+
+    // Load workflow recipients by flag and keep one row per email only.
+    private List<MaterialRequestWorkflowRecipientViewModel> GetRecipientsByEmployeeFlag(string flagColumn)
+    {
+        var rows = new List<MaterialRequestWorkflowRecipientViewModel>();
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand($@"
+        SELECT
+            LTRIM(RTRIM(TheEmail)) AS Email,
+            LTRIM(RTRIM(EmployeeName)) AS EmployeeName,
+            LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode
+        FROM dbo.MS_Employee
+        WHERE ISNULL({flagColumn}, 0) = 1
+        AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
+        AND ISNULL(IsActive, 0) = 1
+        ORDER BY LTRIM(RTRIM(TheEmail)), LTRIM(RTRIM(EmployeeCode))", conn);
+
+        conn.Open();
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            var email = Convert.ToString(rd["Email"]) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                continue;
+            }
+
+            rows.Add(new MaterialRequestWorkflowRecipientViewModel
+            {
+                Email = email.Trim(),
+                DisplayLabel = BuildRecipientLabel(
+                    Convert.ToString(rd["EmployeeName"]),
+                    Convert.ToString(rd["EmployeeCode"]))
+            });
+        }
+
+        return DeduplicateRecipients(rows);
+    }
+
+    // Keep one recipient row per email because one user may have duplicate accounts.
+    private static List<MaterialRequestWorkflowRecipientViewModel> DeduplicateRecipients(IEnumerable<MaterialRequestWorkflowRecipientViewModel> recipients)
+    {
+        return recipients
+            .Where(x => !string.IsNullOrWhiteSpace(x.Email))
+            .GroupBy(x => x.Email.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToList();
+    }
+
+    // Format the greeting label as Full Name (Emp Code) when both values exist.
+    private static string BuildRecipientLabel(string? employeeName, string? employeeCode)
+    {
+        var name = (employeeName ?? string.Empty).Trim();
+        var code = (employeeCode ?? string.Empty).Trim();
+
+        if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(code))
+        {
+            return string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            return name;
+        }
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return code;
+        }
+
+        return $"{name} ({code})";
+    }
+
+    private string ResolveStoreGroupText(int? storeGroup)
+    {
+        if (!storeGroup.HasValue)
+        {
+            return string.Empty;
+        }
+
+        var selected = StoreGroups.FirstOrDefault(x => string.Equals(x.Value, storeGroup.Value.ToString(), StringComparison.OrdinalIgnoreCase));
+        return selected?.Text ?? storeGroup.Value.ToString();
+    }
+
+    private async Task SendNotifyEmailAsync(MaterialRequestWorkflowNotifyRequestViewModel notifyRequest, long requestNo)
+    {
+        try
+        {
+            // Send one mail per recipient so each person gets a personal greeting.
+            foreach (var recipient in notifyRequest.Recipients.DistinctBy(x => x.Email, StringComparer.OrdinalIgnoreCase))
+            {
+                var recipientLabel = string.IsNullOrWhiteSpace(recipient.DisplayLabel)
+                    ? recipient.Email
+                    : recipient.DisplayLabel;
+                var htmlBody = notifyRequest.HtmlBody.Replace(
+                    "{RECIPIENT_LABEL}",
+                    WebUtility.HtmlEncode(recipientLabel ?? string.Empty),
+                    StringComparison.Ordinal);
+
+                using var mail = new MailMessage
+                {
+                    From = new MailAddress(notifyRequest.SenderEmail, "SmartSam System"),
+                    Subject = notifyRequest.Subject,
+                    Body = htmlBody,
+                    IsBodyHtml = true
+                };
+
+                mail.To.Add(recipient.Email);
+
+                foreach (var ccRecipient in notifyRequest.CcRecipients.Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    mail.CC.Add(ccRecipient);
+                }
+
+                using var smtp = new SmtpClient(notifyRequest.MailServer, notifyRequest.MailPort)
+                {
+                    EnableSsl = true,
+                    Credentials = new NetworkCredential(notifyRequest.SenderEmail, notifyRequest.Password)
+                };
+
+                await smtp.SendMailAsync(mail);
+                _logger.LogInformation(
+                    "Notification email sent for Material Request {RequestNo} to {RecipientEmail}.",
+                    requestNo,
+                    recipient.Email);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Cannot send workflow email for Material Request {RequestNo}.", requestNo);
+        }
+    }
+
+    private static string AddTestSubjectPrefix(string subject)
+    {
+        const string prefix = "TEST";
+        var trimmed = (subject ?? string.Empty).Trim();
+        if (trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmed;
+        }
+
+        return string.IsNullOrWhiteSpace(trimmed) ? prefix : $"{prefix} - {trimmed}";
+    }
+
+    private const string TestCcEmail = "hai.dq@saigonskygarden.com.vn";
     private static MaterialRequestWorkflowTransition? ResolveTransition(MaterialRequestWorkflowAction action, int currentStatus, bool isAuto)
     {
         if (action == MaterialRequestWorkflowAction.Submit && currentStatus == StatusJustCreated)
@@ -1264,7 +1613,6 @@ public class MaterialRequestDetailModel : BasePageModel
         return trimmed;
     }
 
-
     private void ApplyTempDataMessagesToModelState()
     {
         if (!string.IsNullOrWhiteSpace(ErrorMessage))
@@ -1313,3 +1661,21 @@ internal sealed class MaterialRequestWorkflowTransition
 
 
 
+
+internal sealed class MaterialRequestWorkflowNotifyRequestViewModel
+{
+    public string SenderEmail { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+    public string MailServer { get; set; } = string.Empty;
+    public int MailPort { get; set; }
+    public string Subject { get; set; } = string.Empty;
+    public string HtmlBody { get; set; } = string.Empty;
+    public List<MaterialRequestWorkflowRecipientViewModel> Recipients { get; set; } = new List<MaterialRequestWorkflowRecipientViewModel>();
+    public List<string> CcRecipients { get; set; } = new List<string>();
+}
+
+internal sealed class MaterialRequestWorkflowRecipientViewModel
+{
+    public string Email { get; set; } = string.Empty;
+    public string DisplayLabel { get; set; } = string.Empty;
+}
