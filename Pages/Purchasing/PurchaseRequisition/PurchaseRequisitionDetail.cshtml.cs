@@ -118,7 +118,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
             Mode = "add";
             Requisition = new PurchaseRequisitionHeader
             {
-                RequestNo = GetSuggestedRequestNo(DateTime.Today),
+                RequestNo = GetSuggestedRequestNo(),
                 RequestDate = DateTime.Today,
                 Currency = 1,
                 Status = 1
@@ -143,12 +143,10 @@ public class PurchaseRequisitionDetailModel : BasePageModel
 
         if (!isNew)
         {
-            var requestNo = Requisition.RequestNo;
             var requestDate = Requisition.RequestDate;
             var description = Requisition.Description;
             var currency = Requisition.Currency;
             LoadExistingWorkflowData(Requisition.Id);
-            Requisition.RequestNo = requestNo;
             Requisition.RequestDate = requestDate;
             Requisition.Description = description;
             Requisition.Currency = currency;
@@ -894,15 +892,34 @@ ORDER BY d.UploadDate DESC, d.DocID DESC", conn);
             "PRStatusName");
     }
 
-    // Nạp danh sách vật tư có thể chọn thêm vào PR bằng màn hình chi tiết.
+    // Nạp danh sách dòng MR đủ điều kiện để modal Add Detail dùng cùng nguồn dữ liệu với Add AT.
     private void LoadItemList()
     {
         ItemList = new List<PurchaseRequisitionItemLookup>();
         const string sql = @"
-SELECT TOP 200 ItemID, ISNULL(ItemCode, '') AS ItemCode, ISNULL(ItemName, '') AS ItemName, ISNULL(Unit, '') AS Unit
-FROM dbo.INV_ItemList
-WHERE ISNULL(IsPurchase, 0) = 1
-ORDER BY ItemCode";
+SELECT
+       CONVERT(varchar(50), d.REQUEST_NO) AS RequestNo,
+       i.ItemID,
+       ISNULL(i.ItemCode, '') AS ItemCode,
+       ISNULL(i.ItemName, '') AS ItemName,
+       ISNULL(i.Unit, '') AS Unit,
+       ISNULL(d.BUY, 0) AS BUY,
+       ISNULL(i.UnitPrice, 0) AS UnitPrice,
+       ISNULL(i.Specification, '') AS Specification,
+       ISNULL(d.NOTE, '') AS Note,
+       d.ID AS MRDetailID
+FROM dbo.MATERIAL_REQUEST m
+INNER JOIN dbo.MATERIAL_REQUEST_DETAIL d ON m.REQUEST_NO = d.REQUEST_NO
+INNER JOIN dbo.INV_ItemList i ON d.ITEMCODE = i.ItemCode
+WHERE ISNULL(d.BUY, 0) > 0
+  AND (d.PostedPR = 0 OR d.PostedPR IS NULL)
+  AND
+  (
+      (m.MATERIALSTATUSID = 3 AND ISNULL(d.BUY, 0) > 0)
+      OR
+      (m.MATERIALSTATUSID = 2 AND ISNULL(m.IS_AUTO, 0) = 1)
+  )
+ORDER BY d.REQUEST_NO, i.ItemCode";
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         using var cmd = new SqlCommand(sql, conn);
@@ -914,9 +931,15 @@ ORDER BY ItemCode";
             ItemList.Add(new PurchaseRequisitionItemLookup
             {
                 Id = Convert.ToInt32(rd["ItemID"]),
+                RequestNo = Convert.ToString(rd["RequestNo"]) ?? string.Empty,
                 ItemCode = Convert.ToString(rd["ItemCode"]) ?? string.Empty,
                 ItemName = Convert.ToString(rd["ItemName"]) ?? string.Empty,
-                Unit = Convert.ToString(rd["Unit"]) ?? string.Empty
+                Unit = Convert.ToString(rd["Unit"]) ?? string.Empty,
+                Buy = Convert.ToDecimal(rd["BUY"]),
+                UnitPrice = Convert.ToDecimal(rd["UnitPrice"]),
+                Specification = Convert.ToString(rd["Specification"]) ?? string.Empty,
+                Note = Convert.ToString(rd["Note"]) ?? string.Empty,
+                MrDetailId = Convert.ToInt32(rd["MRDetailID"])
             });
         }
     }
@@ -947,23 +970,20 @@ ORDER BY SupplierCode";
         }
     }
 
-    // Sinh số PR mới theo pattern PRxx/MMyy để dùng cho chứng từ add mới.
-    private string GetSuggestedRequestNo(DateTime requestDate)
+    // Sinh số PR mới theo stored procedure HaiAutoNumPR để đồng nhất với hệ thống cũ.
+    private string GetSuggestedRequestNo()
     {
-        var suffix = requestDate.ToString("MMyy");
-        var prefix = $"PR%/{suffix}";
-
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
-        using var cmd = new SqlCommand(@"
-SELECT ISNULL(MAX(TRY_CONVERT(int, SUBSTRING(RequestNo, 3, CHARINDEX('/', RequestNo + '/') - 3))), 0)
-FROM dbo.PC_PR
-WHERE RequestNo LIKE @Prefix", conn);
-
-        cmd.Parameters.Add("@Prefix", SqlDbType.VarChar, 20).Value = prefix;
         conn.Open();
+        return GetSuggestedRequestNo(conn, null);
+    }
 
-        var maxNo = Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
-        return $"PR{(maxNo + 1):00}/{suffix}";
+    // Sinh số PR mới trong transaction hiện tại để tránh lệch số khi nhiều người thao tác cùng lúc.
+    private static string GetSuggestedRequestNo(SqlConnection conn, SqlTransaction? trans)
+    {
+        using var cmd = new SqlCommand("EXEC dbo.HaiAutoNumPR NULL", conn, trans);
+        var result = Convert.ToString(cmd.ExecuteScalar());
+        return string.IsNullOrWhiteSpace(result) ? $"PR{DateTime.Now:ddMMyy}" : result.Trim();
     }
 
     // Lưu header và toàn bộ detail hiện tại của PR trong cùng một transaction.
@@ -978,13 +998,32 @@ WHERE RequestNo LIKE @Prefix", conn);
 
         try
         {
+            string requestNo;
+            if (isNew)
+            {
+                requestNo = GetSuggestedRequestNo(conn, trans);
+                Requisition.RequestNo = requestNo;
+            }
+            else
+            {
+                using var requestNoCmd = new SqlCommand("SELECT TOP 1 ISNULL(RequestNo, '') FROM dbo.PC_PR WHERE PRID = @PRID", conn, trans);
+                requestNoCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
+                requestNo = Convert.ToString(requestNoCmd.ExecuteScalar()) ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(requestNo))
+                {
+                    throw new InvalidOperationException("Request No. is not found.");
+                }
+
+                Requisition.RequestNo = requestNo;
+            }
+
             using (var checkCmd = new SqlCommand(@"
 SELECT COUNT(1)
 FROM dbo.PC_PR
 WHERE RequestNo = @RequestNo
   AND (@PRID = 0 OR PRID <> @PRID)", conn, trans))
             {
-                checkCmd.Parameters.Add("@RequestNo", SqlDbType.VarChar, 20).Value = Requisition.RequestNo.Trim();
+                checkCmd.Parameters.Add("@RequestNo", SqlDbType.VarChar, 20).Value = requestNo.Trim();
                 checkCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
                 var exists = Convert.ToInt32(checkCmd.ExecuteScalar() ?? 0);
                 if (exists > 0)
@@ -992,6 +1031,8 @@ WHERE RequestNo = @RequestNo
                     throw new InvalidOperationException("Request No. already exists.");
                 }
             }
+
+            List<PurchaseRequisitionMrAllocationRow> existingMrAllocations = new List<PurchaseRequisitionMrAllocationRow>();
 
             if (isNew)
             {
@@ -1006,10 +1047,10 @@ VALUES
 (
     @RequestNo, @RequestDate, @Description, @Currency, @Status, 0, NULL, 0,
     @PurId, NULL, NULL, NULL, NULL, NULL, NULL, 0
-);
+                );
 SELECT CAST(SCOPE_IDENTITY() AS int);", conn, trans);
 
-                headerCmd.Parameters.Add("@RequestNo", SqlDbType.VarChar, 20).Value = Requisition.RequestNo.Trim();
+                headerCmd.Parameters.Add("@RequestNo", SqlDbType.VarChar, 20).Value = requestNo.Trim();
                 headerCmd.Parameters.Add("@RequestDate", SqlDbType.DateTime).Value = Requisition.RequestDate.Date;
                 headerCmd.Parameters.Add("@Description", SqlDbType.NVarChar, 500).Value = Requisition.Description!.Trim();
                 headerCmd.Parameters.Add("@Currency", SqlDbType.Int).Value = Requisition.Currency;
@@ -1019,10 +1060,12 @@ SELECT CAST(SCOPE_IDENTITY() AS int);", conn, trans);
             }
             else
             {
+                existingMrAllocations = LoadExistingMrAllocations(conn, trans, Requisition.Id);
+                RestoreMaterialRequestBuy(conn, trans, existingMrAllocations);
+
                 using var headerCmd = new SqlCommand(@"
 UPDATE dbo.PC_PR
-SET RequestNo = @RequestNo,
-    RequestDate = @RequestDate,
+SET RequestDate = @RequestDate,
     [Description] = @Description,
     Currency = @Currency,
     [Status] = @Status,
@@ -1030,7 +1073,6 @@ SET RequestNo = @RequestNo,
 WHERE PRID = @PRID", conn, trans);
 
                 headerCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
-                headerCmd.Parameters.Add("@RequestNo", SqlDbType.VarChar, 20).Value = Requisition.RequestNo.Trim();
                 headerCmd.Parameters.Add("@RequestDate", SqlDbType.DateTime).Value = Requisition.RequestDate.Date;
                 headerCmd.Parameters.Add("@Description", SqlDbType.NVarChar, 500).Value = Requisition.Description!.Trim();
                 headerCmd.Parameters.Add("@Currency", SqlDbType.Int).Value = Requisition.Currency;
@@ -1041,6 +1083,8 @@ WHERE PRID = @PRID", conn, trans);
                 deleteCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
                 deleteCmd.ExecuteNonQuery();
             }
+
+            ApplyMaterialRequestBuy(conn, trans, details);
 
             foreach (var detail in details)
             {
@@ -1075,6 +1119,100 @@ END", conn, trans);
         cmd.Parameters.Add("@OperatorCode", SqlDbType.VarChar, 50).Value = string.IsNullOrWhiteSpace(operatorCode) ? DBNull.Value : operatorCode;
         var result = cmd.ExecuteScalar();
         return result == null || result == DBNull.Value ? null : Convert.ToInt32(result);
+    }
+
+    // Nạp các dòng detail đang liên kết với MR để hoàn nguyên số lượng trước khi lưu lại toàn bộ PR.
+    private static List<PurchaseRequisitionMrAllocationRow> LoadExistingMrAllocations(SqlConnection conn, SqlTransaction trans, int prId)
+    {
+        var rows = new List<PurchaseRequisitionMrAllocationRow>();
+
+        using var cmd = new SqlCommand(@"
+SELECT MRDetailID,
+       ISNULL(Quantity, 0) AS Quantity
+FROM dbo.PC_PRDetail
+WHERE PRID = @PRID
+  AND MRDetailID IS NOT NULL", conn, trans);
+
+        cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = prId;
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            rows.Add(new PurchaseRequisitionMrAllocationRow
+            {
+                MrDetailId = Convert.ToInt32(rd["MRDetailID"]),
+                Quantity = Convert.ToDecimal(rd["Quantity"])
+            });
+        }
+
+        return rows;
+    }
+
+    // Hoàn nguyên BUY của MR trước khi ghi lại toàn bộ danh sách detail mới của PR.
+    private static void RestoreMaterialRequestBuy(SqlConnection conn, SqlTransaction trans, IReadOnlyList<PurchaseRequisitionMrAllocationRow> allocations)
+    {
+        foreach (var allocation in allocations
+                     .GroupBy(x => x.MrDetailId)
+                     .Select(x => new PurchaseRequisitionMrAllocationRow
+                     {
+                         MrDetailId = x.Key,
+                         Quantity = x.Sum(y => y.Quantity)
+                     }))
+        {
+            using var cmd = new SqlCommand(@"
+UPDATE dbo.MATERIAL_REQUEST_DETAIL
+SET BUY = ISNULL(BUY, 0) + @Quantity,
+    PostedPR = 0
+WHERE ID = @MRDetailID", conn, trans);
+
+            cmd.Parameters.Add("@Quantity", SqlDbType.Decimal).Value = allocation.Quantity;
+            cmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = allocation.MrDetailId;
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    // Trừ lại BUY của các dòng MR đang được sử dụng trong danh sách detail sau khi user chỉnh sửa xong.
+    private static void ApplyMaterialRequestBuy(SqlConnection conn, SqlTransaction trans, IReadOnlyList<PurchaseRequisitionDetailInput> details)
+    {
+        var allocations = details
+            .Where(x => x.MrDetailId.HasValue && x.MrDetailId.Value > 0)
+            .GroupBy(x => x.MrDetailId!.Value)
+            .Select(x => new PurchaseRequisitionMrAllocationRow
+            {
+                MrDetailId = x.Key,
+                Quantity = x.Sum(y => y.QtyPur)
+            })
+            .ToList();
+
+        foreach (var allocation in allocations)
+        {
+            decimal currentBuy;
+
+            using (var loadCmd = new SqlCommand(@"
+SELECT ISNULL(BUY, 0)
+FROM dbo.MATERIAL_REQUEST_DETAIL
+WHERE ID = @MRDetailID", conn, trans))
+            {
+                loadCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = allocation.MrDetailId;
+                currentBuy = Convert.ToDecimal(loadCmd.ExecuteScalar() ?? 0);
+            }
+
+            if (allocation.Quantity > currentBuy)
+            {
+                throw new InvalidOperationException($"Cannot save because MR detail {allocation.MrDetailId} only has {currentBuy:#,##0.###} BUY remaining.");
+            }
+
+            using var updateCmd = new SqlCommand(@"
+UPDATE dbo.MATERIAL_REQUEST_DETAIL
+SET BUY = @RemainBuy,
+    PostedPR = @PostedPR
+WHERE ID = @MRDetailID", conn, trans);
+
+            var remainBuy = currentBuy - allocation.Quantity;
+            updateCmd.Parameters.Add("@RemainBuy", SqlDbType.Decimal).Value = remainBuy;
+            updateCmd.Parameters.Add("@PostedPR", SqlDbType.Bit).Value = remainBuy <= 0;
+            updateCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = allocation.MrDetailId;
+            updateCmd.ExecuteNonQuery();
+        }
     }
 
     // Parse JSON detail do frontend gửi lên thành danh sách object để backend kiểm tra và lưu.
@@ -1116,6 +1254,11 @@ END", conn, trans);
         if (detail.QtyFromM < 0 || detail.UnitPrice < 0)
         {
             ModelState.AddModelError(string.Empty, $"Row {rowNo}: QtyFromM and U.Price must be valid numbers.");
+        }
+
+        if (detail.MrDetailId.HasValue && detail.QtyPur > detail.QtyFromM)
+        {
+            ModelState.AddModelError(string.Empty, $"Row {rowNo}: QtyPur cannot be greater than BUY.");
         }
     }
 
@@ -1637,6 +1780,12 @@ public class PurchaseRequisitionWorkflowUserInfo
     public bool IsPurchaser { get; set; }
     public bool IsCFO { get; set; }
     public bool IsBOD { get; set; }
+}
+
+public class PurchaseRequisitionMrAllocationRow
+{
+    public int MrDetailId { get; set; }
+    public decimal Quantity { get; set; }
 }
 
 public class PurchaseRequisitionAttachmentViewModel

@@ -33,11 +33,72 @@
         return `${negative ? "-" : ""}${integerPart}${decimalPart ? `.${decimalPart}` : ""}`;
     }
 
-    function formatAmount(value) {
-        return toNumber(value).toLocaleString("en-US", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
+    function formatSummaryAmount(value) {
+        const number = toNumber(value);
+        return number.toLocaleString("en-US", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 3
         });
+    }
+
+    function sanitizeNonNegativeDecimal(value) {
+        let normalized = String(value ?? "")
+            .replace(/,/g, "")
+            .replace(/[^0-9.]/g, "");
+
+        const firstDotIndex = normalized.indexOf(".");
+        if (firstDotIndex >= 0) {
+            normalized = normalized.slice(0, firstDotIndex + 1) + normalized.slice(firstDotIndex + 1).replace(/\./g, "");
+        }
+
+        return normalized;
+    }
+
+    function clampNonNegativeDecimalInput(input, maxValue) {
+        if (!input) return 0;
+
+        let normalizedValue = toNumber(input.value);
+        const normalizedMax = toNumber(maxValue);
+
+        if (normalizedValue < 0) {
+            normalizedValue = 0;
+        }
+
+        if (normalizedMax > 0 && normalizedValue > normalizedMax) {
+            normalizedValue = normalizedMax;
+        }
+
+        input.value = formatNumber(normalizedValue);
+        return normalizedValue;
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    function buildCollapsibleText(text, previewLength) {
+        const safeText = String(text ?? "").trim();
+        if (!safeText) {
+            return "";
+        }
+
+        if (safeText.length <= previewLength) {
+            return `<div class="prq-description-cell prq-add-at-text-cell"><span class="prq-description-full">${escapeHtml(safeText)}</span></div>`;
+        }
+
+        const preview = `${escapeHtml(safeText.slice(0, previewLength))}...`;
+        const full = escapeHtml(safeText);
+        return `
+            <div class="prq-description-cell prq-add-at-text-cell">
+                <span class="prq-description-preview">${preview}</span>
+                <button type="button" class="prq-read-more">Read more</button>
+                <span class="prq-description-full d-none">${full}</span>
+            </div>`;
     }
 
     function normalizeDetailRow(row) {
@@ -84,6 +145,8 @@
         const emptyRow = document.getElementById("prqDetailEmptyRow");
         const selectedDetailIdEl = document.getElementById("SelectedDetailId");
         const totalAmountEl = document.getElementById("prqTotalAmount");
+        const totalAmountCurrencyEl = document.getElementById("prqTotalAmountCurrency");
+        const currencySelectEl = document.getElementById("prqCurrencySelect");
         const recordCountEl = document.getElementById("prqDetailRecordCount");
         const toMrButton = document.getElementById("btnToMr");
         const detailModal = document.getElementById("prqAddDetailModal");
@@ -104,6 +167,14 @@
         } catch {
             details = [];
         }
+
+        const initialAllocatedQtyByMrDetail = {};
+        details.forEach((detail) => {
+            const mrDetailId = Number(detail.mrDetailId || 0);
+            if (mrDetailId > 0) {
+                initialAllocatedQtyByMrDetail[mrDetailId] = (initialAllocatedQtyByMrDetail[mrDetailId] || 0) + toNumber(detail.qtyPur);
+            }
+        });
 
         const hideAddDetailError = () => {
             if (!addDetailError) return;
@@ -179,7 +250,14 @@
         const updateSummary = () => {
             const totalAmount = details.reduce((sum, detail) => sum + (toNumber(detail.qtyPur) * toNumber(detail.unitPrice)), 0);
             if (totalAmountEl) {
-                totalAmountEl.value = formatAmount(totalAmount);
+                if ("value" in totalAmountEl) {
+                    totalAmountEl.value = formatSummaryAmount(totalAmount);
+                } else {
+                    totalAmountEl.textContent = formatSummaryAmount(totalAmount);
+                }
+            }
+            if (totalAmountCurrencyEl && currencySelectEl) {
+                totalAmountCurrencyEl.textContent = currencySelectEl.options[currencySelectEl.selectedIndex]?.text || "";
             }
             if (recordCountEl) {
                 recordCountEl.textContent = String(details.length);
@@ -205,7 +283,7 @@
             selectedDetailId = detail && Number(detail.detailId) > 0 ? Number(detail.detailId) : 0;
             selectedRowKey = detail ? getRowKey(detail) : "";
             if (selectedDetailIdEl) {
-                selectedDetailIdEl.value = selectedDetailId > 0 ? String(selectedDetailId) : "";
+                selectedDetailIdEl.value = selectedDetailId > 0 ? String(selectedDetailId) : "0";
             }
             rowsContainer.querySelectorAll("tr[data-row='1']").forEach((row) => {
                 const rowKey = row.getAttribute("data-row-key") || "";
@@ -251,7 +329,7 @@
                     <td class="prq-center">${formatNumber(detail.qtyFromM)}</td>
                     <td class="prq-center">${formatNumber(detail.qtyPur)}</td>
                     <td class="prq-center">${formatNumber(detail.unitPrice)}</td>
-                    <td class="prq-center">${formatAmount(amount)}</td>
+                    <td class="prq-center">${formatNumber(amount)}</td>
                     <td class="prq-center">${detail.remark || ""}</td>
                     <td>${detail.supplierText || ""}</td>
                     ${removeButtonCell}`;
@@ -272,12 +350,29 @@
             renderRows();
         }
 
-        const isDuplicateDetail = (itemId, supplierId) => {
+        const isDuplicateDetail = (itemId, supplierId, mrDetailId) => {
             return details.some((detail) =>
-                Number(detail.itemId) === Number(itemId) &&
-                Number(detail.supplierId || 0) === Number(supplierId || 0) &&
-                !detail.mrDetailId
+                (
+                    Number(mrDetailId || 0) > 0
+                        ? Number(detail.mrDetailId || 0) === Number(mrDetailId || 0)
+                        : (
+                            Number(detail.itemId) === Number(itemId) &&
+                            Number(detail.supplierId || 0) === Number(supplierId || 0) &&
+                            !detail.mrDetailId
+                        )
+                )
             );
+        };
+
+        const getAllocatedQtyByMrDetail = (mrDetailId) => {
+            const targetMrDetailId = Number(mrDetailId || 0);
+            if (targetMrDetailId <= 0) {
+                return 0;
+            }
+
+            return details
+                .filter((detail) => Number(detail.mrDetailId || 0) === targetMrDetailId)
+                .reduce((sum, detail) => sum + toNumber(detail.qtyPur), 0);
         };
 
         const normalizeInputValue = (input) => {
@@ -294,7 +389,7 @@
                     checkbox.checked = false;
                 }
                 if (subQtyInput) {
-                    subQtyInput.value = "0";
+                    subQtyInput.value = formatNumber(row.getAttribute("data-buy") || "0");
                 }
             });
             hideAddDetailError();
@@ -332,18 +427,30 @@
         addDetailRows.forEach((row) => {
             const checkbox = row.querySelector(".prq-add-detail-check");
             const subQtyInput = row.querySelector(".prq-add-detail-subqty");
+            const specificationCell = row.querySelector(".prq-add-detail-specification");
+            const noteCell = row.querySelector(".prq-add-detail-note");
+            if (specificationCell) {
+                specificationCell.innerHTML = buildCollapsibleText(row.getAttribute("data-specification") || "", 36);
+            }
+            if (noteCell) {
+                noteCell.innerHTML = buildCollapsibleText(row.getAttribute("data-note") || "", 34);
+            }
             checkbox?.addEventListener("change", () => {
                 row.classList.toggle("prq-detail-row-selected", checkbox.checked);
                 hideAddDetailError();
             });
-            subQtyInput?.addEventListener("input", hideAddDetailError);
-            subQtyInput?.addEventListener("blur", () => normalizeInputValue(subQtyInput));
-            row.addEventListener("click", (event) => {
-                if (event.target.closest("input")) return;
-                if (!checkbox) return;
-                checkbox.checked = !checkbox.checked;
-                row.classList.toggle("prq-detail-row-selected", checkbox.checked);
+            subQtyInput?.addEventListener("input", () => {
+                const sanitizedValue = sanitizeNonNegativeDecimal(subQtyInput.value);
+                if (subQtyInput.value !== sanitizedValue) {
+                    subQtyInput.value = sanitizedValue;
+                }
+
+                clampNonNegativeDecimalInput(subQtyInput, row.getAttribute("data-buy") || "0");
                 hideAddDetailError();
+            });
+            subQtyInput?.addEventListener("blur", () => {
+                clampNonNegativeDecimalInput(subQtyInput, row.getAttribute("data-buy") || "0");
+                normalizeInputValue(subQtyInput);
             });
         });
 
@@ -365,18 +472,40 @@
                 const itemId = Number.parseInt(row.getAttribute("data-item-id") || "0", 10);
                 const itemCode = row.getAttribute("data-item-code") || "";
                 const itemName = row.getAttribute("data-item-name") || "";
+                const requestNo = row.getAttribute("data-request-no") || "";
+                const buy = toNumber(row.getAttribute("data-buy") || "0");
                 const unit = row.getAttribute("data-unit") || "";
+                const unitPrice = toNumber(row.getAttribute("data-unit-price") || "0");
+                const specification = row.getAttribute("data-specification") || "";
+                const mrDetailId = Number.parseInt(row.getAttribute("data-mr-detail-id") || "0", 10) || 0;
                 const subQtyInput = row.querySelector(".prq-add-detail-subqty");
                 const qtyPurValue = toNumber(subQtyInput ? subQtyInput.value : "0");
 
                 if (qtyPurValue <= 0) {
-                    showAddDetailError(`Cannot add detail because SubQty for item ${itemCode} must be greater than 0.`);
+                    showAddDetailError(`Cannot add detail because SugBuy for item ${itemCode} must be greater than 0.`);
                     subQtyInput?.focus();
                     return;
                 }
 
-                if (isDuplicateDetail(itemId, null)) {
-                    showAddDetailError(`Cannot add detail because item ${itemCode} already exists in the unsaved detail list.`);
+                if (qtyPurValue > buy) {
+                    showAddDetailError(`Cannot add detail because SugBuy for item ${itemCode} cannot be greater than BUY.`);
+                    subQtyInput?.focus();
+                    return;
+                }
+
+                const initialAllocatedQty = Number(initialAllocatedQtyByMrDetail[mrDetailId] || 0);
+                const currentAllocatedQty = getAllocatedQtyByMrDetail(mrDetailId);
+                const proposedAllocatedQty = currentAllocatedQty + qtyPurValue;
+                const maxAllocatedQty = initialAllocatedQty + buy;
+
+                if (mrDetailId > 0 && proposedAllocatedQty > maxAllocatedQty) {
+                    showAddDetailError(`Cannot add detail because total SugBuy for item ${itemCode} exceeds the remaining BUY of this MR line.`);
+                    subQtyInput?.focus();
+                    return;
+                }
+
+                if (mrDetailId <= 0 && isDuplicateDetail(itemId, null, mrDetailId)) {
+                    showAddDetailError(`Cannot add detail because item ${itemCode} already exists in the detail list.`);
                     return;
                 }
 
@@ -387,14 +516,14 @@
                     itemCode: itemCode,
                     itemName: itemName,
                     unit: unit,
-                    qtyFromM: 0,
+                    qtyFromM: buy,
                     qtyPur: qtyPurValue,
-                    unitPrice: 0,
-                    remark: "",
+                    unitPrice: unitPrice,
+                    remark: specification,
                     supplierId: null,
                     supplierText: "",
-                    mrRequestNo: "",
-                    mrDetailId: null
+                    mrRequestNo: requestNo,
+                    mrDetailId: mrDetailId > 0 ? mrDetailId : null
                 });
             }
 
@@ -411,6 +540,22 @@
             if (!validateAttachmentFile()) {
                 event.preventDefault();
             }
+        });
+
+        currencySelectEl?.addEventListener("change", updateSummary);
+
+        document.addEventListener("click", (event) => {
+            const readMoreButton = event.target.closest(".prq-read-more");
+            if (!readMoreButton) return;
+
+            const container = readMoreButton.closest(".prq-description-cell");
+            if (!container) return;
+
+            const previewEl = container.querySelector(".prq-description-preview");
+            const fullEl = container.querySelector(".prq-description-full");
+            previewEl?.classList.add("d-none");
+            fullEl?.classList.remove("d-none");
+            readMoreButton.remove();
         });
 
         renderRows();

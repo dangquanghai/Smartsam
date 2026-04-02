@@ -55,6 +55,24 @@
         return normalized;
     }
 
+    function clampNonNegativeDecimalInput(input, maxValue) {
+        if (!input) return 0;
+
+        let normalizedValue = toNumber(input.value);
+        const normalizedMax = toNumber(maxValue);
+
+        if (normalizedValue < 0) {
+            normalizedValue = 0;
+        }
+
+        if (normalizedMax > 0 && normalizedValue > normalizedMax) {
+            normalizedValue = normalizedMax;
+        }
+
+        input.value = formatNumber(normalizedValue);
+        return normalizedValue;
+    }
+
     function escapeHtml(value) {
         return String(value ?? "")
             .replace(/&/g, "&amp;")
@@ -555,9 +573,8 @@
             const index = Number.parseInt(sugBuyInput.getAttribute("data-index"), 10);
             if (!Number.isInteger(index) || !sourceRows[index]) return;
 
-            const parsedValue = toNumber(sugBuyInput.value);
+            const parsedValue = clampNonNegativeDecimalInput(sugBuyInput, sourceRows[index].buy);
             sourceRows[index].sugBuy = parsedValue;
-            sugBuyInput.value = formatNumber(parsedValue);
         });
 
         rowsContainer.addEventListener("input", (ev) => {
@@ -568,6 +585,11 @@
             if (sugBuyInput.value !== sanitizedValue) {
                 sugBuyInput.value = sanitizedValue;
             }
+
+            const index = Number.parseInt(sugBuyInput.getAttribute("data-index"), 10);
+            if (!Number.isInteger(index) || !sourceRows[index]) return;
+
+            sourceRows[index].sugBuy = clampNonNegativeDecimalInput(sugBuyInput, sourceRows[index].buy);
         });
 
         addAtForm.addEventListener("submit", (ev) => {
