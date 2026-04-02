@@ -580,7 +580,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 {
                     Histories = GetApprovalHistory(Id!.Value);
                 }
-
+                
                 var friendlyMessage = ex.Number == 515 && ex.Message.Contains("SupplierName", StringComparison.OrdinalIgnoreCase)
                     ? "Cannot save this supplier. Supplier Name is required."
                     : "Cannot save supplier due to database validation rules. Please review the form data and try again.";

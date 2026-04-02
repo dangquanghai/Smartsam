@@ -75,6 +75,7 @@
                                     <div class="row no-gutters align-items-center mb-2">
                                         <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">ContractNo(*)</label></div>
                                         <div class="col-3">
+                                            <input type="hidden" id="hfContractID" asp-for="Contract.ContractID" />
                                             <input type="text" asp-for="Contract.ContractNo" id="ContractNo" class="form-control form-control-sm" readonly tabindex="-1">
                                             <input type="hidden" id="ContractId" value="@Model.SavedContractID" />
                                         </div>
@@ -309,7 +310,9 @@
                         </div>
                         <div class="card-footer py-2">
                             <div class="float-left">
-                                <button type="button" class="btn btn-info btn-sm px-4"><i class="fas fa-history"></i> History</button>
+                                <button type="button" class="btn btn-info" onclick="loadHistory(@Model.Contract.ContractID)">
+                                    <i class="fa fa-history"></i> History
+                                </button>
                                 <button type="submit" class="btn btn-primary btn-sm px-4"><i class="fas fa-save"></i> Save Contract</button>
                             </div>
                         </div>
@@ -349,7 +352,7 @@
                                                     <td class="text-center">
                                                         <input type="radio" name="selectedService" value="@item.ContractServiceID" />
                                                     </td>
-                                                    <td>@item.ServiceName</td>
+                                                    <td class="vni-font">@item.ServiceName</td>
                                                     <td class="text-center">@item.ServiceFromDate?.ToString("dd/MM/yyyy")</td>
                                                     <td class="text-center">@item.ServiceToDate?.ToString("dd/MM/yyyy")</td>
                                                     <td class="text-center">@item.ChargeIntervalName</td>
@@ -393,6 +396,8 @@
                                 <table class="table table-sm table-bordered table-hover mb-0" id="tableTenants">
                                     <thead class="bg-gray-light">
                                         <tr>
+                                            <th style="width: 30px;"></th>
+                                            <th>Title</th>
                                             <th>Full Name</th>
                                             <th>Birthday</th>
                                             <th>Nationality</th>
@@ -408,10 +413,15 @@
                             </div>
                         </div>
                         <div class="card-footer py-2">
-                            <button type="button" class="btn btn-primary btn-sm px-3"><i class="fas fa-user-plus"></i> Add From List</button>
-                            <button type="button" class="btn btn-primary btn-sm px-3">View</button>
-                            <button type="button" class="btn btn-primary btn-sm px-3">Add New</button>
-                            <button type="button" class="btn btn-primary btn-sm px-3">Edit</button>
+                            <button id="btnAddFromList" type="button" class="btn btn-primary btn-sm px-3" onclick="openAddFromList()">
+                                <i class="fas fa-user-plus"></i> Add From List
+                            </button>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="openTenantModal('add')">
+                                <i class="fas fa-plus"></i> Add New Tenant
+                            </button>
+
+                            <button type="button" class="btn btn-info btn-sm" onclick="openTenantModal('view')">View</button>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="openTenantModal('edit')">Edit</button>
                             <button type="button" class="btn btn-danger btn-sm px-3">Remove</button>
                             <a asp-page="./Index" class="btn btn-default btn-sm float-right">Back to List</a>
                         </div>
@@ -439,7 +449,7 @@
                         <div class="col-md-12">
                             <div class="form-group">
                                 <label class="font-weight-bold">Service Name (*)</label>
-                                <select id="svc_ServiceID" class="form-control select2" style="width: 100%;">
+                                <select id="svc_ServiceID" class="form-control select2 vni-font" style="width: 100%;">
                                     <option value="">-- Select Service --</option>
                                     @if (Model.ServiceList != null)
                                     {
@@ -522,6 +532,296 @@
                     <i class="fas fa-save"></i> Save Changes
                 </button>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="historyModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Contract History Log</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <table class="table table-sm table-striped" id="historyTable">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>User</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalSearchTenant" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-search"></i> Search Tenant from History</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="txtSearchName" class="form-control" placeholder="Enter customer name to search..."
+                           onkeyup="if(event.keyCode==13) searchTenant()">
+                    <div class="input-group-append">
+                        <button class="btn btn-primary" type="button" onclick="searchTenant()">
+                            <i class="fas fa-search"></i> Search
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-sm table-hover table-bordered" id="tableResult">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Tenant Name</th>
+                                <th>Gender</th>
+                                <th>ID/Passport</th>
+                                <th>Birthday</th>
+                                <th>Nation</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyResult">
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">Enter name and click search...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <small class="text-muted mr-auto">* Double-click on a row to select and add to contract.</small>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalTenantDetail" tabindex="-1" role="dialog" aria-labelledby="tenantModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <form id="formTenantDetail">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="tenantModalTitle">
+                    <i class="fas fa-user-edit mr-2"></i>Tenant Detailed Information
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs" id="tenantTab" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="info-tab" data-toggle="tab" href="#info" role="tab">
+                            <i class="fas fa-info-circle"></i> 1. General Information
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="passport-tab" data-toggle="tab" href="#passport" role="tab">
+                            <i class="fas fa-passport"></i> 2. Passport Images
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="police-tab" data-toggle="tab" href="#police" role="tab">
+                            <i class="fas fa-shield-alt"></i> 3. Police Registration
+                        </a>
+                    </li>
+                </ul>
+
+                <div class="tab-content mt-3" id="tenantTabContent">
+
+                    <div class="tab-pane fade show active" id="info" role="tabpanel">
+                        <div class="row">
+                            <div class="col-md-6 border-right">
+                                <h6 class="text-primary font-weight-bold mb-3"><i class="fas fa-id-card"></i> Customer Identity (Master Data)</h6>
+                                <input type="hidden" id="txtContractTenantID" value="0" />
+                                <input type="hidden" id="txtCustomerID" />
+
+                                <div class="form-group row mb-2">
+                                    <label class="col-sm-4 col-form-label-sm">Name / Title</label>
+                                    <div class="col-sm-3">
+                                        <input type="text" id="txtTitle" class="form-control form-control-sm" placeholder="Title">
+                                    </div>
+                                    <div class="col-sm-5">
+                                        <input type="text" id="txtCustomerName" class="form-control form-control-sm" >
+                                    </div>
+                                </div>
+
+                                <div class="form-group row mb-2">
+                                    <label class="col-sm-4 col-form-label-sm">Gender / B-Day</label>
+                                    <div class="col-sm-3">
+                                        <select id="ddlMale" class="form-control form-control-sm" disabled>
+                                            <option value="true">Male</option>
+                                            <option value="false">Female</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-sm-5">
+                                            <input type="date" id="txtBirthday" class="form-control form-control-sm" >
+                                    </div>
+                                </div>
+
+                                <div class="form-group row mb-2">
+                                    <label class="col-sm-4 col-form-label-sm"> Tenant Type/Nation</label>
+                                        <div class="col-sm-4">
+                                            <select id="ddlTenantType" class="form-control select2" style="width: 100%;">
+                                                <option value="0">-- Select a Tenants --</option>
+                                                @foreach (var t in Model.ListTenantTypes)
+                                                {
+                                                    <option value="@t.Value">@t.Text</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-sm-4">
+                                            <select id="ddlNationality" class="form-control select2" style="width: 100%;">
+                                                <option value="0">-- Select a Nation --</option>
+                                                @foreach (var n in Model.ListNations)
+                                                {
+                                                    <option value="@n.Value">@n.Text</option>
+                                                }
+                                            </select>
+                                        </div>
+                                </div>
+
+                                <div class="form-group row mb-2">
+                                    <label class="col-sm-4 col-form-label-sm">Passport / Expire</label>
+                                    <div class="col-sm-4">
+                                        <input type="text" id="txtIDPassportNo" class="form-control form-control-sm">
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <input type="date" id="txtPassportUntilDate" class="form-control form-control-sm" >
+                                    </div>
+                                </div>
+
+                                <div class="form-group row mb-2">
+                                    <label class="col-sm-4 col-form-label-sm">Company / VAT</label>
+                                    <div class="col-sm-8">
+                                        <input type="text" id="txtCompany" class="form-control form-control-sm mb-1" >
+                                        <input type="text" id="txtVATCode" class="form-control form-control-sm" placeholder="VAT Code" >
+                                    </div>
+                                </div>
+
+                                <div class="form-group row mb-2">
+                                    <label class="col-sm-4 col-form-label-sm">Address</label>
+                                    <div class="col-sm-8">
+                                        <textarea id="txtAddress" class="form-control form-control-sm" rows="2" ></textarea>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <h6 class="text-success font-weight-bold mb-3"><i class="fas fa-plane-arrival"></i> Stay & Visa Details (Contractual)</h6>
+
+                                <div class="form-group row mb-2">
+                                    <label class="col-sm-4 col-form-label-sm">Position / Move-Out</label>
+                                    <div class="col-sm-5">
+                                            <select id="ddlFamilyPos" class="form-control form-control-sm">
+                                                <option value="0">-- Select Position --</option>
+                                                @foreach (var p in Model.ListPositions)
+                                                {
+                                                    <option value="@p.Value">@p.Text</option>
+                                                }
+                                            </select>
+                                    </div>
+                                    <div class="col-sm-3 text-right">
+                                        <div class="custom-control custom-switch mt-1">
+                                            <input type="checkbox" class="custom-control-input" id="chkIsMoveOut">
+                                            <label class="custom-control-label" for="chkIsMoveOut">Moved?</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-group row mb-2">
+                                    <label class="col-sm-4 col-form-label-sm">Visa No </label>
+                                    <div class="col-sm-4">
+                                        <input type="text" id="txtVisaNo" class="form-control form-control-sm">
+                                    </div>
+                                </div>
+
+                                <div class="form-group row mb-2">
+                                    <label class="col-sm-4 col-form-label-sm">VisaDate/Expire</label>
+                                    <div class="col-sm-4">
+                                        <input type="date" id="txtVisaDate" class="form-control form-control-sm">
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <input type="date" id="txtVisaExpDate" class="form-control form-control-sm">
+                                    </div>
+                                </div>
+
+                                <div class="form-group row mb-2">
+                                    <label class="col-sm-4 col-form-label-sm">Entry / Port</label>
+                                    <div class="col-sm-4">
+                                        <input type="date" id="txtEntryDate" class="form-control form-control-sm">
+                                    </div>
+                                    <div class="col-sm-4">
+                                            <select id="ddlArrivalPort" class="form-control form-control-sm">
+                                                <option value="0">-- Select Port --</option>
+                                                @foreach (var port in Model.ListArrivalPorts)
+                                                {
+                                                    <option value="@port.Value">@port.Text</option>
+                                                }
+                                            </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-group row mb-2">
+                                    <label class="col-sm-4 col-form-label-sm">Permit / Propose Exp</label>
+                                    <div class="col-sm-4">
+                                        <input type="date" id="txtPermitExpDate" class="form-control form-control-sm">
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <input type="date" id="txtProposeExpDate" class="form-control form-control-sm">
+                                    </div>
+                                </div>
+
+                                <div class="form-group row mb-2">
+                                    <label class="col-sm-4 col-form-label-sm">A/D Card / Last Reg</label>
+                                    <div class="col-sm-4">
+                                        <input type="text" id="txtADCardNo" class="form-control form-control-sm">
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <input type="date" id="txtLastRegDate" class="form-control form-control-sm">
+                                    </div>
+                                </div>
+
+                                <div class="form-group mb-0">
+                                    <label class="col-form-label-sm">Sponsor / Notes</label>
+                                    <input type="text" id="txtSponsor" class="form-control form-control-sm mb-1" placeholder="Sponsor">
+                                    <textarea id="txtNotes" class="form-control form-control-sm" rows="1" placeholder="Internal notes..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="passport" role="tabpanel">
+                        <div class="row no-gutters p-2" id="passport_gallery">
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="police" role="tabpanel">
+                        <div class="row no-gutters p-2" id="police_gallery">
+                        </div>
+                    </div>
+                    </form>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary btn-sm px-4" data-dismiss="modal">Close</button>
+                <button type="button" id="btnSaveTenantDetail" class="btn btn-success btn-sm px-4">
+                    <i class="fas fa-save mr-1"></i>Save All Information
+                </button>
+            </div>
+
         </div>
     </div>
 </div>

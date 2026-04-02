@@ -67,6 +67,14 @@ namespace SmartSam.Pages.Sales.STContract
         public List<SelectListItem> ServiceList { get; set; }
         public List<SelectListItem> ChargeIntervalList { get; set; }
         public List<SelectListItem> ChargeTypeList { get; set; }
+        public List<SelectListItem> ListNations { get; set; }
+        public List<SelectListItem> ListPositions { get; set; }
+        public List<SelectListItem> ListArrivalPorts { get; set; }
+        public List<SelectListItem> ListTenantTypes { get; set; }
+
+   
+
+
 
         [BindProperty]
         public long SavedContractID { get; set; }
@@ -247,144 +255,82 @@ namespace SmartSam.Pages.Sales.STContract
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
             return conn.ExecuteScalar<int?>("SELECT ContractStatus FROM ST_Contract WHERE ContractID = @id", new { id }) ?? -1;
         }
-        /*
-        public IActionResult OnPost()
-        {
-            // CHỐT CHẶN CUỐI CÙNG TRƯỚC KHI LƯU
-            int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
-            // Kiểm tra: Nếu là sửa (ID > 0) thì check quyền Edit (4), nếu là mới thì check quyền Add (3)
-            //int statusToCheck = Contract.ContractID > 0 ? (Contract.ContractStatus ?? 1) : 0;
-            int statusToCheck = GetCurrentStatusFromDb(Contract.ContractID);
-
-            var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, statusToCheck);
-            bool hasPermission = Contract.ContractID == 0 ? currentPerms.Contains(3) : currentPerms.Contains(4);
-
-            if (!hasPermission)
-            {
-                ModelState.AddModelError("", "Access Denied: You do not have permission to perform this action in the current status.");
-                LoadAllDropdowns(isNew: (Contract.ContractID == 0));
-                return Page();
-            }
-
-
-            if (!ModelState.IsValid)
-            {
-                ModelState.AddModelError("", "Validation Error: Please check the information provided.");
-                LoadAllDropdowns(isNew: (Contract.ContractID == 0));
-                return Page();
-            }
-
-            string connString = _config.GetConnectionString("DefaultConnection");
-
-            using (var conn = new SqlConnection(connString))
-            {
-                conn.Open();
-                using (var trans = conn.BeginTransaction())
-                {
-                    try
-                    {
-                        bool isNewAtStart = (Contract.ContractID == 0); // Đánh dấu trạng thái lúc bắt đầu bấm nút Save
-                        // 1. Thực hiện lưu (SaveContract sẽ gán ID mới vào Contract.ContractID nếu là Insert)
-                        this.SavedContractID = SaveContract(conn, trans);
-                        SaveContractApmt(Contract.ContractID, conn, trans);
-                        SaveSTInfo(conn, trans);
-
-                        trans.Commit();
-                        Mode = "edit";
-                        TempData["SuccessMessage"] = "Save Contract already.You can update.";
-                        TempData.Keep("SuccessMessage");
-                        LoadAllDropdowns(isNew: isNewAtStart);
-                        if (STInfor.AgentCompany.HasValue)
-                        {
-                            AgentPersonList = FetchAgentPersons(STInfor.AgentCompany.Value);
-                        }
-
-                        // Trả về trang hiện tại với dữ liệu cũ + ID mới vừa sinh ra
-                        return Page();
-                    }
-                    catch (Exception ex)
-                    {
-                        trans.Rollback();
-                        ModelState.AddModelError("", "Error: " + ex.Message);
-                        LoadAllDropdowns(isNew: (Contract.ContractID == 0));
-                        return Page();
-                    }
-                }
-            }
-        }*/
 
         public IActionResult OnPost()
         {
-            // 1. Lấy thông tin Role
+            // 1. Thu thập thông tin định danh
             int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
-            int statusToCheck = 0;
+            int currentEmpId = int.Parse(User.FindFirst("EmployeeID")?.Value ?? "0");
 
-            if (Contract.ContractID > 0)
-            {
-                // Sử dụng Dapper hoặc SqlCommand đơn giản để lấy status thực tế
-                statusToCheck = GetCurrentStatusFromDb(Contract.ContractID);
-                if (statusToCheck == -1) return NotFound();
-            }
+
+
+            // Xác định Mode thực tế dựa trên dữ liệu gửi lên
+            Mode = (Mode ?? "view").ToLower();
+            bool isActuallyAdd = (Contract.ContractID == 0 || Mode == "add");
+
+            // 2. Kiểm tra quyền dựa trên Mode
+            int statusToCheck = isActuallyAdd ? 0 : GetCurrentStatusFromDb(Contract.ContractID);
+            if (!isActuallyAdd && statusToCheck == -1) return NotFound();
 
             var currentPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, statusToCheck);
-            bool hasPermission = Contract.ContractID == 0 ? currentPerms.Contains(3) : currentPerms.Contains(4);
+            bool hasPermission = isActuallyAdd ? currentPerms.Contains(3) : currentPerms.Contains(4);
 
             if (!hasPermission)
             {
-                ModelState.AddModelError("", "Access Denied: You do not have permission to perform this action in the current status.");
-                LoadAllDropdowns(isNew: (Contract.ContractID == 0));
+                ModelState.AddModelError("", "Bạn không có quyền thực hiện thao tác này ở trạng thái hiện tại.");
+                LoadAllDropdowns(isNew: isActuallyAdd);
                 return Page();
             }
 
             if (!ModelState.IsValid)
             {
-                LoadAllDropdowns(isNew: (Contract.ContractID == 0));
+                LoadAllDropdowns(isNew: isActuallyAdd);
                 return Page();
             }
 
+            // 3. Thực hiện lưu dữ liệu (Transaction)
             string connString = _config.GetConnectionString("DefaultConnection");
+            using var conn = new SqlConnection(connString);
+            conn.Open();
+            using var trans = conn.BeginTransaction();
 
-            // Dùng khối 'using' để đảm bảo Connection và Transaction luôn được đóng (Close/Dispose)
-            using (var conn = new SqlConnection(connString))
+            try
             {
-                conn.Open();
-                using (var trans = conn.BeginTransaction())
-                {
-                    try
-                    {
-                        bool isNewAtStart = (Contract.ContractID == 0);
+                // Lưu thông tin chính
+                this.SavedContractID = SaveContract(conn, trans);
+                // Lưu các bảng phụ liên quan
+                SaveContractApmt(this.SavedContractID, conn, trans);
+                SaveSTInfo(conn, trans);
+                string logDesc = isActuallyAdd ? "Add new contract" : $"Update contract (Mode: {Mode})";
+                SaveRecord(this.SavedContractID, logDesc, conn, trans);
 
-                        // Lưu các thành phần (Truyền conn và trans để dùng chung 1 kết nối duy nhất)
-                        this.SavedContractID = SaveContract(conn, trans);
-                        SaveContractApmt(Contract.ContractID, conn, trans);
-                        SaveSTInfo(conn, trans);
+                trans.Commit();
 
-                        trans.Commit(); // Hoàn tất giao dịch
+                // 4. Cập nhật trạng thái UI sau khi lưu thành công
+                TempData["SuccessMessage"] = isActuallyAdd ? "Tạo hợp đồng thành công." : "Cập nhật thành công.";
+                Mode = "edit"; // Luôn chuyển về edit để người dùng có thể sửa tiếp
+                this.Contract.ContractID = (int)this.SavedContractID;
 
-                        // Sau khi Commit, cập nhật UI
-                        Mode = "edit";
-                        TempData["SuccessMessage"] = "Contract saved successfully.";
+                // QUAN TRỌNG: Xóa ModelState để Razor Pages buộc phải render lại từ Property C# 
+                // thay vì dùng giá trị cũ trong Request gửi lên
+                ModelState.Clear();
 
-                        LoadAllDropdowns(isNew: isNewAtStart);
-                        if (STInfor.AgentCompany.HasValue)
-                        {
-                            AgentPersonList = FetchAgentPersons(STInfor.AgentCompany.Value);
-                        }
+                LoadAllDropdowns(isNew: false);
+                if (STInfor.AgentCompany.HasValue)
+                    AgentPersonList = FetchAgentPersons(STInfor.AgentCompany.Value);
 
-                        return Page();
-                    }
-                    catch (Exception ex)
-                    {
-                        // Quan trọng: Rollback ngay khi có lỗi để tránh treo dữ liệu (Deadlock)
-                        trans.Rollback();
-                        ModelState.AddModelError("", "System Error: " + ex.Message);
-
-                        LoadAllDropdowns(isNew: (Contract.ContractID == 0));
-                        return Page();
-                    }
-                } // Hết khối 'using' trans: Tự động Dispose transaction
-            } // Hết khối 'using' conn: Tự động Close và trả Connection về Pool
+                return Page();
+            }
+            catch (Exception ex)
+            {
+                trans.Rollback();
+                ModelState.AddModelError("", "Lỗi hệ thống: " + ex.Message);
+                LoadAllDropdowns(isNew: isActuallyAdd);
+                return Page();
+            }
         }
+
+   
         public async Task<JsonResult> OnGetCheckApmtAvail(string apartmentNo, string fromDate, string toDate, long contractId)
         {
             try
@@ -487,7 +433,7 @@ namespace SmartSam.Pages.Sales.STContract
                 ContractStatus, CompanyID,
                 ContractFromDate, ContractToDate, PlanCheckinDate, PlanCheckoutDate,
                 IsRepeater, Occupy, ContractSourceID, ReceivedByID,
-                Remarks, CreatedBy, CreatedDate
+                Remarks,IsShortTerm
             )
             VALUES (
                 @ContractNo, @ContractDate, @ApmtID, @ApmtNo, @ApmtNo,
@@ -495,7 +441,7 @@ namespace SmartSam.Pages.Sales.STContract
                 @ContractStatus, @CompanyID,
                 @ContractFromDate, @ContractToDate, @PlanCheckinDate, @PlanCheckoutDate,
                 @IsRepeater, @Occupy, @ContractSourceID, @ReceivedByID,
-                @Remarks, @User, GETDATE()
+                @Remarks,@IsShortTerm
             );
             SELECT CAST(SCOPE_IDENTITY() as int);";
             }
@@ -520,8 +466,7 @@ namespace SmartSam.Pages.Sales.STContract
                 IsRepeater = @IsRepeater,
                 Occupy = @Occupy,
                 Remarks = @Remarks,
-                UpdatedBy = @User, 
-                UpdatedDate = GETDATE()
+                IsShortTerm = @IsShortTerm
             WHERE ContractID = @ContractID";
             }
 
@@ -547,6 +492,7 @@ namespace SmartSam.Pages.Sales.STContract
                 Contract.ContractSourceID,
                 Contract.ReceivedByID,
                 Contract.Remarks,
+                Contract.IsShortTerm, 
                 User = User.Identity.Name ?? "System"
             };
 
@@ -564,6 +510,20 @@ namespace SmartSam.Pages.Sales.STContract
             // Trả về ID (dù là mới tạo hay là ID cũ đang edit)
             return Contract.ContractID;
         }
+        private void SaveRecord(long contractId, string Description, SqlConnection conn, SqlTransaction trans)
+        {
+            int EmpId = int.Parse(User.FindFirst("EmployeeID")?.Value ?? "0");
+            string sql = @"
+            Insert CM_CTRecord(ContractID,Description,Operator)
+            VALUES (@ContractID, @Description,@EmpId)";
+
+            using var cmd = new SqlCommand(sql, conn, trans);
+            cmd.Parameters.AddWithValue("@ContractID", contractId);
+            cmd.Parameters.AddWithValue("@Description", Description);
+            cmd.Parameters.AddWithValue("@EmpId", EmpId);
+            cmd.ExecuteNonQuery();
+        }
+
         private void SaveSTInfo(SqlConnection conn, SqlTransaction trans)
         {
             string sqlUpsert = @"
@@ -637,6 +597,18 @@ namespace SmartSam.Pages.Sales.STContract
 
             sql = "  select ChargeTypeID, ChargeTypeName   from SV_ChargeTypeFL  where ChargeTypeID <>2 order by ChargeTypeName ";
             ChargeTypeList = LoadListFromSql(sql, "ChargeTypeID", "ChargeTypeName");
+
+            sql = " select NationID, NationName from MS_Nation order by NationName ";
+            ListNations = LoadListFromSql(sql, "NationID", "NationName");
+
+            sql = " select PositionID, PositionName from CM_TenantPosition order by PositionName ";
+            ListPositions = LoadListFromSql(sql, "PositionID", "PositionName");
+
+            sql = " SELECT PortID, PortName FROM MS_ArrivalPort ORDER BY PortName ";
+            ListArrivalPorts = LoadListFromSql(sql, "PortID", "PortName");
+
+            sql = " select TenantTypeID, TenantTypeName  from CM_TenantType ";
+            ListTenantTypes= LoadListFromSql(sql, "TenantTypeID", "TenantTypeName");
 
         }
 
@@ -784,6 +756,224 @@ namespace SmartSam.Pages.Sales.STContract
                 return new JsonResult(new { success = false, message = "Lỗi hệ thống: " + ex.Message });
             }
         }
+        public JsonResult OnGetHistory(long contractId)
+        {
+            try
+            {
+                string sql = @"
+            SELECT e.EmployeeName, c.Description, c.RecordTime 
+            FROM CM_CTRecord c 
+            INNER JOIN MS_Employee e ON c.Operator = e.EmployeeID 
+            WHERE c.ContractID = @ContractID 
+            ORDER BY c.RecordTime DESC";
+
+                using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+                var history = conn.Query(sql, new { ContractID = contractId }).ToList();
+
+                return new JsonResult(history);
+            }
+            catch (Exception ex)
+            {
+                return new JsonResult(new { error = ex.Message });
+            }
+        }
+        public async Task<JsonResult> OnGetSearchTenants(string name, int currentId)
+        {
+            int cid = (currentId > 0) ? currentId : (this.Contract?.ContractID ?? 0);
+
+            // Bổ sung FamilyPos vào danh sách chọn
+            string sql = @"
+        SELECT TenantID, CustomerName, Male, IDPassportNo, Birthday, NationName, FamilyPos
+        FROM VIEW_ContractMember 
+        WHERE ContractID <> @CID 
+        AND CustomerName LIKE @Name  order by CustomerName";
+
+            using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+            var data = await conn.QueryAsync(sql, new { CID = cid, Name = "%" + name + "%" });
+
+            return new JsonResult(data);
+        }
+        public async Task<JsonResult> OnPostImportTenant(int tenantId, int contractId, int familyPos)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+
+                // Kiểm tra trùng
+                string checkSql = "SELECT COUNT(1) FROM CM_ContractTenant WHERE ContractID = @CTID AND TenantID = @TID";
+                int exists = await conn.ExecuteScalarAsync<int>(checkSql, new { CTID = contractId, TID = tenantId });
+
+                if (exists > 0)
+                    return new JsonResult(new { success = false, message = "Người này đã có trong hợp đồng." });
+
+                // Thực hiện Insert với 3 trường anh yêu cầu + các trường NOT NULL bắt buộc khác
+                string insertSql = @"
+                INSERT INTO CM_ContractTenant (ContractID, TenantID, FamilyPos) VALUES (@CTID, @TID, @FPos)";
+                await conn.ExecuteAsync(insertSql, new
+                {
+                    CTID = contractId,
+                    TID = tenantId,
+                    FPos = familyPos
+                });
+
+                return new JsonResult(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return new JsonResult(new { success = false, message = "Lỗi: " + ex.Message });
+            }
+        }
+        public async Task<JsonResult> OnGetLoadContractTenants(int contractId)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+
+                string sql = @"
+                SELECT ct.ContractTenantID, ct.ContractID, ct.TenantID,t.Title, t.CustomerName, 
+                t.Male, t.Birthday, n.NationName, t.IDPassportNo, ct.TenantType, 
+                tp.PositionName, ct.IsMoveOut, ct.VisaNo,
+                ct.VisaDate, ct.EntryDate, ct.A_DCardNo, ct.MoveinDate, 
+                p.PortName, ct.ProposeExpDate,
+                ct.PermitExpDate, ct.Sponsor, ct.LastRegDate, ct.Notes 
+                FROM CM_ContractTenant ct
+                JOIN CM_Customer t ON ct.TenantID = t.CustomerID
+                LEFT JOIN MS_Nation n ON t.Nationality = n.NationID
+                LEFT JOIN CM_TenantPosition tp ON ct.FamilyPos = tp.PositionID
+                LEFT JOIN MS_ArrivalPort p ON ct.ArrivalPort = p.PortID 
+                WHERE ct.ContractID = @CID";
+
+                var data = await conn.QueryAsync(sql, new { CID = contractId });
+                return new JsonResult(data);
+            }
+            catch (Exception ex)
+            {
+                // Trả về lỗi chi tiết để anh xem ở tab Response trong F12
+                return new JsonResult(new { success = false, message = ex.Message });
+            }
+        }
+        public async Task<JsonResult> OnGetGetFullTenantDetail(int contractTenantId)
+        {
+            using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+
+            // 1. TRƯỜNG HỢP TẠO MỚI (ID = 0)
+            if (contractTenantId == 0)
+            {
+                return new JsonResult(new
+                {
+                    info = new
+                    {
+                        ContractTenantID = 0,
+                        TenantID = 0,
+                        Male = true,
+                        Nationality = 0, 
+                        ArrivalPort = 1
+                    },
+                    passports = new List<dynamic>(),
+                    police = new List<dynamic>()
+                });
+            }
+
+            // 2. TRƯỜNG HỢP VIEW/EDIT (Lấy dữ liệu từ SQL)
+            // Join với MS_Nation để lấy NationName hiển thị nếu cần
+            string sqlInfo = @"
+            SELECT t.Title, t.CustomerName, t.IDPassportNo, t.Birthday, t.Male, t.Nationality,ct.FamilyPos,
+            n.NationName, ct.* FROM CM_ContractTenant ct 
+            JOIN CM_Customer t ON ct.TenantID = t.CustomerID 
+            LEFT JOIN MS_Nation n ON t.Nationality = n.NationID
+            WHERE ct.ContractTenantID = @ID";
+
+            string sqlDocs = "SELECT * FROM CM_ContractTenant_Doc WHERE ContractTenantID = @ID";
+
+            var info = await conn.QueryFirstOrDefaultAsync<dynamic>(sqlInfo, new { ID = contractTenantId });
+            var allDocs = await conn.QueryAsync<dynamic>(sqlDocs, new { ID = contractTenantId });
+
+            return new JsonResult(new
+            {
+                info,
+                passports = allDocs.Where(x => x.DocType == 1).ToList(),
+                police = allDocs.Where(x => x.DocType == 2).ToList()
+            });
+        }
+        public async Task<JsonResult> OnPostSaveTenantDetail([FromBody] TenantViewModel model)
+        {
+            using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+            await conn.OpenAsync();
+            using var trans = conn.BeginTransaction();
+
+            try
+            {
+                // --- 1. XỬ LÝ BẢNG CM_Customer (Thông tin định danh) ---
+                int finalCustomerId = model.TenantID;
+
+                if (finalCustomerId == 0)
+                {
+                    // Thêm mới khách hàng
+                    string sqlInsertCust = @"
+                    INSERT INTO CM_Customer (CustomerName, Title, Male, Birthday, Nationality, IDPassportNo, IsTenant, Address, Company, VATCode) 
+                    OUTPUT INSERTED.CustomerID
+                    VALUES (@CustomerName, @Title, @Male, @Birthday, @Nationality, @IDPassportNo, 1, @Address, @Company, @VATCode)";
+
+                    finalCustomerId = await conn.QuerySingleAsync<int>(sqlInsertCust, model, trans);
+                    model.TenantID = finalCustomerId; // Gán lại ID mới sinh ra cho model
+                }
+                else
+                {
+                    // Cập nhật thông tin khách hàng hiện tại (Master Data)
+                    string sqlUpdateCust = @"
+                    UPDATE CM_Customer SET 
+                    CustomerName = @CustomerName, Title = @Title, Male = @Male, 
+                    Birthday = @Birthday, Nationality = @Nationality, 
+                    IDPassportNo = @IDPassportNo, Address = @Address, 
+                    Company = @Company, VATCode = @VATCode
+                    WHERE CustomerID = @TenantID";
+
+                    await conn.ExecuteAsync(sqlUpdateCust, model, trans);
+                }
+
+                // --- 2. XỬ LÝ BẢNG CM_ContractTenant (Thông tin lưu trú trong hợp đồng) ---
+
+                // Kiểm tra xem Tenant này đã có trong Hợp đồng này chưa (dựa vào ContractTenantID)
+                if (model.ContractTenantID > 0)
+                {
+                    // TRƯỜNG HỢP UPDATE: Đã tồn tại bản ghi liên kết
+                    string sqlUpdateContract = @"
+                    UPDATE CM_ContractTenant SET 
+                    FamilyPos = @FamilyPos, 
+                    IsMoveOut = @IsMoveOut, 
+                    VisaNo = @VisaNo, 
+                    VisaDate = @VisaDate, 
+                    VisaExpDate = @VisaExpDate, 
+                    EntryDate = @EntryDate, 
+                    ArrivalPort = @ArrivalPort, 
+                    Notes = @Notes, 
+                    Sponsor = @Sponsor,
+                    TenantType = @TenantType
+                    WHERE ContractTenantID = @ContractTenantID";
+
+                    await conn.ExecuteAsync(sqlUpdateContract, model, trans);
+                }
+                else
+                {
+                    // TRƯỜNG HỢP INSERT: Lần đầu add khách này vào hợp đồng
+                    string sqlInsertContract = @"
+                    INSERT INTO CM_ContractTenant 
+                    (ContractID, TenantID, FamilyPos, IsMoveOut, VisaNo, VisaDate, VisaExpDate, EntryDate, ArrivalPort, Notes, Sponsor,TenantType)
+                    VALUES (@ContractID, @TenantID, @FamilyPos, @IsMoveOut, @VisaNo, @VisaDate, @VisaExpDate, @EntryDate, @ArrivalPort, @Notes, @Sponsor,@TenantType)";
+
+                    await conn.ExecuteAsync(sqlInsertContract, model, trans);
+                }
+
+                trans.Commit();
+                return new JsonResult(new { success = true, message = "Save successfull!" });
+            }
+            catch (Exception ex)
+            {
+                trans.Rollback();
+                // Log lỗi chi tiết tại đây nếu cần
+                return new JsonResult(new { success = false, message = "System error: " + ex.Message });
+            }
+        }
 
         // Vùng 1.1: CM_Contract
         public class ContractViewModel
@@ -813,6 +1003,7 @@ namespace SmartSam.Pages.Sales.STContract
             public int? ContractSourceID { get; set; }
             public decimal? ElecVND_Amount { get; set; }
             public string? Remarks { get; set; }
+            public bool IsShortTerm { get; set; } = true;
         }
         //vùng 1/2
         public class CM_STInfoViewModel
@@ -909,19 +1100,46 @@ namespace SmartSam.Pages.Sales.STContract
         // Vùng 3: CM_ContractTenant
         public class TenantViewModel
         {
-            public int TenantID { get; set; }
+            // Các trường định danh (Dùng để Update/Delete)
+            public int id { get; set; } // Chính là ID của bảng CM_ContractTenant_Doc hoặc CM_ContractTenant
+            public int ContractTenantID { get; set; }
+            public int TenantID { get; set; } // CustomerID
+            public int ContractID { get; set; }
+
+            // Thông tin hiển thị trên Grid (Vùng 3)
             public string? CustomerName { get; set; }
+            public string? IDPassportNo { get; set; }
+            public string? NationName { get; set; } // Tên quốc gia để hiện trên Grid
+            public string? PositionName { get; set; } // Tên vị trí (Position) để hiện trên Grid
+            public DateTime? MoveinDate { get; set; }
+            public DateTime? ProposeExpDate { get; set; }
+
+            // Thông tin chi tiết trong Modal (Tab 1)
+            public int? TenantType { get; set; } // ID lưu loại Tenant(Freigner,VN-Oversea,... )
+            public string? Title { get; set; }
             public bool Male { get; set; }
             public DateTime? Birthday { get; set; }
-            public string? Nationality { get; set; }
-            public string? IDPassportNo { get; set; }
-            public string? PositionName { get; set; }
+            public int? Nationality { get; set; } // ID quốc gia để lưu
+            public string? FamilyPos { get; set; } // ID vị trí để lưu
             public bool IsMoveOut { get; set; }
             public string? VisaNo { get; set; }
             public DateTime? VisaDate { get; set; }
+            public DateTime? VisaExpDate { get; set; }
             public string? EntryDate { get; set; }
+            public string? ArrivalPort { get; set; }
             public string? Notes { get; set; }
+            public string? Sponsor { get; set; }
+
+            public string Address { get; set; }
+            public string Company { get; set; }
+            public string VATCode { get; set; }
         }
-       
+        public class ContractHistoryViewModel
+        {
+            public string EmployeeName { get; set; }
+            public string Description { get; set; }
+            public DateTime RecordTime { get; set; }
+        }
+
     }
 }

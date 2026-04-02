@@ -198,14 +198,178 @@ function fetchAgentPersons(companyId, selectedPersonId) {
         }
     });
 }
-/*
-function calculateNetPrice() {
-    let gross = parseFloat($('#CurrentRentRate').val().replace(/[^0-9.]/g, '')) || 0;
-    let vat = parseFloat($('#PerVAT').val()) || 0;
-    let netPrice = gross > 0 ? Math.round(gross / (1 + (vat / 100))) : 0;
-    $('#TotalPriceExcVAT').val(netPrice.toLocaleString('en-US'));
+
+function loadHistory(id) {
+    console.log("Loading history for ID:", id); // Kiểm tra xem hàm có chạy không
+
+    if (!id || id == 0) {
+        alert("Vui lòng lưu hợp đồng trước khi xem lịch sử.");
+        return;
+    }
+
+    $.ajax({
+        type: "GET",
+        url: window.location.pathname, // Lấy đường dẫn hiện tại của Page
+        data: {
+            handler: "History",
+            contractId: id
+        },
+        success: function (data) {
+            console.log("Data received:", data); // Kiểm tra dữ liệu trả về
+
+            if (data.length === 0) {
+                alert("Không có lịch sử cho hợp đồng này.");
+                return;
+            }
+
+            var html = '';
+            $.each(data, function (i, item) {
+                // Lưu ý: C# trả về Json thì các field thường bị biến thành chữ thường (camelCase)
+                // e.g: EmployeeName -> employeeName
+                var empName = item.employeeName || item.EmployeeName || "N/A";
+                var desc = item.description || item.Description || "";
+                var time = item.recordTime || item.RecordTime || "";
+
+                html += '<tr>';
+                html += '<td>' + time + '</td>';
+                html += '<td>' + empName + '</td>';
+                html += '<td>' + desc + '</td>';
+                html += '</tr>';
+            });
+
+            $('#historyTable tbody').html(html);
+            $('#historyModal').modal('show');
+        },
+        error: function (xhr, status, error) {
+            console.error("AJAX Error:", status, error);
+            alert("Lỗi khi tải lịch sử: " + error);
+        }
+    });
 }
-*/
+// 1. Hàm mở Modal khi click nút "Add From List"
+function openAddFromList() {
+    $('#modalSearchTenant').modal('show');
+    setTimeout(() => $('#txtSearchName').focus(), 500);
+}
+
+// 2. Hàm tìm kiếm Tenant
+
+function searchTenant() {
+    var name = $('#txtSearchName').val();
+    var cid = $('#hfContractID').val(); // Đọc ID hợp đồng hiện tại từ hidden field
+
+    if (name.length < 2) {
+        alert("Vui lòng nhập ít nhất 2 ký tự để tìm kiếm.");
+        return;
+    }
+
+    // Hiển thị trạng thái đang tải
+    $('#tbodyResult').html('<tr><td colspan="5" class="text-center"><i class="fas fa-spinner fa-spin"></i> Đang tìm kiếm...</td></tr>');
+
+    $.ajax({
+        url: '?handler=SearchTenants',
+        type: 'GET',
+        data: { name: name, currentId: cid },
+        success: function (data) {
+            var html = '';
+
+            if (data && data.length > 0) {
+                $.each(data, function (i, item) {
+                    // 1. Kiểm tra giới tính (Trong SQL là Male, JSON sẽ là male)
+                    // Nếu male = true -> Nam, false -> Nữ
+                    var genderText = (item.male === true || item.Male === true) ? "Male" : "Female";
+
+                    // 2. Lấy Tên khách hàng (JSON thường là customerName)
+                    // Tôi dùng dấu || để "bắt" cả 2 trường hợp Hoa/Thường cho chắc chắn
+                    var tId = item.tenantID || item.TenantID || 0;
+                    var name = item.customerName || item.CustomerName || "N/A";
+                    var passport = item.idPassportNo || item.IDPassportNo || "";
+                    var nation = item.nationName || item.NationName || "";
+                    var fPos = item.familyPos || item.FamilyPos || 1; // Mặc định là 1 nếu null
+
+                    // 3. Xử lý ngày sinh
+                    var bday = "";
+                    if (item.birthday || item.Birthday) {
+                        var dateObj = new Date(item.birthday || item.Birthday);
+                        bday = dateObj.toLocaleDateString('vi-VN');
+                    }
+
+                    // 4. Cộng dồn vào chuỗi HTML
+                    html += `<tr style="cursor:pointer" ondblclick="saveSelectedTenant(${tId})">
+                    <td><span class="badge badge-secondary">${tId}</span></td>
+                    <td>${name}</td>
+                    <td>${genderText}</td>
+                    <td>${passport}</td>
+                    <td>${bday}</td>
+                    <td>${nation}</td>
+                    </tr>`;
+                });
+            } else {
+                html = '<tr><td colspan="5" class="text-center text-danger">Không tìm thấy khách hàng nào phù hợp.</td></tr>';
+            }
+
+            // Ghi đè toàn bộ nội dung trong tbody bằng danh sách mới
+            $('#tbodyResult').html(html);
+        },
+        error: function () {
+            alert("Cannot connect server .");
+            $('#tbodyResult').html('<tr><td colspan="5" class="text-center text-danger">System Error.</td></tr>');
+        }
+    });
+}
+// 3. Hàm lưu Tenant được chọn vào table CM_ContractTenant
+function saveSelectedTenant(tId, fPos) {
+    var cId = $('#hfContractID').val();
+    var token = $('input:hidden[name="__RequestVerificationToken"]').val();
+
+    $.ajax({
+        url: '?handler=ImportTenant', // Handler là "ImportTenant"
+        type: 'POST',
+        data: {
+            tenantId: tId,    // Khớp với tham số C#
+            contractId: cId,  // Khớp với tham số C#
+            familyPos: fPos   // Khớp với tham số C#
+        },
+        beforeSend: function (xhr) {
+            // Tên Header bắt buộc phải là "RequestVerificationToken"
+            xhr.setRequestHeader("RequestVerificationToken", token);
+        },
+        success: function (res) {
+            if (res.success) {
+                // 1. Thông báo thành công
+                alert("Add member susccessfully!");
+
+                // 2. Lệnh đóng Popup (Modal)
+                // Lưu ý: Kiểm tra xem ID modal của anh là 'modalSearchTenant' hay 'tenantSearchModal'
+                $('#modalSearchTenant').modal('hide');
+
+                // 3. Xóa nội dung tìm kiếm cũ để lần sau mở lên là bảng trống
+                $('#tbodyResult').html('');
+                $('#txtSearchName').val('');
+
+                // 4. Cập nhật lại danh sách ở Vùng 3
+                // Nếu anh đã có hàm load danh sách thì gọi nó ở đây
+                if (typeof loadTenantsGrid === "function") {
+                    loadTenantsGrid();
+                } else {
+                    // Nếu chưa có hàm load riêng, dùng cách này để nạp lại vùng danh sách
+                    // Giả sử vùng 3 của anh nằm trong một div có id="vungDanhSach"
+                    // $('#vungDanhSach').load(window.location.href + ' #vungDanhSach');
+
+                    location.reload(); // Cách nhanh nhất nhưng sẽ load lại cả trang
+                }
+            } else {
+                alert("Error: " + res.message);
+            }
+        },
+        error: function (xhr) {
+            // Nếu không vào C#, nó sẽ nhảy vào đây. 
+            // Anh xem log để biết lỗi 400 (Token) hay 404 (Sai URL)
+            console.error("Status:", xhr.status);
+            console.error("Response:", xhr.responseText);
+        }
+    });
+}
 function calculateNetPrice() {
     let grossStr = $('#CurrentRentRate').val().replace(/[^0-9.]/g, '');
     let gross = parseFloat(grossStr) || 0;
@@ -339,3 +503,246 @@ function removeSelectedService() {
     }
 }
 
+function loadTenantsGrid() {
+    var cId = $('#hfContractID').val();
+    if (!cId || cId == 0) return;
+
+    $.ajax({
+        url: '?handler=LoadContractTenants',
+        type: 'GET',
+        data: { contractId: cId },
+        success: function (data) {
+            var html = '';
+            if (data && data.length > 0) {
+                $.each(data, function (i, item) {
+                    const fDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN') : '';
+
+                    // Lấy ID chính của dòng trong bảng CM_ContractTenant
+                    var ctId = item.contractTenantID || item.ContractTenantID;
+
+                    html += `<tr>
+                        <td class="text-center">
+                            <input type="radio" name="selectedTenant" value="${ctId}" class="rd-tenant">
+                        </td>
+                        <td>${item.Title || ''}</td>  <td>${item.CustomerName}</td>
+                        <td class="text-center">${fDate(item.birthday || item.Birthday)}</td>
+                        <td>${item.nationName || item.NationName || ""}</td>
+                        <td>${item.idPassportNo || item.IDPassportNo || ""}</td>
+                        <td><span class="badge badge-info">${item.positionName || item.PositionName || ""}</span></td>
+                        <td class="text-center">${fDate(item.moveinDate || item.MoveinDate)}</td>
+                        <td class="text-center text-danger"><b>${fDate(item.proposeExpDate || item.ProposeExpDate)}</b></td>
+                        <td>${item.visaNo || item.VisaNo || ""}</td>
+                    </tr>`;
+                });
+            } else {
+                html = '<tr><td colspan="9" class="text-center text-muted">No tenants found.</td></tr>';
+            }
+            $('#tableTenants tbody').html(html);
+        }
+    });
+}
+function getSelectedTenantID() {
+    var selectedId = $('input[name="selectedTenant"]:checked').val();
+    if (!selectedId) {
+        alert("Vui lòng chọn một khách hàng từ danh sách.");
+        return null;
+    }
+    return selectedId;
+}
+
+// Ví dụ cho nút Remove
+$('#btnRemoveTenant').click(function () {
+    var id = getSelectedTenantID();
+    if (id && confirm("Bạn có chắc chắn muốn xóa khách hàng này khỏi hợp đồng?")) {
+        // Gọi AJAX xóa với ID này...
+    }
+});
+
+$(document).on('click', '#tableTenants tbody tr', function () {
+    $(this).find('input[type="radio"]').prop('checked', true);
+});
+function openTenantModal(mode) {
+    // 1. Reset Form và ID về mặc định (0)
+    $('#formTenantDetail')[0].reset();
+    $('#txtContractTenantID').val(0);
+    $('#txtCustomerID').val(0);
+    $('#passport_gallery, #police_gallery').empty();
+
+    // Reset các trạng thái khóa/mở input
+    $('#modalTenantDetail input, #modalTenantDetail select, #modalTenantDetail textarea').prop('disabled', false).prop('readonly', false);
+    $('.upload-zone').show();
+    $('#btnSaveTenantDetail').show(); // Đảm bảo nút save luôn hiện trước khi check mode
+
+    var ctId = 0;
+
+    // 2. Xử lý logic theo Mode
+    if (mode === 'edit' || mode === 'view') {
+        var selectedRadio = $('input[name="selectedTenant"]:checked');
+        ctId = selectedRadio.val();
+
+        if (!ctId || ctId == 0) {
+            alert("Vui lòng chọn một khách thuê trong danh sách!");
+            return;
+        }
+
+        // Gọi AJAX lấy dữ liệu cũ
+        $.ajax({
+            url: '?handler=GetFullTenantDetail',
+            type: 'GET',
+            data: { contractTenantId: ctId },
+            success: function (res) {
+                var info = res.info;
+                if (!info) return;
+
+                // Đổ dữ liệu vào Input
+                $('#txtContractTenantID').val(info.ContractTenantID || 0);
+                $('#txtCustomerID').val(info.TenantID || 0);
+                $('#txtTitle').val(info.Title || "");
+                $('#txtCustomerName').val(info.CustomerName || "");
+
+                if (info.Birthday) $('#txtBirthday').val(info.Birthday.split('T')[0]);
+                if (info.PassportUntilDate) $('#txtPassportUntilDate').val(info.PassportUntilDate.split('T')[0]);
+
+                $('#ddlNationality').val(info.Nationality || "").trigger('change');
+                $('#txtIDPassportNo').val(info.IDPassportNo || "");
+                $('#txtCompany').val(info.Company || "");
+                $('#txtVATCode').val(info.VATCode || "");
+                $('#txtAddress').val(info.Address || "");
+
+                $('#ddlTenantType').val(info.TenantType || "1");
+                $('#ddlFamilyPos').val(info.FamilyPos || 0);
+                $('#chkIsMoveOut').prop('checked', info.IsMoveOut === true);
+                $('#txtVisaNo').val(info.VisaNo || "");
+
+                if (info.VisaDate) $('#txtVisaDate').val(info.VisaDate.split('T')[0]);
+                if (info.VisaExpDate) $('#txtVisaExpDate').val(info.VisaExpDate.split('T')[0]);
+                if (info.EntryDate) $('#txtEntryDate').val(info.EntryDate.split('T')[0]);
+                if (info.LastRegDate) $('#txtLastRegDate').val(info.LastRegDate.split('T')[0]);
+
+                $('#ddlArrivalPort').val(info.ArrivalPort || 0);
+                $('#txtADCardNo').val(info.A_DCardNo || "");
+                $('#txtSponsor').val(info.Sponsor || "");
+                $('#txtNotes').val(info.Notes || "");
+
+                // Xử lý hình ảnh
+                renderGalleries(res.passports, res.police);
+
+                // Chế độ View (Khóa toàn bộ)
+                if (mode === 'view') {
+                    $('#modalTenantDetailTitle').text("View Tenant Detail");
+                    $('#btnSaveTenantDetail').hide();
+                    $('#modalTenantDetail input, #modalTenantDetail select, #modalTenantDetail textarea').prop('disabled', true);
+                    $('.upload-zone').hide();
+                } else {
+                    $('#modalTenantDetailTitle').text("Edit Tenant Detail");
+                }
+
+                $('#modalTenantDetail').modal('show');
+            }
+        });
+    }
+    else if (mode === 'add') {
+        // Chế độ thêm mới: Không gọi AJAX, chỉ hiện Modal trống
+        $('#modalTenantDetailTitle').text("Add New Tenant");
+        $('#txtContractTenantID').val(0); // Đảm bảo chắc chắn là 0 để C# chạy lệnh INSERT
+        $('.upload-zone').hide(); // Thường ẩn upload ảnh khi chưa có ID khách
+        $('#modalTenantDetail').modal('show');
+    }
+}
+function renderGalleries(passports, police) {
+    // 1. Xử lý Tab Passport (DocType = 1)
+    var htmlPassport = '';
+    if (passports && passports.length > 0) {
+        $.each(passports, function (i, doc) {
+            htmlPassport += createImgItem(doc);
+        });
+    } else {
+        htmlPassport = '<div class="col-12 text-muted p-3 text-center">Chưa có hình Passport.</div>';
+    }
+    $('#passport_gallery').html(htmlPassport);
+
+    // 2. Xử lý Tab Công an (DocType = 2)
+    var htmlPolice = '';
+    if (police && police.length > 0) {
+        $.each(police, function (i, doc) {
+            htmlPolice += createImgItem(doc);
+        });
+    } else {
+        htmlPolice = '<div class="col-12 text-muted p-3 text-center">Chưa có hồ sơ đăng ký công an.</div>';
+    }
+    $('#police_gallery').html(htmlPolice);
+}
+
+// Hàm con để tạo HTML cho từng tấm ảnh
+function createImgItem(doc) {
+    // doc.FilePath là đường dẫn lưu trong DB (vừa tạo ở bảng CM_ContractTenant_Doc)
+    return `
+        <div class="col-md-4 col-sm-6 mb-3" id="doc_item_${doc.id}">
+            <div class="card shadow-sm border">
+                <div class="card-body p-1 text-center">
+                    <a href="${doc.FilePath}" target="_blank">
+                        <img src="${doc.FilePath}" class="img-fluid rounded" style="height:150px; object-fit:contain; width:100%;">
+                    </a>
+                </div>
+                <div class="card-footer p-1 d-flex justify-content-between align-items-center bg-light">
+                    <small class="text-muted ml-1">${new Date(doc.UploadDate).toLocaleDateString('vi-VN')}</small>
+                    <button type="button" class="btn btn-xs btn-outline-danger" title="Xóa ảnh" onclick="deleteDoc(${doc.id})">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </div>`;
+}
+
+$('#btnSaveTenantDetail').click(function () {
+    // Thu thập dữ liệu từ các control trong Modal
+    var tenantData = {
+        ContractID: $('#hfContractID').val(), // Lấy từ hidden field của trang chính
+        TenantID: $('#txtCustomerID').val() || 0,
+        Title: $('#txtTitle').val(),
+        CustomerName: $('#txtCustomerName').val(),
+        Male: $('#ddlMale').val() === "true",
+        Birthday: $('#txtBirthday').val(),
+        TenantType: $('#ddlTenantType').val(),
+        Nationality: $('#ddlNationality').val(), // Nếu anh dùng Select2/Dropdown
+        IDPassportNo: $('#txtIDPassportNo').val(),
+        PassportUntilDate: $('#txtPassportUntilDate').val(), 
+
+        Address: $('#txtAddress').val(), // Tên này phải khớp với Class C#
+        Company: $('#txtCompany').val(),
+        VATCode: $('#txtVATCode').val(),
+
+        FamilyPos: $('#ddlFamilyPos').val(),
+        IsMoveOut: $('#chkIsMoveOut').is(':checked'),
+        VisaNo: $('#txtVisaNo').val(),
+
+        VisaDate: $('#txtVisaDate').val(),
+        VisaExpDate: $('#txtVisaExpDate').val(),
+
+        EntryDate: $('#txtEntryDate').val(),
+        ArrivalPort: $('#ddlArrivalPort').val(),
+
+        A_DCardNo: $('#txtADCardNo').val(),      // Lấy từ input txtADCardNo
+        LastRegDate: $('#txtLastRegDate').val(), // Lấy từ input txtLastRegDate
+
+        Notes: $('#txtNotes').val(),
+        Sponsor: $('#txtSponsor').val()
+    };
+
+    $.ajax({
+        url: '?handler=SaveTenantDetail',
+        type: 'POST',
+        contentType: 'application/json',
+        headers: { "RequestVerificationToken": $('input[name="__RequestVerificationToken"]').val() },
+        data: JSON.stringify(tenantData),
+        success: function (res) {
+            if (res.success) {
+                alert(res.message);
+                $('#modalTenantDetail').modal('hide');
+                loadTenantsGrid(); // Load lại lưới ở Vùng 3
+            } else {
+                alert("Error: " + res.message);
+            }
+        }
+    });
+});
