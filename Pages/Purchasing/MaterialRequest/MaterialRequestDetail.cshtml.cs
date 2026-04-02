@@ -137,6 +137,11 @@ public class MaterialRequestDetailModel : BasePageModel
 
     public bool CanIssue
     {
+        get { return false; }
+    }
+
+    public bool ShowIssueButton
+    {
         get { return IsEdit && CurrentStatusId == StatusCollectedToPr; }
     }
 
@@ -354,9 +359,10 @@ public class MaterialRequestDetailModel : BasePageModel
         return await HandleCalculateAsync(cancellationToken);
     }
 
-    public async Task<IActionResult> OnPostIssue(CancellationToken cancellationToken)
+    public Task<IActionResult> OnPostIssue(CancellationToken cancellationToken)
     {
-        return await HandleWorkflowActionAsync(MaterialRequestWorkflowAction.Issue, cancellationToken);
+        WarningMessage = "Issue is handled in another business flow and is not available in Material Request.";
+        return Task.FromResult<IActionResult>(RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id)));
     }
 
     public async Task<IActionResult> OnPostReject(CancellationToken cancellationToken)
@@ -656,7 +662,7 @@ public class MaterialRequestDetailModel : BasePageModel
             return new JsonResult(new { success = false, message = "Access denied." });
         }
 
-        var rows = await _materialRequestService.SearchItemsAsync(keyword, null, checkBalanceInStore, Input.StoreGroup, cancellationToken);
+        var rows = await _materialRequestService.SearchItemsAsync(keyword, checkBalanceInStore, cancellationToken);
         return new JsonResult(new { success = true, data = rows });
     }
 

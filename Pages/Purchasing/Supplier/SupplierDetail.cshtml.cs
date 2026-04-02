@@ -813,7 +813,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         private SupplierViewModel? GetDetail(int supplierId)
         {
             const string sql = @"
-                                SELECT SupplierCode,SupplierName,Address,Phone,Mobile,Fax,Contact,[Position],Business,
+                                SELECT SupplierCode,SupplierName,Address,Phone,Mobile,Fax,Email,Contact,[Position],Business,
                                     ApprovedDate,[Document],Certificate,Service,Comment,IsNew,CodeOfAcc,DeptID,[Status],
                                     PurchaserCode,PurchaserPreparedDate
                                 FROM dbo.PC_Suppliers
@@ -838,20 +838,21 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 Phone = rd[3]?.ToString(),
                 Mobile = rd[4]?.ToString(),
                 Fax = rd[5]?.ToString(),
-                Contact = rd[6]?.ToString(),
-                Position = rd[7]?.ToString(),
-                Business = rd[8]?.ToString(),
-                ApprovedDate = rd.IsDBNull(9) ? null : rd.GetDateTime(9),
-                Document = !rd.IsDBNull(10) && Convert.ToBoolean(rd[10]),
-                Certificate = rd[11]?.ToString(),
-                Service = rd[12]?.ToString(),
-                Comment = rd[13]?.ToString(),
-                IsNew = !rd.IsDBNull(14) && Convert.ToBoolean(rd[14]),
-                CodeOfAcc = rd[15]?.ToString(),
-                DeptID = rd.IsDBNull(16) ? null : Convert.ToInt32(rd[16]),
-                Status = rd.IsDBNull(17) ? null : Convert.ToInt32(rd[17]),
-                PurchaserCode = rd[18]?.ToString(),
-                PurchaserPreparedDate = rd.IsDBNull(19) ? null : Convert.ToDateTime(rd[19])
+                Email = rd[6]?.ToString(),
+                Contact = rd[7]?.ToString(),
+                Position = rd[8]?.ToString(),
+                Business = rd[9]?.ToString(),
+                ApprovedDate = rd.IsDBNull(10) ? null : rd.GetDateTime(10),
+                Document = !rd.IsDBNull(11) && Convert.ToBoolean(rd[11]),
+                Certificate = rd[12]?.ToString(),
+                Service = rd[13]?.ToString(),
+                Comment = rd[14]?.ToString(),
+                IsNew = !rd.IsDBNull(15) && Convert.ToBoolean(rd[15]),
+                CodeOfAcc = rd[16]?.ToString(),
+                DeptID = rd.IsDBNull(17) ? null : Convert.ToInt32(rd[17]),
+                Status = rd.IsDBNull(18) ? null : Convert.ToInt32(rd[18]),
+                PurchaserCode = rd[19]?.ToString(),
+                PurchaserPreparedDate = rd.IsDBNull(20) ? null : Convert.ToDateTime(rd[20])
             };
         }
 
@@ -886,6 +887,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 Phone = rd[3]?.ToString(),
                 Mobile = rd[4]?.ToString(),
                 Fax = rd[5]?.ToString(),
+                Email = null,
                 Contact = rd[6]?.ToString(),
                 Position = rd[7]?.ToString(),
                 Business = rd[8]?.ToString(),
@@ -1051,13 +1053,13 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 sql = @"
                     INSERT INTO dbo.PC_Suppliers
                     (
-                        SupplierCode,SupplierName,Address,Phone,Mobile,Fax,Contact,[Position],Business,
+                        SupplierCode,SupplierName,Address,Phone,Mobile,Fax,Email,Contact,[Position],Business,
                         [Document],Certificate,Service,Comment,IsNew,CodeOfAcc,DeptID,[Status],
                         PurchaserCode,PurchaserPreparedDate
                     )
                     VALUES
                     (
-                        @SupplierCode,@SupplierName,@Address,@Phone,@Mobile,@Fax,@Contact,@Position,@Business,
+                        @SupplierCode,@SupplierName,@Address,@Phone,@Mobile,@Fax,@Email,@Contact,@Position,@Business,
                         @Document,@Certificate,@Service,@Comment,@IsNew,@CodeOfAcc,@DeptID,0,
                         NULL,NULL
                     );
@@ -1073,6 +1075,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                         Phone=@Phone,
                         Mobile=@Mobile,
                         Fax=@Fax,
+                        Email=@Email,
                         Contact=@Contact,
                         [Position]=@Position,
                         Business=@Business,
@@ -1294,6 +1297,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             cmd.Parameters.AddWithValue("@Phone", (object?)supplier.Phone ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@Mobile", (object?)supplier.Mobile ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@Fax", (object?)supplier.Fax ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@Email", (object?)supplier.Email ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@Contact", (object?)supplier.Contact ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@Position", (object?)supplier.Position ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@Business", (object?)supplier.Business ?? DBNull.Value);
@@ -1351,6 +1355,10 @@ namespace SmartSam.Pages.Purchasing.Supplier
 
             [StringLength(20, ErrorMessage = "Fax must be at most 20 characters.")]
             public string? Fax { get; set; }
+
+            [EmailAddress(ErrorMessage = "Email is not in a valid format.")]
+            [StringLength(254, ErrorMessage = "Email must be at most 254 characters.")]
+            public string? Email { get; set; }
 
             [StringLength(40, ErrorMessage = "Contact person must be at most 40 characters.")]
             public string? Contact { get; set; }

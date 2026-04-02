@@ -196,6 +196,10 @@
     width: 100%;
 }
 
+.mr-condition-box[data-condition-group="storeman"] {
+    margin-top: 10px;
+}
+
 .mr-condition-box > legend {
     width: auto;
     margin: 0;
@@ -372,12 +376,33 @@
     min-width: 0;
 }
 
+.create-mr-search-field {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.create-mr-search-field > .create-mr-text-input {
+    width: 100%;
+}
+
 .create-mr-table-wrap {
     flex: 1 1 auto;
     min-height: 260px;
     height: auto;
     max-height: none;
     margin-top: 0;
+}
+
+.mr-item-lookup-result-table {
+    width: 100%;
+    table-layout: fixed;
+}
+
+.mr-item-lookup-result-table th,
+.mr-item-lookup-result-table td {
+    vertical-align: middle;
 }
 
 .create-mr-column {
@@ -415,7 +440,6 @@
 }
 
 .create-mr-desc-textarea {
-    min-height: 84px;
     resize: none;
 }
 
@@ -696,6 +720,27 @@
     min-width: 0;
 }
 
+.mr-item-lookup-search-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.mr-item-lookup-keyword-wrap {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.mr-item-lookup-label-note {
+    font-size: 0.78rem;
+    font-weight: 400;
+}
+
+.mr-item-lookup-check {
+    flex: 0 0 auto;
+    margin-top: 0.45rem;
+}
+
 .mr-item-lookup-check .custom-control-label {
     white-space: nowrap;
 }
@@ -794,6 +839,15 @@
 
     .mr-item-lookup-search-btn {
         width: 100%;
+    }
+
+    .mr-item-lookup-search-row {
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .mr-item-lookup-check {
+        margin-top: 0;
     }
 
     .mr-item-lookup-check .custom-control-label {

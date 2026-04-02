@@ -15,6 +15,7 @@
               data-can-submit="@Model.CanSubmit.ToString().ToLowerInvariant()"
               data-can-calculate="@Model.CanCalculate.ToString().ToLowerInvariant()"
               data-can-approve="@Model.CanApprove.ToString().ToLowerInvariant()"
+              data-can-issue="@Model.CanIssue.ToString().ToLowerInvariant()"
               data-can-reject="@Model.CanReject.ToString().ToLowerInvariant()"
               data-store-group-locked="@Model.StoreGroupLocked.ToString().ToLowerInvariant()"
               data-hide-zero-buy-lines="@Model.HideZeroBuyLines.ToString().ToLowerInvariant()">
@@ -204,7 +205,7 @@
                         <button type="submit" asp-page-handler="Calculate" class="btn btn-info btn-sm mx-1 my-1 @(Model.CanCalculate ? string.Empty : "d-none")" id="calculateBtn"><i class="fas fa-calculator"></i> Calculate</button>
                         <button type="submit" asp-page-handler="Submit" id="mrSubmitBtn" class="btn btn-dark btn-sm mx-1 my-1 @(Model.CurrentStatusId == -1 && Model.CanSubmit ? string.Empty : "d-none")"><i class="fas fa-paper-plane"></i> Submit</button>
                         <button type="submit" asp-page-handler="Approve" id="mrApproveBtn" class="btn btn-success btn-sm mx-1 my-1 @(Model.CanApprove ? string.Empty : "d-none")"><i class="fas fa-check"></i> Approve</button>
-                        <button type="submit" asp-page-handler="Issue" id="mrIssueBtn" class="btn btn-secondary btn-sm mx-1 my-1 @(Model.CanIssue ? string.Empty : "d-none")"><i class="fas fa-check-double"></i> Issue</button>
+                        <button type="submit" asp-page-handler="Issue" id="mrIssueBtn" class="btn btn-secondary btn-sm mx-1 my-1 @(Model.ShowIssueButton ? string.Empty : "d-none")" disabled="@(Model.CanIssue ? null : "disabled")"><i class="fas fa-check-double"></i> Issue</button>
                         <button type="button" asp-page-handler="Reject" id="mrRejectBtn" class="btn btn-danger btn-sm mx-1 my-1 @(Model.CanReject ? string.Empty : "d-none")"><i class="fas fa-times"></i> Reject</button>
                         <a href="@Model.BackToListUrl" class="btn btn-default btn-sm mx-1 my-1">Back to List</a>
                     </div>
@@ -216,7 +217,7 @@
         </form>
 
         <div class="modal fade" id="mrItemLookupModal" tabindex="-1" role="dialog" aria-labelledby="mrItemLookupModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-dialog modal-xl create-mr-modal-dialog" role="document">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title" id="mrItemLookupModalLabel">Add / Edit Item</h5>
@@ -226,38 +227,48 @@
                     </div>
                     <div class="modal-body">
                         <div class="form-row align-items-end mr-item-lookup-toolbar">
-                            <div class="form-group col-lg-5 col-md-12 mb-2">
-                                <label class="mb-1">Item Code or Name</label>
-                                <input type="text" class="form-control form-control-sm vni-font" id="lookupKeyword" />
-                            </div>
-                            <div class="form-group col-lg-4 col-md-8 mb-2">
-                                <div class="custom-control custom-checkbox mr-item-lookup-check">
-                                    <input type="checkbox" id="lookupCheckStore" class="custom-control-input" />
-                                    <label for="lookupCheckStore" class="custom-control-label">Check Balance in Store</label>
+                            <div class="form-group col-lg-9 col-md-12 mb-2">
+                                <label class="mb-1 d-block">Item Code or Name <small class="text-muted mr-item-lookup-label-note">(Enter at least 3 characters before "Search")</small></label>
+                                <div class="mr-item-lookup-search-row">
+                                    <div class="mr-item-lookup-keyword-wrap">
+                                        <input type="text" class="form-control form-control-sm vni-font" id="lookupKeyword" />
+                                        <small class="form-text text-danger d-none" id="lookupValidation">Enter at least 3 characters before "Search".</small>
+                                    </div>
+                                    <div class="custom-control custom-checkbox mr-item-lookup-check">
+                                        <input type="checkbox" id="lookupCheckStore" class="custom-control-input" />
+                                        <label for="lookupCheckStore" class="custom-control-label">Check Balance in Store</label>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="form-group col-lg-3 col-md-4 mb-2 text-md-right text-left">
+                            <div class="form-group col-lg-3 col-md-12 mb-2 text-md-right text-left">
                                 <button type="button" class="btn btn-sm btn-primary mr-item-lookup-search-btn" id="lookupSearchBtn"><i class="fas fa-search"></i> Search</button>
                             </div>
                         </div>
-                        <div class="table-responsive border">
-                            <table class="table table-sm table-hover mb-0">
+                        <div class="table-responsive border create-mr-table-wrap">
+                            <table class="table table-sm table-hover mb-0 mr-item-lookup-result-table">
+                                <colgroup>
+                                    <col style="width:120px;" />
+                                    <col />
+                                    <col style="width:70px;" />
+                                    <col style="width:60px;" />
+                                    <col style="width:76px;" />
+                                    <col style="width:110px;" />
+                                </colgroup>
                                 <thead class="thead-light">
                                     <tr>
-                                        <th style="width:130px;">Item Code</th>
+                                        <th style="width:120px;">ItemCode</th>
                                         <th>Item Name</th>
-                                        <th style="width:90px;">Unit</th>
-                                        <th style="width:70px;"></th>
+                                        <th style="width:70px;">Uni</th>
+                                        <th style="width:70px;">In.S</th>
+                                        <th style="width:76px;">Order</th>
+                                        <th style="width:110px;">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody id="lookupResultBody">
-                                    <tr><td colspan="4" class="text-center text-muted">No data</td></tr>
+                                    <tr><td colspan="6" class="text-center text-muted">No data</td></tr>
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-                    <div class="modal-footer py-2">
-                        <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Close</button>
                     </div>
                 </div>
             </div>
