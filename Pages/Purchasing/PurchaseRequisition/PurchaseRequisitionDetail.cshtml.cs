@@ -1305,6 +1305,17 @@ WHERE EmployeeCode = @EmployeeCode", conn);
     // Xác định các nút được phép hiển thị theo trạng thái chứng từ và vai trò workflow hiện tại.
     private void SetActionFlags()
     {
+        if (IsViewMode)
+        {
+            CanSave = false;
+            CanApproveWorkflow = false;
+            CanDisapproveWorkflow = false;
+            CanResetToNew = false;
+            CanMoveToMr = false;
+            CanManageAttachments = false;
+            return;
+        }
+
         var effectivePermissions = GetEffectivePermissionsByStatus(Requisition.Status <= 0 ? 1 : Requisition.Status);
 
         CanSave = Mode == "add"

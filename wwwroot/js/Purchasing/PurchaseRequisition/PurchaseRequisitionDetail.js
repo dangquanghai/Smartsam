@@ -2,7 +2,7 @@
     "use strict";
 
     function getConfig() {
-        return window.purchaseRequisitionDetailPage || { canSave: false, canMoveToMr: false };
+        return window.purchaseRequisitionDetailPage || { canSave: false, canMoveToMr: false, canSelectDetail: false };
     }
 
     function getAllowedExtensions() {
@@ -322,7 +322,7 @@
                     row.classList.add("prq-detail-row-unsaved");
                 }
                 row.innerHTML = `
-                    <td class="prq-center"><input type="checkbox" class="prq-detail-selector" ${selectedRowKey === rowKey ? "checked" : ""} /></td>
+                    <td class="prq-center">${getConfig().canSelectDetail ? `<input type="checkbox" class="prq-detail-selector" ${selectedRowKey === rowKey ? "checked" : ""} />` : ""}</td>
                     <td>${detail.itemCode || ""}</td>
                     <td>${detail.itemName || ""}</td>
                     <td class="prq-center">${detail.unit || ""}</td>
@@ -408,6 +408,10 @@
                     }
                     renderRows();
                 }
+                return;
+            }
+
+            if (!getConfig().canSelectDetail) {
                 return;
             }
 

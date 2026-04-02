@@ -131,7 +131,7 @@
                                 <i class="fas fa-reply"></i> To MR
                             </button>
                         }
-                        @if (Model.CanManageAttachments)
+                        @if (Model.Requisition.Id > 0)
                         {
                             <button type="button" class="btn btn-sm btn-action-secondary border mr-2 mb-2" data-toggle="modal" data-target="#prqAttachmentModal">
                                 <i class="fas fa-paperclip"></i> Attached Files
@@ -221,7 +221,7 @@
     </div>
 }
 
-@if (Model.CanManageAttachments)
+@if (Model.Requisition.Id > 0)
 {
     <div class="modal fade" id="prqAttachmentModal" tabindex="-1" role="dialog" aria-hidden="true">
         <div class="modal-dialog modal-lg" role="document">
@@ -259,12 +259,15 @@
                                             <td>@attachment.UploadDate?.ToString("dd/MM/yyyy HH:mm")</td>
                                             <td>@attachment.UserCode</td>
                                             <td class="text-center">
-                                                <form method="post" action="@Url.Page("./PurchaseRequisitionDetail", "DeleteAttachment", new { id = Model.Requisition.Id, mode = Model.Mode, docId = attachment.DocId })">
-                                                    @Html.AntiForgeryToken()
-                                                    <button type="submit" class="btn btn-sm btn-action-disapprove border px-2" formnovalidate>
-                                                        <i class="fas fa-trash"></i>
-                                                    </button>
-                                                </form>
+                                                @if (Model.CanManageAttachments)
+                                                {
+                                                    <form method="post" action="@Url.Page("./PurchaseRequisitionDetail", "DeleteAttachment", new { id = Model.Requisition.Id, mode = Model.Mode, docId = attachment.DocId })">
+                                                        @Html.AntiForgeryToken()
+                                                        <button type="submit" class="btn btn-sm btn-action-disapprove border px-2" formnovalidate>
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </form>
+                                                }
                                             </td>
                                         </tr>
                                     }
@@ -307,6 +310,7 @@
         window.purchaseRequisitionDetailPage = {
             canSave: @(Model.CanSave ? "true" : "false"),
             canMoveToMr: @(Model.CanMoveToMr ? "true" : "false"),
+            canSelectDetail: @(Model.CanMoveToMr ? "true" : "false"),
             allowedAttachmentExtensions: "@Model.AllowedAttachmentExtensionsText",
             maxAttachmentSizeMb: @Model.MaxAttachmentSizeMb
         };
