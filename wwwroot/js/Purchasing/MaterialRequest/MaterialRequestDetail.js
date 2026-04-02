@@ -131,7 +131,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
 
     // Stop browser submit
     $form.find('input, textarea, select')
-        .not('[type="hidden"], .mr-line-select, #Input_IsAuto, #mrSubmitBtn, #mrApproveBtn, #mrRejectBtn, #addMrLineBtn, #removeMrLineBtn, #createNewItemBtn, #calculateBtn')
+        .not('[type="hidden"], .mr-line-select, .mr-line-buy, .mr-line-note, #Input_IsAuto, #mrSubmitBtn, #mrApproveBtn, #mrRejectBtn, #addMrLineBtn, #removeMrLineBtn, #createNewItemBtn, #calculateBtn')
         .prop('disabled', disableEditFields);
 
     $('#Input_IsAuto').prop('disabled', true);
@@ -151,6 +151,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
     const showSubmitAction = isDraft && !isViewMode && canSubmit;
     const showCalculateAction = isHeadApproved && canCalculate;
     const showWorkflowActions = !isDraft && (canApprove || canReject);
+    const enableBuyAndNoteFields = showEditActions || showCalculateAction;
 
     // Use the clicked button submit
     $('#addMrLineBtn, #removeMrLineBtn, #createNewItemBtn')
@@ -174,7 +175,9 @@ function initializePage(mode, currentStatusId, actionPerm) {
 
     // Display only.
     $('#NoIssueCheck').prop('disabled', true);
+    $tableBody.find('.mr-line-buy, .mr-line-note').prop('disabled', !enableBuyAndNoteFields);
     applyBuyZeroLineVisibility($tableBody, hideZeroBuyLines);
+    initializePurchaserEditableRowPrompt($form, $tableBody, showCalculateAction);
 
     // Lock inputs by mode and rights
     $tableBody.off('click.mrLine').on('click.mrLine', '.mr-line-row', function (event) {
@@ -549,14 +552,14 @@ function createLineRowHtml(row) {
                 <input type="hidden" class="mr-line-itemcode" value="${escapeHtml(row.itemCode || '')}" />
             </td>
             <td>
-                <span class="mr-readonly-cell-text">${escapeHtml(row.itemName || '')}</span>
+                <span class="mr-readonly-cell-text tcvn3-font">${escapeHtml(row.itemName || '')}</span>
                 <input type="hidden" class="mr-line-itemname" value="${escapeHtml(row.itemName || '')}" />
             </td>
             <td>
                 <span class="mr-readonly-cell-text">${escapeHtml(row.unit || '')}</span>
                 <input type="hidden" class="mr-line-unit" value="${escapeHtml(row.unit || '')}" />
             </td>
-            <td><input type="number" min="0.01" step="0.01" class="form-control form-control-sm mr-line-order" value="${row.orderQty ?? 0}" /></td>
+            <td><input type="number" min="1" step="1" class="form-control form-control-sm mr-line-order" value="${row.orderQty ?? 0}" /></td>
             <td>
                 <span class="mr-readonly-cell-text">${row.notReceipt ?? 0}</span>
                 <input type="hidden" class="mr-line-notrec" value="${row.notReceipt ?? 0}" />
@@ -570,8 +573,7 @@ function createLineRowHtml(row) {
                 <input type="hidden" class="mr-line-accin" value="${row.accIn ?? 0}" />
             </td>
             <td>
-                <span class="mr-readonly-cell-text mr-line-buy-text">${row.buy ?? 0}</span>
-                <input type="hidden" class="mr-line-buy" value="${row.buy ?? 0}" />
+                <input type="text" inputmode="decimal" class="form-control form-control-sm mr-line-buy" value="${row.buy ?? 0}" />
             </td>
             <td>
                 <input type="text" class="form-control form-control-sm mr-line-note" value="${escapeHtml(row.note || '')}" />
@@ -580,6 +582,196 @@ function createLineRowHtml(row) {
                 <input type="hidden" class="mr-line-new-item" value="${row.newItem ? 'true' : 'false'}" />
             </td>
         </tr>`;
+}
+
+function initializePurchaserEditableRowPrompt($form, $tableBody, enablePrompt) {
+    $tableBody.find('.mr-line-row').each(function () {
+        storePurchaserEditableSnapshot($(this));
+    });
+
+    $tableBody.off('.mrPurchaserEditPrompt');
+    if (!enablePrompt) {
+        return;
+    }
+
+    $tableBody.on('focusin.mrPurchaserEditPrompt', '.mr-line-buy, .mr-line-note', function () {
+        const $row = $(this).closest('.mr-line-row');
+        const existingTimer = $row.data('mrPromptTimer');
+        if (existingTimer) {
+            window.clearTimeout(existingTimer);
+            $row.removeData('mrPromptTimer');
+        }
+    });
+
+    $tableBody.on('focusout.mrPurchaserEditPrompt', '.mr-line-buy, .mr-line-note', function () {
+        const $row = $(this).closest('.mr-line-row');
+        const timerId = window.setTimeout(function () {
+            $row.removeData('mrPromptTimer');
+
+            if ($row.find(':focus').length > 0) {
+                return;
+            }
+
+            promptSavePurchaserEditableRow($form, $tableBody, $row);
+        }, 0);
+
+        $row.data('mrPromptTimer', timerId);
+    });
+
+    $tableBody.on('input.mrPurchaserEditPrompt', '.mr-line-buy', function () {
+        const normalized = normalizeEditableNumericInput($(this).val());
+        if ($(this).val() !== normalized) {
+            $(this).val(normalized);
+        }
+    });
+}
+
+function promptSavePurchaserEditableRow($form, $tableBody, $row) {
+    if (!$row || $row.length === 0) return;
+    if ($row.data('mrPromptBusy')) return;
+    if ($row.data('mrPromptSaving')) return;
+    if (!isPurchaserEditableRowDirty($row)) return;
+
+    $row.data('mrPromptBusy', true);
+    try {
+        if (!window.confirm('Do you want to save your changes?')) {
+            restorePurchaserEditableSnapshot($row);
+            return;
+        }
+
+        savePurchaserEditableLines($form, $tableBody, $row);
+    } finally {
+        $row.removeData('mrPromptBusy');
+    }
+}
+
+function readPurchaserEditableSnapshot($row) {
+    return {
+        buy: normalizeEditableNumeric($row.find('.mr-line-buy').val()),
+        note: (($row.find('.mr-line-note').val() || '').toString().trim())
+    };
+}
+
+function storePurchaserEditableSnapshot($row) {
+    if ($row.length === 0) return;
+    $row.data('mrOriginalBuyNote', readPurchaserEditableSnapshot($row));
+}
+
+function restorePurchaserEditableSnapshot($row) {
+    const snapshot = $row.data('mrOriginalBuyNote');
+    if (!snapshot) return;
+    $row.find('.mr-line-buy').val(snapshot.buy);
+    $row.find('.mr-line-note').val(snapshot.note);
+}
+
+function isPurchaserEditableRowDirty($row) {
+    const snapshot = $row.data('mrOriginalBuyNote');
+    if (!snapshot) {
+        storePurchaserEditableSnapshot($row);
+        return false;
+    }
+
+    const current = readPurchaserEditableSnapshot($row);
+    return current.buy !== snapshot.buy || current.note !== snapshot.note;
+}
+
+function normalizeEditableNumeric(value) {
+    const text = (value ?? '').toString().trim();
+    if (!text) return '0';
+
+    const parsed = Number.parseFloat(text);
+    if (!Number.isFinite(parsed)) return text;
+    if (Number.isInteger(parsed)) return parsed.toString();
+    return parsed.toFixed(2).replace(/\.?0+$/, '');
+}
+
+function normalizeEditableNumericInput(value) {
+    const source = (value ?? '').toString();
+    let normalized = source.replace(/[^0-9.-]/g, '');
+    normalized = normalized.replace(/(?!^)-/g, '');
+
+    const dotIndex = normalized.indexOf('.');
+    if (dotIndex >= 0) {
+        normalized = normalized.slice(0, dotIndex + 1) + normalized.slice(dotIndex + 1).replace(/\./g, '');
+    }
+
+    return normalized;
+}
+
+function savePurchaserEditableLines($form, $tableBody, $targetRow) {
+    if (!$form || $form.length === 0) return;
+    if ($targetRow && $targetRow.length > 0) {
+        $targetRow.data('mrPromptSaving', true);
+    }
+
+    const form = $form[0];
+    const temporarilyRestoredRows = [];
+    $tableBody.find('.mr-line-row').each(function () {
+        const $row = $(this);
+        if ($targetRow && $targetRow.length > 0 && $row.is($targetRow)) {
+            return;
+        }
+
+        if (!isPurchaserEditableRowDirty($row)) {
+            return;
+        }
+
+        temporarilyRestoredRows.push({
+            $row,
+            buy: $row.find('.mr-line-buy').val(),
+            note: $row.find('.mr-line-note').val()
+        });
+        restorePurchaserEditableSnapshot($row);
+    });
+
+    syncPostedLines($tableBody, $('#linesJsonInput'));
+
+    const formData = new FormData(form);
+    temporarilyRestoredRows.forEach(function (entry) {
+        entry.$row.find('.mr-line-buy').val(entry.buy);
+        entry.$row.find('.mr-line-note').val(entry.note);
+    });
+    const targetUrl = new URL(window.location.href);
+    targetUrl.searchParams.set('handler', 'SavePurchaserLines');
+
+    $.ajax({
+        url: targetUrl.toString(),
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        success: function (res) {
+            if (res && res.success) {
+                if ($targetRow && $targetRow.length > 0) {
+                    storePurchaserEditableSnapshot($targetRow);
+                }
+                if (res.requestNo !== undefined && res.requestNo !== null && res.requestNo !== '') {
+                    updateDraftSavedRequestNo(res.requestNo);
+                }
+                return;
+            }
+
+            showDetailErrorMessage((res && res.message) ? res.message : 'Cannot save Buy/Note changes.');
+            if ($targetRow && $targetRow.length > 0) {
+                $targetRow.find('.mr-line-buy, .mr-line-note').first().trigger('focus');
+            }
+        },
+        error: function (xhr) {
+            const responseMessage = xhr && xhr.responseJSON && xhr.responseJSON.message
+                ? xhr.responseJSON.message
+                : (xhr && xhr.responseText ? xhr.responseText : '');
+            showDetailErrorMessage(responseMessage || 'Cannot save Buy/Note changes.');
+            if ($targetRow && $targetRow.length > 0) {
+                $targetRow.find('.mr-line-buy, .mr-line-note').first().trigger('focus');
+            }
+        },
+        complete: function () {
+            if ($targetRow && $targetRow.length > 0) {
+                $targetRow.removeData('mrPromptSaving');
+            }
+        }
+    });
 }
 
 function addItemToGrid($tableBody, item) {
@@ -779,7 +971,7 @@ function renderLookupResults($resultBody, items) {
     items.forEach(function (item) {
         const $tr = $('<tr></tr>');
         $tr.append(`<td>${escapeHtml(item.itemCode || '')}</td>`);
-        $tr.append(`<td class="vni-font">${escapeHtml(item.itemName || '')}</td>`);
+        $tr.append(`<td class="tcvn3-font">${escapeHtml(item.itemName || '')}</td>`);
         $tr.append(`<td>${escapeHtml(item.unit || '')}</td>`);
         $tr.append(`<td class="text-center">${formatLookupNumber(item.inStock)}</td>`);
         $tr.append(`<td><input type="number" min="0.01" step="0.01" class="form-control form-control-sm mr-lookup-order-input" value="${item.orderQty && item.orderQty > 0 ? item.orderQty : 1}"></td>`);

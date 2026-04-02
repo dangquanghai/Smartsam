@@ -797,7 +797,7 @@
             tr.innerHTML = `
                 <td><input type="checkbox" class="create-mr-search-checkbox"></td>
                 <td>${item.itemCode || ''}</td>
-                <td class="vni-font">${item.itemName || ''}</td>
+                <td class="tcvn3-font">${item.itemName || ''}</td>
                 <td>${item.unit || ''}</td>`;
             const orderCell = document.createElement('td');
             orderCell.textContent = Number.isFinite(Number(item.inStock)) ? String(item.inStock || 0) : '0';
@@ -824,7 +824,7 @@
             tr.innerHTML = `
                 <td><input type="checkbox" class="create-mr-selected-checkbox"></td>
                 <td>${item.itemCode || ''}</td>
-                <td class="vni-font">${item.itemName || ''}</td>
+                <td class="tcvn3-font">${item.itemName || ''}</td>
                 <td>${item.unit || ''}</td>`;
             const orderCell = document.createElement('td');
             orderCell.innerHTML = `<input type="number" min="0.01" step="0.01" class="form-control form-control-sm create-mr-order-input" value="${item.orderQty && item.orderQty > 0 ? item.orderQty : 1}">`;

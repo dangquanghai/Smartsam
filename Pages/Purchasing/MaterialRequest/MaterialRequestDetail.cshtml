@@ -160,14 +160,14 @@
                                                 <input type="hidden" class="mr-line-itemcode" value="@line.ItemCode" />
                                             </td>
                                             <td>
-                                                <span class="mr-readonly-cell-text vni-font">@(line.ItemName ?? string.Empty)</span>
+                                                <span class="mr-readonly-cell-text tcvn3-font">@(line.ItemName ?? string.Empty)</span>
                                                 <input type="hidden" class="mr-line-itemname" value="@line.ItemName" />
                                             </td>
                                             <td>
                                                 <span class="mr-readonly-cell-text">@(line.Unit ?? string.Empty)</span>
                                                 <input type="hidden" class="mr-line-unit" value="@line.Unit" />
                                             </td>
-                                            <td><input type="number" min="0.01" step="0.01" class="form-control form-control-sm mr-line-order" value="@(line.OrderQty?.ToString("0.##") ?? "0")" /></td>
+                                            <td><input type="number" min="1" step="1" class="form-control form-control-sm mr-line-order" value="@(line.OrderQty?.ToString("0.##") ?? "0")" /></td>
                                             <td>
                                                 <span class="mr-readonly-cell-text">@(line.NotReceipt?.ToString("0.##") ?? "0")</span>
                                                 <input type="hidden" class="mr-line-notrec" value="@(line.NotReceipt?.ToString("0.##") ?? "0")" />
@@ -181,8 +181,7 @@
                                                 <input type="hidden" class="mr-line-accin" value="@(line.AccIn?.ToString("0.##") ?? "0")" />
                                             </td>
                                             <td>
-                                                <span class="mr-readonly-cell-text mr-line-buy-text">@(line.Buy?.ToString("0.##") ?? "0")</span>
-                                                <input type="hidden" class="mr-line-buy" value="@(line.Buy?.ToString("0.##") ?? "0")" />
+                                                <input type="text" inputmode="decimal" class="form-control form-control-sm mr-line-buy" value="@(line.Buy?.ToString("0.##") ?? "0")" />
                                             </td>
                                             <td>
                                                 <input type="text" class="form-control form-control-sm mr-line-note vni-font" value="@line.Note" />
