@@ -620,6 +620,11 @@ function openTenantModal(mode) {
                 if (info.LastRegDate) $('#txtLastRegDate').val(info.LastRegDate.split('T')[0]);
 
                 $('#ddlArrivalPort').val(info.ArrivalPort || 0);
+                if (info.PermitExpDate) $('#txtPermitExpDate').val(info.EntryDate.split('T')[0]);
+                if (info.ProposeExpDate) $('#txtProposeExpDate').val(info.LastRegDate.split('T')[0]);
+
+                
+
                 $('#txtADCardNo').val(info.A_DCardNo || "");
                 $('#txtSponsor').val(info.Sponsor || "");
                 $('#txtNotes').val(info.Notes || "");
@@ -695,54 +700,70 @@ function createImgItem(doc) {
 }
 
 $('#btnSaveTenantDetail').click(function () {
-    // Thu thập dữ liệu từ các control trong Modal
+    // Hàm phụ để kiểm tra nếu chuỗi rỗng thì trả về null cho Server dễ đọc
+    const cleanDate = (val) => (val && val.trim() !== "") ? val : null;
+    const cleanInt = (val) => {
+        var res = parseInt(val);
+        return isNaN(res) ? 0 : res;
+    };
+
     var tenantData = {
-        ContractID: $('#hfContractID').val(), // Lấy từ hidden field của trang chính
-        TenantID: $('#txtCustomerID').val() || 0,
+        // CỰC KỲ QUAN TRỌNG: Phải có ID này để Server biết Update hay Insert
+        ContractTenantID: cleanInt($('#txtContractTenantID').val()),
+        // Ép kiểu số cho các trường ID/Dropdown
+        ContractID: cleanInt($('#hfContractID').val()),
+        TenantID: cleanInt($('#txtCustomerID').val()),
+
         Title: $('#txtTitle').val(),
         CustomerName: $('#txtCustomerName').val(),
         Male: $('#ddlMale').val() === "true",
-        Birthday: $('#txtBirthday').val(),
-        TenantType: $('#ddlTenantType').val(),
-        Nationality: $('#ddlNationality').val(), // Nếu anh dùng Select2/Dropdown
+        Birthday: cleanDate($('#txtBirthday').val()),
+        TenantType: cleanInt($('#ddlTenantType').val()),
+        Nationality: parseInt($('#ddlNationality').val()) || 0,
         IDPassportNo: $('#txtIDPassportNo').val(),
-        PassportUntilDate: $('#txtPassportUntilDate').val(), 
-
-        Address: $('#txtAddress').val(), // Tên này phải khớp với Class C#
+        PassportUntilDate: cleanDate($('#txtPassportUntilDate').val()),
         Company: $('#txtCompany').val(),
         VATCode: $('#txtVATCode').val(),
+        Address: $('#txtAddress').val(),
 
-        FamilyPos: $('#ddlFamilyPos').val(),
+        FamilyPos: cleanInt($('#ddlFamilyPos').val()),
         IsMoveOut: $('#chkIsMoveOut').is(':checked'),
         VisaNo: $('#txtVisaNo').val(),
+        VisaDate: cleanDate($('#txtVisaDate').val()),
+        VisaExpDate: cleanDate($('#txtVisaExpDate').val()),
+        EntryDate: cleanDate($('#txtEntryDate').val()),
+        ArrivalPort: cleanInt($('#ddlArrivalPort').val()),
 
-        VisaDate: $('#txtVisaDate').val(),
-        VisaExpDate: $('#txtVisaExpDate').val(),
-
-        EntryDate: $('#txtEntryDate').val(),
-        ArrivalPort: $('#ddlArrivalPort').val(),
-
-        A_DCardNo: $('#txtADCardNo').val(),      // Lấy từ input txtADCardNo
-        LastRegDate: $('#txtLastRegDate').val(), // Lấy từ input txtLastRegDate
-
+        PermitExpDate: cleanDate($('#txtPermitExpDate').val()), 
+        ProposeExpDate: cleanDate($('#txtProposeExpDate').val()), 
+        
+        A_DCardNo: $('#txtADCardNo').val(),
+        LastRegDate: cleanDate($('#txtLastRegDate').val()),
+        Sponsor: $('#txtSponsor').val(),
         Notes: $('#txtNotes').val(),
-        Sponsor: $('#txtSponsor').val()
+        
     };
+
+    console.log("Data gửi lên Server:", tenantData); // Anh nhấn F12 để xem dữ liệu có chuẩn không
 
     $.ajax({
         url: '?handler=SaveTenantDetail',
         type: 'POST',
-        contentType: 'application/json',
+        contentType: 'application/json; charset=utf-8',
         headers: { "RequestVerificationToken": $('input[name="__RequestVerificationToken"]').val() },
         data: JSON.stringify(tenantData),
         success: function (res) {
             if (res.success) {
                 alert(res.message);
                 $('#modalTenantDetail').modal('hide');
-                loadTenantsGrid(); // Load lại lưới ở Vùng 3
+                loadTenantsGrid();
             } else {
                 alert("Error: " + res.message);
             }
+        },
+        error: function (xhr) {
+            // Nếu model bị null, nó thường trả về lỗi 400 hoặc 500
+            console.error("Lỗi Ajax:", xhr.responseText);
         }
     });
 });
