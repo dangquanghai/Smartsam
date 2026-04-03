@@ -250,9 +250,12 @@ public class PurchaseRequisitionDetailModel : BasePageModel
         {
             long recordId;
             int mrDetailId;
+            decimal quantity;
 
             using (var loadCmd = new SqlCommand(@"
-SELECT RecordID, MRDetailID
+SELECT RecordID,
+       MRDetailID,
+       ISNULL(Quantity, 0) AS Quantity
 FROM dbo.PC_PRDetail
 WHERE PRID = @PRID
   AND RecordID = @RecordID", conn, trans))
@@ -273,13 +276,16 @@ WHERE PRID = @PRID
                 }
 
                 mrDetailId = Convert.ToInt32(rd["MRDetailID"]);
+                quantity = Convert.ToDecimal(rd["Quantity"]);
             }
 
             using (var updateCmd = new SqlCommand(@"
 UPDATE dbo.MATERIAL_REQUEST_DETAIL
-SET PostedPR = 0
+SET BUY = ISNULL(BUY, 0) + @Quantity,
+    PostedPR = 0
 WHERE ID = @MRDetailID", conn, trans))
             {
+                updateCmd.Parameters.Add("@Quantity", SqlDbType.Decimal).Value = quantity;
                 updateCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = mrDetailId;
                 updateCmd.ExecuteNonQuery();
             }
@@ -991,6 +997,7 @@ ORDER BY SupplierCode";
     {
         var operatorCode = User.Identity?.Name?.Trim() ?? string.Empty;
         var isNew = Requisition.Id <= 0;
+        var consolidatedDetails = ConsolidateDetailsForSave(details);
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
@@ -1084,9 +1091,9 @@ WHERE PRID = @PRID", conn, trans);
                 deleteCmd.ExecuteNonQuery();
             }
 
-            ApplyMaterialRequestBuy(conn, trans, details);
+            ApplyMaterialRequestBuy(conn, trans, consolidatedDetails);
 
-            foreach (var detail in details)
+            foreach (var detail in consolidatedDetails)
             {
                 IndexModel.InsertDetail(conn, trans, Requisition.Id, detail);
             }
@@ -1098,6 +1105,65 @@ WHERE PRID = @PRID", conn, trans);
             trans.Rollback();
             throw;
         }
+    }
+
+    // Gộp các dòng trùng trước khi lưu để DB chỉ giữ một dòng cho cùng item hoặc cùng dòng MR.
+    private static List<PurchaseRequisitionDetailInput> ConsolidateDetailsForSave(IReadOnlyList<PurchaseRequisitionDetailInput> details)
+    {
+        var consolidated = new List<PurchaseRequisitionDetailInput>();
+
+        foreach (var detail in details)
+        {
+            PurchaseRequisitionDetailInput? target;
+            if (detail.MrDetailId.HasValue && detail.MrDetailId.Value > 0)
+            {
+                target = consolidated.FirstOrDefault(x => x.MrDetailId == detail.MrDetailId);
+            }
+            else
+            {
+                target = consolidated.FirstOrDefault(x =>
+                    !x.MrDetailId.HasValue &&
+                    x.ItemId == detail.ItemId &&
+                    x.SupplierId == detail.SupplierId);
+            }
+
+            if (target == null)
+            {
+                consolidated.Add(new PurchaseRequisitionDetailInput
+                {
+                    DetailId = detail.DetailId,
+                    ItemId = detail.ItemId,
+                    ItemCode = detail.ItemCode,
+                    ItemName = detail.ItemName,
+                    Unit = detail.Unit,
+                    QtyFromM = detail.QtyFromM,
+                    QtyPur = detail.QtyPur,
+                    UnitPrice = detail.UnitPrice,
+                    Remark = detail.Remark,
+                    SupplierId = detail.SupplierId,
+                    SupplierText = detail.SupplierText,
+                    MrRequestNo = detail.MrRequestNo,
+                    MrDetailId = detail.MrDetailId
+                });
+                continue;
+            }
+
+            target.QtyPur += detail.QtyPur;
+            target.QtyFromM = Math.Max(target.QtyFromM, detail.QtyFromM);
+            target.UnitPrice = detail.UnitPrice;
+
+            if (string.IsNullOrWhiteSpace(target.Remark) && !string.IsNullOrWhiteSpace(detail.Remark))
+            {
+                target.Remark = detail.Remark;
+            }
+
+            if (string.IsNullOrWhiteSpace(target.MrRequestNo) && !string.IsNullOrWhiteSpace(detail.MrRequestNo))
+            {
+                target.MrRequestNo = detail.MrRequestNo;
+            }
+        }
+
+        return consolidated;
     }
 
     // Xác định EmployeeID của Purchaser để gắn cho PR khi tạo mới chứng từ.

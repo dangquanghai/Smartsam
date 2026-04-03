@@ -73,7 +73,7 @@
             const message = $button.data('confirm-message') || '';
             const kind = $button.data('confirm-kind') || 'primary';
             const supplierName = $('#EditSupplier_SupplierName').val() || '';
-            const messageHtml = `${escapeHtml(message)}<br><br>Supplier: <strong>${escapeHtml(supplierName || 'N/A')}</strong>`;
+            const messageHtml = `${escapeHtml(message)}<br><br>Supplier: <strong class="vni-font">${escapeHtml(supplierName || 'N/A')}</strong>`;
 
             showConfirmModal({
                 title: title,
