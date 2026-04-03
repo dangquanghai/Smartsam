@@ -43,16 +43,16 @@ namespace SmartSam.Services
                 if (isAdmin)
                 {
                     // Nếu là Admin: Lấy tất cả Function có URL, nối với Module
-                    finalSql = @"SELECT m.ModuleName, f.FunctionName, f.Url, f.FunctionID
+                    finalSql = @"SELECT m.ModuleName,m.TheIcon as ModuleIcon, f.FunctionName,f.TheIcon as FunctionIcon, f.Url, f.FunctionID
                                  FROM SYS_Function f
                                  INNER JOIN SYS_Module m ON f.ModuleID = m.ModuleID
                                  WHERE f.Url <> ''
-                                 ORDER BY  m.ModuleID , f.FunctionID ";
+                                 ORDER BY m.ModuleID, f.TheOrder";
                 }
                 else
                 {
                     // Nếu là User thường: Chạy câu SQL phân quyền gốc của bạn
-                    finalSql = @"SELECT m.ModuleName, f.FunctionName, f.Url, f.FunctionID
+                    finalSql = @"SELECT m.ModuleName, m.TheIcon as ModuleIcon,f.FunctionName, f.TheIcon as FunctionIcon, f.Url, f.FunctionID
                                  FROM SYS_RoleMember rm
                                  INNER JOIN SYS_Role r ON rm.RoleID = r.RoleID 
                                  INNER JOIN SYS_RolePermission rp ON r.RoleID = rp.RoleID 
@@ -61,9 +61,9 @@ namespace SmartSam.Services
                                  INNER JOIN SYS_Module m ON f.ModuleID = m.ModuleID 
                                  INNER JOIN MS_Employee e ON rm.Operator = e.EmployeeID
                                  WHERE fp.PermissionNo = 1 
-                                   AND f.Url <> '' 
-                                   AND e.EmployeeCode = @EmpCode
-                                 ORDER BY m.ModuleName, f.FunctionName";
+                                 AND f.Url <> '' 
+                                 AND e.EmployeeCode = @EmpCode
+                                 ORDER BY m.ModuleID, f.TheOrder";
                 }
 
                 // 3. THỰC THI LẤY DỮ LIỆU MENU
@@ -77,9 +77,12 @@ namespace SmartSam.Services
                         menus.Add(new UserMenuDto
                         {
                             ModuleName = reader["ModuleName"].ToString(),
+                            ModuleIcon = reader["ModuleIcon"].ToString(),
                             FunctionName = reader["FunctionName"].ToString(),
+                            FunctionIcon = reader["FunctionIcon"].ToString(),
                             Url = reader["Url"].ToString(),
                             FunctionID = reader["FunctionID"].ToString()
+
                         });
                     }
                 }

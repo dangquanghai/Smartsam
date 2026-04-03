@@ -2,7 +2,6 @@
 @using System.Linq
 
 @{
-    // Lấy URL hiện tại để xử lý trạng thái Active
     var currentPath = ViewContext.HttpContext.Request.Path.Value ?? "";
 }
 
@@ -10,12 +9,18 @@
 
     @foreach (var moduleGroup in Model.GroupBy(x => x.ModuleName))
     {
-        // Kiểm tra xem trong module này có trang con nào đang được mở không
+        // Lấy thông tin module từ bản ghi đầu tiên trong nhóm
+        var firstItem = moduleGroup.First();
+
+        // Nếu database trống ModuleIcon, dùng mặc định 'fas fa-folder'
+        var mIcon = string.IsNullOrEmpty(firstItem.ModuleIcon) ? "fas fa-folder" : firstItem.ModuleIcon;
+
         var isModuleActive = moduleGroup.Any(f => currentPath.StartsWith(f.Url, StringComparison.OrdinalIgnoreCase));
 
         <li class="nav-item @(isModuleActive ? "menu-open" : "")">
             <a href="#" class="nav-link @(isModuleActive ? "active" : "")">
-                <i class="nav-icon fas fa-folder"></i>
+                @* Hiển thị Icon của Module từ DB *@
+                <i class="nav-icon @mIcon"></i>
                 <p>
                     @moduleGroup.Key
                     <i class="right fas fa-angle-left"></i>
@@ -27,9 +32,13 @@
                 {
                     var isFunctionActive = currentPath.Equals(function.Url, StringComparison.OrdinalIgnoreCase);
 
+                    // Nếu database trống FunctionIcon, dùng mặc định 'far fa-circle' cho thanh thoát
+                    var fIcon = string.IsNullOrEmpty(function.FunctionIcon) ? "far fa-circle" : function.FunctionIcon;
+
                     <li class="nav-item">
                         <a href="@function.Url" class="nav-link @(isFunctionActive ? "active" : "")">
-                            <i class="far fa-circle nav-icon"></i>
+                            @* Hiển thị Icon của Function từ DB *@
+                            <i class="@fIcon nav-icon"></i>
                             <p>@function.FunctionName</p>
                         </a>
                     </li>
