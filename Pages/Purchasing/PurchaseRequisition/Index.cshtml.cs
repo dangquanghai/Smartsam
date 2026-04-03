@@ -1614,9 +1614,15 @@ public class PurchaseRequisitionExportHeader
 public class PurchaseRequisitionItemLookup
 {
     public int Id { get; set; }
+    public string RequestNo { get; set; } = string.Empty;
     public string ItemCode { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
     public string Unit { get; set; } = string.Empty;
+    public decimal Buy { get; set; }
+    public decimal UnitPrice { get; set; }
+    public string Specification { get; set; } = string.Empty;
+    public string Note { get; set; } = string.Empty;
+    public int? MrDetailId { get; set; }
 }
 
 public class PurchaseRequisitionSupplierLookup

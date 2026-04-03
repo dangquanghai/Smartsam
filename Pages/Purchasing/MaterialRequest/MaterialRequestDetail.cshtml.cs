@@ -359,6 +359,71 @@ public class MaterialRequestDetailModel : BasePageModel
         return await HandleCalculateAsync(cancellationToken);
     }
 
+    public async Task<IActionResult> OnPostSavePurchaserLines(CancellationToken cancellationToken)
+    {
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
+        PagePerm = new PagePermissions();
+        PagePerm = GetUserPermissions();
+        await LoadUserScopeAsync(cancellationToken);
+        if (!CanAccessPage())
+        {
+            return IsAjaxRequest()
+                ? new JsonResult(new { success = false, message = "Access denied." }) { StatusCode = StatusCodes.Status403Forbidden }
+                : Forbid();
+        }
+
+        if (!IsEdit)
+        {
+            return new JsonResult(new { success = false, message = "Please save Material Request first." });
+        }
+
+        var existing = await _materialRequestService.GetDetailAsync(Id!.Value, cancellationToken);
+        if (existing is null)
+        {
+            return new JsonResult(new { success = false, message = "Material Request not found." }) { StatusCode = StatusCodes.Status404NotFound };
+        }
+
+        var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
+        if (!ShouldPreserveEditableBuy(currentStatus))
+        {
+            return new JsonResult(new { success = false, message = "You cannot edit Buy/Note at current status." })
+            {
+                StatusCode = StatusCodes.Status403Forbidden
+            };
+        }
+
+        var lines = ResolvePostedLines();
+        if (lines.Count == 0)
+        {
+            lines = (await _materialRequestService.GetLinesAsync(Id!.Value, cancellationToken)).ToList();
+        }
+
+        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken, preserveEditableBuy: true);
+
+        try
+        {
+            var savedNo = await _materialRequestService.SaveAsync(Id, CloneHeader(existing), lines, cancellationToken);
+            return new JsonResult(new
+            {
+                success = true,
+                requestNo = savedNo,
+                message = "Buy/Note changes saved."
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[MaterialRequest][SavePurchaserLines] {ex}");
+            return new JsonResult(new
+            {
+                success = false,
+                message = ex is InvalidOperationException ? ex.Message : $"Cannot save Buy/Note changes. {ex.Message}"
+            })
+            {
+                StatusCode = StatusCodes.Status500InternalServerError
+            };
+        }
+    }
+
     public Task<IActionResult> OnPostIssue(CancellationToken cancellationToken)
     {
         WarningMessage = "Issue is handled in another business flow and is not available in Material Request.";
@@ -444,7 +509,7 @@ public class MaterialRequestDetailModel : BasePageModel
             lines = (await _materialRequestService.GetLinesAsync(Id!.Value, cancellationToken)).ToList();
         }
 
-        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken);
+        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken, preserveEditableBuy: ShouldPreserveEditableBuy(currentStatus));
 
         if (action == MaterialRequestWorkflowAction.Submit)
         {
@@ -597,7 +662,7 @@ public class MaterialRequestDetailModel : BasePageModel
             lines = (await _materialRequestService.GetLinesAsync(Id!.Value, cancellationToken)).ToList();
         }
 
-        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken);
+        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken, preserveEditableBuy: ShouldPreserveEditableBuy(currentStatus));
 
         var storeGroup = existing.StoreGroup ?? Input.StoreGroup ?? _dataScope.StoreGroup;
         if (!storeGroup.HasValue)
@@ -804,7 +869,11 @@ public class MaterialRequestDetailModel : BasePageModel
         return NormalizeLines(Lines);
     }
 
-    private async Task ApplyReadonlyLineRulesAsync(List<MaterialRequestLineDto> lines, long? requestNo, CancellationToken cancellationToken)
+    private async Task ApplyReadonlyLineRulesAsync(
+        List<MaterialRequestLineDto> lines,
+        long? requestNo,
+        CancellationToken cancellationToken,
+        bool preserveEditableBuy = false)
     {
         if (lines.Count == 0)
         {
@@ -840,7 +909,10 @@ public class MaterialRequestDetailModel : BasePageModel
                 line.NotReceipt = snapshot.NotReceipt;
                 line.InStock = snapshot.InStock;
                 line.AccIn = snapshot.AccIn;
-                line.Buy = snapshot.Buy;
+                if (!preserveEditableBuy)
+                {
+                    line.Buy = snapshot.Buy;
+                }
                 line.Unit = snapshot.Unit;
             }
             else
@@ -848,7 +920,10 @@ public class MaterialRequestDetailModel : BasePageModel
                 line.NotReceipt = 0m;
                 line.InStock = 0m;
                 line.AccIn = 0m;
-                line.Buy = 0m;
+                if (!preserveEditableBuy)
+                {
+                    line.Buy = 0m;
+                }
             }
 
             if (itemUnits.TryGetValue(itemCode, out var unitFromMaster) && !string.IsNullOrWhiteSpace(unitFromMaster))
@@ -917,6 +992,11 @@ public class MaterialRequestDetailModel : BasePageModel
             "create-new-item" => "New item created and saved.",
             _ => "Line changes saved."
         };
+    }
+
+    private bool ShouldPreserveEditableBuy(int currentStatus)
+    {
+        return currentStatus == StatusHeadDeptApproved && (IsAdminUser() || _dataScope.IsPurchaser);
     }
 
     private bool IsAjaxRequest()

@@ -716,6 +716,46 @@
     accent-color: #0d6efd;
 }
 
+#mrLineTable {
+    table-layout: fixed;
+}
+
+#mrLineTable .mr-col-itemcode {
+    width: 110px;
+}
+
+#mrLineTable .mr-col-itemname {
+    width: 180px;
+}
+
+#mrLineTable .mr-col-unit {
+    width: 60px;
+}
+
+#mrLineTable .mr-col-order {
+    width: 76px;
+}
+
+#mrLineTable .mr-col-notrec {
+    width: 76px;
+}
+
+#mrLineTable .mr-col-in {
+    width: 76px;
+}
+
+#mrLineTable .mr-col-accin {
+    width: 76px;
+}
+
+#mrLineTable .mr-col-buy {
+    width: 76px;
+}
+
+#mrLineTable .mr-col-note {
+    width: 260px;
+}
+
 .mr-item-lookup-toolbar .form-group {
     min-width: 0;
 }

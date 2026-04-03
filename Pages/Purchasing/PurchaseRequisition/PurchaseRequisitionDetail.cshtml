@@ -38,7 +38,7 @@
                         </div>
                         <div class="col-lg-3 col-md-6 prq-detail-form-col">
                             <label class="prq-detail-label">Date<span class="required-mark">*</span></label>
-                            <input asp-for="Requisition.RequestDate" type="date" class="form-control form-control-sm" readonly="@(Model.IsViewMode ? "readonly" : null)" />
+                            <input asp-for="Requisition.RequestDate" type="date" class="form-control form-control-sm" readonly />
                         </div>
                         <div class="col-lg-3 col-md-6 prq-detail-form-col">
                             <label class="prq-detail-label">Status</label>
@@ -46,7 +46,7 @@
                         </div>
                         <div class="col-lg-3 col-md-6 prq-detail-form-col">
                             <label class="prq-detail-label">Currency<span class="required-mark">*</span></label>
-                            <select asp-for="Requisition.Currency" class="form-control form-control-sm" disabled>
+                            <select asp-for="Requisition.Currency" id="prqCurrencySelect" class="form-control form-control-sm" disabled="@Model.IsViewMode">
                                 <option value="1">VND</option>
                             </select>
                         </div>
@@ -87,7 +87,7 @@
                                 <i class="fas fa-undo"></i> CST New
                             </button>
                         }
-                        <label>Total Amount: @Model.TotalAmount.ToString("#,##0.00")</label>
+                        <label>Total Amount: <span id="prqTotalAmount">@Model.TotalAmount.ToString("#,##0.###")</span> <span id="prqTotalAmountCurrency">VND</span></label>
                     </div>
 
                     <div class="table-responsive prq-detail-table-wrap">
@@ -131,7 +131,7 @@
                                 <i class="fas fa-reply"></i> To MR
                             </button>
                         }
-                        @if (Model.CanManageAttachments)
+                        @if (Model.Requisition.Id > 0)
                         {
                             <button type="button" class="btn btn-sm btn-action-secondary border mr-2 mb-2" data-toggle="modal" data-target="#prqAttachmentModal">
                                 <i class="fas fa-paperclip"></i> Attached Files
@@ -148,7 +148,7 @@
 @if (Model.CanSave)
 {
     <div class="modal fade" id="prqAddDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
-        <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-dialog modal-xl" role="document">
             <div class="modal-content">
                 <div class="modal-header py-2">
                     <h5 class="modal-title">Add Detail</h5>
@@ -158,30 +158,50 @@
                 </div>
                 <div class="modal-body pb-2">
                     <div id="detailAddError" class="text-danger small mb-2" style="display:none;"></div>
-                    <div class="table-responsive prq-add-detail-table-wrap">
-                        <table class="table table-sm table-bordered table-hover mb-0" id="prqAddDetailTable">
+                    <div class="table-responsive prq-add-at-table-wrap prq-add-detail-table-wrap">
+                        <table class="table table-sm table-bordered table-hover mb-0 text-nowrap" id="prqAddDetailTable">
                             <thead class="thead-light">
                                 <tr>
-                                    <th style="width:50px;" class="prq-center">Check</th>
+                                    <th style="width:70px;">Check</th>
+                                    <th style="width:110px;">RequestNo</th>
                                     <th style="width:140px;">Item Code</th>
                                     <th>Item Name</th>
+                                    <th style="width:90px;" class="prq-center">BUY</th>
+                                    <th style="width:110px;" class="prq-center">SugBuy<span class="required-mark">*</span></th>
                                     <th style="width:90px;" class="prq-center">Unit</th>
-                                    <th style="width:110px;" class="prq-center">SubQty<span class="required-mark">*</span></th>
+                                    <th style="width:100px;" class="prq-center">U.Price</th>
+                                    <th style="width:180px;">Specification</th>
+                                    <th style="width:210px;">Note</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach (var item in Model.ItemList)
                                 {
-                                    <tr data-add-detail-row="1" data-item-id="@item.Id" data-item-code="@item.ItemCode" data-item-name="@item.ItemName" data-unit="@item.Unit">
+                                    <tr data-add-detail-row="1"
+                                        data-item-id="@item.Id"
+                                        data-item-code="@item.ItemCode"
+                                        data-item-name="@item.ItemName"
+                                        data-request-no="@item.RequestNo"
+                                        data-buy="@item.Buy"
+                                        data-unit="@item.Unit"
+                                        data-unit-price="@item.UnitPrice"
+                                        data-specification="@item.Specification"
+                                        data-note="@item.Note"
+                                        data-mr-detail-id="@item.MrDetailId">
                                         <td class="prq-center">
                                             <input type="checkbox" class="prq-add-detail-check" />
                                         </td>
+                                        <td>@item.RequestNo</td>
                                         <td>@item.ItemCode</td>
                                         <td>@item.ItemName</td>
-                                        <td class="prq-center">@item.Unit</td>
+                                        <td class="prq-center">@item.Buy.ToString("0.###")</td>
                                         <td class="prq-center">
-                                            <input type="text" inputmode="decimal" class="form-control form-control-sm prq-add-detail-subqty" value="0" />
+                                            <input type="text" inputmode="decimal" class="form-control form-control-sm prq-add-detail-subqty" value="@item.Buy.ToString("0.###")" />
                                         </td>
+                                        <td class="prq-center">@item.Unit</td>
+                                        <td class="prq-center">@item.UnitPrice.ToString("0.###")</td>
+                                        <td class="prq-add-at-text-cell prq-add-detail-specification"></td>
+                                        <td class="prq-add-at-text-cell prq-add-detail-note"></td>
                                     </tr>
                                 }
                             </tbody>
@@ -201,7 +221,7 @@
     </div>
 }
 
-@if (Model.CanManageAttachments)
+@if (Model.Requisition.Id > 0)
 {
     <div class="modal fade" id="prqAttachmentModal" tabindex="-1" role="dialog" aria-hidden="true">
         <div class="modal-dialog modal-lg" role="document">
@@ -239,12 +259,15 @@
                                             <td>@attachment.UploadDate?.ToString("dd/MM/yyyy HH:mm")</td>
                                             <td>@attachment.UserCode</td>
                                             <td class="text-center">
-                                                <form method="post" action="@Url.Page("./PurchaseRequisitionDetail", "DeleteAttachment", new { id = Model.Requisition.Id, mode = Model.Mode, docId = attachment.DocId })">
-                                                    @Html.AntiForgeryToken()
-                                                    <button type="submit" class="btn btn-sm btn-action-disapprove border px-2" formnovalidate>
-                                                        <i class="fas fa-trash"></i>
-                                                    </button>
-                                                </form>
+                                                @if (Model.CanManageAttachments)
+                                                {
+                                                    <form method="post" action="@Url.Page("./PurchaseRequisitionDetail", "DeleteAttachment", new { id = Model.Requisition.Id, mode = Model.Mode, docId = attachment.DocId })">
+                                                        @Html.AntiForgeryToken()
+                                                        <button type="submit" class="btn btn-sm btn-action-disapprove border px-2" formnovalidate>
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </form>
+                                                }
                                             </td>
                                         </tr>
                                     }
@@ -287,6 +310,7 @@
         window.purchaseRequisitionDetailPage = {
             canSave: @(Model.CanSave ? "true" : "false"),
             canMoveToMr: @(Model.CanMoveToMr ? "true" : "false"),
+            canSelectDetail: @(Model.CanMoveToMr ? "true" : "false"),
             allowedAttachmentExtensions: "@Model.AllowedAttachmentExtensionsText",
             maxAttachmentSizeMb: @Model.MaxAttachmentSizeMb
         };

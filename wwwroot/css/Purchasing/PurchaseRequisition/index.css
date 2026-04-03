@@ -189,6 +189,15 @@
     background: #f8f9fa;
 }
 
+.prq-add-at-table-wrap tbody tr,
+.prq-add-at-table-wrap tbody tr > td {
+    cursor: default;
+}
+
+.prq-add-at-table-wrap .prq-add-at-check {
+    cursor: pointer;
+}
+
 .prq-add-at-text-cell {
     white-space: normal !important;
     word-break: break-word;

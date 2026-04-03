@@ -35,6 +35,10 @@
     overflow: auto;
 }
 
+#prqAddDetailModal .modal-dialog {
+    max-width: 1140px;
+}
+
 .prq-detail-table-wrap thead th {
     position: sticky;
     top: 0;
@@ -47,6 +51,15 @@
     top: 0;
     z-index: 3;
     background: #f8f9fa;
+}
+
+.prq-add-detail-table-wrap tbody tr,
+.prq-add-detail-table-wrap tbody tr > td {
+    cursor: default;
+}
+
+.prq-add-detail-table-wrap .prq-add-detail-check {
+    cursor: pointer;
 }
 
 .prq-center {
@@ -70,6 +83,32 @@
 
 .prq-detail-row-unsaved {
     background-color: #eef7ff;
+}
+
+.prq-description-cell {
+    white-space: normal !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+}
+
+.prq-description-preview,
+.prq-description-full {
+    white-space: normal !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+.prq-read-more {
+    font-size: inherit;
+    margin-left: 0.35rem;
+    vertical-align: baseline;
+    color: #007bff;
+    background: none;
+    border: 0;
+    padding: 0;
+    text-decoration: underline;
+    cursor: pointer;
 }
 
 .text-transparent {
