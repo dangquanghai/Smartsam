@@ -281,8 +281,9 @@ public class MaterialRequestDetailModel : BasePageModel
             return Forbid();
         }
 
+        var isAutoRequest = IsEdit && existing?.IsAuto == true;
         var lines = ResolvePostedLines();
-        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken);
+        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken, preserveReadonlyOrder: isAutoRequest);
 
         if (!ModelState.IsValid)
         {
@@ -398,7 +399,7 @@ public class MaterialRequestDetailModel : BasePageModel
             lines = (await _materialRequestService.GetLinesAsync(Id!.Value, cancellationToken)).ToList();
         }
 
-        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken, preserveEditableBuy: true);
+        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken, preserveEditableBuy: true, preserveReadonlyOrder: existing.IsAuto, preserveEditableNote: true);
 
         try
         {
@@ -509,7 +510,13 @@ public class MaterialRequestDetailModel : BasePageModel
             lines = (await _materialRequestService.GetLinesAsync(Id!.Value, cancellationToken)).ToList();
         }
 
-        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken, preserveEditableBuy: ShouldPreserveEditableBuy(currentStatus));
+        await ApplyReadonlyLineRulesAsync(
+            lines,
+            Id,
+            cancellationToken,
+            preserveEditableBuy: ShouldPreserveEditableBuy(currentStatus),
+            preserveReadonlyOrder: isAuto,
+            preserveEditableNote: ShouldPreserveEditableBuy(currentStatus));
 
         if (action == MaterialRequestWorkflowAction.Submit)
         {
@@ -594,7 +601,7 @@ public class MaterialRequestDetailModel : BasePageModel
             lines = (await _materialRequestService.GetLinesAsync(Id!.Value, cancellationToken)).ToList();
         }
 
-        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken);
+        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken, preserveReadonlyOrder: isAuto);
 
         try
         {
@@ -662,7 +669,13 @@ public class MaterialRequestDetailModel : BasePageModel
             lines = (await _materialRequestService.GetLinesAsync(Id!.Value, cancellationToken)).ToList();
         }
 
-        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken, preserveEditableBuy: ShouldPreserveEditableBuy(currentStatus));
+        await ApplyReadonlyLineRulesAsync(
+            lines,
+            Id,
+            cancellationToken,
+            preserveEditableBuy: ShouldPreserveEditableBuy(currentStatus),
+            preserveReadonlyOrder: existing.IsAuto,
+            preserveEditableNote: ShouldPreserveEditableBuy(currentStatus));
 
         var storeGroup = existing.StoreGroup ?? Input.StoreGroup ?? _dataScope.StoreGroup;
         if (!storeGroup.HasValue)
@@ -873,7 +886,9 @@ public class MaterialRequestDetailModel : BasePageModel
         List<MaterialRequestLineDto> lines,
         long? requestNo,
         CancellationToken cancellationToken,
-        bool preserveEditableBuy = false)
+        bool preserveEditableBuy = false,
+        bool preserveReadonlyOrder = false,
+        bool preserveEditableNote = false)
     {
         if (lines.Count == 0)
         {
@@ -906,12 +921,20 @@ public class MaterialRequestDetailModel : BasePageModel
 
             if (existingSnapshots.TryGetValue(itemCode, out var snapshot))
             {
+                if (preserveReadonlyOrder)
+                {
+                    line.OrderQty = snapshot.OrderQty;
+                }
                 line.NotReceipt = snapshot.NotReceipt;
                 line.InStock = snapshot.InStock;
                 line.AccIn = snapshot.AccIn;
                 if (!preserveEditableBuy)
                 {
                     line.Buy = snapshot.Buy;
+                }
+                if (!preserveEditableNote)
+                {
+                    line.Note = snapshot.Note;
                 }
                 line.Unit = snapshot.Unit;
             }
@@ -923,6 +946,10 @@ public class MaterialRequestDetailModel : BasePageModel
                 if (!preserveEditableBuy)
                 {
                     line.Buy = 0m;
+                }
+                if (!preserveEditableNote)
+                {
+                    line.Note = string.Empty;
                 }
             }
 
@@ -1347,13 +1374,13 @@ public class MaterialRequestDetailModel : BasePageModel
             : $"{Request.Scheme}://{Request.Host}{detailUrl}";
         var body = $@"
         <p>Dear {{RECIPIENT_LABEL}},</p>
-        <p>Material Request <b>{WebUtility.HtmlEncode(requestNo)}</b> {WebUtility.HtmlEncode(actionText)}</p>
+        <p>Material Request <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(requestNo)}</span></b> <span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(actionText)}</span></p>
         <ul>
-        <li>Request No: <b>{WebUtility.HtmlEncode(requestNo)}</b></li>
+        <li>Request No: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(requestNo)}</span></b></li>
         <li>Date: <b>{header.DateCreate:dd/MM/yyyy}</b></li>
-        <li>Store Group: <b>{WebUtility.HtmlEncode(storeGroupText)}</b></li>
-        <li>According To: <b>{WebUtility.HtmlEncode(header.AccordingTo ?? string.Empty)}</b></li>
-        <li>Step: <b>{WebUtility.HtmlEncode(stepLabel)}</b></li>
+        <li>Store Group: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(storeGroupText)}</span></b></li>
+        <li>According To: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(header.AccordingTo ?? string.Empty)}</span></b></li>
+        <li>Step: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(stepLabel)}</span></b></li>
         </ul>
         {(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Material Request Detail</a></p>")}
         <p>SmartSam System</p>";
