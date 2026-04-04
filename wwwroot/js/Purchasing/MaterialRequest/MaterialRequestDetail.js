@@ -173,6 +173,9 @@ function initializePage(mode, currentStatusId, actionPerm) {
     const enableOrderFields = showEditActions && !isAutoRequest;
     const enableBuyAndNoteFields = showCalculateAction;
 
+    $form.data('mr-enable-order-fields', enableOrderFields);
+    $form.data('mr-enable-buy-note-fields', enableBuyAndNoteFields);
+
     // Use the clicked button submit
     $('#addMrLineBtn, #removeMrLineBtn, #createNewItemBtn')
         .toggle(showEditActions)
@@ -809,6 +812,17 @@ function addItemToGrid($tableBody, item) {
     }
 
     $tableBody.append(createLineRowHtml(item));
+    const $newRow = $tableBody.find('.mr-line-row').last();
+    const $form = $tableBody.closest('form');
+    const enableOrderFields = toBoolData($form.data('mr-enable-order-fields'));
+    const enableBuyAndNoteFields = toBoolData($form.data('mr-enable-buy-note-fields'));
+
+    $newRow.find('.mr-line-order').prop('disabled', !enableOrderFields);
+    $newRow.find('.mr-line-buy, .mr-line-note').prop('disabled', !enableBuyAndNoteFields);
+    if (enableBuyAndNoteFields) {
+        storePurchaserEditableSnapshot($newRow);
+    }
+
     syncEmptyRow($tableBody);
     syncLineInputNames($tableBody);
     refreshLineIndexes($tableBody);

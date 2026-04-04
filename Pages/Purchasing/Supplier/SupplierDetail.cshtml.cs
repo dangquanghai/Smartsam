@@ -1173,9 +1173,9 @@ namespace SmartSam.Pages.Purchasing.Supplier
 <p>Dear {{RECIPIENT_LABEL}},</p>
 <p>A new supplier has just been <b>submitted</b> and is waiting for your approval.</p>
 <ul>
-  <li>Supplier Code: <b>{WebUtility.HtmlEncode(supplierCode)}</b></li>
-  <li>Supplier Name: <b>{WebUtility.HtmlEncode(supplierName)}</b></li>
-  <li>Submitted by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
+  <li>Supplier Code: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(supplierCode)}</span></b></li>
+  <li>Supplier Name: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(supplierName)}</span></b></li>
+  <li>Submitted by: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(operatorCode)}</span></b></li>
   <li>Submit time: <b>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</b></li>
 </ul>
 {(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Approve Supplier New</a></p>")}
