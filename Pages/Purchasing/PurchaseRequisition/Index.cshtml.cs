@@ -23,6 +23,7 @@ public class IndexModel : BasePageModel
     private const int PermissionAdd = 3;
     private const int PermissionEdit = 4;
     private const int PermissionDisapproval = 6;
+    private const int PermissionChangeStatus = 6;
     private readonly ILogger<IndexModel> _logger;
     private readonly PermissionService _permissionService;
     private readonly ISecurityService _securityService;
@@ -62,7 +63,7 @@ public class IndexModel : BasePageModel
     public byte AddAtCurrencyId { get; set; } = 1;
 
     [BindProperty]
-    public IFormFile? AddAtAttachment { get; set; }
+    public List<IFormFile> AddAtAttachments { get; set; } = new List<IFormFile>();
 
     [TempData]
     public string? Message { get; set; }
@@ -87,10 +88,13 @@ public class IndexModel : BasePageModel
     public bool HasPreviousPage => Filter.Page > 1;
     public bool HasNextPage => Filter.Page < TotalPages;
 
+    private PurchaseRequisitionWorkflowUserInfo _workflowUser = new PurchaseRequisitionWorkflowUserInfo();
+
     // Xử lý tải dữ liệu ban đầu của màn hình.
     public IActionResult OnGet()
     {
         PagePerm = GetUserPermissions();
+        LoadCurrentWorkflowUser();
         LoadPageActions();
         if (!HasPermission(PermissionViewList))
         {
@@ -113,6 +117,7 @@ public class IndexModel : BasePageModel
         {
             // 1. Lấy quyền thực tế của role đang đăng nhập
             PagePerm = GetUserPermissions();
+            LoadCurrentWorkflowUser();
             LoadPageActions();
             if (!HasPermission(PermissionViewList))
             {
@@ -150,6 +155,7 @@ public class IndexModel : BasePageModel
     public IActionResult OnPostAddAt()
     {
         PagePerm = GetUserPermissions();
+        LoadCurrentWorkflowUser();
         LoadPageActions();
         if (!CanAddAt)
         {
@@ -161,6 +167,11 @@ public class IndexModel : BasePageModel
         NormalizeFilter();
 
         var details = ParseAddAtSourceRows();
+
+        if (string.IsNullOrWhiteSpace(AddAtDescription))
+        {
+            ModelState.AddModelError(string.Empty, "Description is required.");
+        }
 
         if (details.Count == 0)
         {
@@ -205,6 +216,7 @@ public class IndexModel : BasePageModel
     public IActionResult OnGetAddAtSource()
     {
         PagePerm = GetUserPermissions();
+        LoadCurrentWorkflowUser();
         LoadPageActions();
         if (!CanAddAt)
         {
@@ -240,6 +252,7 @@ public class IndexModel : BasePageModel
     public IActionResult OnGetExportExcel()
     {
         PagePerm = GetUserPermissions();
+        LoadCurrentWorkflowUser();
         if (!HasPermission(PermissionViewList))
         {
             return Redirect("/");
@@ -918,9 +931,9 @@ VALUES
                 UpdateMaterialRequestAfterAddAt(conn, trans, detail);
             }
 
-            if (AddAtAttachment != null)
+            foreach (var attachment in AddAtAttachments.Where(file => file != null && file.Length > 0))
             {
-                SaveAddAtAttachment(conn, trans, newPrId, purchaserId, AddAtAttachment, savedFilePaths);
+                SaveAddAtAttachment(conn, trans, newPrId, purchaserId, attachment, savedFilePaths);
             }
 
             trans.Commit();
@@ -1138,22 +1151,27 @@ VALUES
     // Cập nhật ngược lại dữ liệu MR sau khi một dòng đã được gom vào PR.
     private static void UpdateMaterialRequestAfterAddAt(SqlConnection conn, SqlTransaction trans, PurchaseRequisitionAddAtSourceRow detail)
     {
-        using var updateCmd = new SqlCommand(@"
+        var remainBuy = detail.Buy - detail.SugBuy;
+        if (detail.SugBuy < detail.Buy)
+        {
+            using var updateCmd = new SqlCommand(@"
 UPDATE dbo.MATERIAL_REQUEST_DETAIL
-SET BUY = @RemainBuy,
-    PostedPR = @PostedPR
+SET BUY = @RemainBuy
 WHERE ID = @MRDetailID", conn, trans);
 
-        var remainBuy = detail.Buy - detail.SugBuy;
-        if (remainBuy < 0)
-        {
-            remainBuy = 0;
+            updateCmd.Parameters.Add("@RemainBuy", SqlDbType.Decimal).Value = remainBuy < 0 ? 0 : remainBuy;
+            updateCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = detail.MrDetailId;
+            updateCmd.ExecuteNonQuery();
+            return;
         }
 
-        updateCmd.Parameters.Add("@RemainBuy", SqlDbType.Decimal).Value = remainBuy;
-        updateCmd.Parameters.Add("@PostedPR", SqlDbType.Bit).Value = remainBuy <= 0;
-        updateCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = detail.MrDetailId;
-        updateCmd.ExecuteNonQuery();
+        using var postedCmd = new SqlCommand(@"
+UPDATE dbo.MATERIAL_REQUEST_DETAIL
+SET PostedPR = 1
+WHERE ID = @MRDetailID", conn, trans);
+
+        postedCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = detail.MrDetailId;
+        postedCmd.ExecuteNonQuery();
     }
 
     internal static void BindSearchParams(SqlCommand cmd, PurchaseRequisitionFilter filter)
@@ -1409,11 +1427,6 @@ WHERE ID = @MRDetailID", conn, trans);
             ModelState.AddModelError(string.Empty, $"Row {rowNo}: SugBuy must be greater than 0.");
         }
 
-        if (detail.SugBuy > detail.Buy)
-        {
-            ModelState.AddModelError(string.Empty, $"Row {rowNo}: SugBuy cannot be greater than BUY.");
-        }
-
         if (detail.Buy < 0 || detail.UnitPrice < 0)
         {
             ModelState.AddModelError(string.Empty, $"Row {rowNo}: BUY and UnitPrice must be valid numbers.");
@@ -1428,7 +1441,7 @@ WHERE ID = @MRDetailID", conn, trans);
     // Kiểm tra loại file và dung lượng file đính kèm theo cấu hình trong appsettings.json.
     private void ValidateAddAtAttachment()
     {
-        if (AddAtAttachment == null || AddAtAttachment.Length <= 0)
+        if (AddAtAttachments == null || AddAtAttachments.Count == 0)
         {
             return;
         }
@@ -1438,16 +1451,19 @@ WHERE ID = @MRDetailID", conn, trans);
             .Select(x => x.StartsWith('.') ? x.ToLowerInvariant() : $".{x.ToLowerInvariant()}")
             .ToHashSet();
 
-        var fileExtension = Path.GetExtension(AddAtAttachment.FileName)?.ToLowerInvariant() ?? string.Empty;
-        if (allowedExtensions.Count > 0 && !allowedExtensions.Contains(fileExtension))
-        {
-            ModelState.AddModelError(string.Empty, $"Attachment file type is invalid. Allowed types: {string.Join(", ", allowedExtensions)}.");
-        }
-
         var maxFileSizeBytes = MaxAttachmentSizeMb * 1024 * 1024L;
-        if (maxFileSizeBytes > 0 && AddAtAttachment.Length > maxFileSizeBytes)
+        foreach (var attachment in AddAtAttachments.Where(file => file != null && file.Length > 0))
         {
-            ModelState.AddModelError(string.Empty, $"Attachment size cannot exceed {MaxAttachmentSizeMb} MB.");
+            var fileExtension = Path.GetExtension(attachment.FileName)?.ToLowerInvariant() ?? string.Empty;
+            if (allowedExtensions.Count > 0 && !allowedExtensions.Contains(fileExtension))
+            {
+                ModelState.AddModelError(string.Empty, $"Attachment file type is invalid for '{attachment.FileName}'. Allowed types: {string.Join(", ", allowedExtensions)}.");
+            }
+
+            if (maxFileSizeBytes > 0 && attachment.Length > maxFileSizeBytes)
+            {
+                ModelState.AddModelError(string.Empty, $"Attachment '{attachment.FileName}' size cannot exceed {MaxAttachmentSizeMb} MB.");
+            }
         }
     }
 
@@ -1518,7 +1534,18 @@ WHERE ID = @MRDetailID", conn, trans);
     // Thực hiện xử lý cho hàm CanEditRow theo nghiệp vụ của màn hình.
     public bool CanEditRow(byte? statusId)
     {
-        return statusId.HasValue && GetEffectivePermissionsByStatus(statusId.Value).Contains(PermissionEdit);
+        if (!statusId.HasValue)
+        {
+            return false;
+        }
+
+        var effectivePermissions = GetEffectivePermissionsByStatus(statusId.Value);
+        return statusId.Value switch
+        {
+            1 => effectivePermissions.Contains(PermissionEdit),
+            3 => effectivePermissions.Contains(PermissionChangeStatus) && IsWorkflowActor(),
+            _ => false
+        };
     }
 
     // Thực hiện xử lý cho hàm CanViewDetailRow theo nghiệp vụ của màn hình.
@@ -1528,6 +1555,50 @@ WHERE ID = @MRDetailID", conn, trans);
     }
 
     private bool HasPermission(int permissionNo) => PagePerm.HasPermission(permissionNo);
+
+    // Nạp vai trò workflow hiện tại để danh sách cũng xác định đúng row nào được mở mode=edit.
+    private void LoadCurrentWorkflowUser()
+    {
+        _workflowUser = new PurchaseRequisitionWorkflowUserInfo();
+        var employeeCode = User.Identity?.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(employeeCode))
+        {
+            return;
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand(@"
+SELECT TOP 1 EmployeeID,
+       ISNULL(IsPurchaser, 0) AS IsPurchaser,
+       ISNULL(IsCFO, 0) AS IsCFO,
+       ISNULL(IsBOD, 0) AS IsBOD
+FROM dbo.MS_Employee
+WHERE EmployeeCode = @EmployeeCode", conn);
+
+        cmd.Parameters.Add("@EmployeeCode", SqlDbType.VarChar, 50).Value = employeeCode;
+        conn.Open();
+
+        using var rd = cmd.ExecuteReader();
+        if (!rd.Read())
+        {
+            return;
+        }
+
+        _workflowUser = new PurchaseRequisitionWorkflowUserInfo
+        {
+            EmployeeId = rd.IsDBNull(rd.GetOrdinal("EmployeeID")) ? 0 : Convert.ToInt32(rd["EmployeeID"]),
+            EmployeeCode = employeeCode,
+            IsPurchaser = Convert.ToBoolean(rd["IsPurchaser"]),
+            IsCFO = Convert.ToBoolean(rd["IsCFO"]),
+            IsBOD = Convert.ToBoolean(rd["IsBOD"])
+        };
+    }
+
+    // Chỉ PU/CFO/BOD/Admin mới được mở Pending ở mode=edit để xử lý CST New.
+    private bool IsWorkflowActor()
+    {
+        return _workflowUser.IsPurchaser || _workflowUser.IsCFO || _workflowUser.IsBOD || IsAdminRole();
+    }
 
     // Thực hiện xử lý cho hàm NeedCollapseDescription theo nghiệp vụ của màn hình.
     public bool NeedCollapseDescription(string? description)

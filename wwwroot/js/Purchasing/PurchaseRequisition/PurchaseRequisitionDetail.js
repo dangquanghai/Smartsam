@@ -54,18 +54,13 @@
         return normalized;
     }
 
-    function clampNonNegativeDecimalInput(input, maxValue) {
+    function clampNonNegativeDecimalInput(input) {
         if (!input) return 0;
 
         let normalizedValue = toNumber(input.value);
-        const normalizedMax = toNumber(maxValue);
 
         if (normalizedValue < 0) {
             normalizedValue = 0;
-        }
-
-        if (normalizedMax > 0 && normalizedValue > normalizedMax) {
-            normalizedValue = normalizedMax;
         }
 
         input.value = formatNumber(normalizedValue);
@@ -88,16 +83,16 @@
         }
 
         if (safeText.length <= previewLength) {
-            return `<div class="prq-description-cell prq-add-at-text-cell"><span class="prq-description-full">${escapeHtml(safeText)}</span></div>`;
+            return `<div class="prq-description-cell prq-add-at-text-cell"><span class="prq-description-full vni-font">${escapeHtml(safeText)}</span></div>`;
         }
 
         const preview = `${escapeHtml(safeText.slice(0, previewLength))}...`;
         const full = escapeHtml(safeText);
         return `
             <div class="prq-description-cell prq-add-at-text-cell">
-                <span class="prq-description-preview">${preview}</span>
+                <span class="prq-description-preview vni-font">${preview}</span>
                 <button type="button" class="prq-read-more">Read more</button>
-                <span class="prq-description-full d-none">${full}</span>
+                <span class="prq-description-full d-none vni-font">${full}</span>
             </div>`;
     }
 
@@ -155,6 +150,8 @@
         const detailAttachmentInput = document.getElementById("detailAttachmentUpload");
         const detailAttachmentError = document.getElementById("detailAttachmentError");
         const detailAttachmentUploadButton = document.getElementById("btnDetailAttachmentUpload");
+        const detailAttachmentDeleteButton = document.getElementById("btnDetailAttachmentDelete");
+        const attachmentSelectors = Array.from(document.querySelectorAll(".prq-attachment-selector"));
         const addDetailRows = Array.from(document.querySelectorAll("tr[data-add-detail-row='1']"));
         if (!detailsJsonEl || !rowsContainer || !emptyRow) return;
 
@@ -194,27 +191,35 @@
             detailAttachmentError.style.display = "block";
         };
 
+        const updateAttachmentDeleteButton = () => {
+            if (!detailAttachmentDeleteButton) return;
+            detailAttachmentDeleteButton.disabled = !attachmentSelectors.some((checkbox) => checkbox.checked);
+        };
+
         const validateAttachmentFile = () => {
             if (!detailAttachmentInput || !detailAttachmentInput.files || detailAttachmentInput.files.length === 0) {
                 hideAttachmentError();
                 return true;
             }
 
-            const file = detailAttachmentInput.files[0];
-            const extension = `.${String(file.name.split(".").pop() || "").toLowerCase()}`;
             const allowedExtensions = getAllowedExtensions();
             const maxSizeBytes = getMaxAttachmentSizeBytes();
+            const files = Array.from(detailAttachmentInput.files);
 
-            if (allowedExtensions.length > 0 && !allowedExtensions.includes(extension)) {
-                showAttachmentError(`Attached file extension is invalid. Allowed: ${getConfig().allowedAttachmentExtensions}`);
-                detailAttachmentInput.value = "";
-                return false;
-            }
+            for (const file of files) {
+                const extension = `.${String(file.name.split(".").pop() || "").toLowerCase()}`;
 
-            if (maxSizeBytes > 0 && file.size > maxSizeBytes) {
-                showAttachmentError(`Attached file size must not exceed ${getConfig().maxAttachmentSizeMb} MB.`);
-                detailAttachmentInput.value = "";
-                return false;
+                if (allowedExtensions.length > 0 && !allowedExtensions.includes(extension)) {
+                    showAttachmentError(`Attached file extension is invalid for '${file.name}'. Allowed: ${getConfig().allowedAttachmentExtensions}`);
+                    detailAttachmentInput.value = "";
+                    return false;
+                }
+
+                if (maxSizeBytes > 0 && file.size > maxSizeBytes) {
+                    showAttachmentError(`Attached file '${file.name}' size must not exceed ${getConfig().maxAttachmentSizeMb} MB.`);
+                    detailAttachmentInput.value = "";
+                    return false;
+                }
             }
 
             hideAttachmentError();
@@ -331,8 +336,8 @@
                     <td class="prq-center">${formatNumber(detail.qtyPur)}</td>
                     <td class="prq-center">${formatNumber(detail.unitPrice)}</td>
                     <td class="prq-center">${formatNumber(amount)}</td>
-                    <td class="prq-center">${detail.remark || ""}</td>
-                    <td>${detail.supplierText || ""}</td>`;
+                    <td class="prq-center"><span class="vni-font">${escapeHtml(detail.remark || "")}</span></td>
+                    <td><span class="vni-font">${escapeHtml(detail.supplierText || "")}</span></td>`;
                 rowsContainer.appendChild(row);
             });
 
@@ -421,26 +426,11 @@
 
                 if (subQtyInput) {
                     const currentValue = toNumber(subQtyInput.value);
-                    const nextValue = remainingBuy <= 0
-                        ? 0
-                        : (currentValue > 0 && currentValue <= remainingBuy ? currentValue : remainingBuy);
-                    subQtyInput.value = formatNumber(nextValue);
-                    subQtyInput.disabled = remainingBuy <= 0;
-                }
-
-                if (checkbox) {
-                    if (remainingBuy <= 0) {
-                        checkbox.checked = false;
-                    }
-                    checkbox.disabled = remainingBuy <= 0;
-                }
-
-                row.classList.toggle("d-none", remainingBuy <= 0);
-                if (remainingBuy <= 0) {
-                    row.classList.remove("prq-detail-row-selected");
-                }
-            });
-        };
+                const nextValue = currentValue > 0 ? currentValue : remainingBuy;
+                subQtyInput.value = formatNumber(nextValue);
+            }
+        });
+    };
 
         const normalizeInputValue = (input) => {
             if (!input) return;
@@ -516,17 +506,11 @@
                     subQtyInput.value = sanitizedValue;
                 }
 
-                clampNonNegativeDecimalInput(
-                    subQtyInput,
-                    row.getAttribute("data-current-buy") || row.getAttribute("data-base-buy") || row.getAttribute("data-buy") || "0"
-                );
+                clampNonNegativeDecimalInput(subQtyInput);
                 hideAddDetailError();
             });
             subQtyInput?.addEventListener("blur", () => {
-                clampNonNegativeDecimalInput(
-                    subQtyInput,
-                    row.getAttribute("data-current-buy") || row.getAttribute("data-base-buy") || row.getAttribute("data-buy") || "0"
-                );
+                clampNonNegativeDecimalInput(subQtyInput);
                 normalizeInputValue(subQtyInput);
             });
         });
@@ -565,22 +549,7 @@
                     return;
                 }
 
-                if (qtyPurValue > buy) {
-                    showAddDetailError(`Cannot add detail because SugBuy for item ${itemCode} cannot be greater than BUY.`);
-                    subQtyInput?.focus();
-                    return;
-                }
-
                 const initialAllocatedQty = Number(initialAllocatedQtyByMrDetail[mrDetailId] || 0);
-                const currentAllocatedQty = getAllocatedQtyByMrDetail(mrDetailId);
-                const proposedAllocatedQty = currentAllocatedQty + qtyPurValue;
-                const maxAllocatedQty = initialAllocatedQty + baseBuy;
-
-                if (mrDetailId > 0 && proposedAllocatedQty > maxAllocatedQty) {
-                    showAddDetailError(`Cannot add detail because total SugBuy for item ${itemCode} exceeds the remaining BUY of this MR line.`);
-                    subQtyInput?.focus();
-                    return;
-                }
 
                 const pendingUnsavedDetail = findPendingUnsavedDetail(itemId, mrDetailId);
                 if (pendingUnsavedDetail) {
@@ -631,6 +600,9 @@
                 event.preventDefault();
             }
         });
+        attachmentSelectors.forEach((checkbox) => {
+            checkbox.addEventListener("change", updateAttachmentDeleteButton);
+        });
 
         currencySelectEl?.addEventListener("change", updateSummary);
 
@@ -649,6 +621,7 @@
         });
 
         renderRows();
+        updateAttachmentDeleteButton();
     }
 
     if (document.readyState === "loading") {

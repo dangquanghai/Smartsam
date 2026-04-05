@@ -62,6 +62,16 @@
     cursor: pointer;
 }
 
+.prq-detail-table-wrap tbody tr:hover,
+.prq-detail-table-wrap tbody tr:hover > td {
+    cursor: pointer;
+}
+
+.prq-detail-table-wrap .prq-detail-selector,
+.prq-detail-table-wrap .prq-detail-selector:hover {
+    cursor: pointer;
+}
+
 .prq-center {
     text-align: center;
     vertical-align: middle;
@@ -78,7 +88,7 @@
 }
 
 .prq-detail-row-selected {
-    background-color: #fff3cd !important;
+    background-color: #dff0ff !important;
 }
 
 .prq-detail-row-unsaved {
@@ -123,6 +133,12 @@
 
 .prq-attachment-delete-form {
     margin: 0;
+}
+
+.prq-sugbuy-header {
+    color: #b76e00;
+    font-weight: 700;
+    background: #fff4d6 !important;
 }
 
 .btn-action-add {

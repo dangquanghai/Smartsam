@@ -18,11 +18,13 @@ namespace SmartSam.Pages.Purchasing.PurchaseRequisition;
 
 public class PurchaseRequisitionDetailModel : BasePageModel
 {
-    private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
+    private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
+    // private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
     private const int FUNCTION_ID = 72;
     private const int PermissionViewDetail = 2;
     private const int PermissionAdd = 3;
     private const int PermissionEdit = 4;
+    private const int PermissionChangeStatus = 6;
     private readonly PermissionService _permissionService;
     private readonly ISecurityService _securityService;
     private readonly ILogger<PurchaseRequisitionDetailModel> _logger;
@@ -44,6 +46,9 @@ public class PurchaseRequisitionDetailModel : BasePageModel
     public bool CanMoveToMr { get; private set; }
     public bool CanManageAttachments { get; private set; }
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
+    public bool IsApproveMode => string.Equals(Mode, "approve", StringComparison.OrdinalIgnoreCase);
+    public bool IsStatusReadOnlyMode => Mode == "edit" && Requisition.Status != 1;
+    public bool IsReadOnlyMode => IsViewMode || IsApproveMode || IsStatusReadOnlyMode;
     public decimal TotalAmount { get; private set; }
     public string AllowedAttachmentExtensionsText => _config.GetValue<string>("AllowedExtensions") ?? ".doc,.docx,.xls,.xlsx,.pdf,.jpg,.jpeg,.png";
     public int MaxAttachmentSizeMb => _config.GetValue<int?>("MaxFileSizeMb") ?? 10;
@@ -61,7 +66,10 @@ public class PurchaseRequisitionDetailModel : BasePageModel
     public long SelectedDetailId { get; set; }
 
     [BindProperty]
-    public IFormFile? AttachmentUpload { get; set; }
+    public List<IFormFile> AttachmentUploads { get; set; } = new List<IFormFile>();
+
+    [BindProperty]
+    public List<int> SelectedAttachmentDocIds { get; set; } = new List<int>();
 
     [TempData]
     public string? Message { get; set; }
@@ -98,11 +106,22 @@ public class PurchaseRequisitionDetailModel : BasePageModel
                 return RedirectToPage("./Index");
             }
 
-            if (Mode == "edit" && !effectivePermissions.Contains(PermissionEdit))
+            if (Mode == "edit" && !CanOpenEditMode(effectivePermissions))
             {
                 TempData["Message"] = "You have no permission to edit this requisition.";
                 TempData["MessageType"] = "warning";
                 return RedirectToPage("./Index");
+            }
+
+            if (IsApproveMode)
+            {
+                SetActionFlags();
+                if (!CanApproveWorkflow && !CanDisapproveWorkflow)
+                {
+                    TempData["Message"] = "You have no permission to approve this requisition at the current step.";
+                    TempData["MessageType"] = "warning";
+                    return RedirectToPage("./Index");
+                }
             }
         }
         else
@@ -248,14 +267,12 @@ public class PurchaseRequisitionDetailModel : BasePageModel
 
         try
         {
-            long recordId;
+            int itemId;
             int mrDetailId;
-            decimal quantity;
 
             using (var loadCmd = new SqlCommand(@"
-SELECT RecordID,
-       MRDetailID,
-       ISNULL(Quantity, 0) AS Quantity
+SELECT ItemID,
+       MRDetailID
 FROM dbo.PC_PRDetail
 WHERE PRID = @PRID
   AND RecordID = @RecordID", conn, trans))
@@ -269,23 +286,20 @@ WHERE PRID = @PRID
                     throw new InvalidOperationException("Detail row not found.");
                 }
 
-                recordId = Convert.ToInt64(rd["RecordID"]);
+                itemId = Convert.ToInt32(rd["ItemID"]);
                 if (rd.IsDBNull(rd.GetOrdinal("MRDetailID")))
                 {
                     throw new InvalidOperationException("Selected detail row has no MR link.");
                 }
 
                 mrDetailId = Convert.ToInt32(rd["MRDetailID"]);
-                quantity = Convert.ToDecimal(rd["Quantity"]);
             }
 
             using (var updateCmd = new SqlCommand(@"
 UPDATE dbo.MATERIAL_REQUEST_DETAIL
-SET BUY = ISNULL(BUY, 0) + @Quantity,
-    PostedPR = 0
+SET PostedPR = 0
 WHERE ID = @MRDetailID", conn, trans))
             {
-                updateCmd.Parameters.Add("@Quantity", SqlDbType.Decimal).Value = quantity;
                 updateCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = mrDetailId;
                 updateCmd.ExecuteNonQuery();
             }
@@ -293,10 +307,12 @@ WHERE ID = @MRDetailID", conn, trans))
             using (var deleteCmd = new SqlCommand(@"
 DELETE FROM dbo.PC_PRDetail
 WHERE PRID = @PRID
-  AND RecordID = @RecordID", conn, trans))
+  AND ItemID = @ItemID
+  AND MRDetailID = @MRDetailID", conn, trans))
             {
                 deleteCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
-                deleteCmd.Parameters.Add("@RecordID", SqlDbType.BigInt).Value = recordId;
+                deleteCmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = itemId;
+                deleteCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = mrDetailId;
                 deleteCmd.ExecuteNonQuery();
             }
 
@@ -398,7 +414,7 @@ WHERE PRID = @PRID
 
                 recipients = GetEmailsByWorkflowRole(conn, trans, "CFO");
                 notifySubject = "[Purchase Requisition] Waiting for CFO approve";
-                notifyBody = BuildWorkflowNotifyBody("PURCHASE REQUISITION", "#007bff", recipients, "waiting for your approval.");
+                notifyBody = BuildWorkflowNotifyBody(conn, trans, "PURCHASE REQUISITION", "#007bff", "waiting for your approval.");
             }
             else if (CanApproveAsCfo())
             {
@@ -421,7 +437,7 @@ WHERE PRID = @PRID
 
                 recipients = GetEmailsByWorkflowRole(conn, trans, "BOD");
                 notifySubject = "[Purchase Requisition] Waiting for BOD approve";
-                notifyBody = BuildWorkflowNotifyBody("PURCHASE REQUISITION", "#17a2b8", recipients, "waiting for your approval.");
+                notifyBody = BuildWorkflowNotifyBody(conn, trans, "PURCHASE REQUISITION", "#17a2b8", "waiting for your approval.");
             }
             else if (CanApproveAsBod())
             {
@@ -466,7 +482,7 @@ WHERE PRID = @PRID
 
         TempData["Message"] = "Purchase requisition approved successfully.";
         TempData["MessageType"] = "success";
-        return RedirectToPage("./PurchaseRequisitionDetail", new { id = Requisition.Id, mode = "view" });
+        return RedirectToPage("./Index");
     }
 
     // Từ chối duyệt chứng từ và chuyển trạng thái sang Pending theo đúng bước đang xử lý.
@@ -546,17 +562,21 @@ WHERE PRID = @PRID
             return RedirectToCurrentDetail("edit");
         }
 
-        if (AttachmentUpload == null || AttachmentUpload.Length <= 0)
+        if (AttachmentUploads == null || AttachmentUploads.Count == 0)
         {
-            TempData["Message"] = "Please select one file to upload.";
+            TempData["Message"] = "Please select at least one file to upload.";
             TempData["MessageType"] = "warning";
             return RedirectToCurrentDetail("edit");
         }
 
-        var validationMessage = ValidateAttachment(AttachmentUpload);
-        if (!string.IsNullOrWhiteSpace(validationMessage))
+        var validationMessages = AttachmentUploads
+            .Where(file => file != null && file.Length > 0)
+            .Select(file => ValidateAttachment(file))
+            .Where(message => !string.IsNullOrWhiteSpace(message))
+            .ToList();
+        if (validationMessages.Count > 0)
         {
-            TempData["Message"] = validationMessage;
+            TempData["Message"] = string.Join(" ", validationMessages);
             TempData["MessageType"] = "error";
             return RedirectToCurrentDetail("edit");
         }
@@ -568,9 +588,12 @@ WHERE PRID = @PRID
 
         try
         {
-            SaveAttachment(conn, trans, Requisition.Id, _workflowUser.EmployeeId, AttachmentUpload, savedFilePaths);
+            foreach (var attachment in AttachmentUploads.Where(file => file != null && file.Length > 0))
+            {
+                SaveAttachment(conn, trans, Requisition.Id, _workflowUser.EmployeeId, attachment, savedFilePaths);
+            }
             trans.Commit();
-            TempData["Message"] = "Attachment uploaded successfully.";
+            TempData["Message"] = "Attachments uploaded successfully.";
             TempData["MessageType"] = "success";
         }
         catch (Exception ex)
@@ -584,8 +607,8 @@ WHERE PRID = @PRID
         return RedirectToCurrentDetail("edit");
     }
 
-    // Xóa file đính kèm cũ của PR khỏi cả bảng PC_PR_Doc và thư mục lưu file vật lý.
-    public IActionResult OnPostDeleteAttachment(int docId)
+    // Xóa các file đính kèm đã chọn của PR khỏi cả bảng PC_PR_Doc và thư mục lưu file vật lý.
+    public IActionResult OnPostDeleteAttachments()
     {
         var prepareResult = PrepareExistingRecordForPost();
         if (prepareResult != null)
@@ -600,49 +623,67 @@ WHERE PRID = @PRID
             return RedirectToCurrentDetail("edit");
         }
 
+        if (SelectedAttachmentDocIds == null || SelectedAttachmentDocIds.Count == 0)
+        {
+            TempData["Message"] = "Please select at least one attachment to delete.";
+            TempData["MessageType"] = "warning";
+            return RedirectToCurrentDetail("edit");
+        }
+
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
         using var trans = conn.BeginTransaction();
+        var deletedFileNames = new List<string>();
 
         try
         {
-            string? fileName = null;
+            foreach (var docId in SelectedAttachmentDocIds.Distinct())
+            {
+                string? fileName = null;
 
-            using (var loadCmd = new SqlCommand(@"
+                using (var loadCmd = new SqlCommand(@"
 SELECT FilePath
 FROM dbo.PC_PR_Doc
 WHERE DocID = @DocID
   AND PRID = @PRID", conn, trans))
-            {
-                loadCmd.Parameters.Add("@DocID", SqlDbType.Int).Value = docId;
-                loadCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
-                fileName = Convert.ToString(loadCmd.ExecuteScalar());
-            }
+                {
+                    loadCmd.Parameters.Add("@DocID", SqlDbType.Int).Value = docId;
+                    loadCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
+                    fileName = Convert.ToString(loadCmd.ExecuteScalar());
+                }
 
-            if (string.IsNullOrWhiteSpace(fileName))
-            {
-                throw new InvalidOperationException("Attachment is not found.");
-            }
+                if (string.IsNullOrWhiteSpace(fileName))
+                {
+                    continue;
+                }
 
-            using (var deleteCmd = new SqlCommand(@"
+                using (var deleteCmd = new SqlCommand(@"
 DELETE FROM dbo.PC_PR_Doc
 WHERE DocID = @DocID
   AND PRID = @PRID", conn, trans))
-            {
-                deleteCmd.Parameters.Add("@DocID", SqlDbType.Int).Value = docId;
-                deleteCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
-                deleteCmd.ExecuteNonQuery();
+                {
+                    deleteCmd.Parameters.Add("@DocID", SqlDbType.Int).Value = docId;
+                    deleteCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
+                    deleteCmd.ExecuteNonQuery();
+                }
+
+                deletedFileNames.Add(fileName);
             }
 
             trans.Commit();
 
-            var fullPath = Path.Combine(ResolveUploadFolder(), fileName);
-            if (System.IO.File.Exists(fullPath))
+            foreach (var fileName in deletedFileNames)
             {
-                System.IO.File.Delete(fullPath);
+                var fullPath = Path.Combine(ResolveUploadFolder(), fileName);
+                if (System.IO.File.Exists(fullPath))
+                {
+                    System.IO.File.Delete(fullPath);
+                }
             }
 
-            TempData["Message"] = "Attachment deleted successfully.";
+            TempData["Message"] = deletedFileNames.Count > 0
+                ? "Selected attachments deleted successfully."
+                : "No attachment was deleted.";
             TempData["MessageType"] = "success";
         }
         catch (Exception ex)
@@ -1267,17 +1308,27 @@ WHERE ID = @MRDetailID", conn, trans))
                 throw new InvalidOperationException($"Cannot save because MR detail {allocation.MrDetailId} only has {currentBuy:#,##0.###} BUY remaining.");
             }
 
-            using var updateCmd = new SqlCommand(@"
+            var remainBuy = currentBuy - allocation.Quantity;
+            if (allocation.Quantity < currentBuy)
+            {
+                using var updateCmd = new SqlCommand(@"
 UPDATE dbo.MATERIAL_REQUEST_DETAIL
-SET BUY = @RemainBuy,
-    PostedPR = @PostedPR
+SET BUY = @RemainBuy
 WHERE ID = @MRDetailID", conn, trans);
 
-            var remainBuy = currentBuy - allocation.Quantity;
-            updateCmd.Parameters.Add("@RemainBuy", SqlDbType.Decimal).Value = remainBuy;
-            updateCmd.Parameters.Add("@PostedPR", SqlDbType.Bit).Value = remainBuy <= 0;
-            updateCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = allocation.MrDetailId;
-            updateCmd.ExecuteNonQuery();
+                updateCmd.Parameters.Add("@RemainBuy", SqlDbType.Decimal).Value = remainBuy;
+                updateCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = allocation.MrDetailId;
+                updateCmd.ExecuteNonQuery();
+                continue;
+            }
+
+            using var postedCmd = new SqlCommand(@"
+UPDATE dbo.MATERIAL_REQUEST_DETAIL
+SET PostedPR = 1
+WHERE ID = @MRDetailID", conn, trans);
+
+            postedCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = allocation.MrDetailId;
+            postedCmd.ExecuteNonQuery();
         }
     }
 
@@ -1384,14 +1435,56 @@ WHERE EmployeeCode = @EmployeeCode", conn);
 
         var effectivePermissions = GetEffectivePermissionsByStatus(Requisition.Status <= 0 ? 1 : Requisition.Status);
 
+        if (IsApproveMode)
+        {
+            CanSave = false;
+            CanApproveWorkflow = CanApproveCurrentStep();
+            CanDisapproveWorkflow = CanApproveAsCfo() || CanApproveAsBod();
+            CanResetToNew = false;
+            CanMoveToMr = false;
+            CanManageAttachments = false;
+            return;
+        }
+
         CanSave = Mode == "add"
             ? effectivePermissions.Contains(PermissionAdd)
-            : Mode == "edit" && effectivePermissions.Contains(PermissionEdit);
+            : Mode == "edit" && CanEditDocument(effectivePermissions);
         CanApproveWorkflow = CanApproveCurrentStep();
         CanDisapproveWorkflow = CanApproveAsCfo() || CanApproveAsBod();
-        CanResetToNew = Requisition.Id > 0 && Requisition.Status != 1 && (_workflowUser.IsPurchaser || IsAdminRole());
+        CanResetToNew = Requisition.Id > 0
+            && Requisition.Status == 3
+            && effectivePermissions.Contains(PermissionChangeStatus)
+            && (_workflowUser.IsPurchaser || _workflowUser.IsCFO || _workflowUser.IsBOD || IsAdminRole());
         CanMoveToMr = Requisition.Id > 0 && CanSave && Requisition.Status == 1;
-        CanManageAttachments = Requisition.Id > 0;
+        CanManageAttachments = Requisition.Id > 0 && CanEditDocument(effectivePermissions);
+    }
+
+    // Xác định PU/CFO/BOD/Admin có đang thuộc nhóm workflow được phép dùng CST New ở trạng thái Pending hay không.
+    private bool IsWorkflowActor()
+    {
+        return _workflowUser.IsPurchaser || _workflowUser.IsCFO || _workflowUser.IsBOD || IsAdminRole();
+    }
+
+    // Xác định có cho phép mở mode=edit hay không theo đúng rule trạng thái của Purchase Requisition.
+    private bool CanOpenEditMode(List<int> effectivePermissions)
+    {
+        if (Mode != "edit")
+        {
+            return false;
+        }
+
+        return Requisition.Status switch
+        {
+            1 => effectivePermissions.Contains(PermissionEdit),
+            3 => effectivePermissions.Contains(PermissionChangeStatus) && IsWorkflowActor(),
+            _ => false
+        };
+    }
+
+    // Xác định edit thật sự dữ liệu chứng từ chỉ được phép ở trạng thái New.
+    private bool CanEditDocument(List<int> effectivePermissions)
+    {
+        return Requisition.Status == 1 && effectivePermissions.Contains(PermissionEdit);
     }
 
     // Xác định user hiện tại có đang ở bước PU duyệt đầu tiên hay không.
@@ -1553,10 +1646,7 @@ WHERE ISNULL({flagColumn}, 0) = 1
             }
         }
 
-        return rows
-            .GroupBy(x => x.Email, StringComparer.OrdinalIgnoreCase)
-            .Select(x => x.First())
-            .ToList();
+        return rows;
     }
 
     // Lấy danh sách người nhận mail của BOD, ưu tiên bảng cấu hình SYS_Funtion_LevelProcess nếu hệ thống có bảng này.
@@ -1611,41 +1701,61 @@ WHERE ISNULL(IsBOD, 0) = 1
             }
         }
 
-        return rows
-            .GroupBy(x => x.Email, StringComparer.OrdinalIgnoreCase)
-            .Select(x => x.First())
-            .ToList();
+        return rows;
+    }
+
+    // Tính tổng tiền hiện tại của PR từ bảng chi tiết để mail luôn dùng đúng dữ liệu mới nhất.
+    private decimal GetCurrentTotalAmount(SqlConnection conn, SqlTransaction trans)
+    {
+        using var cmd = new SqlCommand(@"
+SELECT ISNULL(SUM(ISNULL(Quantity, 0) * ISNULL(UnitPrice, 0)), 0)
+FROM dbo.PC_PRDetail
+WHERE PRID = @PRID", conn, trans);
+
+        cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
+        var value = cmd.ExecuteScalar();
+        return value == null || value == DBNull.Value ? 0M : Convert.ToDecimal(value);
+    }
+
+    // Format số tiền theo đúng cách hiển thị hiện tại của màn hình: có dấu phẩy hàng nghìn và bỏ số 0 dư cuối.
+    private static string FormatAmountForView(decimal amount)
+    {
+        return amount.ToString("#,##0.###");
+    }
+
+    // Lấy tên currency hiển thị cho mail theo mã tiền tệ đang lưu trên chứng từ.
+    private string GetCurrencyDisplayText(int currencyId)
+    {
+        return currencyId switch
+        {
+            1 => "VND",
+            _ => currencyId.ToString()
+        };
     }
 
     // Tạo nội dung mail thông báo workflow cho bước duyệt kế tiếp.
-    private string BuildWorkflowNotifyBody(string title, string color, IReadOnlyCollection<PurchaseRequisitionNotifyRecipientViewModel> recipients, string actionText)
+    private string BuildWorkflowNotifyBody(SqlConnection conn, SqlTransaction trans, string title, string color, string actionText)
     {
         var detailUrl = Url.Page("/Purchasing/PurchaseRequisition/PurchaseRequisitionDetail", values: new
         {
             id = Requisition.Id,
-            mode = "view"
+            mode = "approve"
         });
 
         var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl)
             ? string.Empty
             : $"{Request.Scheme}://{Request.Host}{detailUrl}";
-        var recipientDisplayNames = string.Join(", ", recipients.Select(x =>
-        {
-            var employeeName = string.IsNullOrWhiteSpace(x.EmployeeName) ? x.Email : x.EmployeeName;
-            return string.IsNullOrWhiteSpace(x.EmployeeCode)
-                ? employeeName
-                : $"{employeeName} ({x.EmployeeCode})";
-        }));
+        var totalAmount = GetCurrentTotalAmount(conn, trans);
 
         var body = $@"
-<p>Dear {WebUtility.HtmlEncode(recipientDisplayNames)},</p>
+<p>Dear {{{{RECIPIENT_LABEL}}}},</p>
 <p>Purchase Requisition <b>{WebUtility.HtmlEncode(Requisition.RequestNo)}</b> is {WebUtility.HtmlEncode(actionText)}</p>
 <ul>
   <li>Date: <b>{Requisition.RequestDate:dd/MM/yyyy}</b></li>
   <li>Description: <b>{WebUtility.HtmlEncode(Requisition.Description ?? string.Empty)}</b></li>
-  <li>Total Amount: <b>{TotalAmount:#,##0.00}</b></li>
+  <li>Total Amount: <b>{FormatAmountForView(totalAmount)} {WebUtility.HtmlEncode(GetCurrencyDisplayText(Requisition.Currency))}</b></li>
 </ul>
-{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Purchase Requisition Detail</a></p>")}
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Purchase Requisition Approve</a></p>")}
 <p>SmartSam System</p>";
 
         return EmailTemplateHelper.WrapInNotifyTemplate(title, color, DateTime.Now, body);
@@ -1676,7 +1786,7 @@ WHERE ISNULL(IsBOD, 0) = 1
             MailPort = mailPort,
             Subject = $"TEST - {subject}",
             HtmlBody = htmlBody,
-            Recipients = recipients.Select(x => x.Email).ToList()
+            Recipients = recipients
         });
     }
 
@@ -1685,28 +1795,37 @@ WHERE ISNULL(IsBOD, 0) = 1
     {
         try
         {
-            using var mail = new MailMessage
+            foreach (var recipient in notifyRequest.Recipients)
             {
-                From = new MailAddress(notifyRequest.SenderEmail, "SmartSam System"),
-                Subject = notifyRequest.Subject,
-                Body = notifyRequest.HtmlBody,
-                IsBodyHtml = true
-            };
+                if (string.IsNullOrWhiteSpace(recipient.Email))
+                {
+                    continue;
+                }
 
-            foreach (var recipient in notifyRequest.Recipients.Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                mail.To.Add(recipient);
+                var recipientName = string.IsNullOrWhiteSpace(recipient.EmployeeName) ? recipient.Email : recipient.EmployeeName;
+                var recipientLabel = string.IsNullOrWhiteSpace(recipient.EmployeeCode)
+                    ? recipientName
+                    : $"{recipientName} ({recipient.EmployeeCode})";
+
+                using var mail = new MailMessage
+                {
+                    From = new MailAddress(notifyRequest.SenderEmail, "SmartSam System"),
+                    Subject = notifyRequest.Subject,
+                    Body = notifyRequest.HtmlBody.Replace("{{RECIPIENT_LABEL}}", WebUtility.HtmlEncode(recipientLabel)),
+                    IsBodyHtml = true
+                };
+
+                mail.To.Add(recipient.Email);
+                mail.CC.Add(NotifyCcEmail);
+
+                using var smtp = new SmtpClient(notifyRequest.MailServer, notifyRequest.MailPort)
+                {
+                    EnableSsl = true,
+                    Credentials = new NetworkCredential(notifyRequest.SenderEmail, notifyRequest.Password)
+                };
+
+                await smtp.SendMailAsync(mail);
             }
-
-            mail.CC.Add(NotifyCcEmail);
-
-            using var smtp = new SmtpClient(notifyRequest.MailServer, notifyRequest.MailPort)
-            {
-                EnableSsl = true,
-                Credentials = new NetworkCredential(notifyRequest.SenderEmail, notifyRequest.Password)
-            };
-
-            await smtp.SendMailAsync(mail);
         }
         catch (Exception ex)
         {
@@ -1882,7 +2001,7 @@ public class PurchaseRequisitionWorkflowNotifyRequestViewModel
     public int MailPort { get; set; }
     public string Subject { get; set; } = string.Empty;
     public string HtmlBody { get; set; } = string.Empty;
-    public List<string> Recipients { get; set; } = new List<string>();
+    public List<PurchaseRequisitionNotifyRecipientViewModel> Recipients { get; set; } = new List<PurchaseRequisitionNotifyRecipientViewModel>();
 }
 
 public class PurchaseRequisitionNotifyRecipientViewModel
