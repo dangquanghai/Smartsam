@@ -1214,6 +1214,8 @@ public class MaterialRequestLineReadonlySnapshotDto
 {
     public string ItemCode { get; set; } = string.Empty;
     public string Unit { get; set; } = string.Empty;
+    public string Note { get; set; } = string.Empty;
+    public decimal OrderQty { get; set; }
     public decimal NotReceipt { get; set; }
     public decimal InStock { get; set; }
     public decimal AccIn { get; set; }
@@ -1662,6 +1664,8 @@ public class MaterialRequestService
             SELECT
                 ITEMCODE,
                 ISNULL(UNIT, '') AS UNIT,
+                ISNULL(NOTE, '') AS NOTE,
+                ISNULL(NEW_ORDER, 0),
                 ISNULL(NOT_RECEIPT, 0) AS NOT_RECEIPT,
                 ISNULL(INSTOCK, 0) AS INSTOCK,
                 ISNULL(acctualyInventory, 0) AS acctualyInventory,
@@ -1677,10 +1681,12 @@ public class MaterialRequestService
             {
                 ItemCode = rd[0]?.ToString() ?? string.Empty,
                 Unit = rd[1]?.ToString() ?? string.Empty,
-                NotReceipt = rd.IsDBNull(2) ? 0m : Convert.ToDecimal(rd[2]),
-                InStock = rd.IsDBNull(3) ? 0m : Convert.ToDecimal(rd[3]),
-                AccIn = rd.IsDBNull(4) ? 0m : Convert.ToDecimal(rd[4]),
-                Buy = rd.IsDBNull(5) ? 0m : Convert.ToDecimal(rd[5])
+                Note = rd[2]?.ToString() ?? string.Empty,
+                OrderQty = rd.IsDBNull(3) ? 0m : Convert.ToDecimal(rd[3]),
+                NotReceipt = rd.IsDBNull(4) ? 0m : Convert.ToDecimal(rd[4]),
+                InStock = rd.IsDBNull(5) ? 0m : Convert.ToDecimal(rd[5]),
+                AccIn = rd.IsDBNull(6) ? 0m : Convert.ToDecimal(rd[6]),
+                Buy = rd.IsDBNull(7) ? 0m : Convert.ToDecimal(rd[7])
             },
             cmd => AddNumeric18_0Param(cmd, "@RequestNo", requestNo),
             cancellationToken);

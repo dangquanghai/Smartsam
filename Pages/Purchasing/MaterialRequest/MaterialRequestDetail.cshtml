@@ -12,6 +12,7 @@
               id="materialRequestDetailForm"
               data-current-status="@Model.CurrentStatusId"
               data-can-save="@Model.CanSave.ToString().ToLowerInvariant()"
+              data-is-auto="@Model.Input.IsAuto.ToString().ToLowerInvariant()"
               data-can-submit="@Model.CanSubmit.ToString().ToLowerInvariant()"
               data-can-calculate="@Model.CanCalculate.ToString().ToLowerInvariant()"
               data-can-approve="@Model.CanApprove.ToString().ToLowerInvariant()"
@@ -221,7 +222,7 @@
                     <div class="modal-header">
                         <h5 class="modal-title" id="mrItemLookupModalLabel">Add / Edit Item</h5>
                         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                            <span aria-hidden="true">&times;</span>
+                            <i class="fas fa-times" aria-hidden="true"></i>
                         </button>
                     </div>
                     <div class="modal-body">
@@ -279,7 +280,7 @@
                     <div class="modal-header">
                         <h5 class="modal-title" id="mrNewItemModalLabel">Create New Item</h5>
                         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                            <span aria-hidden="true">&times;</span>
+                            <i class="fas fa-times" aria-hidden="true"></i>
                         </button>
                     </div>
                     <div class="modal-body">
@@ -295,7 +296,7 @@
                     </div>
                     <div class="modal-footer py-2">
                         <button type="button" class="btn btn-sm btn-primary" id="createNewItemConfirmBtn">Create</button>
-                        <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal"><i class="fas fa-times mr-1" aria-hidden="true"></i>Close</button>
                     </div>
                 </div>
             </div>

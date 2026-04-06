@@ -1,4 +1,4 @@
-﻿@page "{id?}"
+﻿@page
 @model SmartSam.Pages.Purchasing.PurchaseRequisition.PurchaseRequisitionDetailModel
 @{
     ViewData["Title"] = "Purchase Requisition Detail";
@@ -46,7 +46,7 @@
                         </div>
                         <div class="col-lg-3 col-md-6 prq-detail-form-col">
                             <label class="prq-detail-label">Currency<span class="required-mark">*</span></label>
-                            <select asp-for="Requisition.Currency" id="prqCurrencySelect" class="form-control form-control-sm" disabled="@Model.IsViewMode">
+                            <select asp-for="Requisition.Currency" id="prqCurrencySelect" class="form-control form-control-sm" disabled="@Model.IsReadOnlyMode">
                                 <option value="1">VND</option>
                             </select>
                         </div>
@@ -54,7 +54,7 @@
                     <div class="row prq-detail-form-row mb-3">
                         <div class="col-lg-12 col-md-12 prq-detail-form-col">
                             <label class="prq-detail-label">Description<span class="required-mark">*</span></label>
-                            <textarea asp-for="Requisition.Description" rows="3" class="form-control form-control-sm vni-font" readonly="@(Model.IsViewMode ? "readonly" : null)"></textarea>
+                            <textarea asp-for="Requisition.Description" rows="3" class="form-control form-control-sm vni-font" readonly="@(Model.IsReadOnlyMode ? "readonly" : null)"></textarea>
                             <span asp-validation-for="Requisition.Description" class="text-danger small"></span>
                         </div>
                     </div>
@@ -104,15 +104,11 @@
                                     <th style="width:120px;" class="prq-center">Amount</th>
                                     <th style="width:220px;" class="prq-center">Remark</th>
                                     <th style="width:180px;">Supplier</th>
-                                    @if (Model.CanSave)
-                                    {
-                                        <th style="width:60px;"></th>
-                                    }
                                 </tr>
                             </thead>
                             <tbody id="prqDetailRows">
                                 <tr id="prqDetailEmptyRow">
-                                    <td colspan="@(Model.CanSave ? 11 : 10)" class="text-center text-muted">No detail rows</td>
+                                    <td colspan="10" class="text-center text-muted">No detail rows</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -130,6 +126,12 @@
                             <button type="submit" id="btnToMr" class="btn btn-sm btn-action-secondary border mr-2 mb-2" formaction="@Url.Page("./PurchaseRequisitionDetail", "ToMr", new { id = Model.Requisition.Id, mode = Model.Mode })" formnovalidate disabled>
                                 <i class="fas fa-reply"></i> To MR
                             </button>
+                        }
+                        @if (Model.Requisition.Id > 0)
+                        {
+                            <a href="@Url.Page("./Index", "ExportExcel", new { SelectedPrId = Model.Requisition.Id })" class="btn btn-sm btn-action-export border mr-2 mb-2">
+                                <i class="fas fa-file-excel"></i> Export Excel
+                            </a>
                         }
                         @if (Model.Requisition.Id > 0)
                         {
@@ -167,7 +169,7 @@
                                     <th style="width:140px;">Item Code</th>
                                     <th>Item Name</th>
                                     <th style="width:90px;" class="prq-center">BUY</th>
-                                    <th style="width:110px;" class="prq-center">SugBuy<span class="required-mark">*</span></th>
+                                    <th style="width:110px;" class="prq-center prq-sugbuy-header">SugBuy<span class="required-mark">*</span></th>
                                     <th style="width:90px;" class="prq-center">Unit</th>
                                     <th style="width:100px;" class="prq-center">U.Price</th>
                                     <th style="width:180px;">Specification</th>
@@ -183,6 +185,7 @@
                                         data-item-name="@item.ItemName"
                                         data-request-no="@item.RequestNo"
                                         data-buy="@item.Buy"
+                                        data-base-buy="@item.Buy"
                                         data-unit="@item.Unit"
                                         data-unit-price="@item.UnitPrice"
                                         data-specification="@item.Specification"
@@ -194,7 +197,7 @@
                                         <td>@item.RequestNo</td>
                                         <td>@item.ItemCode</td>
                                         <td>@item.ItemName</td>
-                                        <td class="prq-center">@item.Buy.ToString("0.###")</td>
+                                        <td class="prq-center prq-add-detail-buy">@item.Buy.ToString("0.###")</td>
                                         <td class="prq-center">
                                             <input type="text" inputmode="decimal" class="form-control form-control-sm prq-add-detail-subqty" value="@item.Buy.ToString("0.###")" />
                                         </td>
@@ -239,56 +242,62 @@
                     }
                     else
                     {
-                        <div class="table-responsive mb-3">
-                            <table class="table table-sm table-bordered mb-0">
-                                <thead class="thead-light">
-                                    <tr>
-                                        <th>File</th>
-                                        <th style="width:160px;">Upload Date</th>
-                                        <th style="width:120px;">User</th>
-                                        <th style="width:90px;"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var attachment in Model.AttachmentList)
-                                    {
+                        <form method="post" action="@Url.Page("./PurchaseRequisitionDetail", "DeleteAttachments", new { id = Model.Requisition.Id, mode = Model.Mode })" id="prqDeleteAttachmentsForm">
+                            @Html.AntiForgeryToken()
+                            <input asp-for="Requisition.Id" type="hidden" />
+                            <input asp-for="Mode" type="hidden" />
+                            <div class="table-responsive mb-3">
+                                <table class="table table-sm table-bordered mb-0">
+                                    <thead class="thead-light">
                                         <tr>
-                                            <td>
-                                                <a asp-page="./PurchaseRequisitionDetail" asp-page-handler="DownloadAttachment" asp-route-id="@Model.Requisition.Id" asp-route-docId="@attachment.DocId">@attachment.FilePath</a>
-                                            </td>
-                                            <td>@attachment.UploadDate?.ToString("dd/MM/yyyy HH:mm")</td>
-                                            <td>@attachment.UserCode</td>
-                                            <td class="text-center">
+                                            @if (Model.CanManageAttachments)
+                                            {
+                                                <th style="width:50px;" class="text-center"></th>
+                                            }
+                                            <th>File</th>
+                                            <th style="width:160px;">Upload Date</th>
+                                            <th style="width:120px;">User</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var attachment in Model.AttachmentList)
+                                        {
+                                            <tr>
                                                 @if (Model.CanManageAttachments)
                                                 {
-                                                    <form method="post" action="@Url.Page("./PurchaseRequisitionDetail", "DeleteAttachment", new { id = Model.Requisition.Id, mode = Model.Mode, docId = attachment.DocId })">
-                                                        @Html.AntiForgeryToken()
-                                                        <button type="submit" class="btn btn-sm btn-action-disapprove border px-2" formnovalidate>
-                                                            <i class="fas fa-trash"></i>
-                                                        </button>
-                                                    </form>
+                                                    <td class="text-center">
+                                                        <input type="checkbox" name="SelectedAttachmentDocIds" value="@attachment.DocId" class="prq-attachment-selector" />
+                                                    </td>
                                                 }
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
+                                                <td>
+                                                    <a asp-page="./PurchaseRequisitionDetail" asp-page-handler="DownloadAttachment" asp-route-id="@Model.Requisition.Id" asp-route-docId="@attachment.DocId">@attachment.FilePath</a>
+                                                </td>
+                                                <td>@attachment.UploadDate?.ToString("dd/MM/yyyy HH:mm")</td>
+                                                <td>@attachment.UserCode</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </form>
                     }
 
                     @if (Model.CanManageAttachments)
                     {
-                        <form method="post" enctype="multipart/form-data" action="@Url.Page("./PurchaseRequisitionDetail", "UploadAttachment", new { id = Model.Requisition.Id, mode = Model.Mode })">
+                        <form method="post" enctype="multipart/form-data" action="@Url.Page("./PurchaseRequisitionDetail", "UploadAttachment", new { id = Model.Requisition.Id, mode = Model.Mode })" id="prqUploadAttachmentsForm">
                             @Html.AntiForgeryToken()
                             <input asp-for="Requisition.Id" type="hidden" />
                             <input asp-for="Mode" type="hidden" />
                             <div class="form-group mb-0">
                                 <label class="mb-1">Attached Files <span class="prq-attachment-note">Allowed: @Model.AllowedAttachmentExtensionsText | Max size: @Model.MaxAttachmentSizeMb MB</span></label>
-                                <input asp-for="AttachmentUpload" type="file" class="form-control-file prq-attachment-input" id="detailAttachmentUpload" accept="@Model.AllowedAttachmentExtensionsText" />
+                                <input asp-for="AttachmentUploads" type="file" class="form-control-file prq-attachment-input" id="detailAttachmentUpload" accept="@Model.AllowedAttachmentExtensionsText" multiple />
                                 <div id="detailAttachmentError" class="text-danger small mt-1" style="display:none;"></div>
                                 <div class="mt-2">
                                     <button type="submit" class="btn btn-sm btn-action-add border" id="btnDetailAttachmentUpload">
                                         <i class="fas fa-upload"></i> Upload
+                                    </button>
+                                    <button type="submit" class="btn btn-sm btn-action-disapprove border ml-2" id="btnDetailAttachmentDelete" form="prqDeleteAttachmentsForm" formnovalidate disabled>
+                                        <i class="fas fa-trash"></i> Delete Files
                                     </button>
                                 </div>
                             </div>

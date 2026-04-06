@@ -1229,12 +1229,23 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 ? $"[Approve Supplier New] Last supplier processed at level {currentLevel}"
                 : $"[Supplier Approval] Last supplier processed at level {currentLevel}";
             subject = $"TEST - {subject}";
-            var body = $@"
+            var body = IsApproveSupplierNewMode
+                ? $@"
 <p>Dear {{RECIPIENT_LABEL}},</p>
 <p>The last supplier in current approval list has been <b>{action}</b> at level {currentLevel}.</p>
 <ul>
   <li>Supplier Code: <b>{WebUtility.HtmlEncode(supplierCode)}</b></li>
   <li>Supplier Name: <b>{WebUtility.HtmlEncode(supplierName)}</b></li>
+  <li>Action by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
+  <li>Action time: <b>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</b></li>
+</ul>
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">{WebUtility.HtmlEncode(PageTitle)}</a></p>")}
+<p>SmartSam System</p>"
+                : $@"
+<p>Dear {{RECIPIENT_LABEL}},</p>
+<p>The current supplier approval list has been <b>{action}</b> at level {currentLevel}.</p>
+<p>Please access the approval page to continue reviewing the next suppliers in your workflow.</p>
+<ul>
   <li>Action by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
   <li>Action time: <b>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</b></li>
 </ul>

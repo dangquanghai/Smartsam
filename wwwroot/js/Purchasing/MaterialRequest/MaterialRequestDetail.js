@@ -59,6 +59,24 @@
             }
         }
 
+        if (!actionMode && submitter) {
+            if (submitter.id === 'mrSubmitBtn') {
+                actionMode = 'submit';
+            }
+            else if (submitter.id === 'mrApproveBtn') {
+                actionMode = 'approve';
+            }
+            else if (submitter.id === 'calculateBtn') {
+                actionMode = 'calculate';
+            }
+            else if (submitter.id === 'mrRejectBtn') {
+                actionMode = 'reject';
+            }
+            else if (submitter.id === 'mrIssueBtn') {
+                actionMode = 'issue';
+            }
+        }
+
         $('#workflowActionModeInput').val(actionMode);
 
         if (validateMainForm(actionMode)) {
@@ -125,6 +143,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
     const canIssue = !!actionPerm.canIssue;
     const canReject = !!actionPerm.canReject;
     const hideZeroBuyLines = toBoolData($form.data('hide-zero-buy-lines'));
+    const isAutoRequest = toBoolData($form.data('is-auto'));
 
     const isViewMode = mode === 'view';
     const disableEditFields = isViewMode || !canSave;
@@ -151,7 +170,11 @@ function initializePage(mode, currentStatusId, actionPerm) {
     const showSubmitAction = isDraft && !isViewMode && canSubmit;
     const showCalculateAction = isHeadApproved && canCalculate;
     const showWorkflowActions = !isDraft && (canApprove || canReject);
-    const enableBuyAndNoteFields = showEditActions || showCalculateAction;
+    const enableOrderFields = showEditActions && !isAutoRequest;
+    const enableBuyAndNoteFields = showCalculateAction;
+
+    $form.data('mr-enable-order-fields', enableOrderFields);
+    $form.data('mr-enable-buy-note-fields', enableBuyAndNoteFields);
 
     // Use the clicked button submit
     $('#addMrLineBtn, #removeMrLineBtn, #createNewItemBtn')
@@ -175,6 +198,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
 
     // Display only.
     $('#NoIssueCheck').prop('disabled', true);
+    $tableBody.find('.mr-line-order').prop('disabled', !enableOrderFields);
     $tableBody.find('.mr-line-buy, .mr-line-note').prop('disabled', !enableBuyAndNoteFields);
     applyBuyZeroLineVisibility($tableBody, hideZeroBuyLines);
     initializePurchaserEditableRowPrompt($form, $tableBody, showCalculateAction);
@@ -450,7 +474,6 @@ function validateMainForm(actionMode) {
         const numberChecks = [
             { selector: '.mr-line-notrec', label: 'NotRec' },
             { selector: '.mr-line-accin', label: 'Acc.In' },
-            { selector: '.mr-line-buy', label: 'Buy' },
             { selector: '.mr-line-price', label: 'Price' }
         ];
 
@@ -789,6 +812,17 @@ function addItemToGrid($tableBody, item) {
     }
 
     $tableBody.append(createLineRowHtml(item));
+    const $newRow = $tableBody.find('.mr-line-row').last();
+    const $form = $tableBody.closest('form');
+    const enableOrderFields = toBoolData($form.data('mr-enable-order-fields'));
+    const enableBuyAndNoteFields = toBoolData($form.data('mr-enable-buy-note-fields'));
+
+    $newRow.find('.mr-line-order').prop('disabled', !enableOrderFields);
+    $newRow.find('.mr-line-buy, .mr-line-note').prop('disabled', !enableBuyAndNoteFields);
+    if (enableBuyAndNoteFields) {
+        storePurchaserEditableSnapshot($newRow);
+    }
+
     syncEmptyRow($tableBody);
     syncLineInputNames($tableBody);
     refreshLineIndexes($tableBody);

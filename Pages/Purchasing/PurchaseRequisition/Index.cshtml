@@ -193,20 +193,27 @@
                                                     <input type="radio" class="prq-selector" name="selectedPurchaseRequisition" aria-label="Select row" />
                                                 </td>
                                                 <td>
-                                                    <a href="#" class="prq-row-link text-bold" data-id="@row.Id">@row.RequestNo</a>
+                                                    @if (Model.CanEditRow(row.StatusId) || Model.CanViewDetailRow(row.StatusId))
+                                                    {
+                                                        <a href="@Url.Page("./PurchaseRequisitionDetail", new { id = row.Id, mode = Model.CanEditRow(row.StatusId) ? "edit" : "view" })" class="prq-row-link text-bold" data-id="@row.Id">@row.RequestNo</a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-bold">@row.RequestNo</span>
+                                                    }
                                                 </td>
                                                 <td>@row.RequestDate.ToString("dd/MM/yyyy")</td>
                                                 <td class="prq-description-column">
                                                     <div class="prq-description-cell">
                                                         @if (Model.NeedCollapseDescription(row.Description))
                                                         {
-                                                            <span class="prq-description-preview">@Model.GetDescriptionPreview(row.Description)</span>
+                                                            <span class="prq-description-preview vni-font">@Model.GetDescriptionPreview(row.Description)</span>
                                                             <button type="button" class="prq-read-more">Read more</button>
-                                                            <span class="prq-description-full d-none">@row.Description</span>
+                                                            <span class="prq-description-full d-none vni-font">@row.Description</span>
                                                         }
                                                         else
                                                         {
-                                                            <span class="prq-description-full">@row.Description</span>
+                                                            <span class="prq-description-full vni-font">@row.Description</span>
                                                         }
                                                     </div>
                                                 </td>
@@ -233,16 +240,8 @@
                         {
                             <a asp-page="./PurchaseRequisitionDetail" asp-route-mode="add" class="btn btn-sm btn-action-add border mx-1 my-1"><i class="fas fa-plus"></i> Add New</a>
                         }
-                        @if (Model.CanEditRequisition)
-                        {
-                            <button type="button" id="btnEdit" class="btn btn-sm btn-action-submit border mx-1 my-1" disabled><i class="fas fa-edit"></i> Edit</button>
-                        }
-                        @if (Model.CanViewDetailRequisition)
-                        {
-                            <button type="button" id="btnViewDetail" class="btn btn-sm btn-action-export border mx-1 my-1" disabled><i class="fas fa-list-alt"></i> View Detail</button>
-                        }
                         <button type="button" id="btnExportExcel" class="btn btn-sm btn-action-export border mx-1 my-1"><i class="fas fa-file-excel"></i> Export Excel</button>
-                        <button type="button" id="btnDisapproval" class="btn btn-sm btn-action-copy border mx-1 my-1" disabled><i class="fas fa-ban"></i> Disapproval</button>
+                        @* <button type="button" id="btnDisapproval" class="btn btn-sm btn-action-copy border mx-1 my-1" disabled><i class="fas fa-ban"></i> Disapproval</button> *@
                     </div>
                 </div>
             </div>
@@ -292,21 +291,21 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group col-md-12">
-                            <label class="mb-1">Description</label>
+                            <label class="mb-1">Description<span class="required-mark">*</span></label>
                             <textarea asp-for="AddAtDescription" id="prqAddAtDescription" rows="2" class="form-control form-control-sm vni-font" maxlength="500"></textarea>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group col-md-12">
                             <label class="mb-1">Attached Files <span class="prq-add-at-file-note">Allowed: @Model.AllowedAttachmentExtensionsText | Max size: @Model.MaxAttachmentSizeMb MB</span></label>
-                            <input asp-for="AddAtAttachment" type="file" id="prqAddAtAttachments" class="form-control form-control-sm prq-add-at-file-input" accept="@Model.AllowedAttachmentExtensionsText" />
+                            <input asp-for="AddAtAttachments" type="file" id="prqAddAtAttachments" class="form-control form-control-sm prq-add-at-file-input" accept="@Model.AllowedAttachmentExtensionsText" multiple />
                             <div id="prqAddAtAttachmentError" class="prq-add-at-file-error d-none"></div>
                         </div>
                     </div>
 
                     <div class="mb-2">
                         <button type="submit" class="btn btn-sm btn-action-save border mr-2">
-                            <i class="fas fa-check"></i> OK
+                            <i class="fas fa-check"></i> Save
                         </button>
                         <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
                             <i class="fas fa-times"></i> Close
@@ -322,7 +321,7 @@
                                     <th style="width:140px;">Item Code</th>
                                     <th>Item Name</th>
                                     <th style="width:90px;" class="prq-center">BUY</th>
-                                    <th style="width:110px;" class="prq-center">SugBuy</th>
+                                    <th style="width:110px;" class="prq-center prq-sugbuy-header">SugBuy</th>
                                     <th style="width:80px;" class="prq-center">Unit</th>
                                     <th style="width:100px;" class="prq-center">U.Price</th>
                                     <th style="width:220px;">Specification</th>

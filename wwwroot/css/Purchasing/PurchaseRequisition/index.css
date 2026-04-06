@@ -198,6 +198,16 @@
     cursor: pointer;
 }
 
+.required-mark {
+    color: #dc3545 !important;
+    margin-left: 0.15rem;
+    font-weight: 700;
+}
+
+.prq-add-at-table-wrap tbody tr.selected {
+    background-color: #dff0ff !important;
+}
+
 .prq-add-at-text-cell {
     white-space: normal !important;
     word-break: break-word;
@@ -220,6 +230,12 @@
     margin-top: 0.25rem;
     font-size: 0.8rem;
     color: #dc3545;
+}
+
+.prq-sugbuy-header {
+    color: #b76e00;
+    font-weight: 700;
+    background: #fff4d6 !important;
 }
 
 @media (max-width: 767.98px) {

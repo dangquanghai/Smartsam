@@ -54,18 +54,13 @@
         return normalized;
     }
 
-    function clampNonNegativeDecimalInput(input, maxValue) {
+    function clampNonNegativeDecimalInput(input) {
         if (!input) return 0;
 
         let normalizedValue = toNumber(input.value);
-        const normalizedMax = toNumber(maxValue);
 
         if (normalizedValue < 0) {
             normalizedValue = 0;
-        }
-
-        if (normalizedMax > 0 && normalizedValue > normalizedMax) {
-            normalizedValue = normalizedMax;
         }
 
         input.value = formatNumber(normalizedValue);
@@ -88,16 +83,16 @@
         }
 
         if (safeText.length <= previewLength) {
-            return `<div class="prq-description-cell prq-add-at-text-cell"><span class="prq-description-full">${escapeHtml(safeText)}</span></div>`;
+            return `<div class="prq-description-cell prq-add-at-text-cell"><span class="prq-description-full vni-font">${escapeHtml(safeText)}</span></div>`;
         }
 
         const preview = `${escapeHtml(safeText.slice(0, previewLength))}...`;
         const full = escapeHtml(safeText);
         return `
             <div class="prq-description-cell prq-add-at-text-cell">
-                <span class="prq-description-preview">${preview}</span>
+                <span class="prq-description-preview vni-font">${preview}</span>
                 <button type="button" class="prq-read-more">Read more</button>
-                <span class="prq-description-full d-none">${full}</span>
+                <span class="prq-description-full d-none vni-font">${full}</span>
             </div>`;
     }
 
@@ -155,6 +150,8 @@
         const detailAttachmentInput = document.getElementById("detailAttachmentUpload");
         const detailAttachmentError = document.getElementById("detailAttachmentError");
         const detailAttachmentUploadButton = document.getElementById("btnDetailAttachmentUpload");
+        const detailAttachmentDeleteButton = document.getElementById("btnDetailAttachmentDelete");
+        const attachmentSelectors = Array.from(document.querySelectorAll(".prq-attachment-selector"));
         const addDetailRows = Array.from(document.querySelectorAll("tr[data-add-detail-row='1']"));
         if (!detailsJsonEl || !rowsContainer || !emptyRow) return;
 
@@ -194,27 +191,35 @@
             detailAttachmentError.style.display = "block";
         };
 
+        const updateAttachmentDeleteButton = () => {
+            if (!detailAttachmentDeleteButton) return;
+            detailAttachmentDeleteButton.disabled = !attachmentSelectors.some((checkbox) => checkbox.checked);
+        };
+
         const validateAttachmentFile = () => {
             if (!detailAttachmentInput || !detailAttachmentInput.files || detailAttachmentInput.files.length === 0) {
                 hideAttachmentError();
                 return true;
             }
 
-            const file = detailAttachmentInput.files[0];
-            const extension = `.${String(file.name.split(".").pop() || "").toLowerCase()}`;
             const allowedExtensions = getAllowedExtensions();
             const maxSizeBytes = getMaxAttachmentSizeBytes();
+            const files = Array.from(detailAttachmentInput.files);
 
-            if (allowedExtensions.length > 0 && !allowedExtensions.includes(extension)) {
-                showAttachmentError(`Attached file extension is invalid. Allowed: ${getConfig().allowedAttachmentExtensions}`);
-                detailAttachmentInput.value = "";
-                return false;
-            }
+            for (const file of files) {
+                const extension = `.${String(file.name.split(".").pop() || "").toLowerCase()}`;
 
-            if (maxSizeBytes > 0 && file.size > maxSizeBytes) {
-                showAttachmentError(`Attached file size must not exceed ${getConfig().maxAttachmentSizeMb} MB.`);
-                detailAttachmentInput.value = "";
-                return false;
+                if (allowedExtensions.length > 0 && !allowedExtensions.includes(extension)) {
+                    showAttachmentError(`Attached file extension is invalid for '${file.name}'. Allowed: ${getConfig().allowedAttachmentExtensions}`);
+                    detailAttachmentInput.value = "";
+                    return false;
+                }
+
+                if (maxSizeBytes > 0 && file.size > maxSizeBytes) {
+                    showAttachmentError(`Attached file '${file.name}' size must not exceed ${getConfig().maxAttachmentSizeMb} MB.`);
+                    detailAttachmentInput.value = "";
+                    return false;
+                }
             }
 
             hideAttachmentError();
@@ -304,15 +309,13 @@
                 setSelectedDetail(null);
                 syncHiddenInput();
                 updateSummary();
+                updateAddDetailAvailability();
                 return;
             }
 
             emptyRow.style.display = "none";
-            details.forEach((detail, index) => {
+            details.forEach((detail) => {
                 const amount = toNumber(detail.qtyPur) * toNumber(detail.unitPrice);
-                const removeButtonCell = getConfig().canSave
-                    ? `<td class="text-center"><button type="button" class="btn btn-xs btn-outline-danger border" data-remove-index="${index}">X</button></td>`
-                    : "";
                 const rowKey = getRowKey(detail);
                 const row = document.createElement("tr");
                 row.dataset.row = "1";
@@ -321,8 +324,11 @@
                 if (Number(detail.detailId) <= 0) {
                     row.classList.add("prq-detail-row-unsaved");
                 }
+                const selectorCell = Number(detail.detailId) <= 0
+                    ? `<button type="button" class="btn btn-xs btn-outline-danger border prq-unsaved-remove" data-remove-temp-key="${escapeHtml(detail.tempKey || "")}" title="Remove"><i class="fas fa-trash"></i></button>`
+                    : (getConfig().canSelectDetail ? `<input type="checkbox" class="prq-detail-selector" ${selectedRowKey === rowKey ? "checked" : ""} />` : "");
                 row.innerHTML = `
-                    <td class="prq-center">${getConfig().canSelectDetail ? `<input type="checkbox" class="prq-detail-selector" ${selectedRowKey === rowKey ? "checked" : ""} />` : ""}</td>
+                    <td class="prq-center">${selectorCell}</td>
                     <td>${detail.itemCode || ""}</td>
                     <td>${detail.itemName || ""}</td>
                     <td class="prq-center">${detail.unit || ""}</td>
@@ -330,9 +336,8 @@
                     <td class="prq-center">${formatNumber(detail.qtyPur)}</td>
                     <td class="prq-center">${formatNumber(detail.unitPrice)}</td>
                     <td class="prq-center">${formatNumber(amount)}</td>
-                    <td class="prq-center">${detail.remark || ""}</td>
-                    <td>${detail.supplierText || ""}</td>
-                    ${removeButtonCell}`;
+                    <td class="prq-center"><span class="vni-font">${escapeHtml(detail.remark || "")}</span></td>
+                    <td><span class="vni-font">${escapeHtml(detail.supplierText || "")}</span></td>`;
                 rowsContainer.appendChild(row);
             });
 
@@ -344,6 +349,7 @@
             }
             syncHiddenInput();
             updateSummary();
+            updateAddDetailAvailability();
         };
 
         if (!getConfig().canSave) {
@@ -375,6 +381,57 @@
                 .reduce((sum, detail) => sum + toNumber(detail.qtyPur), 0);
         };
 
+        const getPendingUnsavedQtyByMrDetail = (mrDetailId) => {
+            const targetMrDetailId = Number(mrDetailId || 0);
+            if (targetMrDetailId <= 0) {
+                return 0;
+            }
+
+            return details
+                .filter((detail) => Number(detail.detailId || 0) <= 0 && Number(detail.mrDetailId || 0) === targetMrDetailId)
+                .reduce((sum, detail) => sum + toNumber(detail.qtyPur), 0);
+        };
+
+        const findPendingUnsavedDetail = (itemId, mrDetailId) => {
+            const targetMrDetailId = Number(mrDetailId || 0);
+            if (targetMrDetailId > 0) {
+                return details.find((detail) =>
+                    Number(detail.detailId || 0) <= 0 &&
+                    Number(detail.mrDetailId || 0) === targetMrDetailId
+                ) || null;
+            }
+
+            return details.find((detail) =>
+                Number(detail.detailId || 0) <= 0 &&
+                Number(detail.itemId || 0) === Number(itemId || 0) &&
+                !Number(detail.mrDetailId || 0)
+            ) || null;
+        };
+
+        const updateAddDetailAvailability = () => {
+            addDetailRows.forEach((row) => {
+                const mrDetailId = Number.parseInt(row.getAttribute("data-mr-detail-id") || "0", 10) || 0;
+                const baseBuy = toNumber(row.getAttribute("data-base-buy") || row.getAttribute("data-buy") || "0");
+                const pendingQty = getPendingUnsavedQtyByMrDetail(mrDetailId);
+                const remainingBuy = Math.max(0, baseBuy - pendingQty);
+                const checkbox = row.querySelector(".prq-add-detail-check");
+                const subQtyInput = row.querySelector(".prq-add-detail-subqty");
+                const buyCell = row.querySelector(".prq-add-detail-buy");
+
+                row.setAttribute("data-current-buy", String(remainingBuy));
+
+                if (buyCell) {
+                    buyCell.textContent = formatNumber(remainingBuy);
+                }
+
+                if (subQtyInput) {
+                    const currentValue = toNumber(subQtyInput.value);
+                const nextValue = currentValue > 0 ? currentValue : remainingBuy;
+                subQtyInput.value = formatNumber(nextValue);
+            }
+        });
+    };
+
         const normalizeInputValue = (input) => {
             if (!input) return;
             input.value = formatNumber(input.value);
@@ -389,22 +446,22 @@
                     checkbox.checked = false;
                 }
                 if (subQtyInput) {
-                    subQtyInput.value = formatNumber(row.getAttribute("data-buy") || "0");
+                    const currentBuy = row.getAttribute("data-current-buy") || row.getAttribute("data-base-buy") || row.getAttribute("data-buy") || "0";
+                    subQtyInput.value = formatNumber(currentBuy);
                 }
             });
             hideAddDetailError();
         };
 
         rowsContainer.addEventListener("click", (event) => {
-            const removeButton = event.target.closest("button[data-remove-index]");
-            if (removeButton) {
-                const index = Number.parseInt(removeButton.getAttribute("data-remove-index") || "-1", 10);
-                if (Number.isInteger(index) && index >= 0 && index < details.length) {
-                    const removed = details[index];
-                    details.splice(index, 1);
-                    if (getRowKey(removed) === selectedRowKey) {
-                        selectedDetailId = 0;
-                        selectedRowKey = "";
+            const removeUnsavedButton = event.target.closest("button[data-remove-temp-key]");
+            if (removeUnsavedButton) {
+                const tempKey = removeUnsavedButton.getAttribute("data-remove-temp-key") || "";
+                const removeIndex = details.findIndex((detail) => String(detail.tempKey || "") === tempKey && Number(detail.detailId || 0) <= 0);
+                if (removeIndex >= 0) {
+                    details.splice(removeIndex, 1);
+                    if (!details.some((detail) => getRowKey(detail) === selectedRowKey)) {
+                        setSelectedDetail(null);
                     }
                     renderRows();
                 }
@@ -449,11 +506,11 @@
                     subQtyInput.value = sanitizedValue;
                 }
 
-                clampNonNegativeDecimalInput(subQtyInput, row.getAttribute("data-buy") || "0");
+                clampNonNegativeDecimalInput(subQtyInput);
                 hideAddDetailError();
             });
             subQtyInput?.addEventListener("blur", () => {
-                clampNonNegativeDecimalInput(subQtyInput, row.getAttribute("data-buy") || "0");
+                clampNonNegativeDecimalInput(subQtyInput);
                 normalizeInputValue(subQtyInput);
             });
         });
@@ -477,7 +534,8 @@
                 const itemCode = row.getAttribute("data-item-code") || "";
                 const itemName = row.getAttribute("data-item-name") || "";
                 const requestNo = row.getAttribute("data-request-no") || "";
-                const buy = toNumber(row.getAttribute("data-buy") || "0");
+                const buy = toNumber(row.getAttribute("data-current-buy") || row.getAttribute("data-base-buy") || row.getAttribute("data-buy") || "0");
+                const baseBuy = toNumber(row.getAttribute("data-base-buy") || row.getAttribute("data-buy") || "0");
                 const unit = row.getAttribute("data-unit") || "";
                 const unitPrice = toNumber(row.getAttribute("data-unit-price") || "0");
                 const specification = row.getAttribute("data-specification") || "";
@@ -491,26 +549,19 @@
                     return;
                 }
 
-                if (qtyPurValue > buy) {
-                    showAddDetailError(`Cannot add detail because SugBuy for item ${itemCode} cannot be greater than BUY.`);
-                    subQtyInput?.focus();
-                    return;
-                }
-
                 const initialAllocatedQty = Number(initialAllocatedQtyByMrDetail[mrDetailId] || 0);
-                const currentAllocatedQty = getAllocatedQtyByMrDetail(mrDetailId);
-                const proposedAllocatedQty = currentAllocatedQty + qtyPurValue;
-                const maxAllocatedQty = initialAllocatedQty + buy;
 
-                if (mrDetailId > 0 && proposedAllocatedQty > maxAllocatedQty) {
-                    showAddDetailError(`Cannot add detail because total SugBuy for item ${itemCode} exceeds the remaining BUY of this MR line.`);
-                    subQtyInput?.focus();
-                    return;
-                }
-
-                if (mrDetailId <= 0 && isDuplicateDetail(itemId, null, mrDetailId)) {
-                    showAddDetailError(`Cannot add detail because item ${itemCode} already exists in the detail list.`);
-                    return;
+                const pendingUnsavedDetail = findPendingUnsavedDetail(itemId, mrDetailId);
+                if (pendingUnsavedDetail) {
+                    pendingUnsavedDetail.qtyPur = toNumber(pendingUnsavedDetail.qtyPur) + qtyPurValue;
+                    pendingUnsavedDetail.qtyFromM = mrDetailId > 0 ? initialAllocatedQty + baseBuy : Math.max(toNumber(pendingUnsavedDetail.qtyFromM), baseBuy);
+                    pendingUnsavedDetail.unitPrice = unitPrice;
+                    pendingUnsavedDetail.remark = specification;
+                    pendingUnsavedDetail.mrRequestNo = requestNo;
+                    if (mrDetailId > 0) {
+                        pendingUnsavedDetail.mrDetailId = mrDetailId;
+                    }
+                    continue;
                 }
 
                 newDetails.push({
@@ -520,7 +571,7 @@
                     itemCode: itemCode,
                     itemName: itemName,
                     unit: unit,
-                    qtyFromM: buy,
+                    qtyFromM: mrDetailId > 0 ? initialAllocatedQty + baseBuy : baseBuy,
                     qtyPur: qtyPurValue,
                     unitPrice: unitPrice,
                     remark: specification,
@@ -532,7 +583,11 @@
             }
 
             details.push(...newDetails);
+            setSelectedDetail(null);
             renderRows();
+            if (toMrButton) {
+                toMrButton.disabled = true;
+            }
             resetDetailFields();
             if (window.jQuery && detailModal) {
                 window.jQuery(detailModal).modal("hide");
@@ -544,6 +599,9 @@
             if (!validateAttachmentFile()) {
                 event.preventDefault();
             }
+        });
+        attachmentSelectors.forEach((checkbox) => {
+            checkbox.addEventListener("change", updateAttachmentDeleteButton);
         });
 
         currencySelectEl?.addEventListener("change", updateSummary);
@@ -563,6 +621,7 @@
         });
 
         renderRows();
+        updateAttachmentDeleteButton();
     }
 
     if (document.readyState === "loading") {

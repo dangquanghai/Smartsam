@@ -55,18 +55,13 @@
         return normalized;
     }
 
-    function clampNonNegativeDecimalInput(input, maxValue) {
+    function clampNonNegativeDecimalInput(input) {
         if (!input) return 0;
 
         let normalizedValue = toNumber(input.value);
-        const normalizedMax = toNumber(maxValue);
 
         if (normalizedValue < 0) {
             normalizedValue = 0;
-        }
-
-        if (normalizedMax > 0 && normalizedValue > normalizedMax) {
-            normalizedValue = normalizedMax;
         }
 
         input.value = formatNumber(normalizedValue);
@@ -89,22 +84,25 @@
         }
 
         if (text.length <= previewLength) {
-            return `<div class="prq-description-cell prq-add-at-text-cell"><span class="prq-description-full">${escapeHtml(text)}</span></div>`;
+            return `<div class="prq-description-cell prq-add-at-text-cell"><span class="prq-description-full vni-font">${escapeHtml(text)}</span></div>`;
         }
 
         const preview = `${escapeHtml(text.slice(0, previewLength))}...`;
         const full = escapeHtml(text);
         return `
             <div class="prq-description-cell prq-add-at-text-cell">
-                <span class="prq-description-preview">${preview}</span>
+                <span class="prq-description-preview vni-font">${preview}</span>
                 <button type="button" class="prq-read-more">Read more</button>
-                <span class="prq-description-full d-none">${full}</span>
+                <span class="prq-description-full d-none vni-font">${full}</span>
             </div>`;
     }
 
     function buildDetailUrl(id, mode) {
         const base = getConfig().detailUrlBase || "";
-        return `${base}/${id}?mode=${mode}`;
+        const params = new URLSearchParams();
+        params.set("id", id);
+        params.set("mode", mode);
+        return `${base}?${params.toString()}`;
     }
 
     function canEditSelectedRow(row) {
@@ -142,6 +140,12 @@
             const link = row.querySelector(".prq-row-link");
             link?.addEventListener("click", (ev) => {
                 ev.preventDefault();
+                const href = link.getAttribute("href");
+                if (href && href !== "#") {
+                    window.location.href = href;
+                    return;
+                }
+
                 const id = row.getAttribute("data-prid");
                 if (!id) return;
                 const mode = canEditSelectedRow(row) ? "edit" : "view";
@@ -275,11 +279,8 @@
     }
 
     function initActions() {
-        const btnEdit = document.getElementById("btnEdit");
-        const btnViewDetail = document.getElementById("btnViewDetail");
         const btnExportExcel = document.getElementById("btnExportExcel");
         const btnDisapproval = document.getElementById("btnDisapproval");
-        const config = getConfig();
 
         const getSelectedRow = () => {
             const rows = typeof window.getPrqSelectedRows === "function" ? window.getPrqSelectedRows() : [];
@@ -289,22 +290,8 @@
         const syncState = () => {
             const selectedRow = getSelectedRow();
             const hasSelection = !!selectedRow;
-            if (btnEdit) btnEdit.disabled = !hasSelection || !config.canEdit || !canEditSelectedRow(selectedRow);
-            if (btnViewDetail) btnViewDetail.disabled = !hasSelection || !config.canViewDetail || !canViewDetailSelectedRow(selectedRow);
-            if (btnDisapproval) btnDisapproval.disabled = !hasSelection || !config.canDisapproval;
+            if (btnDisapproval) btnDisapproval.disabled = !hasSelection || !getConfig().canDisapproval;
         };
-
-        btnEdit?.addEventListener("click", () => {
-            const row = getSelectedRow();
-            if (!row || !canEditSelectedRow(row)) return;
-            window.location.href = buildDetailUrl(row.getAttribute("data-prid"), "edit");
-        });
-
-        btnViewDetail?.addEventListener("click", () => {
-            const row = getSelectedRow();
-            if (!row || !canViewDetailSelectedRow(row)) return;
-            window.location.href = buildDetailUrl(row.getAttribute("data-prid"), "view");
-        });
 
         btnExportExcel?.addEventListener("click", () => {
             const params = new URLSearchParams();
@@ -376,24 +363,26 @@
         const validateAttachment = () => {
             clearAttachmentError();
 
-            const file = attachmentEl.files && attachmentEl.files.length ? attachmentEl.files[0] : null;
-            if (!file) {
+            const files = attachmentEl.files ? Array.from(attachmentEl.files) : [];
+            if (!files.length) {
                 return true;
             }
 
-            const fileName = String(file.name || "");
-            const dotIndex = fileName.lastIndexOf(".");
-            const extension = dotIndex >= 0 ? fileName.substring(dotIndex).toLowerCase() : "";
-            if (allowedExtensions.length && !allowedExtensions.includes(extension)) {
-                showAttachmentError(`Attachment file type is invalid. Allowed: ${config.allowedAttachmentExtensions}`);
-                attachmentEl.value = "";
-                return false;
-            }
+            for (const file of files) {
+                const fileName = String(file.name || "");
+                const dotIndex = fileName.lastIndexOf(".");
+                const extension = dotIndex >= 0 ? fileName.substring(dotIndex).toLowerCase() : "";
+                if (allowedExtensions.length && !allowedExtensions.includes(extension)) {
+                    showAttachmentError(`Attachment file type is invalid for '${fileName}'. Allowed: ${config.allowedAttachmentExtensions}`);
+                    attachmentEl.value = "";
+                    return false;
+                }
 
-            if (maxFileSizeBytes > 0 && file.size > maxFileSizeBytes) {
-                showAttachmentError(`Attachment size cannot exceed ${config.maxAttachmentSizeMb} MB.`);
-                attachmentEl.value = "";
-                return false;
+                if (maxFileSizeBytes > 0 && file.size > maxFileSizeBytes) {
+                    showAttachmentError(`Attachment '${fileName}' size cannot exceed ${config.maxAttachmentSizeMb} MB.`);
+                    attachmentEl.value = "";
+                    return false;
+                }
             }
 
             return true;
@@ -437,6 +426,7 @@
             sourceRows.forEach((row, index) => {
                 const tr = document.createElement("tr");
                 tr.dataset.row = "1";
+                tr.classList.toggle("selected", !!row.checked);
                 tr.innerHTML = `
                     <td class="text-center">
                         <input type="checkbox" class="prq-add-at-check" data-index="${index}" ${row.checked ? "checked" : ""} />
@@ -564,6 +554,10 @@
                 if (Number.isInteger(index) && sourceRows[index]) {
                     sourceRows[index].checked = check.checked;
                 }
+                const row = check.closest("tr");
+                if (row) {
+                    row.classList.toggle("selected", check.checked);
+                }
                 return;
             }
 
@@ -573,7 +567,7 @@
             const index = Number.parseInt(sugBuyInput.getAttribute("data-index"), 10);
             if (!Number.isInteger(index) || !sourceRows[index]) return;
 
-            const parsedValue = clampNonNegativeDecimalInput(sugBuyInput, sourceRows[index].buy);
+            const parsedValue = clampNonNegativeDecimalInput(sugBuyInput);
             sourceRows[index].sugBuy = parsedValue;
         });
 
@@ -589,7 +583,7 @@
             const index = Number.parseInt(sugBuyInput.getAttribute("data-index"), 10);
             if (!Number.isInteger(index) || !sourceRows[index]) return;
 
-            sourceRows[index].sugBuy = clampNonNegativeDecimalInput(sugBuyInput, sourceRows[index].buy);
+            sourceRows[index].sugBuy = clampNonNegativeDecimalInput(sugBuyInput);
         });
 
         addAtForm.addEventListener("submit", (ev) => {
@@ -599,6 +593,13 @@
             }
 
             syncHiddenValues();
+
+            if (!String(descriptionEl.value || "").trim()) {
+                ev.preventDefault();
+                showDangerModal("Description is required.");
+                descriptionEl.focus();
+                return;
+            }
 
             if (!validateAttachment()) {
                 ev.preventDefault();
@@ -612,10 +613,10 @@
                 return;
             }
 
-            const invalidRow = selectedRows.find((row) => row.sugBuy <= 0 || row.sugBuy > row.buy);
+            const invalidRow = selectedRows.find((row) => row.sugBuy <= 0);
             if (invalidRow) {
                 ev.preventDefault();
-                showDangerModal("SugBuy must be greater than 0 and cannot be greater than BUY.");
+                showDangerModal("SugBuy must be greater than 0.");
                 return;
             }
 
