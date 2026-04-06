@@ -80,8 +80,8 @@ public class IndexModel : BasePageModel
     public bool CanEditRequisition { get; set; }
     public bool CanViewDetailRequisition { get; set; }
     public int TotalRecords { get; set; }
-    public string AllowedAttachmentExtensionsText => _config.GetValue<string>("AllowedExtensions") ?? ".doc,.docx,.xls,.xlsx,.pdf,.jpg,.jpeg,.png";
-    public int MaxAttachmentSizeMb => _config.GetValue<int?>("MaxFileSizeMb") ?? 10;
+    public string AllowedAttachmentExtensionsText => _config.GetValue<string>("FileUploads:AllowedExtensions") ?? ".doc,.docx,.xls,.xlsx,.pdf,.jpg,.jpeg,.png";
+    public int MaxAttachmentSizeMb => _config.GetValue<int?>("FileUploads:MaxFileSizeMb") ?? 10;
     public int TotalPages => Filter.PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)Filter.PageSize));
     public int PageStart => TotalRecords == 0 ? 0 : ((Filter.Page - 1) * Filter.PageSize) + 1;
     public int PageEnd => TotalRecords == 0 ? 0 : Math.Min(Filter.Page * Filter.PageSize, TotalRecords);
@@ -990,13 +990,13 @@ VALUES
         docCmd.ExecuteNonQuery();
     }
 
-    // Xác định thư mục lưu file theo cấu hình FilePath trong appsettings.json.
+    // Xác định thư mục lưu file theo cấu hình FileUploads:FilePath trong appsettings.json.
     private string ResolveAddAtUploadFolder()
     {
-        var configuredPath = _config.GetValue<string>("FilePath");
+        var configuredPath = _config.GetValue<string>("FileUploads:FilePath");
         if (string.IsNullOrWhiteSpace(configuredPath))
         {
-            throw new InvalidOperationException("FilePath is missing in appsettings.json.");
+            throw new InvalidOperationException("FileUploads:FilePath is missing in appsettings.json.");
         }
 
         return Path.IsPathRooted(configuredPath)

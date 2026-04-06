@@ -50,8 +50,8 @@ public class PurchaseRequisitionDetailModel : BasePageModel
     public bool IsStatusReadOnlyMode => Mode == "edit" && Requisition.Status != 1;
     public bool IsReadOnlyMode => IsViewMode || IsApproveMode || IsStatusReadOnlyMode;
     public decimal TotalAmount { get; private set; }
-    public string AllowedAttachmentExtensionsText => _config.GetValue<string>("AllowedExtensions") ?? ".doc,.docx,.xls,.xlsx,.pdf,.jpg,.jpeg,.png";
-    public int MaxAttachmentSizeMb => _config.GetValue<int?>("MaxFileSizeMb") ?? 10;
+    public string AllowedAttachmentExtensionsText => _config.GetValue<string>("FileUploads:AllowedExtensions") ?? ".doc,.docx,.xls,.xlsx,.pdf,.jpg,.jpeg,.png";
+    public int MaxAttachmentSizeMb => _config.GetValue<int?>("FileUploads:MaxFileSizeMb") ?? 10;
 
     [BindProperty(SupportsGet = true)]
     public string Mode { get; set; } = "add";
@@ -1893,13 +1893,13 @@ VALUES
         cmd.ExecuteNonQuery();
     }
 
-    // Xác định thư mục lưu file đính kèm từ cấu hình FilePath.
+    // Xác định thư mục lưu file đính kèm từ cấu hình FileUploads:FilePath.
     private string ResolveUploadFolder()
     {
-        var configuredPath = _config.GetValue<string>("FilePath");
+        var configuredPath = _config.GetValue<string>("FileUploads:FilePath");
         if (string.IsNullOrWhiteSpace(configuredPath))
         {
-            throw new InvalidOperationException("FilePath is missing in appsettings.json.");
+            throw new InvalidOperationException("FileUploads:FilePath is missing in appsettings.json.");
         }
 
         return Path.IsPathRooted(configuredPath)
