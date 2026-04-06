@@ -998,7 +998,6 @@ ORDER BY d.REQUEST_NO, i.ItemCode";
         const string sql = @"
 SELECT TOP 200 SupplierID, ISNULL(SupplierCode, '') AS SupplierCode, ISNULL(SupplierName, '') AS SupplierName
 FROM dbo.PC_Suppliers
-WHERE ISNULL(IsDeleted, 0) = 0
 ORDER BY SupplierCode";
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
