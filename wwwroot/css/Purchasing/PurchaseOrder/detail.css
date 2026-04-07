@@ -1,0 +1,94 @@
+.purchase-order-header-layout {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+.purchase-order-header-left {
+    flex: 0 0 58%;
+    max-width: 58%;
+}
+
+.purchase-order-header-right {
+    flex: 1 1 42%;
+    max-width: 42%;
+}
+
+.purchase-order-header-field {
+    display: grid;
+    grid-template-columns: 140px minmax(0, 1fr);
+    gap: 0.5rem 0.75rem;
+    align-items: start;
+}
+
+.purchase-order-header-right textarea,
+.purchase-order-header-left textarea {
+    resize: vertical;
+}
+
+.purchase-order-vat-grid {
+    display: grid;
+    grid-template-columns: 140px minmax(72px, 104px) 118px minmax(0, 1fr);
+    gap: 0.5rem 0.75rem;
+    align-items: center;
+    margin-top: 0.35rem;
+}
+
+.purchase-order-vat-label {
+    display: flex;
+    align-items: center;
+}
+
+.purchase-order-vat-label-secondary {
+    justify-content: flex-start;
+}
+
+.purchase-order-vat-value input {
+    width: 100%;
+}
+
+.purchase-order-vat-value-sm {
+    max-width: 104px;
+}
+
+.purchase-order-action-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #e9ecef;
+}
+
+.purchase-order-action-bar .btn {
+    margin-right: 0 !important;
+}
+
+/* PO page only: keep Select2 dropdowns below Bootstrap modals. */
+.purchase-order-header-layout .select2-container,
+.purchase-order-header-layout .select2-container--open,
+.select2-dropdown {
+    z-index: 1040 !important;
+}
+
+@media (max-width: 991.98px) {
+    .purchase-order-header-layout {
+        flex-direction: column;
+    }
+
+    .purchase-order-header-left,
+    .purchase-order-header-right {
+        flex: 1 1 auto;
+        max-width: 100%;
+    }
+
+    .purchase-order-header-field,
+    .purchase-order-vat-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .purchase-order-vat-value-sm {
+        max-width: none;
+    }
+}

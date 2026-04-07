@@ -1,0 +1,389 @@
+@page
+@model SmartSam.Pages.Purchasing.PurchaseOrder.PurchaseOrderDetailModel
+@{
+    ViewData["Title"] = "Purchase Order Detail";
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <strong><i class="fas fa-check-circle"></i></strong> @TempData["SuccessMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="alert alert-danger">
+                <div asp-validation-summary="All" class="text-danger"></div>
+            </div>
+        }
+
+        <form method="post" id="purchaseOrderDetailForm">
+            <input asp-for="Mode" type="hidden" />
+            <input asp-for="Header.Id" type="hidden" />
+            <input asp-for="DetailsJson" type="hidden" id="DetailsJson" />
+            <input asp-for="ReturnUrl" type="hidden" />
+
+            <div class="card card-primary card-outline">
+                <div class="card-header py-2">
+                    <h3 class="card-title">Purchase Order Detail</h3>
+                </div>
+                <div class="card-body pb-2">
+                    <div class="purchase-order-header-layout">
+                        <div class="purchase-order-header-left">
+                            <div class="row no-gutters align-items-center mb-2">
+                                <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">PO. No.<span class="text-danger">*</span></label></div>
+                                <div class="col-4">
+                                    <input asp-for="Header.PONo" id="PONo" class="form-control form-control-sm" readonly />
+                                </div>
+                                <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Order Date</label></div>
+                                <div class="col-4">
+                                    <input asp-for="Header.PODate" id="PODate" type="date" class="form-control form-control-sm" readonly="@Model.IsViewMode" />
+                                </div>
+                            </div>
+
+                            <div class="row no-gutters align-items-center mb-2">
+                                <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">PR No</label></div>
+                                <div class="col-4">
+                                    <select asp-for="Header.PRID" id="PRID" class="form-control form-control-sm" disabled="@Model.IsViewMode" style="width: 100%;">
+                                        <option value="">-- Select PR --</option>
+                                        @if (Model.Header.PRID.HasValue && !string.IsNullOrWhiteSpace(Model.CurrentPrText))
+                                        {
+                                            <option value="@Model.Header.PRID" selected>@Model.CurrentPrText</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Currency</label></div>
+                                <div class="col-4">
+                                    <select asp-for="Header.Currency" asp-items="Model.CurrencyOptions" class="form-control form-control-sm" disabled="@Model.IsViewMode">
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row no-gutters align-items-center mb-2">
+                                <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Supplier</label></div>
+                                <div class="col-4">
+                                    <select asp-for="Header.SupplierID" id="SupplierID" class="form-control form-control-sm" disabled="@Model.IsViewMode" style="width: 100%;">
+                                        <option value="">-- Select Supplier --</option>
+                                        @if (Model.Header.SupplierID.HasValue && !string.IsNullOrWhiteSpace(Model.CurrentSupplierText))
+                                        {
+                                            <option value="@Model.Header.SupplierID" selected>@Model.CurrentSupplierText</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Ass. Level</label></div>
+                                <div class="col-4">
+                                    <select asp-for="Header.AssessLevel" asp-items="Model.AssessLevelOptions" class="form-control form-control-sm" disabled="@Model.IsViewMode">
+                                        <option value="">-- Select Assess Level --</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row no-gutters align-items-center mb-2">
+                                <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">ExRate</label></div>
+                                <div class="col-4">
+                                    <input asp-for="Header.ExRate" id="ExRate" class="form-control form-control-sm text-right" readonly="@Model.IsViewMode" />
+                                </div>
+                                <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Status</label></div>
+                                <div class="col-4">
+                                    <select asp-for="Header.StatusId" asp-items="Model.StatusOptions" class="form-control form-control-sm" disabled>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row no-gutters align-items-start mb-2">
+                                <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">Comment</label></div>
+                                <div class="col-10">
+                                    <textarea asp-for="Header.Comment" id="Comment" rows="3" class="form-control form-control-sm vni-font" readonly="@Model.IsViewMode"></textarea>
+                                </div>
+                            </div>
+
+                            <div class="row no-gutters align-items-start mb-0">
+                                <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">Remark</label></div>
+                                <div class="col-10">
+                                    <textarea asp-for="Header.Remark" id="Remark" rows="2" class="form-control form-control-sm vni-font" readonly="@Model.IsViewMode"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="purchase-order-header-right">
+                            <div class="purchase-order-header-field mb-2">
+                                <label class="col-form-label-sm mt-1 mb-0">Terms &amp; Condition</label>
+                                <div>
+                                    <textarea asp-for="Header.POTerms" id="POTerms" rows="6" class="form-control form-control-sm vni-font" readonly="@Model.IsViewMode"></textarea>
+                                </div>
+                            </div>
+
+                            <div class="purchase-order-vat-grid">
+                                <div class="purchase-order-vat-label">
+                                    <label class="col-form-label-sm mb-0">%VAT</label>
+                                </div>
+                                <div class="purchase-order-vat-value purchase-order-vat-value-sm">
+                                    <input asp-for="Header.PerVAT" id="PerVAT" class="form-control form-control-sm text-right" readonly="@Model.IsViewMode" />
+                                </div>
+                                <div class="purchase-order-vat-label purchase-order-vat-label-secondary">
+                                    <label class="col-form-label-sm mb-0">Before VAT</label>
+                                </div>
+                                <div class="purchase-order-vat-value">
+                                    <input asp-for="Header.BeforeVAT" id="BeforeVAT" class="form-control form-control-sm text-right" readonly />
+                                </div>
+
+                                <div></div>
+                                <div></div>
+                                <div class="purchase-order-vat-label purchase-order-vat-label-secondary">
+                                    <label class="col-form-label-sm mb-0">VAT</label>
+                                </div>
+                                <div class="purchase-order-vat-value">
+                                    <input asp-for="Header.VAT" id="VAT" class="form-control form-control-sm text-right" readonly />
+                                </div>
+
+                                <div></div>
+                                <div></div>
+                                <div class="purchase-order-vat-label purchase-order-vat-label-secondary">
+                                    <label class="col-form-label-sm mb-0">After VAT</label>
+                                </div>
+                                <div class="purchase-order-vat-value">
+                                    <input asp-for="Header.AfterVAT" id="AfterVAT" class="form-control form-control-sm text-right" readonly />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="purchase-order-action-bar">
+                        @if (Model.CanSave)
+                        {
+                            <button type="submit" class="btn btn-sm btn-success mr-2" id="btnSave">
+                                <i class="fas fa-save"></i> Save
+                            </button>
+                        }
+                        @if (Model.CanEvaluate)
+                        {
+                            <button type="button" class="btn btn-sm btn-primary mr-2" id="btnEvaluate">
+                                <i class="fas fa-star"></i> Evaluate
+                            </button>
+                        }
+                        @if (Model.CanApprove)
+                        {
+                            <button type="button" class="btn btn-sm btn-info mr-2" id="btnApprove">
+                                <i class="fas fa-check"></i> Approve
+                            </button>
+                        }
+                        @if (Model.CanBackToProcessing)
+                        {
+                            <button type="button" class="btn btn-sm btn-warning mr-2" id="btnBackToProcessingDetail">
+                                <i class="fas fa-undo"></i> Back to Processing
+                            </button>
+                        }
+                        <button type="button" class="btn btn-sm btn-secondary mr-2" id="btnCalculateTotal">
+                            <i class="fas fa-calculator"></i> CalSum
+                        </button>
+                        <a href="@Model.BackToListUrl" class="btn btn-sm btn-default">
+                            <i class="fas fa-arrow-left"></i> Back to list
+                        </a>
+                    </div>
+                </div>
+
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered table-hover mb-0" id="purchaseOrderDetailTable">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th style="width: 40px;"></th>
+                                    <th style="width: 140px;">Item Code</th>
+                                    <th>Item Name</th>
+                                    <th style="width: 80px;">Unit</th>
+                                    <th style="width: 90px;" class="text-center">Qty</th>
+                                    <th style="width: 100px;" class="text-center">U.Price</th>
+                                    <th style="width: 120px;" class="text-center">PO Amount</th>
+                                    <th style="width: 180px;">For Department</th>
+                                    <th style="width: 180px;">Note</th>
+                                    <th style="width: 90px;" class="text-center">Rec Qty</th>
+                                    <th style="width: 120px;" class="text-center">Rec Amount</th>
+                                    <th style="width: 110px;" class="text-center">Rec Date</th>
+                                    @if (Model.CanSave)
+                                    {
+                                        <th style="width: 55px;"></th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody id="purchaseOrderDetailRows">
+                                <tr id="purchaseOrderDetailEmptyRow">
+                                    <td colspan="@(Model.CanSave ? 13 : 12)" class="text-center text-muted">No detail rows</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card-footer py-2">
+                    @if (Model.CanSave)
+                    {
+                        <button type="button" class="btn btn-sm btn-success mr-2" id="btnAddDetail">
+                            <i class="fas fa-plus"></i> Add Detail
+                        </button>
+                    }
+                    <span class="float-right">Total Record(s): <span id="purchaseOrderDetailCount">0</span></span>
+                </div>
+            </div>
+        </form>
+
+        <form method="post" asp-page-handler="Evaluate" id="poEvaluateForm">
+            <input type="hidden" name="Header.Id" value="@Model.Header.Id" />
+            <input type="hidden" name="Mode" value="@Model.Mode" />
+            <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+            <input type="hidden" name="EstimatePoint" id="EvaluateEstimatePointInput" />
+        </form>
+
+        <form method="post" asp-page-handler="Approve" id="poApproveForm">
+            <input type="hidden" name="Header.Id" value="@Model.Header.Id" />
+            <input type="hidden" name="Mode" value="@Model.Mode" />
+            <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+        </form>
+
+        <form method="post" asp-page-handler="BackToProcessing" id="poBackToProcessingForm">
+            <input type="hidden" name="Header.Id" value="@Model.Header.Id" />
+            <input type="hidden" name="Mode" value="@Model.Mode" />
+            <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+            <input type="hidden" name="ConvertReason" id="ConvertReasonInput" />
+        </form>
+
+        @if (Model.CanSave)
+        {
+            <div class="modal fade" id="purchaseOrderAddDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
+                <div class="modal-dialog modal-xl" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header py-2">
+                            <h5 class="modal-title">Select Items From PR</h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body pb-2">
+                            <div class="text-danger small mb-2 d-none" id="purchaseOrderAddDetailError"></div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered table-hover mb-0" id="purchaseOrderPrLineTable">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th style="width: 50px;" class="text-center">
+                                                <input type="checkbox" id="purchaseOrderPrCheckAll" />
+                                            </th>
+                                            <th style="width: 140px;">Item Code</th>
+                                            <th>Item Name</th>
+                                            <th style="width: 80px;">Unit</th>
+                                            <th style="width: 90px;" class="text-center">Qty</th>
+                                            <th style="width: 100px;" class="text-center">U.Price</th>
+                                            <th style="width: 180px;">Remark</th>
+                                            <th style="width: 180px;">Supplier</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="purchaseOrderPrLineRows">
+                                        <tr>
+                                            <td colspan="8" class="text-center text-muted">Please select PR first.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="modal-footer py-2">
+                            <button type="button" class="btn btn-sm btn-primary" id="btnConfirmAddDetail">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                            <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">
+                                <i class="fas fa-times"></i> Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="modal fade" id="purchaseOrderEvaluateModal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header py-2">
+                        <h5 class="modal-title">Evaluate Purchase Order</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group mb-2">
+                            <label class="d-block">Price Point</label>
+                            <div class="custom-control custom-radio">
+                                <input class="custom-control-input" type="radio" id="estimatePoint1" name="estimatePointOption" value="1" />
+                                <label class="custom-control-label" for="estimatePoint1">1</label>
+                            </div>
+                            <div class="custom-control custom-radio">
+                                <input class="custom-control-input" type="radio" id="estimatePoint2" name="estimatePointOption" value="2" />
+                                <label class="custom-control-label" for="estimatePoint2">2</label>
+                            </div>
+                            <div class="custom-control custom-radio">
+                                <input class="custom-control-input" type="radio" id="estimatePoint3" name="estimatePointOption" value="3" />
+                                <label class="custom-control-label" for="estimatePoint3">3</label>
+                            </div>
+                            <div class="custom-control custom-radio">
+                                <input class="custom-control-input" type="radio" id="estimatePoint4" name="estimatePointOption" value="4" />
+                                <label class="custom-control-label" for="estimatePoint4">4</label>
+                            </div>
+                        </div>
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="confirmEstimateCheck" />
+                            <label class="custom-control-label" for="confirmEstimateCheck">You make sure with your estimate</label>
+                        </div>
+                    </div>
+                    <div class="modal-footer py-2">
+                        <button type="button" class="btn btn-sm btn-primary" id="btnConfirmEvaluate">OK</button>
+                        <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="purchaseOrderConvertModal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header py-2">
+                        <h5 class="modal-title">Reason to convert PO</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <textarea class="form-control form-control-sm vni-font" id="ConvertReasonText" rows="5"></textarea>
+                    </div>
+                    <div class="modal-footer py-2">
+                        <button type="button" class="btn btn-sm btn-warning" id="btnConfirmBackToProcessing">Convert</button>
+                        <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Purchasing/PurchaseOrder/detail.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script>
+        window.purchaseOrderDetailPage = {
+            canSave: @(Model.CanSave ? "true" : "false"),
+            isViewMode: @(Model.IsViewMode ? "true" : "false"),
+            canEvaluate: @(Model.CanEvaluate ? "true" : "false"),
+            canApprove: @(Model.CanApprove ? "true" : "false"),
+            canBackToProcessing: @(Model.CanBackToProcessing ? "true" : "false"),
+            supplierLookupUrl: '@Url.Page("./PurchaseOrderDetail", "SupplierLookup")',
+            prLookupUrl: '@Url.Page("./PurchaseOrderDetail", "PrLookup")',
+            prLinesUrl: '@Url.Page("./PurchaseOrderDetail", "PrLines")',
+            departmentOptions: @Html.Raw(Model.DepartmentOptionsJson),
+            openConvertModal: @(Model.OpenConvertModal ? "true" : "false")
+        };
+    </script>
+    <script src="~/js/Purchasing/PurchaseOrder/PurchaseOrderDetail.js" asp-append-version="true"></script>
+}

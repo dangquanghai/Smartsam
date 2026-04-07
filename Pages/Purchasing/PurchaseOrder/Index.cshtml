@@ -1,0 +1,311 @@
+@page
+@model SmartSam.Pages.Purchasing.PurchaseOrder.IndexModel
+@{
+    ViewData["Title"] = "Purchase Order";
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+
+            <div class="col-md-2">
+                <div class="card card-info">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-search"></i> Search
+                        </h3>
+                    </div>
+
+                    <div class="card-body">
+                        <form method="get" id="purchaseOrderSearchForm">
+                            <div class="form-group">
+                                <label>Order No.</label>
+                                <input class="form-control form-control-sm" asp-for="Filter.PONo" id="Filter_PONo" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>PR No.</label>
+                                <input class="form-control form-control-sm" asp-for="Filter.RequestNo" id="Filter_RequestNo" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Status</label>
+                                <select class="form-control form-control-sm"
+                                        asp-for="Filter.StatusId"
+                                        asp-items="Model.Statuses"
+                                        id="Filter_StatusId">
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Supplier</label>
+                                <input class="form-control form-control-sm vni-font" asp-for="Filter.SupplierKeyword" id="Filter_SupplierKeyword" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Assess Level</label>
+                                <select class="form-control form-control-sm"
+                                        asp-for="Filter.AssessLevelId"
+                                        asp-items="Model.AssessLevels"
+                                        id="Filter_AssessLevelId">
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Remark</label>
+                                <input class="form-control form-control-sm vni-font" asp-for="Filter.Remark" id="Filter_Remark" />
+                            </div>
+
+                            <div class="form-group mb-1">
+                                <div class="custom-control custom-checkbox">
+                                    <input asp-for="Filter.UseDateRange" class="custom-control-input" id="Filter_UseDateRange" />
+                                    <label asp-for="Filter.UseDateRange" class="custom-control-label">Use PO Date</label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>From Date - To Date</label>
+                                <div class="po-date-range-control">
+                                    <input type="text"
+                                           id="PoDateRange"
+                                           class="form-control form-control-sm"
+                                           readonly />
+                                </div>
+                                <input asp-for="Filter.FromDate" type="hidden" id="Filter_FromDate" />
+                                <input asp-for="Filter.ToDate" type="hidden" id="Filter_ToDate" />
+                            </div>
+
+                            <button class="btn btn-primary btn-block btn-sm" type="submit">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-10">
+                <div class="card card-primary">
+                    <div class="card-header">
+                        <h3 class="card-title">Purchase Orders</h3>
+                        <span class="badge badge-light ml-2" id="total-records-badge">0 records</span>
+                        <div class="card-tools float-right app-paging-white">
+                            <nav aria-label="Page navigation">
+                                <div id="pagination-info" class="d-inline-block mr-2" style="padding-top: 0.3rem;">
+                                    <small>No records</small>
+                                </div>
+                                <ul class="pagination pagination-sm mb-0 d-inline-flex" id="pagination">
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-bordered mb-0" id="purchaseOrderTable">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th></th>
+                                        <th>No.</th>
+                                        <th>Date</th>
+                                        <th>Request No.</th>
+                                        <th>Supplier Code / Name</th>
+                                        <th>Status</th>
+                                        <th>Purchaser</th>
+                                        <th>Chief.A</th>
+                                        <th>G.Director</th>
+                                        <th>Remark</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="10" class="text-center py-4">No data</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-outline card-primary">
+                    <div class="card-footer p-2 text-center">
+                        @if (Model.PagePerm.HasPermission(3))
+                        {
+                            <button class="btn btn-success btn-sm" id="btnAdd" type="button">
+                                <i class="fas fa-plus"></i> Add New
+                            </button>
+                        }
+                        <button class="btn btn-primary btn-sm d-none" id="btnEdit" type="button">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        @if (Model.PagePerm.HasPermission(2))
+                        {
+                            <button class="btn btn-info btn-sm" id="btnViewDetail" type="button">
+                                <i class="fas fa-list-alt"></i> View Detail
+                            </button>
+                        }
+                        <button class="btn btn-warning btn-sm d-none" id="btnBackToProcessing" type="button">
+                            <i class="fas fa-undo"></i> Back to Processing
+                        </button>
+                        <button class="btn btn-secondary btn-sm" id="btnExportExcel" type="button">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </button>
+                    </div>
+                </div>
+        </div>
+
+        @if (Model.PagePerm.HasPermission(2))
+        {
+            <div class="modal fade" id="purchaseOrderViewDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
+                <div class="modal-dialog modal-xl" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header py-2">
+                            <h5 class="modal-title">View Purchase Order Detail</h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="po-viewdetail-panel">
+                                <div class="po-viewdetail-filter-layout">
+                                    <div class="po-viewdetail-filter-row">
+                                        <div class="po-viewdetail-inline-field po-viewdetail-itemcode">
+                                            <label for="ViewDetail_ItemCode">Item Code</label>
+                                            <input type="text" class="form-control form-control-sm" id="ViewDetail_ItemCode" />
+                                        </div>
+                                        <div class="po-viewdetail-inline-field po-viewdetail-recqty">
+                                            <label for="ViewDetail_RecQty">Rec Qty</label>
+                                            <div class="po-viewdetail-qty-group">
+                                                <select class="form-control form-control-sm" id="ViewDetail_RecQtyOp">
+                                                    <option value="=">=</option>
+                                                    <option value=">">&gt;</option>
+                                                    <option value=">=">&gt;=</option>
+                                                    <option value="<">&lt;</option>
+                                                    <option value="<=">&lt;=</option>
+                                                </select>
+                                                <input type="number" class="form-control form-control-sm" id="ViewDetail_RecQty" />
+                                            </div>
+                                        </div>
+                                        <div class="po-viewdetail-inline-check po-viewdetail-renovation">
+                                            <div class="custom-control custom-checkbox">
+                                                <input type="checkbox" class="custom-control-input" id="ViewDetail_Renovation" />
+                                                <label class="custom-control-label" for="ViewDetail_Renovation">Renovation</label>
+                                            </div>
+                                        </div>
+                                        <div class="po-viewdetail-inline-check po-viewdetail-general">
+                                            <div class="custom-control custom-checkbox">
+                                                <input type="checkbox" class="custom-control-input" id="ViewDetail_General" />
+                                                <label class="custom-control-label" for="ViewDetail_General">General</label>
+                                            </div>
+                                        </div>
+                                        <div class="po-viewdetail-inline-field po-viewdetail-podate">
+                                            <div class="po-viewdetail-date-inline">
+                                                <div class="custom-control custom-checkbox po-viewdetail-date-toggle">
+                                                    <input type="checkbox" class="custom-control-input" id="ViewDetail_UsePoDateRange" checked="checked" />
+                                                    <label class="custom-control-label" for="ViewDetail_UsePoDateRange">PO Date</label>
+                                                </div>
+                                                <div class="po-viewdetail-date-group">
+                                                    <input type="text" id="ViewDetailPoDateRange" class="form-control form-control-sm" readonly />
+                                                </div>
+                                            </div>
+                                            <input type="hidden" id="ViewDetail_PoFromDate" />
+                                            <input type="hidden" id="ViewDetail_PoToDate" />
+                                        </div>
+                                    </div>
+                                    <div class="po-viewdetail-filter-row" id="purchaseOrderViewDetailAdvanced">
+                                        <div class="po-viewdetail-inline-field po-viewdetail-fordep">
+                                            <label for="ViewDetail_ForDeptId">For Dep</label>
+                                            <select class="form-control form-control-sm" asp-items="Model.Departments" id="ViewDetail_ForDeptId"></select>
+                                        </div>
+                                        <div class="po-viewdetail-inline-field po-viewdetail-itemnot">
+                                            <label for="ViewDetail_ItemNotInclude">Item not Include</label>
+                                            <input type="text" class="form-control form-control-sm" id="ViewDetail_ItemNotInclude" />
+                                        </div>
+                                        <div class="po-viewdetail-inline-field po-viewdetail-supplier">
+                                            <label for="ViewDetail_SupplierName">Supplier Name</label>
+                                            <input type="text" class="form-control form-control-sm" id="ViewDetail_SupplierName" />
+                                        </div>
+                                        <div class="po-viewdetail-inline-field po-viewdetail-recd">
+                                            <div class="po-viewdetail-date-inline">
+                                                <div class="custom-control custom-checkbox po-viewdetail-date-toggle">
+                                                    <input type="checkbox" class="custom-control-input" id="ViewDetail_UseRecDateRange" />
+                                                    <label class="custom-control-label" for="ViewDetail_UseRecDateRange">Rec Date</label>
+                                                </div>
+                                                <div class="po-viewdetail-date-group">
+                                                    <input type="text" id="ViewDetailRecDateRange" class="form-control form-control-sm" readonly />
+                                                </div>
+                                            </div>
+                                            <input type="hidden" id="ViewDetail_RecFromDate" />
+                                            <input type="hidden" id="ViewDetail_RecToDate" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="po-viewdetail-filter-actions">
+                                    <button type="button" class="btn btn-sm btn-primary" id="btnSearchViewDetail">Search</button>
+                                </div>
+                            </div>
+
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered table-hover mb-0 text-nowrap" id="purchaseOrderViewDetailTable">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th>Item Code</th>
+                                            <th>Item Name</th>
+                                            <th class="text-right">Quantity</th>
+                                            <th class="text-right">U.Price</th>
+                                            <th class="text-right">PO Amount</th>
+                                            <th>For Department</th>
+                                            <th>Note</th>
+                                            <th class="text-right">Rec Qty</th>
+                                            <th class="text-right">Rec Amount</th>
+                                            <th>Rec Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="purchaseOrderViewDetailRows">
+                                        <tr>
+                                            <td colspan="10" class="text-center text-muted">No data</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="d-flex align-items-center justify-content-between mt-2">
+                                <div id="purchaseOrderViewDetailPaginationInfo" class="text-muted small">
+                                    <small>No records</small>
+                                </div>
+                                <ul class="pagination pagination-sm mb-0" id="purchaseOrderViewDetailPagination"></ul>
+                            </div>
+                        </div>
+                        <div class="modal-footer py-2 d-flex align-items-center">
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="btnViewDetailReport">
+                                Report
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-success mx-auto" id="btnViewDetailExportExcel">
+                                Export Excel
+                            </button>
+                            <span class="badge badge-light ml-auto mr-2" id="purchaseOrderViewDetailCount">Total Record(s): 0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        </div>
+    </div>
+</section>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Purchasing/PurchaseOrder/index.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    @Html.AntiForgeryToken()
+    <script>
+        const defaultPageSize = @Model.DefaultPageSize;
+        window.purchaseOrderPage = {
+            detailUrlBase: '@Url.Page("./PurchaseOrderDetail")',
+            exportUrlBase: '@Url.Page("./Index", "ExportExcel")',
+            canAdd: @(Model.PagePerm.HasPermission(3) ? "true" : "false")
+        };
+    </script>
+    <script src="~/js/Purchasing/PurchaseOrder/index.js" asp-append-version="true"></script>
+}
