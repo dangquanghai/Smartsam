@@ -40,7 +40,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         private bool _isAdminRole;
         private List<int> _effectivePerms = new List<int>();
 
-        // Constructor truyá»n config vÃ o BasePageModel
+        // Constructor that passes configuration into BasePageModel.
         public SupplierDetailModel(ISecurityService securityService, PermissionService permissionService, IConfiguration config, ILogger<SupplierDetailModel> logger) : base(config)
         {
             _securityService = securityService;
@@ -143,10 +143,10 @@ namespace SmartSam.Pages.Purchasing.Supplier
 
         public async Task<IActionResult> OnGetAsync(int? id, string mode = "view")
         {
-            // 1. Láº¥y thÃ´ng tin Role cá»§a User hiá»‡n táº¡i
+            // 1. Get the current user's role information.
             int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
 
-            // GÃ¡n máº·c Ä‘á»‹nh ban Ä‘áº§u
+            // Initialize default values.
             Id = id;
             Mode = mode ?? "view";
 
@@ -159,7 +159,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
 
             if (Id.HasValue && Id.Value > 0)
             {
-                // 2. Load dá»¯ liá»‡u thá»±c táº¿
+                // 2. Load the actual supplier record.
                 LoadSupplierData(Id.Value);
 
                 if (Input == null)
@@ -172,17 +172,17 @@ namespace SmartSam.Pages.Purchasing.Supplier
                     return Forbid();
                 }
 
-                // Láº¥y táº­p quyá»n thá»±c táº¿ cho báº£n ghi hiá»‡n táº¡i (theo cÃ¹ng pattern vá»›i STContract).
-                // Function 71 hiá»‡n váº«n static nÃªn behavior chÆ°a Ä‘á»•i.
+                // Get the effective permissions for the current record, following the same pattern as STContract.
+                // Function 71 is still static, so the behavior remains unchanged.
                 _effectivePerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, Input.Status ?? 0);
 
-                // BÆ°á»›c A: Kiá»ƒm tra quyá»n truy cáº­p báº£n ghi (MÃ£ 2: View)
+                // Step A: Check access permission for the record (Code 2: View).
                 if (!_effectivePerms.Contains(PermissionViewDetail))
                 {
                     return RedirectToPage("./Index", new { msg = "Record does not exist or you have no permission to access." });
                 }
 
-                // BÆ°á»›c B: Ã‰p Mode dá»±a trÃªn quyá»n edit
+                // Step B: Force the mode based on edit permission.
                 if (Mode == "edit" && !_effectivePerms.Contains(PermissionEdit))
                 {
                     Mode = "view";
@@ -190,8 +190,8 @@ namespace SmartSam.Pages.Purchasing.Supplier
             }
             else
             {
-                // TRÆ¯á»œNG Há»¢P ADD Má»šI: Kiá»ƒm tra mÃ£ quyá»n 3 (Add) tá»« SecurityService
-                // Truyá»n tráº¡ng thÃ¡i 0 (vÃ¬ chÆ°a cÃ³ báº£n ghi) Ä‘á»ƒ check quyá»n Add
+                // ADD NEW case: check permission code 3 (Add) from SecurityService.
+                // Pass status 0 because the record does not exist yet.
                 var addPerms = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, 0);
                 _effectivePerms = addPerms;
 
@@ -227,8 +227,8 @@ namespace SmartSam.Pages.Purchasing.Supplier
             return Page();
         }
 
-        // AJAX kiá»ƒm tra trÃ¹ng SupplierCode khi user nháº­p.
-        // Kiá»ƒm tra quyá»n add/edit vÃ  pháº¡m vi dá»¯ liá»‡u (scope) theo phÃ²ng ban.
+        // AJAX endpoint to check duplicate SupplierCode while the user is typing.
+        // Also validates add/edit permission and department data scope.
         public JsonResult OnGetCheckSupplierCode(string? supplierCode, int? id)
         {
             int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
@@ -269,7 +269,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             return new JsonResult(new { ok = true, exists = exists });
         }
 
-        // AJAX táº£i lá»‹ch sá»­ phÃª duyá»‡t; tbody render báº±ng JS.
+        // AJAX endpoint to load approval history; the tbody is rendered by JavaScript.
         public IActionResult OnGetApprovalHistory(int supplierId, string? viewMode, int? year)
         {
             int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
@@ -313,25 +313,25 @@ namespace SmartSam.Pages.Purchasing.Supplier
             bool isAdmin = IsAdminUser();
             int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
 
-            // 1. Khá»Ÿi táº¡o Ä‘á»‘i tÆ°á»£ng PagePermissions má»›i
+            // 1. Initialize a new PagePermissions object.
             var permsObj = new PagePermissions();
 
             if (isAdmin)
             {
-                // Admin: GÃ¡n danh sÃ¡ch quyá»n giáº£ láº­p
+                // Admin: assign a full mock permission set.
                 permsObj.AllowedNos = Enumerable.Range(1, 20).ToList();
             }
             else
             {
-                // 2. Láº¥y danh sÃ¡ch List<int> tá»« Service vÃ  gÃ¡n vÃ o thuá»™c tÃ­nh AllowedNos cá»§a Object
+                // 2. Load the permission list from the service and assign it to AllowedNos.
                 permsObj.AllowedNos = _permissionService.GetPermissionsForPage(roleId, FUNCTION_ID);
             }
 
-            // 3. Tráº£ vá» Ä‘á»‘i tÆ°á»£ng (Object) chá»©a danh sÃ¡ch Ä‘Ã³
+            // 3. Return the object that contains the permission list.
             return permsObj;
         }
 
-        // Náº¡p data scope cá»§a user login hiá»‡n táº¡i (Dept + LevelCheckSupplier).
+        // Load the current login user's data scope (Dept + LevelCheckSupplier).
         private void LoadUserDataScope()
         {
             _isAdminRole = IsAdminUser();
@@ -344,7 +344,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             _dataScope = GetEmployeeDataScope(User.Identity?.Name);
         }
 
-        // Check admin role theo claim moi ("True"/"1"), co fallback DB theo RoleID.
+        // Check the admin role from the new claim format ("True"/"1"), with DB fallback by RoleID.
         private bool IsAdminUser()
         {
             var adminClaim = (User.FindFirst("IsAdminRole")?.Value ?? string.Empty).Trim();
@@ -380,7 +380,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             }
         }
 
-        // Äá»c scope user tá»« báº£ng MS_Employee.
+        // Read the user scope from MS_Employee.
         private EmployeeDataScopeViewModel GetEmployeeDataScope(string? employeeCode)
         {
             if (string.IsNullOrWhiteSpace(employeeCode))
@@ -415,7 +415,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             }
         }
 
-        // Kiá»ƒm tra record supplier cÃ³ náº±m trong pháº¡m vi dept user Ä‘Æ°á»£c thao tÃ¡c khÃ´ng.
+        // Check whether the supplier record is within the current user's department scope.
         private bool CanLoadAllDepartments()
         {
             return _isAdminRole || _dataScope.LevelCheckSupplier is 1 or 3 or 4;
@@ -436,7 +436,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             return _dataScope.DeptID.Value == supplierDeptId.Value;
         }
 
-        // Láº¥y DeptID cá»§a supplier theo current/annual Ä‘á»ƒ phá»¥c vá»¥ check scope.
+        // Get the supplier DeptID from current or annual data for scope validation.
         private int? GetSupplierDepartment(int supplierId, string? viewMode, int? year)
         {
             var isByYear = string.Equals(viewMode, "byyear", StringComparison.OrdinalIgnoreCase);
@@ -463,8 +463,8 @@ namespace SmartSam.Pages.Purchasing.Supplier
             }
         }
 
-        // Save/Add/Edit/Submit/Reuse Supplier (theo action cá»§a nÃºt submit).
-        // NgoÃ i UI, backend váº«n check quyá»n + scope Ä‘á»ƒ cháº·n gá»i trá»±c tiáº¿p.
+        // Save/Add/Edit/Submit/Reuse supplier based on the submit button action.
+        // Besides the UI, the backend still validates permission and scope to block direct calls.
         public IActionResult OnPost()
         {
             int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
@@ -650,7 +650,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             var operatorCode = User.Identity?.Name ?? "SYSTEM";
             SubmitApproval(Id!.Value, operatorCode);
 
-            // Náº¿u supplier lÃ  má»›i thÃ¬ gá»­i mail ngay cho cáº¥p duyá»‡t tiáº¿p theo giá»‘ng luá»“ng approve new.
+            // If the supplier is new, send the notification email to the next approval level immediately.
             if (current.IsNew)
             {
                 TryQueueNotifyNewSupplierAfterSubmit(Id.Value, current, operatorCode);
@@ -782,8 +782,8 @@ namespace SmartSam.Pages.Purchasing.Supplier
             return StatusId.HasValue ? StatusId.Value.ToString() : null;
         }
 
-        // Náº¡p dropdown Department + Status cho form detail.
-        // Department bá»‹ giá»›i háº¡n theo scope náº¿u user khÃ´ng cÃ³ quyá»n xem all dept.
+        // Load Department and Status dropdowns for the detail form.
+        // Department is limited by scope when the user cannot access all departments.
         private void LoadAllDropdowns()
         {
             var departments = LoadListFromSql(
@@ -828,7 +828,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             Statuses = statuses;
         }
 
-        // Load chi tiet supplier tu bang current.
+        // Load supplier detail from the current supplier table.
         private SupplierViewModel? GetDetail(int supplierId)
         {
             const string sql = @"
@@ -875,7 +875,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             };
         }
 
-        // Load chi tiet supplier tu bang annual theo nam.
+        // Load supplier detail from the annual supplier table by year.
         private SupplierViewModel? GetAnnualDetail(int supplierId, int year)
         {
             var sql = $@"
@@ -924,7 +924,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             };
         }
 
-        // Láº¥y lá»‹ch sá»­ phÃª duyá»‡t cho current supplier.
+        // Get approval history for the current supplier.
         private List<SupplierApprovalHistoryViewModel> GetApprovalHistory(int supplierId)
         {
             const string sql = @"
@@ -959,7 +959,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             return LoadApprovalHistory(sql, supplierId, null);
         }
 
-        // Láº¥y lá»‹ch sá»­ phÃª duyá»‡t cho annual supplier.
+        // Get approval history for the annual supplier.
         private List<SupplierApprovalHistoryViewModel> GetAnnualApprovalHistory(int supplierId, int? year)
         {
             var sql = $@"
@@ -998,7 +998,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             return LoadApprovalHistory(sql, supplierId, year);
         }
 
-        // HÃ m dÃ¹ng chung Ä‘á»ƒ map káº¿t quáº£ lá»‹ch sá»­ phÃª duyá»‡t.
+        // Shared helper to map approval history results.
         private List<SupplierApprovalHistoryViewModel> LoadApprovalHistory(string sql, int supplierId, int? year)
         {
             var rows = new List<SupplierApprovalHistoryViewModel>();
@@ -1026,7 +1026,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             return rows;
         }
 
-        // Kiá»ƒm tra trÃ¹ng mÃ£ supplier (bá» qua supplier hiá»‡n táº¡i khi edit).
+        // Check duplicate supplier code, excluding the current supplier during edit.
         private bool SupplierCodeExists(string supplierCode, int? excludeSupplierId)
         {
             const string sql = @"
@@ -1045,9 +1045,9 @@ namespace SmartSam.Pages.Purchasing.Supplier
             return Convert.ToInt32(result) > 0;
         }
 
-        // Save chinh:
-        // - Add thi insert + tra ve ID moi
-        // - Edit thi update theo SupplierID.
+        // Main save flow:
+        // - Add inserts a new record and returns the new ID.
+        // - Edit updates by SupplierID.
         private int SaveSupplier(SqlConnection conn, SqlTransaction trans, string operatorCode)
         {
             bool isNew = !Id.HasValue || Id.Value <= 0;
@@ -1126,7 +1126,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             return supplierId;
         }
 
-        // Cap nhat trang thai submit vao workflow phe duyet.
+        // Update the submit status in the approval workflow.
         private void SubmitApproval(int supplierId, string operatorCode)
         {
             const string sql = @"
@@ -1157,11 +1157,16 @@ namespace SmartSam.Pages.Purchasing.Supplier
 
         private void TryQueueNotifyNewSupplierAfterSubmit(int supplierId, SupplierViewModel supplier, string operatorCode)
         {
-            // 1. Sau khi submit, supplier má»›i luÃ´n chuyá»ƒn sang Status = 1 nÃªn cáº¥p duyá»‡t tiáº¿p theo lÃ  level 2.
+            // 1. After submit, a new supplier always moves to Status = 1, so the next approval level is level 2.
             const int nextLevel = 2;
             var recipients = GetEmailsByLevelCheck(nextLevel, supplier.DeptID);
             if (recipients.Count == 0)
             {
+                // _logger.LogWarning(
+                //     "Khong tim thay nguoi nhan mail submit supplier moi. SupplierID={SupplierID}, DeptID={DeptID}, LevelCheckSupplier={LevelCheckSupplier}.",
+                //     supplierId,
+                //     supplier.DeptID,
+                //     nextLevel);
                 return;
             }
 
@@ -1174,6 +1179,11 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 string.IsNullOrWhiteSpace(mailServer) ||
                 mailPort <= 0)
             {
+                // _logger.LogWarning(
+                //     "Thieu cau hinh SMTP khi gui mail submit supplier moi. SupplierID={SupplierID}, DeptID={DeptID}, LevelCheckSupplier={LevelCheckSupplier}.",
+                //     supplierId,
+                //     supplier.DeptID,
+                //     nextLevel);
                 return;
             }
 
@@ -1208,12 +1218,44 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 Password = mailPass,
                 MailServer = mailServer,
                 MailPort = mailPort,
-                Subject = AddTestSubjectPrefix("[Approve Supplier New] Supplier submitted for approval"),
+                Subject = ApplyMailSubjectPrefix("[Approve Supplier New] Supplier submitted for approval"),
                 HtmlBody = htmlBody,
                 Recipients = recipients
             };
 
-            _ = SendNotifyEmailAsync(notifyRequest);
+            // Send within the current request to avoid losing a background task after the redirect response ends.
+            SendNotifyEmailAsync(notifyRequest).GetAwaiter().GetResult();
+        }
+
+        // Apply the subject prefix from EmailSettings when the Supplier FunctionID is in the test list.
+        private string ApplyMailSubjectPrefix(string subject)
+        {
+            if (string.IsNullOrWhiteSpace(subject))
+            {
+                return subject;
+            }
+
+            var prefix = _config.GetValue<string>("EmailSettings:PrefixSubject")?.Trim();
+            if (string.IsNullOrWhiteSpace(prefix) || !ShouldApplyTestSubjectPrefix())
+            {
+                return subject;
+            }
+
+            return $"{prefix} - {subject}";
+        }
+
+        // Check whether the Supplier FunctionID is included in TestFunctionIDs.
+        private bool ShouldApplyTestSubjectPrefix()
+        {
+            var configuredIds = _config.GetValue<string>("EmailSettings:TestFunctionIDs");
+            if (string.IsNullOrWhiteSpace(configuredIds))
+            {
+                return false;
+            }
+
+            return configuredIds
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(value => int.TryParse(value, out var id) && id == FUNCTION_ID);
         }
 
         private List<SupplierSubmitNotifyRecipientViewModel> GetEmailsByLevelCheck(int levelCheckSupplier, int? deptId)
@@ -1292,34 +1334,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             }
         }
 
-        private string AddTestSubjectPrefix(string subject)
-        {
-            var trimmed = (subject ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(trimmed))
-            {
-                return trimmed;
-            }
-
-            if (trimmed.StartsWith("[TEST]", StringComparison.OrdinalIgnoreCase))
-            {
-                return trimmed;
-            }
-
-            var testFunctionIds = (_config.GetValue<string>("EmailSettings:TestFunctionIDs") ?? string.Empty)
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-            foreach (var item in testFunctionIds)
-            {
-                if (int.TryParse(item, out var functionId) && functionId == FUNCTION_ID)
-                {
-                    return $"[TEST] {trimmed}";
-                }
-            }
-
-            return trimmed;
-        }
-
-        // Reset workflow de supplier disapproved co the submit lai tu dau.
+        // Reset the workflow so a disapproved supplier can be submitted again from the beginning.
         private void ResetForReuse(int supplierId)
         {
             const string sql = @"
@@ -1334,7 +1349,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             cmd.ExecuteNonQuery();
         }
 
-        // Bind parameter dung chung cho insert/update supplier.
+        // Bind shared parameters for insert and update operations.
         private static void AddSupplierParameters(SqlCommand cmd, SupplierViewModel supplier)
         {
             cmd.Parameters.AddWithValue("@SupplierCode", (object?)supplier.SupplierCode ?? DBNull.Value);
@@ -1356,13 +1371,13 @@ namespace SmartSam.Pages.Purchasing.Supplier
             cmd.Parameters.AddWithValue("@DeptID", (object?)supplier.DeptID ?? DBNull.Value);
         }
 
-        // Gan flash message vao message hien thi trong trang hien tai.
+        // Apply the flash message to the current page message area.
         private void ApplyFlashMessage()
         {
-            // Giá»¯ hÃ m Ä‘á»ƒ tÆ°Æ¡ng thÃ­ch luá»“ng cÅ©; hiá»‡n dÃ¹ng TempData cho thÃ nh cÃ´ng vÃ  ModelState cho lá»—i.
+            // Keep this method for compatibility with the old flow; success uses TempData and errors use ModelState.
         }
 
-        // Set flash message de hien sau redirect.
+        // Set a flash message to be shown after redirect.
         private void SetFlashMessage(string message, string type)
         {
             FlashMessage = message;
@@ -1370,7 +1385,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             TempData["SuccessMessage"] = message;
         }
 
-        // Set message hien ngay tren response hien tai.
+        // Set a message to be shown immediately on the current response.
         private void SetMessage(string message, string type)
         {
             Message = message;
@@ -1378,7 +1393,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             ModelState.AddModelError(string.Empty, message);
         }
 
-        // VÃ¹ng 1: PC_Suppliers (thÃ´ng tin chÃ­nh cá»§a Supplier)
+        // Region 1: PC_Suppliers (main supplier information)
         public class SupplierViewModel
         {
             [Required(ErrorMessage = "Supplier code is required.")]
@@ -1447,7 +1462,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             public DateTime? PurchaserPreparedDate { get; set; }
         }
 
-        // VÃ¹ng 2: Approval Information (lá»‹ch sá»­ duyá»‡t)
+        // Region 2: Approval Information (approval history)
         public class SupplierApprovalHistoryViewModel
         {
             public string Action { get; set; } = string.Empty;
@@ -1455,7 +1470,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             public DateTime? ActionDate { get; set; }
         }
 
-        // VÃ¹ng phá»¥: scope dá»¯ liá»‡u cá»§a user Ä‘Äƒng nháº­p (Dept/LevelCheckSupplier)
+        // Supporting region: logged-in user data scope (Dept/LevelCheckSupplier)
         public class EmployeeDataScopeViewModel
         {
             public int? DeptID { get; set; }
@@ -1493,3 +1508,5 @@ namespace SmartSam.Pages.Purchasing.Supplier
         }
     }
 }
+
+

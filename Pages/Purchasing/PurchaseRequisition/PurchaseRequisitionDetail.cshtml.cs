@@ -19,8 +19,8 @@ namespace SmartSam.Pages.Purchasing.PurchaseRequisition;
 public class PurchaseRequisitionDetailModel : BasePageModel
 {
     private static readonly HashSet<int> AllowedPageSizes = [10, 20, 50, 100, 200];
-    // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
-    private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
+    private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
+    // private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
     private const int FUNCTION_ID = 72;
     private const int PermissionViewDetail = 2;
     private const int PermissionAdd = 3;
@@ -1954,10 +1954,41 @@ WHERE PRID = @PRID", conn, trans);
             Password = password,
             MailServer = mailServer,
             MailPort = mailPort,
-            Subject = $"TEST - {subject}",
+            Subject = ApplyMailSubjectPrefix(subject),
             HtmlBody = htmlBody,
             Recipients = recipients
         });
+    }
+
+    // Áp tiền tố subject theo cấu hình EmailSettings khi FunctionID của Purchase Requisition nằm trong danh sách test.
+    private string ApplyMailSubjectPrefix(string subject)
+    {
+        if (string.IsNullOrWhiteSpace(subject))
+        {
+            return subject;
+        }
+
+        var prefix = _config.GetValue<string>("EmailSettings:PrefixSubject")?.Trim();
+        if (string.IsNullOrWhiteSpace(prefix) || !ShouldApplyTestSubjectPrefix())
+        {
+            return subject;
+        }
+
+        return $"{prefix} - {subject}";
+    }
+
+    // Kiểm tra cấu hình TestFunctionIDs để quyết định có thêm tiền tố test vào subject hay không.
+    private bool ShouldApplyTestSubjectPrefix()
+    {
+        var configuredIds = _config.GetValue<string>("EmailSettings:TestFunctionIDs");
+        if (string.IsNullOrWhiteSpace(configuredIds))
+        {
+            return false;
+        }
+
+        return configuredIds
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(value => int.TryParse(value, out var id) && id == FUNCTION_ID);
     }
 
     // Gửi mail workflow bằng SMTP với body HTML theo template chung.

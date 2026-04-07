@@ -17,8 +17,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 {
     public class ApproveSupplierDetailModel : BasePageModel
     {
-        // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
-        private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
+        private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
+        // private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
         private readonly ILogger<ApproveSupplierDetailModel> _logger;
         private readonly ISecurityService _securityService;
         private const int NoDepartmentScopeValue = -1;
@@ -1228,7 +1228,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             var subject = IsApproveSupplierNewMode
                 ? $"[Approve Supplier New] Last supplier processed at level {currentLevel}"
                 : $"[Supplier Approval] Last supplier processed at level {currentLevel}";
-            subject = $"TEST - {subject}";
+            subject = ApplyMailSubjectPrefix(subject);
             var body = IsApproveSupplierNewMode
                 ? $@"
 <p>Dear {{RECIPIENT_LABEL}},</p>
@@ -1273,6 +1273,37 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
             _ = SendNotifyEmailAsync(notifyRequest);
             return $"The notification email is being sent to the next level.";
+        }
+
+        // Áp tiền tố subject theo cấu hình EmailSettings khi FunctionID hiện tại thuộc danh sách test.
+        private string ApplyMailSubjectPrefix(string subject)
+        {
+            if (string.IsNullOrWhiteSpace(subject))
+            {
+                return subject;
+            }
+
+            var prefix = _config.GetValue<string>("EmailSettings:PrefixSubject")?.Trim();
+            if (string.IsNullOrWhiteSpace(prefix) || !ShouldApplyTestSubjectPrefix())
+            {
+                return subject;
+            }
+
+            return $"{prefix} - {subject}";
+        }
+
+        // Kiểm tra FunctionID của chức năng duyệt supplier có nằm trong cấu hình TestFunctionIDs hay không.
+        private bool ShouldApplyTestSubjectPrefix()
+        {
+            var configuredIds = _config.GetValue<string>("EmailSettings:TestFunctionIDs");
+            if (string.IsNullOrWhiteSpace(configuredIds))
+            {
+                return false;
+            }
+
+            return configuredIds
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(value => int.TryParse(value, out var id) && id == FUNCTION_ID);
         }
 
         // Gửi email thông báo bất đồng bộ cho cấp duyệt tiếp theo.
