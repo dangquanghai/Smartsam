@@ -109,6 +109,10 @@
         return !!row && row.getAttribute("data-can-edit") === "true";
     }
 
+    function canApproveSelectedRow(row) {
+        return !!row && row.getAttribute("data-can-approve") === "true";
+    }
+
     function canViewDetailSelectedRow(row) {
         return !!row && row.getAttribute("data-can-view-detail") === "true";
     }
@@ -148,8 +152,8 @@
 
                 const id = row.getAttribute("data-prid");
                 if (!id) return;
-                const mode = canEditSelectedRow(row) ? "edit" : "view";
-                if (canEditSelectedRow(row) || canViewDetailSelectedRow(row)) {
+                const mode = canEditSelectedRow(row) ? "edit" : canApproveSelectedRow(row) ? "approve" : "view";
+                if (canEditSelectedRow(row) || canApproveSelectedRow(row) || canViewDetailSelectedRow(row)) {
                     window.location.href = buildDetailUrl(id, mode);
                 }
             });
@@ -281,10 +285,227 @@
     function initActions() {
         const btnExportExcel = document.getElementById("btnExportExcel");
         const btnDisapproval = document.getElementById("btnDisapproval");
+        const btnViewPrDetail = document.getElementById("btnViewPrDetail");
+        const viewDetailModal = document.getElementById("prqViewDetailModal");
+        const viewDetailRequestNo = document.getElementById("prqViewDetailRequestNo");
+        const viewDetailDescription = document.getElementById("prqViewDetailDescription");
+        const viewDetailRecQtyOperator = document.getElementById("prqViewDetailRecQtyOperator");
+        const viewDetailRecQty = document.getElementById("prqViewDetailRecQty");
+        const viewDetailItemCode = document.getElementById("prqViewDetailItemCode");
+        const viewDetailUseDateRange = document.getElementById("prqViewDetailUseDateRange");
+        const viewDetailFromDate = document.getElementById("prqViewDetailFromDate");
+        const viewDetailToDate = document.getElementById("prqViewDetailToDate");
+        const viewDetailSearchButton = document.getElementById("btnPrqViewDetailSearch");
+        const viewDetailRows = document.getElementById("prqViewDetailRows");
+        const viewDetailEmptyRow = document.getElementById("prqViewDetailEmptyRow");
+        const viewDetailPaginationInfo = document.getElementById("prqViewDetailPaginationInfo");
+        const viewDetailPagination = document.getElementById("prqViewDetailPagination");
+        const viewDetailPageSize = document.getElementById("prqViewDetailPageSize");
 
         const getSelectedRow = () => {
             const rows = typeof window.getPrqSelectedRows === "function" ? window.getPrqSelectedRows() : [];
             return rows.length === 1 ? rows[0] : null;
+        };
+
+        const viewDetailState = {
+            pageNumber: 1,
+            pageSize: viewDetailPageSize ? Number.parseInt(viewDetailPageSize.value || "10", 10) || 10 : 10,
+            totalPages: 1,
+            loading: false
+        };
+
+        const buildViewDetailPages = (currentPage, totalPages) => {
+            const items = [];
+            if (totalPages <= 7) {
+                for (let page = 1; page <= totalPages; page += 1) {
+                    items.push(page);
+                }
+                return items;
+            }
+
+            items.push(1);
+            if (currentPage > 3) {
+                items.push(null);
+            }
+
+            const start = Math.max(2, currentPage - 1);
+            const end = Math.min(totalPages - 1, currentPage + 1);
+            for (let page = start; page <= end; page += 1) {
+                items.push(page);
+            }
+
+            if (currentPage < totalPages - 2) {
+                items.push(null);
+            }
+
+            items.push(totalPages);
+            return items;
+        };
+
+        const getViewDetailFilter = () => ({
+            requestNo: viewDetailRequestNo?.value?.trim() || "",
+            description: viewDetailDescription?.value?.trim() || "",
+            recQtyOperator: viewDetailRecQtyOperator?.value || "=",
+            recQty: viewDetailRecQty?.value?.trim() || "",
+            itemCode: viewDetailItemCode?.value?.trim() || "",
+            useDateRange: !!viewDetailUseDateRange?.checked,
+            fromDate: viewDetailFromDate?.value || "",
+            toDate: viewDetailToDate?.value || "",
+            pageNumber: viewDetailState.pageNumber,
+            pageSize: viewDetailState.pageSize
+        });
+
+        const renderViewDetailRows = (response) => {
+            if (!viewDetailRows || !viewDetailEmptyRow || !viewDetailPaginationInfo || !viewDetailPagination) {
+                return;
+            }
+
+            viewDetailRows.querySelectorAll("tr[data-view-detail-row='1']").forEach((row) => row.remove());
+
+            const rows = Array.isArray(response?.rows) ? response.rows : [];
+            const totalRecords = Number(response?.totalRecords || 0);
+            const totalPages = Math.max(1, Number(response?.totalPages || 1));
+            const currentPage = Math.max(1, Number(response?.pageNumber || 1));
+            const pageSize = Math.max(1, Number(response?.pageSize || viewDetailState.pageSize || 10));
+            viewDetailState.pageNumber = currentPage;
+            viewDetailState.pageSize = pageSize;
+            viewDetailState.totalPages = totalPages;
+
+            if (viewDetailPageSize) {
+                viewDetailPageSize.value = String(pageSize);
+            }
+
+            if (!rows.length) {
+                viewDetailEmptyRow.style.display = "";
+                viewDetailEmptyRow.querySelector("td").textContent = "No detail rows";
+            } else {
+                viewDetailEmptyRow.style.display = "none";
+                rows.forEach((row) => {
+                    const tr = document.createElement("tr");
+                    tr.dataset.viewDetailRow = "1";
+                    tr.innerHTML = `
+                        <td>${escapeHtml(row.requestNo || "")}</td>
+                        <td>${escapeHtml(row.requestDateText || "")}</td>
+                        <td>${buildCollapsibleText(row.description || "", 60)}</td>
+                        <td class="tcvn3-font">${escapeHtml(row.itemCode || "")}${row.itemName ? ` / ${escapeHtml(row.itemName)}` : ""}</td>
+                        <td class="prq-center">${formatNumber(row.prQty || 0)}</td>
+                        <td class="prq-center">${formatNumber(row.recQty || 0)}</td>`;
+                    viewDetailRows.appendChild(tr);
+                });
+            }
+
+            const start = totalRecords === 0 ? 0 : ((currentPage - 1) * pageSize) + 1;
+            const end = totalRecords === 0 ? 0 : Math.min(currentPage * pageSize, totalRecords);
+            viewDetailPaginationInfo.innerHTML = totalRecords === 0
+                ? "<small>No records</small>"
+                : `<small>Showing ${start} to ${end} of ${totalRecords} entries</small>`;
+
+            viewDetailPagination.innerHTML = "";
+            const appendPageItem = (label, page, disabled, active) => {
+                const li = document.createElement("li");
+                li.className = `page-item${disabled ? " disabled" : ""}${active ? " active" : ""}`;
+                const inner = document.createElement(disabled || active ? "span" : "button");
+                inner.className = "page-link prq-pager-link";
+                inner.textContent = label;
+                if (!disabled && !active) {
+                    inner.type = "button";
+                    inner.dataset.page = String(page);
+                }
+                li.appendChild(inner);
+                viewDetailPagination.appendChild(li);
+            };
+
+            appendPageItem("Prev", Math.max(1, currentPage - 1), currentPage <= 1, false);
+            buildViewDetailPages(currentPage, totalPages).forEach((page) => {
+                if (page == null) {
+                    const li = document.createElement("li");
+                    li.className = "page-item disabled";
+                    li.innerHTML = '<span class="page-link">...</span>';
+                    viewDetailPagination.appendChild(li);
+                    return;
+                }
+
+                appendPageItem(String(page), page, false, page === currentPage);
+            });
+            appendPageItem("Next", Math.min(totalPages, currentPage + 1), currentPage >= totalPages, false);
+        };
+
+        const loadViewDetailRows = async () => {
+            if (!viewDetailModal) {
+                return;
+            }
+
+            const filter = getViewDetailFilter();
+
+            viewDetailState.loading = true;
+            if (viewDetailSearchButton) {
+                viewDetailSearchButton.disabled = true;
+            }
+            if (viewDetailEmptyRow) {
+                viewDetailEmptyRow.style.display = "";
+                viewDetailEmptyRow.querySelector("td").textContent = "Loading detail rows...";
+            }
+
+            try {
+                const endpoint = getConfig().viewDetailEndpoint || "";
+                const requestUrl = new URL(endpoint, window.location.origin);
+                const params = new URLSearchParams();
+                Object.entries(filter).forEach(([key, value]) => {
+                    if (value === "" || value == null) {
+                        return;
+                    }
+                    params.set(key, String(value));
+                });
+
+                params.forEach((value, key) => {
+                    requestUrl.searchParams.set(key, value);
+                });
+
+                const response = await fetch(requestUrl.toString(), {
+                    headers: { "X-Requested-With": "XMLHttpRequest" }
+                });
+                const responseText = await response.text();
+                let payload = null;
+                try {
+                    payload = responseText ? JSON.parse(responseText) : {};
+                } catch {
+                    throw new Error("Cannot load purchase requisition details.");
+                }
+
+                if (!response.ok) {
+                    throw new Error(payload?.message || "Cannot load purchase requisition details.");
+                }
+
+                renderViewDetailRows(payload);
+            } catch (error) {
+                renderViewDetailRows({ rows: [], totalRecords: 0, pageNumber: 1, pageSize: viewDetailState.pageSize, totalPages: 1 });
+                showDangerModal(error.message || "Cannot load purchase requisition details.");
+            } finally {
+                viewDetailState.loading = false;
+                if (viewDetailSearchButton) {
+                    viewDetailSearchButton.disabled = false;
+                }
+            }
+        };
+
+        const syncViewDetailDateRange = () => {
+            if (!viewDetailUseDateRange || !viewDetailFromDate || !viewDetailToDate) {
+                return;
+            }
+
+            const enabled = viewDetailUseDateRange.checked;
+            viewDetailFromDate.disabled = !enabled;
+            viewDetailToDate.disabled = !enabled || !viewDetailFromDate.value;
+            viewDetailToDate.min = viewDetailFromDate.value || "";
+
+            if (!enabled) {
+                viewDetailFromDate.value = "";
+                viewDetailToDate.value = "";
+            }
+
+            if (viewDetailFromDate.value && viewDetailToDate.value && viewDetailFromDate.value > viewDetailToDate.value) {
+                viewDetailToDate.value = "";
+            }
         };
 
         const syncState = () => {
@@ -319,7 +540,89 @@
         });
         btnDisapproval?.addEventListener("click", () => alert("Disapproval is not implemented yet."));
 
+        btnViewPrDetail?.addEventListener("click", () => {
+            const selectedRow = getSelectedRow();
+            if (!getConfig().canViewDetail) {
+                return;
+            }
+
+            const selectedRequestNo = selectedRow ? (selectedRow.getAttribute("data-request-no") || "") : "";
+            if (viewDetailRequestNo) {
+                viewDetailRequestNo.value = selectedRow && canViewDetailSelectedRow(selectedRow) ? selectedRequestNo : "";
+            }
+            if (viewDetailDescription) {
+                viewDetailDescription.value = "";
+            }
+            if (viewDetailRecQty) {
+                viewDetailRecQty.value = "";
+            }
+            if (viewDetailItemCode) {
+                viewDetailItemCode.value = "";
+            }
+            if (viewDetailRecQtyOperator) {
+                viewDetailRecQtyOperator.value = "=";
+            }
+            if (viewDetailUseDateRange) {
+                viewDetailUseDateRange.checked = false;
+            }
+            if (viewDetailFromDate) {
+                viewDetailFromDate.value = "";
+            }
+            if (viewDetailToDate) {
+                viewDetailToDate.value = "";
+            }
+
+            syncViewDetailDateRange();
+            viewDetailState.pageNumber = 1;
+            viewDetailState.pageSize = viewDetailPageSize ? Number.parseInt(viewDetailPageSize.value || "10", 10) || 10 : 10;
+
+            if (window.jQuery) {
+                window.jQuery(viewDetailModal).modal("show");
+            }
+            loadViewDetailRows();
+        });
+
+        viewDetailSearchButton?.addEventListener("click", () => {
+            viewDetailState.pageNumber = 1;
+            loadViewDetailRows();
+        });
+
+        viewDetailPageSize?.addEventListener("change", () => {
+            viewDetailState.pageSize = Number.parseInt(viewDetailPageSize.value || "10", 10) || 10;
+            viewDetailState.pageNumber = 1;
+            loadViewDetailRows();
+        });
+
+        viewDetailPagination?.addEventListener("click", (ev) => {
+            const button = ev.target.closest("button[data-page]");
+            if (!button || viewDetailState.loading) {
+                return;
+            }
+
+            const page = Number.parseInt(button.dataset.page || "1", 10);
+            if (!Number.isInteger(page) || page <= 0 || page === viewDetailState.pageNumber) {
+                return;
+            }
+
+            viewDetailState.pageNumber = page;
+            loadViewDetailRows();
+        });
+
+        viewDetailUseDateRange?.addEventListener("change", syncViewDetailDateRange);
+        viewDetailFromDate?.addEventListener("change", syncViewDetailDateRange);
+        viewDetailToDate?.addEventListener("change", syncViewDetailDateRange);
+
+        if (window.jQuery && viewDetailModal) {
+            window.jQuery(viewDetailModal).on("hidden.bs.modal", () => {
+                if (viewDetailRequestNo) viewDetailRequestNo.value = "";
+                if (viewDetailDescription) viewDetailDescription.value = "";
+                if (viewDetailRecQty) viewDetailRecQty.value = "";
+                if (viewDetailItemCode) viewDetailItemCode.value = "";
+            });
+        }
+
         document.addEventListener("prq:selection-changed", syncState);
+        syncViewDetailDateRange();
         syncState();
     }
 
@@ -433,7 +736,7 @@
                     </td>
                     <td>${escapeHtml(row.requestNo)}</td>
                     <td>${escapeHtml(row.itemCode)}</td>
-                    <td>${escapeHtml(row.itemName)}</td>
+                    <td class="tcvn3-font">${escapeHtml(row.itemName)}</td>
                     <td class="prq-center">${formatNumber(row.buy)}</td>
                     <td class="prq-center">
                         <input type="text" inputmode="decimal" class="form-control form-control-sm prq-add-at-sugbuy" data-index="${index}" value="${formatNumber(row.sugBuy)}" />
