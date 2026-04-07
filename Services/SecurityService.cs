@@ -17,6 +17,7 @@ namespace SmartSam.Services.Implementations
         // danh sách các page index mà quyền không phụ thuộc vào trạng thái dữ liệu
         private static readonly HashSet<int> StaticFunctionIds = new HashSet<int>
         {
+            18, //Admin/Employee
             71,// Supplier list
             74,// Supplier-PO Report	
             75 // Analyzing Suppliers

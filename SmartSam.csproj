@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <Folder Include="Pages\Apartment\" />
+    <Folder Include="wwwroot\css\Admin\Employee\" />
     <Folder Include="wwwroot\uploads\" />
     <Folder Include="wwwroot\uploads\2025-11\" />
     <Folder Include="wwwroot\uploads\2025-12\" />

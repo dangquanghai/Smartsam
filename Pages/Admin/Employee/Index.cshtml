@@ -1,0 +1,175 @@
+﻿@page
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Xsrf
+@Html.AntiForgeryToken()
+@model SmartSam.Pages.Admin.Employee.IndexModel
+@{
+    ViewData["Title"] = "Employee Management";
+}
+
+@section Styles {
+    <style>
+        /* Tận dụng lại các CSS tùy chỉnh anh đã cung cấp */
+        .input-group > .select2-container--default {
+            flex: 1 1 auto;
+            width: 1% !important;
+        }
+
+        .input-group .select2-container--default .select2-selection--single {
+            height: 38px !important;
+            border-top-right-radius: 0 !important;
+            border-bottom-right-radius: 0 !important;
+            display: flex;
+            align-items: center;
+            border-color: #ced4da;
+        }
+
+        .btn-clear-select2 {
+            border-top-left-radius: 0 !important;
+            border-bottom-left-radius: 0 !important;
+            border-left: none !important;
+            background-color: #fff;
+            color: #999;
+            border-color: #ced4da;
+            z-index: 10;
+        }
+
+            .btn-clear-select2:hover {
+                color: #dc3545;
+                background-color: #f8f9fa;
+            }
+
+        .employee-row {
+            user-select: none;
+            cursor: pointer;
+        }
+    </style>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+
+            <div class="col-md-2">
+                <div class="card card-info">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-search"></i> Search</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get">
+                            <div class="form-group">
+                                <label>Emp Code</label>
+                                <input class="form-control form-control-sm" asp-for="Filter.EmpCode">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Emp Name</label>
+                                <input class="form-control form-control-sm" asp-for="Filter.EmpName">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Department</label>
+                                <div class="input-group">
+                                    <select asp-for="Filter.DepartmentId" asp-items="Model.DepartmentList" class="form-control select2">
+                                        <option value="">-- All --</option>
+                                    </select>
+                                    <div class="input-group-append">
+                                        <button class="btn btn-outline-secondary btn-clear-select2" type="button" data-target="#Filter_DepartmentId">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input class="custom-control-input" type="checkbox" asp-for="Filter.IsActive" id="chkActive">
+                                    <label for="chkActive" class="custom-control-label">Is Active</label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input class="custom-control-input" type="checkbox" asp-for="Filter.IsHeadDept" id="chkHead">
+                                    <label for="chkHead" class="custom-control-label">Is Head Dept</label>
+                                </div>
+                            </div>
+
+                            <button class="btn btn-primary btn-block">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-10">
+                <div class="card card-primary">
+                    <div class="card-header">
+                        <h3 class="card-title">Employee List</h3>
+                        <div class="card-tools float-right app-paging-white">
+                            <ul class="pagination pagination-sm mb-0" id="pagination"></ul>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-bordered mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width: 40px">#</th>
+                                        <th>Emp Code</th>
+                                        <th>Emp Name</th>
+                                        <th>Department</th>
+                                        <th class="text-center">System</th>
+                                        <th class="text-center">Head Dept</th>
+                                        <th class="text-center">Active</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="employee-table-body">
+                                    <tr>
+                                        <td colspan="6" class="text-center">Loading data...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-outline card-primary">
+                    <div class="card-footer p-2 text-center">
+                        <button class="btn btn-success btn-sm" id="btnAdd">
+                            <i class="fas fa-plus"></i> Add New Employee
+                        </button>
+
+                        <button class="btn btn-info btn-sm d-none" id="btnEdit">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button class="btn btn-danger btn-sm d-none" id="btnDelete">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="~/js/Admin/Employee/index.js" asp-append-version="true"></script>
+    <script>
+        $(function () {
+            $('.select2').select2({
+                theme: 'default',
+                placeholder: "-- Select --",
+                allowClear: false // Vì đã có nút X tùy chỉnh của anh
+            });
+
+            // Logic cho nút Clear Select2 của anh
+            $('.btn-clear-select2').click(function () {
+                var target = $(this).data('target');
+                $(target).val(null).trigger('change');
+            });
+        });
+    </script>
+}
