@@ -78,6 +78,9 @@ namespace SmartSam.Pages.Purchasing.Supplier
         public int? StatusId { get; set; }
 
         [BindProperty(SupportsGet = true)]
+        public string? StatusIdsCsv { get; set; }
+
+        [BindProperty(SupportsGet = true)]
         public bool IsNew { get; set; }
 
         [BindProperty(SupportsGet = true)]
@@ -146,6 +149,11 @@ namespace SmartSam.Pages.Purchasing.Supplier
             // GÃ¡n máº·c Ä‘á»‹nh ban Ä‘áº§u
             Id = id;
             Mode = mode ?? "view";
+
+            if (string.IsNullOrWhiteSpace(StatusIdsCsv) && StatusId.HasValue)
+            {
+                StatusIdsCsv = StatusId.Value.ToString();
+            }
 
             LoadUserDataScope();
 
@@ -749,7 +757,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             SupplierCode,
             Contact,
             SupplierName,
-            StatusId,
+            StatusIdsCsv = GetStatusIdsCsvForRoute(),
             IsNew,
             PageIndex,
             PageSize
@@ -760,8 +768,19 @@ namespace SmartSam.Pages.Purchasing.Supplier
             id = supplierId,
             mode = "edit",
             viewMode = ViewMode,
-            year = Year
+            year = Year,
+            StatusIdsCsv = GetStatusIdsCsvForRoute()
         };
+
+        private string? GetStatusIdsCsvForRoute()
+        {
+            if (!string.IsNullOrWhiteSpace(StatusIdsCsv))
+            {
+                return StatusIdsCsv.Trim();
+            }
+
+            return StatusId.HasValue ? StatusId.Value.ToString() : null;
+        }
 
         // Náº¡p dropdown Department + Status cho form detail.
         // Department bá»‹ giá»›i háº¡n theo scope náº¿u user khÃ´ng cÃ³ quyá»n xem all dept.
@@ -1189,7 +1208,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 Password = mailPass,
                 MailServer = mailServer,
                 MailPort = mailPort,
-                Subject = "TEST - [Approve Supplier New] Supplier submitted for approval",
+                Subject = AddTestSubjectPrefix("[Approve Supplier New] Supplier submitted for approval"),
                 HtmlBody = htmlBody,
                 Recipients = recipients
             };
@@ -1271,6 +1290,33 @@ namespace SmartSam.Pages.Purchasing.Supplier
             {
                 _logger.LogError(ex, "Cannot send notification email for new supplier submit to level {NextLevel}.", notifyRequest.NextLevel);
             }
+        }
+
+        private string AddTestSubjectPrefix(string subject)
+        {
+            var trimmed = (subject ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
+                return trimmed;
+            }
+
+            if (trimmed.StartsWith("[TEST]", StringComparison.OrdinalIgnoreCase))
+            {
+                return trimmed;
+            }
+
+            var testFunctionIds = (_config.GetValue<string>("EmailSettings:TestFunctionIDs") ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            foreach (var item in testFunctionIds)
+            {
+                if (int.TryParse(item, out var functionId) && functionId == FUNCTION_ID)
+                {
+                    return $"[TEST] {trimmed}";
+                }
+            }
+
+            return trimmed;
         }
 
         // Reset workflow de supplier disapproved co the submit lai tu dau.
