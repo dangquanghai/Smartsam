@@ -2098,15 +2098,37 @@ VALUES
     // Xác định thư mục lưu file đính kèm từ cấu hình FileUploads:FilePath.
     private string ResolveUploadFolder()
     {
-        var configuredPath = _config.GetValue<string>("FileUploads:FilePath");
-        if (string.IsNullOrWhiteSpace(configuredPath))
+        var basePath = _config.GetValue<string>("FileUploads:BasePath");
+        if (string.IsNullOrWhiteSpace(basePath))
         {
-            throw new InvalidOperationException("FileUploads:FilePath is missing in appsettings.json.");
+            var legacyPath = _config.GetValue<string>("FileUploads:FilePath");
+            if (string.IsNullOrWhiteSpace(legacyPath))
+            {
+                throw new InvalidOperationException("FileUploads:BasePath or FileUploads:FilePath is missing in appsettings.json.");
+            }
+
+            return Path.IsPathRooted(legacyPath)
+                ? legacyPath
+                : Path.Combine(Directory.GetCurrentDirectory(), legacyPath);
         }
 
-        return Path.IsPathRooted(configuredPath)
-            ? configuredPath
-            : Path.Combine(Directory.GetCurrentDirectory(), configuredPath);
+        var rootPath = Path.IsPathRooted(basePath)
+            ? basePath
+            : Path.Combine(Directory.GetCurrentDirectory(), basePath);
+
+        var configuredFunctionPath = _config.GetValue<string>($"FileUploads:Funtions:{FUNCTION_ID}");
+        if (string.IsNullOrWhiteSpace(configuredFunctionPath))
+        {
+            return rootPath;
+        }
+
+        var relativeSegments = configuredFunctionPath
+            .Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        return relativeSegments.Length == 0
+            ? rootPath
+            : Path.Combine([rootPath, .. relativeSegments]);
     }
 
     // Sinh tên file mới có thêm ticks để tránh trùng tên khi upload.
