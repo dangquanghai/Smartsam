@@ -18,6 +18,7 @@ namespace SmartSam.Pages.Purchasing.PurchaseRequisition;
 
 public class PurchaseRequisitionDetailModel : BasePageModel
 {
+    private static readonly HashSet<int> AllowedPageSizes = [10, 20, 50, 100, 200];
     private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
     // private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
     private const int FUNCTION_ID = 72;
@@ -45,6 +46,8 @@ public class PurchaseRequisitionDetailModel : BasePageModel
     public bool CanResetToNew { get; private set; }
     public bool CanMoveToMr { get; private set; }
     public bool CanManageAttachments { get; private set; }
+    public bool CanEditExistingDetailFields { get; private set; }
+    public bool CanOpenViewDetailDialog => PagePerm.HasPermission(PermissionViewDetail);
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
     public bool IsApproveMode => string.Equals(Mode, "approve", StringComparison.OrdinalIgnoreCase);
     public bool IsStatusReadOnlyMode => Mode == "edit" && Requisition.Status != 1;
@@ -150,6 +153,152 @@ public class PurchaseRequisitionDetailModel : BasePageModel
         return Page();
     }
 
+    // Tải dữ liệu popup View Detail bằng ajax để tìm kiếm và phân trang mà không reload trang chính.
+    public IActionResult OnGetViewDetailRows([FromQuery] PurchaseRequisitionViewDetailFilterRequest request)
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionViewDetail))
+        {
+            Response.StatusCode = StatusCodes.Status403Forbidden;
+            return new JsonResult(new { message = "You have no permission to view purchase requisition details." });
+        }
+
+        request.PageNumber = request.PageNumber <= 0 ? 1 : request.PageNumber;
+        request.PageSize = AllowedPageSizes.Contains(request.PageSize) ? request.PageSize : 10;
+
+        var allowedStatuses = GetAllowedViewStatuses();
+        if (allowedStatuses.Count == 0)
+        {
+            return new JsonResult(new PurchaseRequisitionViewDetailResponse());
+        }
+
+        var rows = new List<PurchaseRequisitionViewDetailRow>();
+        var totalRecords = 0;
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+
+        var whereBuilder = new List<string>
+        {
+            $"p.[Status] IN ({string.Join(",", allowedStatuses)})"
+        };
+
+        if (!string.IsNullOrWhiteSpace(request.RequestNo))
+        {
+            whereBuilder.Add("p.RequestNo LIKE '%' + @RequestNo + '%'");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Description))
+        {
+            whereBuilder.Add("p.[Description] LIKE '%' + @Description + '%'");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.ItemCode))
+        {
+            whereBuilder.Add("(i.ItemCode LIKE '%' + @ItemCode + '%' OR i.ItemName LIKE '%' + @ItemCode + '%')");
+        }
+
+        if (request.UseDateRange)
+        {
+            if (request.FromDate.HasValue)
+            {
+                whereBuilder.Add("CAST(p.RequestDate AS date) >= @FromDate");
+            }
+
+            if (request.ToDate.HasValue)
+            {
+                whereBuilder.Add("CAST(p.RequestDate AS date) <= @ToDate");
+            }
+        }
+
+        if (request.RecQty.HasValue)
+        {
+            var recQtyCondition = request.RecQtyOperator switch
+            {
+                ">" => "ISNULL(d.RecQty, 0) > @RecQty",
+                ">=" => "ISNULL(d.RecQty, 0) >= @RecQty",
+                "<" => "ISNULL(d.RecQty, 0) < @RecQty",
+                "<=" => "ISNULL(d.RecQty, 0) <= @RecQty",
+                "=" => "ISNULL(d.RecQty, 0) = @RecQty",
+                _ => string.Empty
+            };
+
+            if (!string.IsNullOrWhiteSpace(recQtyCondition))
+            {
+                whereBuilder.Add(recQtyCondition);
+            }
+        }
+
+        var whereSql = whereBuilder.Count == 0
+            ? string.Empty
+            : $"WHERE {string.Join(" AND ", whereBuilder)}";
+
+        using (var countCmd = new SqlCommand($@"
+SELECT COUNT(1)
+FROM dbo.PC_PR p
+INNER JOIN dbo.PC_PRDetail d ON p.PRID = d.PRID
+LEFT JOIN dbo.INV_ItemList i ON d.ItemID = i.ItemID
+{whereSql}", conn))
+        {
+            BindViewDetailFilterParams(countCmd, request);
+            totalRecords = Convert.ToInt32(countCmd.ExecuteScalar() ?? 0);
+        }
+
+        using (var dataCmd = new SqlCommand($@"
+SELECT
+    p.PRID,
+    ISNULL(p.RequestNo, '') AS RequestNo,
+    p.RequestDate,
+    ISNULL(p.[Description], '') AS [Description],
+    ISNULL(i.ItemCode, '') AS ItemCode,
+    ISNULL(i.ItemName, '') AS ItemName,
+    ISNULL(d.Quantity, 0) AS PrQty,
+    ISNULL(d.RecQty, 0) AS RecQty
+FROM dbo.PC_PR p
+INNER JOIN dbo.PC_PRDetail d ON p.PRID = d.PRID
+LEFT JOIN dbo.INV_ItemList i ON d.ItemID = i.ItemID
+{whereSql}
+ORDER BY p.RequestDate DESC, p.RequestNo DESC, d.RecordID DESC
+OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
+        {
+            BindViewDetailFilterParams(dataCmd, request);
+            dataCmd.Parameters.Add("@Offset", SqlDbType.Int).Value = (request.PageNumber - 1) * request.PageSize;
+            dataCmd.Parameters.Add("@PageSize", SqlDbType.Int).Value = request.PageSize;
+
+            using var rd = dataCmd.ExecuteReader();
+            while (rd.Read())
+            {
+                rows.Add(new PurchaseRequisitionViewDetailRow
+                {
+                    PrId = Convert.ToInt32(rd["PRID"]),
+                    RequestNo = Convert.ToString(rd["RequestNo"]) ?? string.Empty,
+                    RequestDate = rd["RequestDate"] == DBNull.Value ? null : Convert.ToDateTime(rd["RequestDate"]),
+                    RequestDateText = rd["RequestDate"] == DBNull.Value ? string.Empty : Convert.ToDateTime(rd["RequestDate"]).ToString("dd-MMM-yyyy"),
+                    Description = Convert.ToString(rd["Description"]) ?? string.Empty,
+                    ItemCode = Convert.ToString(rd["ItemCode"]) ?? string.Empty,
+                    ItemName = Convert.ToString(rd["ItemName"]) ?? string.Empty,
+                    PrQty = Convert.ToDecimal(rd["PrQty"]),
+                    RecQty = Convert.ToDecimal(rd["RecQty"])
+                });
+            }
+        }
+
+        var totalPages = request.PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(totalRecords / (double)request.PageSize));
+        if (request.PageNumber > totalPages)
+        {
+            request.PageNumber = totalPages;
+        }
+
+        return new JsonResult(new PurchaseRequisitionViewDetailResponse
+        {
+            Rows = rows,
+            PageNumber = request.PageNumber,
+            PageSize = request.PageSize,
+            TotalRecords = totalRecords,
+            TotalPages = totalPages
+        });
+    }
+
     // Lưu dữ liệu header và detail của phiếu đề nghị mua hàng.
     public IActionResult OnPost()
     {
@@ -174,7 +323,10 @@ public class PurchaseRequisitionDetailModel : BasePageModel
         var effectivePermissions = isNew
             ? GetEffectivePermissionsByStatus(1)
             : GetEffectivePermissionsByStatus(Requisition.Status);
-        if (isNew && !effectivePermissions.Contains(PermissionAdd) || !isNew && !effectivePermissions.Contains(PermissionEdit))
+        var canSaveExistingDetailFields = !isNew
+            && string.Equals(Mode, "edit", StringComparison.OrdinalIgnoreCase)
+            && _workflowUser.IsPurchaser;
+        if (isNew && !effectivePermissions.Contains(PermissionAdd) || !isNew && !effectivePermissions.Contains(PermissionEdit) && !canSaveExistingDetailFields)
         {
             ModelState.AddModelError(string.Empty, "You have no permission to save requisition.");
             SetActionFlags();
@@ -269,10 +421,14 @@ public class PurchaseRequisitionDetailModel : BasePageModel
         {
             int itemId;
             int mrDetailId;
+            decimal quantity;
+            decimal sugQty;
 
             using (var loadCmd = new SqlCommand(@"
 SELECT ItemID,
-       MRDetailID
+       MRDetailID,
+       ISNULL(Quantity, 0) AS Quantity,
+       ISNULL(SugQty, 0) AS SugQty
 FROM dbo.PC_PRDetail
 WHERE PRID = @PRID
   AND RecordID = @RecordID", conn, trans))
@@ -293,14 +449,26 @@ WHERE PRID = @PRID
                 }
 
                 mrDetailId = Convert.ToInt32(rd["MRDetailID"]);
+                quantity = Convert.ToDecimal(rd["Quantity"]);
+                sugQty = Convert.ToDecimal(rd["SugQty"]);
             }
 
-            using (var updateCmd = new SqlCommand(@"
+            using (var updateCmd = new SqlCommand(quantity < sugQty
+                ? @"
+UPDATE dbo.MATERIAL_REQUEST_DETAIL
+SET BUY = ISNULL(BUY, 0) + @Quantity,
+    PostedPR = 0
+WHERE ID = @MRDetailID"
+                : @"
 UPDATE dbo.MATERIAL_REQUEST_DETAIL
 SET PostedPR = 0
 WHERE ID = @MRDetailID", conn, trans))
             {
                 updateCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = mrDetailId;
+                if (quantity < sugQty)
+                {
+                    updateCmd.Parameters.Add("@Quantity", SqlDbType.Decimal).Value = quantity;
+                }
                 updateCmd.ExecuteNonQuery();
             }
 
@@ -1037,8 +1205,6 @@ ORDER BY SupplierCode";
     {
         var operatorCode = User.Identity?.Name?.Trim() ?? string.Empty;
         var isNew = Requisition.Id <= 0;
-        var consolidatedDetails = ConsolidateDetailsForSave(details);
-
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
         using var trans = conn.BeginTransaction();
@@ -1079,8 +1245,6 @@ WHERE RequestNo = @RequestNo
                 }
             }
 
-            List<PurchaseRequisitionMrAllocationRow> existingMrAllocations = new List<PurchaseRequisitionMrAllocationRow>();
-
             if (isNew)
             {
                 var purId = ResolvePurchaserId(conn, trans, operatorCode);
@@ -1107,9 +1271,6 @@ SELECT CAST(SCOPE_IDENTITY() AS int);", conn, trans);
             }
             else
             {
-                existingMrAllocations = LoadExistingMrAllocations(conn, trans, Requisition.Id);
-                RestoreMaterialRequestBuy(conn, trans, existingMrAllocations);
-
                 using var headerCmd = new SqlCommand(@"
 UPDATE dbo.PC_PR
 SET RequestDate = @RequestDate,
@@ -1125,17 +1286,38 @@ WHERE PRID = @PRID", conn, trans);
                 headerCmd.Parameters.Add("@Currency", SqlDbType.Int).Value = Requisition.Currency;
                 headerCmd.Parameters.Add("@Status", SqlDbType.TinyInt).Value = Requisition.Status;
                 headerCmd.ExecuteNonQuery();
-
-                using var deleteCmd = new SqlCommand("DELETE FROM dbo.PC_PRDetail WHERE PRID = @PRID", conn, trans);
-                deleteCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
-                deleteCmd.ExecuteNonQuery();
             }
 
-            ApplyMaterialRequestBuy(conn, trans, consolidatedDetails);
-
-            foreach (var detail in consolidatedDetails)
+            if (isNew)
             {
-                IndexModel.InsertDetail(conn, trans, Requisition.Id, detail);
+                var consolidatedDetails = ConsolidateDetailsForSave(details);
+                ApplyMaterialRequestBuy(conn, trans, consolidatedDetails);
+
+                foreach (var detail in consolidatedDetails)
+                {
+                    IndexModel.InsertDetail(conn, trans, Requisition.Id, detail);
+                }
+            }
+            else
+            {
+                var existingDetails = details
+                    .Where(x => x.DetailId > 0)
+                    .ToList();
+                var newDetails = ConsolidateDetailsForSave(details
+                    .Where(x => x.DetailId <= 0)
+                    .ToList());
+
+                UpdateExistingPrDetails(conn, trans, Requisition.Id, existingDetails);
+
+                if (newDetails.Count > 0)
+                {
+                    ApplyMaterialRequestBuy(conn, trans, newDetails);
+
+                    foreach (var detail in newDetails)
+                    {
+                        IndexModel.InsertDetail(conn, trans, Requisition.Id, detail);
+                    }
+                }
             }
 
             trans.Commit();
@@ -1227,56 +1409,28 @@ END", conn, trans);
         return result == null || result == DBNull.Value ? null : Convert.ToInt32(result);
     }
 
-    // Nạp các dòng detail đang liên kết với MR để hoàn nguyên số lượng trước khi lưu lại toàn bộ PR.
-    private static List<PurchaseRequisitionMrAllocationRow> LoadExistingMrAllocations(SqlConnection conn, SqlTransaction trans, int prId)
+    // Với dòng đã có sẵn trong PR, chỉ cho phép chỉnh U.Price và Remark trực tiếp trên PC_PRDetail.
+    private static void UpdateExistingPrDetails(SqlConnection conn, SqlTransaction trans, int prId, IReadOnlyList<PurchaseRequisitionDetailInput> details)
     {
-        var rows = new List<PurchaseRequisitionMrAllocationRow>();
-
-        using var cmd = new SqlCommand(@"
-SELECT MRDetailID,
-       ISNULL(Quantity, 0) AS Quantity
-FROM dbo.PC_PRDetail
-WHERE PRID = @PRID
-  AND MRDetailID IS NOT NULL", conn, trans);
-
-        cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = prId;
-        using var rd = cmd.ExecuteReader();
-        while (rd.Read())
-        {
-            rows.Add(new PurchaseRequisitionMrAllocationRow
-            {
-                MrDetailId = Convert.ToInt32(rd["MRDetailID"]),
-                Quantity = Convert.ToDecimal(rd["Quantity"])
-            });
-        }
-
-        return rows;
-    }
-
-    // Hoàn nguyên BUY của MR trước khi ghi lại toàn bộ danh sách detail mới của PR.
-    private static void RestoreMaterialRequestBuy(SqlConnection conn, SqlTransaction trans, IReadOnlyList<PurchaseRequisitionMrAllocationRow> allocations)
-    {
-        foreach (var allocation in allocations
-                     .GroupBy(x => x.MrDetailId)
-                     .Select(x => new PurchaseRequisitionMrAllocationRow
-                     {
-                         MrDetailId = x.Key,
-                         Quantity = x.Sum(y => y.Quantity)
-                     }))
+        foreach (var detail in details)
         {
             using var cmd = new SqlCommand(@"
-UPDATE dbo.MATERIAL_REQUEST_DETAIL
-SET BUY = ISNULL(BUY, 0) + @Quantity,
-    PostedPR = 0
-WHERE ID = @MRDetailID", conn, trans);
+UPDATE dbo.PC_PRDetail
+SET UnitPrice = @UnitPrice,
+    Remark = @Remark,
+    OrdAmount = ISNULL(Quantity, 0) * @UnitPrice
+WHERE PRID = @PRID
+  AND RecordID = @RecordID", conn, trans);
 
-            cmd.Parameters.Add("@Quantity", SqlDbType.Decimal).Value = allocation.Quantity;
-            cmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = allocation.MrDetailId;
+            cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = prId;
+            cmd.Parameters.Add("@RecordID", SqlDbType.BigInt).Value = detail.DetailId;
+            cmd.Parameters.Add("@UnitPrice", SqlDbType.Decimal).Value = detail.UnitPrice;
+            cmd.Parameters.Add("@Remark", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(detail.Remark) ? DBNull.Value : detail.Remark.Trim();
             cmd.ExecuteNonQuery();
         }
     }
 
-    // Trừ lại BUY của các dòng MR đang được sử dụng trong danh sách detail sau khi user chỉnh sửa xong.
+    // Cập nhật lại MR theo đúng logic cũ: nếu SugBuy < BUY thì trừ BUY, ngược lại chỉ set PostedPR = 1.
     private static void ApplyMaterialRequestBuy(SqlConnection conn, SqlTransaction trans, IReadOnlyList<PurchaseRequisitionDetailInput> details)
     {
         var allocations = details
@@ -1302,12 +1456,6 @@ WHERE ID = @MRDetailID", conn, trans))
                 currentBuy = Convert.ToDecimal(loadCmd.ExecuteScalar() ?? 0);
             }
 
-            if (allocation.Quantity > currentBuy)
-            {
-                throw new InvalidOperationException($"Cannot save because MR detail {allocation.MrDetailId} only has {currentBuy:#,##0.###} BUY remaining.");
-            }
-
-            var remainBuy = currentBuy - allocation.Quantity;
             if (allocation.Quantity < currentBuy)
             {
                 using var updateCmd = new SqlCommand(@"
@@ -1315,7 +1463,7 @@ UPDATE dbo.MATERIAL_REQUEST_DETAIL
 SET BUY = @RemainBuy
 WHERE ID = @MRDetailID", conn, trans);
 
-                updateCmd.Parameters.Add("@RemainBuy", SqlDbType.Decimal).Value = remainBuy;
+                updateCmd.Parameters.Add("@RemainBuy", SqlDbType.Decimal).Value = currentBuy - allocation.Quantity;
                 updateCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = allocation.MrDetailId;
                 updateCmd.ExecuteNonQuery();
                 continue;
@@ -1372,10 +1520,30 @@ WHERE ID = @MRDetailID", conn, trans);
             ModelState.AddModelError(string.Empty, $"Row {rowNo}: QtyFromM and U.Price must be valid numbers.");
         }
 
-        if (detail.MrDetailId.HasValue && detail.QtyPur > detail.QtyFromM)
+    }
+
+    private List<int> GetAllowedViewStatuses()
+    {
+        var statuses = new List<int>();
+        foreach (var status in new[] { 1, 2, 3, 4 })
         {
-            ModelState.AddModelError(string.Empty, $"Row {rowNo}: QtyPur cannot be greater than BUY.");
+            if (GetEffectivePermissionsByStatus(status).Contains(PermissionViewDetail))
+            {
+                statuses.Add(status);
+            }
         }
+
+        return statuses;
+    }
+
+    private static void BindViewDetailFilterParams(SqlCommand cmd, PurchaseRequisitionViewDetailFilterRequest request)
+    {
+        cmd.Parameters.Add("@RequestNo", SqlDbType.VarChar, 50).Value = string.IsNullOrWhiteSpace(request.RequestNo) ? DBNull.Value : request.RequestNo.Trim();
+        cmd.Parameters.Add("@Description", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(request.Description) ? DBNull.Value : request.Description.Trim();
+        cmd.Parameters.Add("@ItemCode", SqlDbType.VarChar, 100).Value = string.IsNullOrWhiteSpace(request.ItemCode) ? DBNull.Value : request.ItemCode.Trim();
+        cmd.Parameters.Add("@RecQty", SqlDbType.Decimal).Value = request.RecQty.HasValue ? request.RecQty.Value : DBNull.Value;
+        cmd.Parameters.Add("@FromDate", SqlDbType.Date).Value = request.FromDate.HasValue ? request.FromDate.Value.Date : DBNull.Value;
+        cmd.Parameters.Add("@ToDate", SqlDbType.Date).Value = request.ToDate.HasValue ? request.ToDate.Value.Date : DBNull.Value;
     }
 
     // Nạp thông tin vai trò workflow của user hiện tại từ bảng MS_Employee.
@@ -1429,6 +1597,7 @@ WHERE EmployeeCode = @EmployeeCode", conn);
             CanResetToNew = false;
             CanMoveToMr = false;
             CanManageAttachments = false;
+            CanEditExistingDetailFields = false;
             return;
         }
 
@@ -1442,12 +1611,14 @@ WHERE EmployeeCode = @EmployeeCode", conn);
             CanResetToNew = false;
             CanMoveToMr = false;
             CanManageAttachments = false;
+            CanEditExistingDetailFields = false;
             return;
         }
 
         CanSave = Mode == "add"
             ? effectivePermissions.Contains(PermissionAdd)
             : Mode == "edit" && CanEditDocument(effectivePermissions);
+        CanEditExistingDetailFields = Mode == "edit" && _workflowUser.IsPurchaser && Requisition.Id > 0;
         CanApproveWorkflow = CanApproveCurrentStep();
         CanDisapproveWorkflow = CanApproveAsCfo() || CanApproveAsBod();
         CanResetToNew = Requisition.Id > 0
@@ -1783,10 +1954,41 @@ WHERE PRID = @PRID", conn, trans);
             Password = password,
             MailServer = mailServer,
             MailPort = mailPort,
-            Subject = $"TEST - {subject}",
+            Subject = ApplyMailSubjectPrefix(subject),
             HtmlBody = htmlBody,
             Recipients = recipients
         });
+    }
+
+    // Áp tiền tố subject theo cấu hình EmailSettings khi FunctionID của Purchase Requisition nằm trong danh sách test.
+    private string ApplyMailSubjectPrefix(string subject)
+    {
+        if (string.IsNullOrWhiteSpace(subject))
+        {
+            return subject;
+        }
+
+        var prefix = _config.GetValue<string>("EmailSettings:PrefixSubject")?.Trim();
+        if (string.IsNullOrWhiteSpace(prefix) || !ShouldApplyTestSubjectPrefix())
+        {
+            return subject;
+        }
+
+        return $"{prefix} - {subject}";
+    }
+
+    // Kiểm tra cấu hình TestFunctionIDs để quyết định có thêm tiền tố test vào subject hay không.
+    private bool ShouldApplyTestSubjectPrefix()
+    {
+        var configuredIds = _config.GetValue<string>("EmailSettings:TestFunctionIDs");
+        if (string.IsNullOrWhiteSpace(configuredIds))
+        {
+            return false;
+        }
+
+        return configuredIds
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(value => int.TryParse(value, out var id) && id == FUNCTION_ID);
     }
 
     // Gửi mail workflow bằng SMTP với body HTML theo template chung.
@@ -2008,4 +2210,40 @@ public class PurchaseRequisitionNotifyRecipientViewModel
     public string Email { get; set; } = string.Empty;
     public string EmployeeCode { get; set; } = string.Empty;
     public string EmployeeName { get; set; } = string.Empty;
+}
+
+public class PurchaseRequisitionViewDetailFilterRequest
+{
+    public string? RequestNo { get; set; }
+    public string? Description { get; set; }
+    public string? ItemCode { get; set; }
+    public string RecQtyOperator { get; set; } = "=";
+    public decimal? RecQty { get; set; }
+    public bool UseDateRange { get; set; }
+    public DateTime? FromDate { get; set; }
+    public DateTime? ToDate { get; set; }
+    public int PageNumber { get; set; } = 1;
+    public int PageSize { get; set; } = 10;
+}
+
+public class PurchaseRequisitionViewDetailRow
+{
+    public int PrId { get; set; }
+    public string RequestNo { get; set; } = string.Empty;
+    public DateTime? RequestDate { get; set; }
+    public string RequestDateText { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string ItemCode { get; set; } = string.Empty;
+    public string ItemName { get; set; } = string.Empty;
+    public decimal PrQty { get; set; }
+    public decimal RecQty { get; set; }
+}
+
+public class PurchaseRequisitionViewDetailResponse
+{
+    public List<PurchaseRequisitionViewDetailRow> Rows { get; set; } = new List<PurchaseRequisitionViewDetailRow>();
+    public int PageNumber { get; set; } = 1;
+    public int PageSize { get; set; } = 10;
+    public int TotalRecords { get; set; }
+    public int TotalPages { get; set; } = 1;
 }

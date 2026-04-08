@@ -2,7 +2,7 @@
     "use strict";
 
     function getConfig() {
-        return window.purchaseRequisitionDetailPage || { canSave: false, canMoveToMr: false, canSelectDetail: false };
+        return window.purchaseRequisitionDetailPage || { canSave: false, canEditExistingDetailFields: false, canMoveToMr: false, canSelectDetail: false };
     }
 
     function getAllowedExtensions() {
@@ -153,6 +153,22 @@
         const detailAttachmentDeleteButton = document.getElementById("btnDetailAttachmentDelete");
         const attachmentSelectors = Array.from(document.querySelectorAll(".prq-attachment-selector"));
         const addDetailRows = Array.from(document.querySelectorAll("tr[data-add-detail-row='1']"));
+        const viewDetailModal = document.getElementById("prqViewDetailModal");
+        const openViewDetailButton = document.getElementById("btnOpenViewDetailModal");
+        const viewDetailRequestNo = document.getElementById("prqViewDetailRequestNo");
+        const viewDetailDescription = document.getElementById("prqViewDetailDescription");
+        const viewDetailRecQtyOperator = document.getElementById("prqViewDetailRecQtyOperator");
+        const viewDetailRecQty = document.getElementById("prqViewDetailRecQty");
+        const viewDetailItemCode = document.getElementById("prqViewDetailItemCode");
+        const viewDetailUseDateRange = document.getElementById("prqViewDetailUseDateRange");
+        const viewDetailFromDate = document.getElementById("prqViewDetailFromDate");
+        const viewDetailToDate = document.getElementById("prqViewDetailToDate");
+        const viewDetailSearchButton = document.getElementById("btnPrqViewDetailSearch");
+        const viewDetailRows = document.getElementById("prqViewDetailRows");
+        const viewDetailEmptyRow = document.getElementById("prqViewDetailEmptyRow");
+        const viewDetailPaginationInfo = document.getElementById("prqViewDetailPaginationInfo");
+        const viewDetailPagination = document.getElementById("prqViewDetailPagination");
+        const viewDetailPageSize = document.getElementById("prqViewDetailPageSize");
         if (!detailsJsonEl || !rowsContainer || !emptyRow) return;
 
         let details = [];
@@ -196,6 +212,14 @@
             detailAttachmentDeleteButton.disabled = !attachmentSelectors.some((checkbox) => checkbox.checked);
         };
 
+        const viewDetailState = {
+            pageNumber: 1,
+            pageSize: viewDetailPageSize ? Number.parseInt(viewDetailPageSize.value || "10", 10) || 10 : 10,
+            totalPages: 1,
+            hasLoaded: false,
+            loading: false
+        };
+
         const validateAttachmentFile = () => {
             if (!detailAttachmentInput || !detailAttachmentInput.files || detailAttachmentInput.files.length === 0) {
                 hideAttachmentError();
@@ -232,6 +256,174 @@
             }
             addDetailError.textContent = message;
             addDetailError.style.display = "block";
+        };
+
+        const getViewDetailFilter = () => ({
+            requestNo: viewDetailRequestNo?.value?.trim() || "",
+            description: viewDetailDescription?.value?.trim() || "",
+            recQtyOperator: viewDetailRecQtyOperator?.value || "=",
+            recQty: viewDetailRecQty?.value?.trim() || "",
+            itemCode: viewDetailItemCode?.value?.trim() || "",
+            useDateRange: !!viewDetailUseDateRange?.checked,
+            fromDate: viewDetailFromDate?.value || "",
+            toDate: viewDetailToDate?.value || "",
+            pageNumber: viewDetailState.pageNumber,
+            pageSize: viewDetailState.pageSize
+        });
+
+        const buildViewDetailPages = (currentPage, totalPages) => {
+            const items = [];
+            if (totalPages <= 7) {
+                for (let page = 1; page <= totalPages; page += 1) {
+                    items.push(page);
+                }
+                return items;
+            }
+
+            items.push(1);
+            if (currentPage > 3) {
+                items.push(null);
+            }
+
+            const start = Math.max(2, currentPage - 1);
+            const end = Math.min(totalPages - 1, currentPage + 1);
+            for (let page = start; page <= end; page += 1) {
+                items.push(page);
+            }
+
+            if (currentPage < totalPages - 2) {
+                items.push(null);
+            }
+            items.push(totalPages);
+            return items;
+        };
+
+        const renderViewDetailRows = (response) => {
+            if (!viewDetailRows || !viewDetailEmptyRow || !viewDetailPaginationInfo || !viewDetailPagination) {
+                return;
+            }
+
+            viewDetailRows.querySelectorAll("tr[data-view-detail-row='1']").forEach((row) => row.remove());
+
+            const rows = Array.isArray(response?.rows) ? response.rows : [];
+            const totalRecords = Number(response?.totalRecords || 0);
+            const totalPages = Math.max(1, Number(response?.totalPages || 1));
+            const currentPage = Math.max(1, Number(response?.pageNumber || 1));
+            const pageSize = Math.max(1, Number(response?.pageSize || viewDetailState.pageSize || 10));
+            viewDetailState.totalPages = totalPages;
+            viewDetailState.pageNumber = currentPage;
+            viewDetailState.pageSize = pageSize;
+            if (viewDetailPageSize) {
+                viewDetailPageSize.value = String(pageSize);
+            }
+
+            if (rows.length === 0) {
+                viewDetailEmptyRow.style.display = "";
+            } else {
+                viewDetailEmptyRow.style.display = "none";
+                rows.forEach((row) => {
+                    const tr = document.createElement("tr");
+                    tr.setAttribute("data-view-detail-row", "1");
+                    tr.innerHTML = `
+                        <td>${escapeHtml(row.requestNo || "")}</td>
+                        <td>${escapeHtml(row.requestDateText || "")}</td>
+                        <td><span class="vni-font">${escapeHtml(row.description || "")}</span></td>
+                        <td><span class="tcvn3-font">${escapeHtml(row.itemCode || "")}</span> / <span class="tcvn3-font">${escapeHtml(row.itemName || "")}</span></td>
+                        <td class="prq-center">${formatNumber(row.prQty || 0)}</td>
+                        <td class="prq-center">${formatNumber(row.recQty || 0)}</td>`;
+                    viewDetailRows.appendChild(tr);
+                });
+            }
+
+            if (totalRecords <= 0) {
+                viewDetailPaginationInfo.innerHTML = "<small>No records</small>";
+            } else {
+                const pageStart = ((currentPage - 1) * pageSize) + 1;
+                const pageEnd = Math.min(currentPage * pageSize, totalRecords);
+                viewDetailPaginationInfo.innerHTML = `<small>Showing ${pageStart} to ${pageEnd} of ${totalRecords} entries</small>`;
+            }
+
+            viewDetailPagination.innerHTML = "";
+            const appendPageItem = (label, page, disabled, active) => {
+                const li = document.createElement("li");
+                li.className = `page-item${disabled ? " disabled" : ""}${active ? " active" : ""}`;
+                const link = document.createElement(disabled ? "span" : "a");
+                link.className = "page-link";
+                link.textContent = label;
+                if (!disabled) {
+                    link.href = "#";
+                    link.dataset.page = String(page);
+                }
+                li.appendChild(link);
+                viewDetailPagination.appendChild(li);
+            };
+
+            appendPageItem("Prev", currentPage - 1, currentPage <= 1, false);
+            buildViewDetailPages(currentPage, totalPages).forEach((page) => {
+                if (page == null) {
+                    const li = document.createElement("li");
+                    li.className = "page-item disabled";
+                    li.innerHTML = "<span class='page-link'>...</span>";
+                    viewDetailPagination.appendChild(li);
+                    return;
+                }
+
+                appendPageItem(String(page), page, false, page === currentPage);
+            });
+            appendPageItem("Next", currentPage + 1, currentPage >= totalPages, false);
+        };
+
+        const loadViewDetailRows = async (resetPage) => {
+            if (!getConfig().canOpenViewDetailDialog || !getConfig().viewDetailEndpoint || !viewDetailRows) {
+                return;
+            }
+
+            if (resetPage) {
+                viewDetailState.pageNumber = 1;
+            }
+
+            const filter = getViewDetailFilter();
+            const params = new URLSearchParams();
+            if (filter.requestNo) params.set("RequestNo", filter.requestNo);
+            if (filter.description) params.set("Description", filter.description);
+            if (filter.itemCode) params.set("ItemCode", filter.itemCode);
+            if (filter.recQty) {
+                params.set("RecQtyOperator", filter.recQtyOperator);
+                params.set("RecQty", filter.recQty);
+            }
+            if (filter.useDateRange) {
+                params.set("UseDateRange", "true");
+                if (filter.fromDate) params.set("FromDate", filter.fromDate);
+                if (filter.toDate) params.set("ToDate", filter.toDate);
+            }
+            params.set("PageNumber", String(filter.pageNumber));
+            params.set("PageSize", String(filter.pageSize));
+
+            const separator = getConfig().viewDetailEndpoint.includes("?") ? "&" : "?";
+            const url = `${getConfig().viewDetailEndpoint}${separator}${params.toString()}`;
+            viewDetailState.loading = true;
+
+            try {
+                const response = await fetch(url, {
+                    method: "GET",
+                    headers: { "X-Requested-With": "XMLHttpRequest" }
+                });
+
+                if (!response.ok) {
+                    throw new Error("Cannot load purchase requisition details.");
+                }
+
+                const payload = await response.json();
+                renderViewDetailRows(payload);
+                viewDetailState.hasLoaded = true;
+            } catch (error) {
+                renderViewDetailRows({ rows: [], totalRecords: 0, totalPages: 1, pageNumber: 1, pageSize: viewDetailState.pageSize });
+                if (viewDetailPaginationInfo) {
+                    viewDetailPaginationInfo.innerHTML = `<small>${escapeHtml(error?.message || "Cannot load purchase requisition details.")}</small>`;
+                }
+            } finally {
+                viewDetailState.loading = false;
+            }
         };
 
         const syncHiddenInput = () => {
@@ -330,13 +522,17 @@
                 row.innerHTML = `
                     <td class="prq-center">${selectorCell}</td>
                     <td>${detail.itemCode || ""}</td>
-                    <td>${detail.itemName || ""}</td>
+                    <td><span class="tcvn3-font">${escapeHtml(detail.itemName || "")}</span></td>
                     <td class="prq-center">${detail.unit || ""}</td>
                     <td class="prq-center">${formatNumber(detail.qtyFromM)}</td>
                     <td class="prq-center">${formatNumber(detail.qtyPur)}</td>
-                    <td class="prq-center">${formatNumber(detail.unitPrice)}</td>
-                    <td class="prq-center">${formatNumber(amount)}</td>
-                    <td class="prq-center"><span class="vni-font">${escapeHtml(detail.remark || "")}</span></td>
+                    <td class="prq-center">${getConfig().canEditExistingDetailFields
+                        ? `<input type="text" inputmode="decimal" class="form-control form-control-sm prq-detail-edit-price" value="${formatNumber(detail.unitPrice)}" />`
+                        : formatNumber(detail.unitPrice)}</td>
+                    <td class="prq-center prq-detail-amount">${formatNumber(amount)}</td>
+                    <td class="prq-center">${getConfig().canEditExistingDetailFields
+                        ? `<input type="text" class="form-control form-control-sm prq-detail-edit-remark vni-font" value="${escapeHtml(detail.remark || "")}" />`
+                        : `<span class="vni-font">${escapeHtml(detail.remark || "")}</span>`}</td>
                     <td><span class="vni-font">${escapeHtml(detail.supplierText || "")}</span></td>`;
                 rowsContainer.appendChild(row);
             });
@@ -356,6 +552,53 @@
             renderRows();
         }
 
+        rowsContainer.addEventListener("input", (ev) => {
+            const target = ev.target;
+            if (!(target instanceof HTMLInputElement)) {
+                return;
+            }
+
+            const row = target.closest("tr[data-row='1']");
+            if (!row) {
+                return;
+            }
+
+            const rowKey = row.getAttribute("data-row-key") || "";
+            const detail = details.find((item) => getRowKey(item) === rowKey);
+            if (!detail || !getConfig().canEditExistingDetailFields) {
+                return;
+            }
+
+            if (target.classList.contains("prq-detail-edit-price")) {
+                target.value = sanitizeNonNegativeDecimal(target.value);
+                detail.unitPrice = toNumber(target.value);
+            } else if (target.classList.contains("prq-detail-edit-remark")) {
+                detail.remark = target.value || "";
+            } else {
+                return;
+            }
+
+            const amountCell = row.querySelector(".prq-detail-amount");
+            if (amountCell) {
+                amountCell.textContent = formatNumber(toNumber(detail.qtyPur) * toNumber(detail.unitPrice));
+            }
+
+            syncHiddenInput();
+            updateSummary();
+        });
+
+        rowsContainer.addEventListener("blur", (ev) => {
+            const target = ev.target;
+            if (!(target instanceof HTMLInputElement)) {
+                return;
+            }
+
+            if (target.classList.contains("prq-detail-edit-price")) {
+                clampNonNegativeDecimalInput(target);
+                target.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+        }, true);
+
         const isDuplicateDetail = (itemId, supplierId, mrDetailId) => {
             return details.some((detail) =>
                 (
@@ -370,26 +613,13 @@
             );
         };
 
-        const getAllocatedQtyByMrDetail = (mrDetailId) => {
+        const hasDetailByMrDetail = (mrDetailId) => {
             const targetMrDetailId = Number(mrDetailId || 0);
             if (targetMrDetailId <= 0) {
-                return 0;
+                return false;
             }
 
-            return details
-                .filter((detail) => Number(detail.mrDetailId || 0) === targetMrDetailId)
-                .reduce((sum, detail) => sum + toNumber(detail.qtyPur), 0);
-        };
-
-        const getPendingUnsavedQtyByMrDetail = (mrDetailId) => {
-            const targetMrDetailId = Number(mrDetailId || 0);
-            if (targetMrDetailId <= 0) {
-                return 0;
-            }
-
-            return details
-                .filter((detail) => Number(detail.detailId || 0) <= 0 && Number(detail.mrDetailId || 0) === targetMrDetailId)
-                .reduce((sum, detail) => sum + toNumber(detail.qtyPur), 0);
+            return details.some((detail) => Number(detail.mrDetailId || 0) === targetMrDetailId);
         };
 
         const findPendingUnsavedDetail = (itemId, mrDetailId) => {
@@ -411,26 +641,33 @@
         const updateAddDetailAvailability = () => {
             addDetailRows.forEach((row) => {
                 const mrDetailId = Number.parseInt(row.getAttribute("data-mr-detail-id") || "0", 10) || 0;
+                const isAlreadyInPr = hasDetailByMrDetail(mrDetailId);
                 const baseBuy = toNumber(row.getAttribute("data-base-buy") || row.getAttribute("data-buy") || "0");
-                const pendingQty = getPendingUnsavedQtyByMrDetail(mrDetailId);
-                const remainingBuy = Math.max(0, baseBuy - pendingQty);
+                const remainingBuy = isAlreadyInPr ? 0 : baseBuy;
                 const checkbox = row.querySelector(".prq-add-detail-check");
                 const subQtyInput = row.querySelector(".prq-add-detail-subqty");
                 const buyCell = row.querySelector(".prq-add-detail-buy");
 
                 row.setAttribute("data-current-buy", String(remainingBuy));
+                row.style.display = isAlreadyInPr ? "none" : "";
 
                 if (buyCell) {
                     buyCell.textContent = formatNumber(remainingBuy);
                 }
 
+                if (checkbox) {
+                    checkbox.checked = false;
+                    checkbox.disabled = isAlreadyInPr;
+                }
+
                 if (subQtyInput) {
-                    const currentValue = toNumber(subQtyInput.value);
-                const nextValue = currentValue > 0 ? currentValue : remainingBuy;
-                subQtyInput.value = formatNumber(nextValue);
-            }
-        });
-    };
+                    subQtyInput.disabled = isAlreadyInPr;
+                    subQtyInput.value = formatNumber(remainingBuy);
+                }
+
+                row.classList.remove("prq-detail-row-selected");
+            });
+        };
 
         const normalizeInputValue = (input) => {
             if (!input) return;
@@ -469,6 +706,10 @@
             }
 
             if (!getConfig().canSelectDetail) {
+                return;
+            }
+
+            if (event.target.closest(".prq-detail-edit-price, .prq-detail-edit-remark")) {
                 return;
             }
 
@@ -534,7 +775,6 @@
                 const itemCode = row.getAttribute("data-item-code") || "";
                 const itemName = row.getAttribute("data-item-name") || "";
                 const requestNo = row.getAttribute("data-request-no") || "";
-                const buy = toNumber(row.getAttribute("data-current-buy") || row.getAttribute("data-base-buy") || row.getAttribute("data-buy") || "0");
                 const baseBuy = toNumber(row.getAttribute("data-base-buy") || row.getAttribute("data-buy") || "0");
                 const unit = row.getAttribute("data-unit") || "";
                 const unitPrice = toNumber(row.getAttribute("data-unit-price") || "0");
@@ -550,19 +790,6 @@
                 }
 
                 const initialAllocatedQty = Number(initialAllocatedQtyByMrDetail[mrDetailId] || 0);
-
-                const pendingUnsavedDetail = findPendingUnsavedDetail(itemId, mrDetailId);
-                if (pendingUnsavedDetail) {
-                    pendingUnsavedDetail.qtyPur = toNumber(pendingUnsavedDetail.qtyPur) + qtyPurValue;
-                    pendingUnsavedDetail.qtyFromM = mrDetailId > 0 ? initialAllocatedQty + baseBuy : Math.max(toNumber(pendingUnsavedDetail.qtyFromM), baseBuy);
-                    pendingUnsavedDetail.unitPrice = unitPrice;
-                    pendingUnsavedDetail.remark = specification;
-                    pendingUnsavedDetail.mrRequestNo = requestNo;
-                    if (mrDetailId > 0) {
-                        pendingUnsavedDetail.mrDetailId = mrDetailId;
-                    }
-                    continue;
-                }
 
                 newDetails.push({
                     tempKey: `tmp-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -602,6 +829,61 @@
         });
         attachmentSelectors.forEach((checkbox) => {
             checkbox.addEventListener("change", updateAttachmentDeleteButton);
+        });
+
+        if (viewDetailUseDateRange && viewDetailFromDate && viewDetailToDate) {
+            const syncViewDetailDateRange = () => {
+                const enabled = viewDetailUseDateRange.checked;
+                viewDetailFromDate.disabled = !enabled;
+                viewDetailToDate.disabled = !enabled;
+                if (!enabled) {
+                    viewDetailFromDate.value = "";
+                    viewDetailToDate.value = "";
+                }
+            };
+
+            viewDetailUseDateRange.addEventListener("change", syncViewDetailDateRange);
+            syncViewDetailDateRange();
+        }
+
+        openViewDetailButton?.addEventListener("click", () => {
+            if (!viewDetailState.hasLoaded) {
+                loadViewDetailRows(true);
+            }
+        });
+
+        viewDetailSearchButton?.addEventListener("click", () => {
+            loadViewDetailRows(true);
+        });
+
+        viewDetailPageSize?.addEventListener("change", () => {
+            viewDetailState.pageSize = Number.parseInt(viewDetailPageSize.value || "10", 10) || 10;
+            loadViewDetailRows(true);
+        });
+
+        viewDetailPagination?.addEventListener("click", (event) => {
+            const link = event.target.closest("[data-page]");
+            if (!link) {
+                return;
+            }
+
+            event.preventDefault();
+            const page = Number.parseInt(link.getAttribute("data-page") || "1", 10) || 1;
+            if (page <= 0 || page === viewDetailState.pageNumber || viewDetailState.loading) {
+                return;
+            }
+
+            viewDetailState.pageNumber = page;
+            loadViewDetailRows(false);
+        });
+
+        [viewDetailRequestNo, viewDetailDescription, viewDetailRecQty, viewDetailItemCode, viewDetailFromDate, viewDetailToDate].forEach((input) => {
+            input?.addEventListener("keydown", (event) => {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                    loadViewDetailRows(true);
+                }
+            });
         });
 
         currencySelectEl?.addEventListener("change", updateSummary);

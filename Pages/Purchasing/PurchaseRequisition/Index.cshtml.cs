@@ -22,6 +22,7 @@ public class IndexModel : BasePageModel
     private const int PermissionViewDetail = 2;
     private const int PermissionAdd = 3;
     private const int PermissionEdit = 4;
+    private const int PermissionApprove = 5;
     private const int PermissionDisapproval = 6;
     private const int PermissionChangeStatus = 6;
     private readonly ILogger<IndexModel> _logger;
@@ -292,6 +293,148 @@ public class IndexModel : BasePageModel
 
         var (rows, _) = SearchPurchaseRequisitionRows(exportFilter);
         return ExportPurchaseRequisitionListExcel(rows);
+    }
+
+    // Tải danh sách PC_PRDetail của đúng PR đang chọn trong popup View Detail bằng ajax.
+    public IActionResult OnGetViewDetailRows([FromQuery] PurchaseRequisitionListViewDetailFilterRequest request)
+    {
+        PagePerm = GetUserPermissions();
+        LoadCurrentWorkflowUser();
+        if (!HasPermission(PermissionViewDetail))
+        {
+            Response.StatusCode = StatusCodes.Status403Forbidden;
+            return new JsonResult(new { message = "You have no permission to view purchase requisition details." });
+        }
+
+        request.PageNumber = request.PageNumber <= 0 ? 1 : request.PageNumber;
+        request.PageSize = AllowedPageSizes.Contains(request.PageSize) ? request.PageSize : DefaultPageSize;
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+
+        var rows = new List<PurchaseRequisitionListViewDetailRow>();
+        var totalRecords = 0;
+        var allowedStatuses = GetAllowedViewStatuses();
+        if (allowedStatuses.Count == 0)
+        {
+            return new JsonResult(new PurchaseRequisitionListViewDetailResponse());
+        }
+
+        var whereBuilder = new List<string>
+        {
+            $"p.[Status] IN ({string.Join(",", allowedStatuses)})"
+        };
+
+        if (!string.IsNullOrWhiteSpace(request.RequestNo))
+        {
+            whereBuilder.Add("p.RequestNo LIKE '%' + @RequestNo + '%'");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Description))
+        {
+            whereBuilder.Add("p.[Description] LIKE '%' + @Description + '%'");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.ItemCode))
+        {
+            whereBuilder.Add("(i.ItemCode LIKE '%' + @ItemCode + '%' OR i.ItemName LIKE '%' + @ItemCode + '%')");
+        }
+
+        if (request.UseDateRange)
+        {
+            if (request.FromDate.HasValue)
+            {
+                whereBuilder.Add("CAST(p.RequestDate AS date) >= @FromDate");
+            }
+
+            if (request.ToDate.HasValue)
+            {
+                whereBuilder.Add("CAST(p.RequestDate AS date) <= @ToDate");
+            }
+        }
+
+        if (request.RecQty.HasValue)
+        {
+            var recQtyCondition = request.RecQtyOperator switch
+            {
+                ">" => "ISNULL(d.RecQty, 0) > @RecQty",
+                ">=" => "ISNULL(d.RecQty, 0) >= @RecQty",
+                "<" => "ISNULL(d.RecQty, 0) < @RecQty",
+                "<=" => "ISNULL(d.RecQty, 0) <= @RecQty",
+                "=" => "ISNULL(d.RecQty, 0) = @RecQty",
+                _ => string.Empty
+            };
+
+            if (!string.IsNullOrWhiteSpace(recQtyCondition))
+            {
+                whereBuilder.Add(recQtyCondition);
+            }
+        }
+
+        var whereSql = $"WHERE {string.Join(" AND ", whereBuilder)}";
+
+        using (var countCmd = new SqlCommand($@"
+SELECT COUNT(1)
+FROM dbo.PC_PR p
+INNER JOIN dbo.PC_PRDetail d ON p.PRID = d.PRID
+LEFT JOIN dbo.INV_ItemList i ON d.ItemID = i.ItemID
+{whereSql}", conn))
+        {
+            BindViewDetailFilterParams(countCmd, request);
+            totalRecords = Convert.ToInt32(countCmd.ExecuteScalar() ?? 0);
+        }
+
+        var totalPages = request.PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(totalRecords / (double)request.PageSize));
+        if (request.PageNumber > totalPages)
+        {
+            request.PageNumber = totalPages;
+        }
+
+        using (var dataCmd = new SqlCommand($@"
+SELECT
+    ISNULL(p.RequestNo, '') AS RequestNo,
+    p.RequestDate,
+    ISNULL(p.[Description], '') AS [Description],
+    ISNULL(i.ItemCode, '') AS ItemCode,
+    ISNULL(i.ItemName, '') AS ItemName,
+    ISNULL(d.Quantity, 0) AS PrQty,
+    ISNULL(d.RecQty, 0) AS RecQty
+FROM dbo.PC_PR p
+INNER JOIN dbo.PC_PRDetail d ON p.PRID = d.PRID
+LEFT JOIN dbo.INV_ItemList i ON d.ItemID = i.ItemID
+{whereSql}
+ORDER BY d.RecordID DESC
+OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
+        {
+            BindViewDetailFilterParams(dataCmd, request);
+            dataCmd.Parameters.Add("@Offset", SqlDbType.Int).Value = (request.PageNumber - 1) * request.PageSize;
+            dataCmd.Parameters.Add("@PageSize", SqlDbType.Int).Value = request.PageSize;
+
+            using var rd = dataCmd.ExecuteReader();
+            while (rd.Read())
+            {
+                rows.Add(new PurchaseRequisitionListViewDetailRow
+                {
+                    RequestNo = Convert.ToString(rd["RequestNo"]) ?? string.Empty,
+                    RequestDate = rd["RequestDate"] == DBNull.Value ? null : Convert.ToDateTime(rd["RequestDate"]),
+                    RequestDateText = rd["RequestDate"] == DBNull.Value ? string.Empty : Convert.ToDateTime(rd["RequestDate"]).ToString("dd-MMM-yyyy"),
+                    Description = Convert.ToString(rd["Description"]) ?? string.Empty,
+                    ItemCode = Convert.ToString(rd["ItemCode"]) ?? string.Empty,
+                    ItemName = Convert.ToString(rd["ItemName"]) ?? string.Empty,
+                    PrQty = Convert.ToDecimal(rd["PrQty"]),
+                    RecQty = Convert.ToDecimal(rd["RecQty"])
+                });
+            }
+        }
+
+        return new JsonResult(new PurchaseRequisitionListViewDetailResponse
+        {
+            Rows = rows,
+            PageNumber = request.PageNumber,
+            PageSize = request.PageSize,
+            TotalRecords = totalRecords,
+            TotalPages = totalPages
+        });
     }
 
     // Thực hiện xử lý cho hàm ExportPurchaseRequisitionListExcel theo nghiệp vụ của màn hình.
@@ -655,10 +798,11 @@ ORDER BY d.RecordID", conn);
     private object BuildRowActions(PurchaseRequisitionRow row) => new
     {
         canEdit = CanEditRow(row.StatusId),
+        canApprove = CanApproveRow(row),
         canAddAt = CanAddAt,
         canViewDetail = CanViewDetailRow(row.StatusId),
         canDisapproval = HasPermission(PermissionDisapproval),
-        accessMode = CanEditRow(row.StatusId) ? "edit" : "view"
+        accessMode = GetAccessMode(row)
     };
 
     // Thực hiện xử lý cho hàm LoadStatusList theo nghiệp vụ của màn hình.
@@ -1554,6 +1698,87 @@ WHERE ID = @MRDetailID", conn, trans);
         return statusId.HasValue && GetEffectivePermissionsByStatus(statusId.Value).Contains(PermissionViewDetail);
     }
 
+    // Xác định row hiện tại có thể mở thẳng mode=approve theo bước workflow của user hay không.
+    public bool CanApproveRow(PurchaseRequisitionRow row)
+    {
+        if (row.StatusId != 1 && row.StatusId != 2)
+        {
+            return false;
+        }
+
+        var effectivePermissions = GetEffectivePermissionsByStatus(row.StatusId ?? 0);
+        if (!effectivePermissions.Contains(PermissionApprove))
+        {
+            return false;
+        }
+
+        if (IsAdminRole())
+        {
+            return row.StatusId == 1
+                || (row.StatusId == 2 && (string.IsNullOrWhiteSpace(row.ChiefACode) || string.IsNullOrWhiteSpace(row.GDirectorCode)));
+        }
+
+        if (row.StatusId == 1)
+        {
+            return _workflowUser.IsPurchaser;
+        }
+
+        if (row.StatusId == 2 && string.IsNullOrWhiteSpace(row.ChiefACode))
+        {
+            return _workflowUser.IsCFO;
+        }
+
+        if (row.StatusId == 2 && !string.IsNullOrWhiteSpace(row.ChiefACode) && string.IsNullOrWhiteSpace(row.GDirectorCode))
+        {
+            return _workflowUser.IsBOD;
+        }
+
+        return false;
+    }
+
+    // Gán tham số filter cho popup View Detail của đúng PR đang chọn.
+    private static void BindViewDetailFilterParams(SqlCommand cmd, PurchaseRequisitionListViewDetailFilterRequest request)
+    {
+        cmd.Parameters.Add("@RequestNo", SqlDbType.NVarChar, 50).Value = string.IsNullOrWhiteSpace(request.RequestNo) ? DBNull.Value : request.RequestNo.Trim();
+        cmd.Parameters.Add("@Description", SqlDbType.NVarChar, 250).Value = string.IsNullOrWhiteSpace(request.Description) ? DBNull.Value : request.Description.Trim();
+        cmd.Parameters.Add("@ItemCode", SqlDbType.NVarChar, 150).Value = string.IsNullOrWhiteSpace(request.ItemCode) ? DBNull.Value : request.ItemCode.Trim();
+        cmd.Parameters.Add("@FromDate", SqlDbType.Date).Value = request.FromDate.HasValue ? request.FromDate.Value.Date : DBNull.Value;
+        cmd.Parameters.Add("@ToDate", SqlDbType.Date).Value = request.ToDate.HasValue ? request.ToDate.Value.Date : DBNull.Value;
+        cmd.Parameters.Add("@UseDateRange", SqlDbType.Bit).Value = request.UseDateRange;
+        cmd.Parameters.Add("@RecQty", SqlDbType.Decimal).Value = request.RecQty.HasValue ? request.RecQty.Value : DBNull.Value;
+    }
+
+    // Lấy các trạng thái PR mà user hiện tại được quyền mở View Detail.
+    private List<int> GetAllowedViewStatuses()
+    {
+        var statuses = new List<int>();
+        for (var status = 1; status <= 4; status++)
+        {
+            if (CanViewDetailRow((byte)status))
+            {
+                statuses.Add(status);
+            }
+        }
+
+        return statuses;
+    }
+
+    // Xác định mode ưu tiên cho link No. theo thứ tự edit => approve => view.
+    public string GetAccessMode(PurchaseRequisitionRow row)
+    {
+        if (CanEditRow(row.StatusId))
+        {
+            return "edit";
+        }
+
+        if (CanApproveRow(row))
+        {
+            return "approve";
+        }
+
+        return "view";
+    }
+
     private bool HasPermission(int permissionNo) => PagePerm.HasPermission(permissionNo);
 
     // Nạp vai trò workflow hiện tại để danh sách cũng xác định đúng row nào được mở mode=edit.
@@ -1739,6 +1964,41 @@ public class PurchaseRequisitionAddAtSourceRow
     public string Specification { get; set; } = string.Empty;
     public string Note { get; set; } = string.Empty;
     public int MrDetailId { get; set; }
+}
+
+public class PurchaseRequisitionListViewDetailFilterRequest
+{
+    public string? RequestNo { get; set; }
+    public string? Description { get; set; }
+    public string? ItemCode { get; set; }
+    public string RecQtyOperator { get; set; } = "=";
+    public decimal? RecQty { get; set; }
+    public bool UseDateRange { get; set; }
+    public DateTime? FromDate { get; set; }
+    public DateTime? ToDate { get; set; }
+    public int PageNumber { get; set; } = 1;
+    public int PageSize { get; set; } = 10;
+}
+
+public class PurchaseRequisitionListViewDetailRow
+{
+    public string RequestNo { get; set; } = string.Empty;
+    public DateTime? RequestDate { get; set; }
+    public string RequestDateText { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string ItemCode { get; set; } = string.Empty;
+    public string ItemName { get; set; } = string.Empty;
+    public decimal PrQty { get; set; }
+    public decimal RecQty { get; set; }
+}
+
+public class PurchaseRequisitionListViewDetailResponse
+{
+    public List<PurchaseRequisitionListViewDetailRow> Rows { get; set; } = new List<PurchaseRequisitionListViewDetailRow>();
+    public int PageNumber { get; set; } = 1;
+    public int PageSize { get; set; } = 10;
+    public int TotalRecords { get; set; }
+    public int TotalPages { get; set; } = 1;
 }
 
 

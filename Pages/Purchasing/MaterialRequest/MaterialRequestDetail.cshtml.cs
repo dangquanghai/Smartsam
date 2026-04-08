@@ -1583,16 +1583,43 @@ public class MaterialRequestDetailModel : BasePageModel
         }
     }
 
-    private static string AddTestSubjectPrefix(string subject)
+    private string AddTestSubjectPrefix(string subject)
     {
-        const string prefix = "TEST";
         var trimmed = (subject ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return trimmed;
+        }
+
+        // Đọc danh sách function được đánh dấu test từ appsettings.json.
+        // Chỉ những function nằm trong danh sách này mới bị prefix [TEST].
+        var testFunctionIds = (_config.GetValue<string>("EmailSettings:TestFunctionIDs") ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var isTestFunction = false;
+        foreach (var item in testFunctionIds)
+        {
+            if (int.TryParse(item, out var functionId) && functionId == MaterialRequestFunctionId)
+            {
+                isTestFunction = true;
+                break;
+            }
+        }
+
+        // Nếu function hiện tại không phải test function thì giữ subject nguyên bản.
+        if (!isTestFunction)
+        {
+            return trimmed;
+        }
+
+        const string prefix = "[TEST]";
+
+        // Nếu đã có prefix [TEST] rồi thì không thêm lại lần nữa.
         if (trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
         {
             return trimmed;
         }
 
-        return string.IsNullOrWhiteSpace(trimmed) ? prefix : $"{prefix} - {trimmed}";
+        return string.IsNullOrWhiteSpace(trimmed) ? prefix : $"{prefix} {trimmed}";
     }
 
     private const string TestCcEmail = "hai.dq@saigonskygarden.com.vn";

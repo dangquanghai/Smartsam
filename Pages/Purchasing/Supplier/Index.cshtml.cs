@@ -76,6 +76,12 @@ namespace SmartSam.Pages.Purchasing.Supplier
         public int? StatusId { get; set; }
 
         [BindProperty(SupportsGet = true)]
+        public string? StatusIdsCsv { get; set; }
+
+        [BindProperty(SupportsGet = true)]
+        public List<int> StatusIds { get; set; } = [];
+
+        [BindProperty(SupportsGet = true)]
         public bool IsNew { get; set; }
 
         [BindProperty(SupportsGet = true)]
@@ -141,6 +147,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             // Load dữ liệu cho các Dropdown
             LoadDepartments();
             LoadSupplierStatuses();
+            InitializeStatusSelection();
 
             ViewData["DefaultPageSize"] = DefaultPageSize;
         }
@@ -488,7 +495,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 SupplierName = NullIfEmpty(request.SupplierName),
                 Business = NullIfEmpty(request.Business),
                 Contact = NullIfEmpty(request.Contact),
-                StatusId = request.StatusId,
+                StatusIds = NormalizeStatusIds(request.StatusIds, request.StatusId),
                 IsNew = request.IsNew,
                 PageIndex = page,
                 PageSize = pageSize
@@ -601,7 +608,87 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 }
             }
 
-            Statuses = Helper.BuildIntSelectList(list, x => x.Id, x => x.Name, showAll: true);
+            Statuses = Helper.BuildIntSelectList(list, x => x.Id, x => x.Name, showAll: false);
+        }
+
+        private void InitializeStatusSelection()
+        {
+            var selectedStatusIds = ParseStatusIdsCsv(StatusIdsCsv);
+
+            if (selectedStatusIds.Count == 0 && StatusId.HasValue && StatusId.Value >= 0)
+            {
+                selectedStatusIds.Add(StatusId.Value);
+            }
+
+            if (selectedStatusIds.Count == 0)
+            {
+                selectedStatusIds = GetDefaultStatusIds();
+            }
+
+            StatusIds = selectedStatusIds;
+        }
+
+        private List<int> GetDefaultStatusIds()
+        {
+            var availableStatusIds = Statuses
+                .Select(x => int.TryParse(x.Value, out var statusId) ? statusId : -1)
+                .Where(x => x >= 0)
+                .Distinct()
+                .ToList();
+
+            if (availableStatusIds.Count == 0)
+            {
+                return [];
+            }
+
+            if (_isAdminRole)
+            {
+                return availableStatusIds;
+            }
+
+            if (_dataScope.LevelCheckSupplier > 0)
+            {
+                var defaultStatusId = Math.Max(0, _dataScope.LevelCheckSupplier - 1);
+                return availableStatusIds.Contains(defaultStatusId)
+                    ? [defaultStatusId]
+                    : [];
+            }
+
+            return [];
+        }
+
+        private static List<int> ParseStatusIdsCsv(string? statusIdsCsv)
+        {
+            var statusIds = new List<int>();
+
+            if (string.IsNullOrWhiteSpace(statusIdsCsv))
+            {
+                return statusIds;
+            }
+
+            foreach (var part in statusIdsCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (int.TryParse(part, out var statusId) && statusId >= 0)
+                {
+                    statusIds.Add(statusId);
+                }
+            }
+
+            return statusIds
+                .Distinct()
+                .ToList();
+        }
+
+        private string GetStatusIdsCsv()
+        {
+            if (!string.IsNullOrWhiteSpace(StatusIdsCsv))
+            {
+                return StatusIdsCsv.Trim();
+            }
+
+            return StatusIds.Count > 0
+                ? string.Join(",", StatusIds.Distinct().Where(id => id >= 0))
+                : string.Empty;
         }
 
         // Nap du lieu grid theo paging hien tai.
@@ -638,7 +725,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 SupplierName = NullIfEmpty(SupplierName),
                 Business = NullIfEmpty(Business),
                 Contact = NullIfEmpty(Contact),
-                StatusId = StatusId,
+                StatusIds = StatusIds.ToList(),
                 IsNew = IsNew,
                 PageIndex = includePaging ? PageIndex : null,
                 PageSize = includePaging ? PageSize : null
@@ -648,6 +735,24 @@ namespace SmartSam.Pages.Purchasing.Supplier
         // Chuan hoa chuoi rong ve null de query SQL de hon.
         private static string? NullIfEmpty(string? value)
             => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+        private static List<int> NormalizeStatusIds(IEnumerable<int>? statusIds, int? fallbackStatusId = null)
+        {
+            var normalized = statusIds?
+                .Where(x => x >= 0)
+                .Distinct()
+                .ToList()
+                ?? [];
+
+            if (normalized.Count == 0 && fallbackStatusId.HasValue && fallbackStatusId.Value >= 0)
+            {
+                normalized.Add(fallbackStatusId.Value);
+            }
+
+            return normalized
+                .Distinct()
+                .ToList();
+        }
 
         // Lay SupplierID duoc chon tu radio/hidden field.
         // Hien tai chi lay 1 ID dau tien (single selection).
@@ -946,7 +1051,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 SupplierName = criteria.SupplierName,
                 Business = criteria.Business,
                 Contact = criteria.Contact,
-                StatusId = criteria.StatusId,
+                StatusIds = criteria.StatusIds?.ToList() ?? [],
                 IsNew = criteria.IsNew,
                 PageIndex = null,
                 PageSize = null
@@ -965,22 +1070,28 @@ namespace SmartSam.Pages.Purchasing.Supplier
             var pageIndex = criteria.PageIndex.GetValueOrDefault() <= 0 ? 1 : criteria.PageIndex!.Value;
             var pageSize = criteria.PageSize.GetValueOrDefault() <= 0 ? DefaultPageSize : criteria.PageSize!.Value;
             var applyPaging = criteria.PageIndex.HasValue && criteria.PageSize.HasValue;
+            var statusIds = (criteria.StatusIds ?? [])
+                .Where(x => x >= 0)
+                .Distinct()
+                .ToList();
+            var statusFilterSql = statusIds.Count > 0
+                ? $"\n        AND s.[Status] IN ({string.Join(", ", statusIds.Select((_, index) => $"@StatusId{index}"))})"
+                : string.Empty;
             var yearFilterSql = isByYear
                 ? $"\n    AND (@Year IS NULL OR s.[{AnnualYearColumn}] = @Year)"
                 : string.Empty;
 
             var fromWhereSql = $@"
     FROM {sourceTable} s
-    LEFT JOIN dbo.PC_SupplierStatus st ON s.[Status] = st.SupplierStatusID
-    LEFT JOIN dbo.MS_Department d ON s.DeptID = d.DeptID
-    WHERE
+        LEFT JOIN dbo.PC_SupplierStatus st ON s.[Status] = st.SupplierStatusID
+        LEFT JOIN dbo.MS_Department d ON s.DeptID = d.DeptID
+        WHERE
         (@SupplierCode IS NULL OR s.SupplierCode LIKE '%' + @SupplierCode + '%')
         AND (@SupplierName IS NULL OR s.SupplierName LIKE '%' + @SupplierName + '%')
         AND (@Business IS NULL OR s.Business LIKE '%' + @Business + '%')
         AND (@Contact IS NULL OR s.Contact LIKE '%' + @Contact + '%')
         AND (@DeptID IS NULL OR s.DeptID = @DeptID)
-        AND (@StatusID IS NULL OR s.[Status] = @StatusID)
-        AND (@IsNew = 0 OR s.IsNew = 1){yearFilterSql}";
+        AND (@IsNew = 0 OR s.IsNew = 1){statusFilterSql}{yearFilterSql}";
 
             var countSql = "SELECT COUNT(1) " + fromWhereSql;
             var selectSql = $@"
@@ -1024,7 +1135,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             // 1) Dem tong record
             await using (var countCmd = new SqlCommand(countSql, conn))
             {
-                BindSearchParams(countCmd, criteria, isByYear);
+                BindSearchParams(countCmd, criteria, isByYear, statusIds);
                 var totalObj = await countCmd.ExecuteScalarAsync(cancellationToken);
                 totalRecords = Convert.ToInt32(totalObj);
             }
@@ -1032,7 +1143,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             // 2) Lay data
             await using (var cmd = new SqlCommand(selectSql, conn))
             {
-                BindSearchParams(cmd, criteria, isByYear);
+                BindSearchParams(cmd, criteria, isByYear, statusIds);
                 if (applyPaging)
                 {
                     cmd.Parameters.Add("@Offset", SqlDbType.Int).Value = (pageIndex - 1) * pageSize;
@@ -1078,15 +1189,19 @@ namespace SmartSam.Pages.Purchasing.Supplier
         }
 
         // Bind parameter cho ca cau query count va data.
-        private static void BindSearchParams(SqlCommand cmd, SupplierFilterInput criteria, bool isByYear)
+        private static void BindSearchParams(SqlCommand cmd, SupplierFilterInput criteria, bool isByYear, IReadOnlyList<int> statusIds)
         {
             cmd.Parameters.Add("@SupplierCode", SqlDbType.NVarChar, 255).Value = (object?)NullIfEmpty(criteria.SupplierCode) ?? DBNull.Value;
             cmd.Parameters.Add("@SupplierName", SqlDbType.NVarChar, 255).Value = (object?)NullIfEmpty(criteria.SupplierName) ?? DBNull.Value;
             cmd.Parameters.Add("@Business", SqlDbType.NVarChar, 255).Value = (object?)NullIfEmpty(criteria.Business) ?? DBNull.Value;
             cmd.Parameters.Add("@Contact", SqlDbType.NVarChar, 255).Value = (object?)NullIfEmpty(criteria.Contact) ?? DBNull.Value;
             cmd.Parameters.Add("@DeptID", SqlDbType.Int).Value = (object?)criteria.DeptId ?? DBNull.Value;
-            cmd.Parameters.Add("@StatusID", SqlDbType.Int).Value = (object?)criteria.StatusId ?? DBNull.Value;
             cmd.Parameters.Add("@IsNew", SqlDbType.Int).Value = criteria.IsNew ? 1 : 0;
+
+            for (var i = 0; i < statusIds.Count; i++)
+            {
+                cmd.Parameters.Add($"@StatusId{i}", SqlDbType.Int).Value = statusIds[i];
+            }
 
             if (isByYear)
             {
@@ -1212,7 +1327,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             SupplierName,
             Business,
             Contact,
-            StatusId,
+            StatusIdsCsv = GetStatusIdsCsv(),
             IsNew,
             PageIndex,
             PageSize
@@ -1230,6 +1345,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         public string? Business { get; set; }
         public string? Contact { get; set; }
         public int? StatusId { get; set; }
+        public List<int>? StatusIds { get; set; }
         public bool IsNew { get; set; }
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 10;
@@ -1244,7 +1360,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         public string? SupplierName { get; set; }
         public string? Business { get; set; }
         public string? Contact { get; set; }
-        public int? StatusId { get; set; }
+        public List<int> StatusIds { get; set; } = [];
         public bool IsNew { get; set; }
         public int? PageIndex { get; set; }
         public int? PageSize { get; set; }

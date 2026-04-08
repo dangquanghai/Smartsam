@@ -117,6 +117,13 @@
     cursor: pointer;
 }
 
+.prq-row-link-view,
+.prq-row-link-view:hover,
+.prq-row-link-view:focus {
+    color: #212529;
+    font-weight: 700;
+}
+
 .prq-table-paging-info {
     display: inline-flex;
     align-items: center;
@@ -180,6 +187,68 @@
 .prq-add-at-table-wrap {
     max-height: 45vh;
     overflow: auto;
+}
+
+#prqViewDetailModal .modal-dialog {
+    max-width: 1280px;
+}
+
+.prq-view-detail-filter-row {
+    margin-left: -0.375rem;
+    margin-right: -0.375rem;
+}
+
+.prq-view-detail-filter-row > div {
+    padding-left: 0.375rem;
+    padding-right: 0.375rem;
+}
+
+.prq-view-detail-filter-actions {
+    min-height: 38px;
+    white-space: nowrap;
+}
+
+.prq-view-detail-date-range .form-check-input {
+    margin-top: 0.15rem;
+}
+
+.prq-view-detail-inline-date {
+    gap: 0.35rem;
+}
+
+.prq-view-detail-check {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    min-width: 18px;
+}
+
+.prq-view-detail-check .form-check-input {
+    position: static;
+    margin: 0;
+}
+
+.prq-view-detail-table-wrap {
+    max-height: 52vh;
+    overflow: auto;
+}
+
+.prq-view-detail-table-wrap thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #f8f9fa;
+}
+
+.prq-view-detail-page-size-label {
+    margin-bottom: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #212529;
+}
+
+.prq-view-detail-paging .pagination {
+    margin-bottom: 0;
 }
 
 .prq-add-at-table-wrap thead th {

@@ -7,6 +7,69 @@
     let currentPage = 1;
     let currentDataRows = [];
 
+    function getSelectedStatusIds() {
+        return $('.supplier-status-checkbox:checked')
+            .map(function () {
+                const parsed = parseInt(($(this).val() || '').toString(), 10);
+                return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+            })
+            .get()
+            .filter(function (value) { return value !== null; });
+    }
+
+    function getSelectedStatusIdsCsv() {
+        return getSelectedStatusIds().join(',');
+    }
+
+    function initStatusCheckboxDropdown() {
+        const $dropdownBtn = $('#supplierStatusDropdownBtn');
+        const $menu = $('.supplier-status-menu');
+        const $checkboxes = $('.supplier-status-checkbox');
+        const $selectAllBtn = $('#supplierStatusSelectAllBtn');
+        const $clearBtn = $('#supplierStatusClearBtn');
+        if ($dropdownBtn.length === 0 || $menu.length === 0 || $checkboxes.length === 0) return;
+
+        function updateCaption() {
+            const selected = $checkboxes
+                .filter(':checked')
+                .map(function () { return ($(this).data('label') || '').toString(); })
+                .get()
+                .filter(function (x) { return x.length > 0; });
+
+            const fullCaption = selected.join('; ');
+            $dropdownBtn.attr('title', fullCaption || 'All status');
+
+            if (selected.length === 0) {
+                $dropdownBtn.text('All status');
+                return;
+            }
+
+            if (selected.length === 1) {
+                $dropdownBtn.text(selected[0]);
+                return;
+            }
+
+            $dropdownBtn.text(`${selected.length} statuses selected`);
+        }
+
+        $menu.off('click.supplierStatus').on('click.supplierStatus', function (event) {
+            event.stopPropagation();
+        });
+
+        $checkboxes.off('change.supplierStatus').on('change.supplierStatus', updateCaption);
+        $selectAllBtn.off('click.supplierStatus').on('click.supplierStatus', function () {
+            $checkboxes.prop('checked', true);
+            updateCaption();
+        });
+
+        $clearBtn.off('click.supplierStatus').on('click.supplierStatus', function () {
+            $checkboxes.prop('checked', false);
+            updateCaption();
+        });
+
+        updateCaption();
+    }
+
     // ========== SEARCH FUNCTION ==========
     function performSearch(page = 1, options = {}) {
         currentPage = page;
@@ -24,7 +87,7 @@
             supplierName: ($('#SupplierName').val() || '').trim() || null,
             business: ($('#Business').val() || '').trim() || null,
             contact: ($('#Contact').val() || '').trim() || null,
-            statusId: parseNullableInt($('#StatusId').val()),
+            statusIds: getSelectedStatusIds(),
             isNew: $('#IsNew').is(':checked'),
             page: currentPage,
             pageSize: pageSize
@@ -245,7 +308,7 @@
         const supplierName = ($('#SupplierName').val() || '').toString().trim();
         const business = ($('#Business').val() || '').toString().trim();
         const contact = ($('#Contact').val() || '').toString().trim();
-        const statusId = ($('#StatusId').val() || '').toString().trim();
+        const statusIdsCsv = getSelectedStatusIdsCsv();
         const isNew = $('#IsNew').is(':checked');
 
         if (viewMode === 'byyear' && yearRaw !== '') query.set('year', yearRaw);
@@ -254,7 +317,7 @@
         if (supplierName !== '') query.set('SupplierName', supplierName);
         if (business !== '') query.set('Business', business);
         if (contact !== '') query.set('Contact', contact);
-        if (statusId !== '') query.set('StatusId', statusId);
+        if (statusIdsCsv !== '') query.set('StatusIdsCsv', statusIdsCsv);
         if (isNew) query.set('IsNew', 'true');
         query.set('PageIndex', currentPage.toString());
         query.set('PageSize', pageSize.toString());
@@ -406,7 +469,7 @@
             const supplierName = ($('#SupplierName').val() || '').toString().trim();
             const business = ($('#Business').val() || '').toString().trim();
             const contact = ($('#Contact').val() || '').toString().trim();
-            const statusId = ($('#StatusId').val() || '').toString().trim();
+            const statusIdsCsv = getSelectedStatusIdsCsv();
             const isNew = $('#IsNew').is(':checked');
 
             if (viewMode === 'byyear' && yearRaw !== '') query.set('year', yearRaw);
@@ -415,7 +478,7 @@
             if (supplierName !== '') query.set('SupplierName', supplierName);
             if (business !== '') query.set('Business', business);
             if (contact !== '') query.set('Contact', contact);
-            if (statusId !== '') query.set('StatusId', statusId);
+            if (statusIdsCsv !== '') query.set('StatusIdsCsv', statusIdsCsv);
             if (isNew) query.set('IsNew', 'true');
             query.set('PageIndex', currentPage.toString());
             query.set('PageSize', pageSize.toString());
@@ -450,6 +513,7 @@
 
         // 4. Init popup Copy + reset action state
         bindCopyModal();
+        initStatusCheckboxDropdown();
         resetActions();
         syncListStateToPostForms();
 
@@ -466,7 +530,7 @@
         const supplierName = ($('#SupplierName').val() || '').toString().trim();
         const business = ($('#Business').val() || '').toString().trim();
         const contact = ($('#Contact').val() || '').toString().trim();
-        const statusId = ($('#StatusId').val() || '').toString().trim();
+        const statusIdsCsv = getSelectedStatusIdsCsv();
         const isNew = $('#IsNew').is(':checked');
 
         query.set('handler', 'ExportExcel');
@@ -477,7 +541,7 @@
         if (supplierName !== '') query.set('SupplierName', supplierName);
         if (business !== '') query.set('Business', business);
         if (contact !== '') query.set('Contact', contact);
-        if (statusId !== '') query.set('StatusId', statusId);
+        if (statusIdsCsv !== '') query.set('StatusIdsCsv', statusIdsCsv);
         if (isNew) query.set('IsNew', 'true');
 
         return `?${query.toString()}`;
@@ -502,7 +566,7 @@
         const supplierName = ($('#SupplierName').val() || '').toString().trim();
         const business = ($('#Business').val() || '').toString().trim();
         const contact = ($('#Contact').val() || '').toString().trim();
-        const statusId = ($('#StatusId').val() || '').toString().trim();
+        const statusIdsCsv = getSelectedStatusIdsCsv();
         const isNew = $('#IsNew').is(':checked') ? 'true' : 'false';
 
         return {
@@ -513,7 +577,7 @@
             SupplierName: supplierName,
             Business: business,
             Contact: contact,
-            StatusId: statusId,
+            StatusIdsCsv: statusIdsCsv,
             IsNew: isNew,
             PageIndex: currentPage.toString(),
             PageSize: pageSize.toString()

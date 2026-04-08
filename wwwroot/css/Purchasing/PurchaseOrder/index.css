@@ -1,0 +1,263 @@
+.modal-body{
+padding: 5px;
+}
+.po-date-range-control {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.po-date-range-control > .form-control {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.po-date-range-control .date-clear-btn {
+    flex: 0 0 auto;
+    margin-left: 0;
+}
+
+.po-viewdetail-panel {
+    background: #f8f9fb;
+    border: 1px solid #d7dde5;
+    padding: 8px 8px 8px;
+}
+
+.po-viewdetail-filter-layout {
+    display: block;
+}
+
+.po-viewdetail-filter-row {
+    display: grid;
+    grid-template-columns: 230px 240px 120px 120px minmax(280px, 1fr);
+    align-items: center;
+    gap: 22px;
+}
+
+.po-viewdetail-filter-row + .po-viewdetail-filter-row {
+    margin-top: 10px;
+}
+
+.po-viewdetail-inline-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    width: 100%;
+}
+
+.po-viewdetail-inline-field > label {
+    margin: 0;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #2f3b52;
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+.po-viewdetail-qty-group,
+.po-viewdetail-date-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.po-viewdetail-date-inline {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: nowrap;
+    min-width: 0;
+    width: 100%;
+}
+
+.po-viewdetail-qty-group > .form-control:first-child {
+    flex: 0 0 78px;
+}
+
+.po-viewdetail-qty-group > .form-control:last-child {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.po-viewdetail-date-group > .form-control {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.po-viewdetail-podate .po-viewdetail-date-group,
+.po-viewdetail-recd .po-viewdetail-date-group {
+    flex: 1 1 auto;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+}
+
+.po-viewdetail-podate .po-viewdetail-date-inline,
+.po-viewdetail-recd .po-viewdetail-date-inline {
+    gap: 6px;
+}
+
+.po-viewdetail-podate .form-control,
+.po-viewdetail-recd .form-control {
+    min-width: 0;
+}
+
+.po-viewdetail-filter-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.po-viewdetail-filter-actions .btn {
+    min-width: 110px;
+}
+
+.po-clear-btn {
+    width: 30px;
+    min-width: 30px;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.po-viewdetail-itemcode {
+    grid-column: 1;
+}
+
+.po-viewdetail-recqty {
+    grid-column: 2;
+}
+
+.po-viewdetail-inline-check {
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.po-viewdetail-renovation {
+    grid-column: 3;
+}
+
+.po-viewdetail-general {
+    grid-column: 4;
+}
+
+.po-viewdetail-podate,
+.po-viewdetail-recd {
+    grid-column: 5;
+    padding-left: 12px;
+}
+
+.po-viewdetail-fordep {
+    grid-column: 1;
+}
+
+.po-viewdetail-itemnot {
+    grid-column: 2;
+}
+
+.po-viewdetail-supplier {
+    grid-column: 3 / span 2;
+}
+
+.po-viewdetail-date-toggle {
+    flex: 0 0 auto;
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+.po-viewdetail-podate .po-viewdetail-date-toggle,
+.po-viewdetail-recd .po-viewdetail-date-toggle {
+    flex: 0 0 86px;
+    width: 86px;
+}
+
+.po-viewdetail-date-toggle .custom-control-label {
+    white-space: nowrap;
+}
+
+.po-viewdetail-date-group .date-clear-btn {
+    width: 30px;
+    min-width: 30px;
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: 0 !important;
+}
+
+.po-viewdetail-date-group .form-control {
+    min-width: 0;
+}
+
+.po-viewdetail-inline-field > .form-control,
+.po-viewdetail-inline-field > .custom-select,
+.po-viewdetail-inline-field > select {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.po-viewdetail-itemcode > label,
+.po-viewdetail-fordep > label {
+    width: 64px;
+}
+
+.po-viewdetail-recqty > label,
+.po-viewdetail-itemnot > label {
+    width: 108px;
+}
+
+.po-viewdetail-supplier > label {
+    width: 98px;
+}
+
+.po-viewdetail-filter-row .custom-control {
+    margin-bottom: 0;
+}
+
+.po-viewdetail-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.po-viewdetail-actions .btn {
+    width: 100%;
+}
+
+@media (max-width: 991.98px) {
+    .po-viewdetail-filter-row {
+        display: block;
+    }
+
+    .po-viewdetail-filter-row > * {
+        margin-bottom: 8px;
+    }
+
+    .po-viewdetail-inline-field {
+        display: block;
+    }
+
+    .po-viewdetail-inline-field > label {
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .po-viewdetail-filter-actions {
+        justify-content: flex-start;
+    }
+
+    .po-viewdetail-filter-actions .btn {
+        min-width: 0;
+        flex: 1 1 140px;
+    }
+
+    .po-viewdetail-actions {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .po-viewdetail-actions .btn {
+        width: auto;
+        flex: 1 1 0;
+    }
+}

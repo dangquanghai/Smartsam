@@ -188,14 +188,16 @@
                                     {
                                         foreach (var row in Model.Rows)
                                         {
-                                            <tr class="prq-row" data-prid="@row.Id" data-request-no="@row.RequestNo" data-can-edit="@(Model.CanEditRow(row.StatusId) ? "true" : "false")" data-can-view-detail="@(Model.CanViewDetailRow(row.StatusId) ? "true" : "false")">
+                                            <tr class="prq-row" data-prid="@row.Id" data-request-no="@row.RequestNo" data-can-edit="@(Model.CanEditRow(row.StatusId) ? "true" : "false")" data-can-approve="@(Model.CanApproveRow(row) ? "true" : "false")" data-can-view-detail="@(Model.CanViewDetailRow(row.StatusId) ? "true" : "false")">
                                                 <td>
                                                     <input type="radio" class="prq-selector" name="selectedPurchaseRequisition" aria-label="Select row" />
                                                 </td>
                                                 <td>
-                                                    @if (Model.CanEditRow(row.StatusId) || Model.CanViewDetailRow(row.StatusId))
+                                                    @if (Model.CanEditRow(row.StatusId) || Model.CanApproveRow(row) || Model.CanViewDetailRow(row.StatusId))
                                                     {
-                                                        <a href="@Url.Page("./PurchaseRequisitionDetail", new { id = row.Id, mode = Model.CanEditRow(row.StatusId) ? "edit" : "view" })" class="prq-row-link text-bold" data-id="@row.Id">@row.RequestNo</a>
+                                                        var accessMode = Model.GetAccessMode(row);
+                                                        var linkClass = accessMode == "view" ? "prq-row-link prq-row-link-view text-bold" : "prq-row-link text-bold";
+                                                        <a href="@Url.Page("./PurchaseRequisitionDetail", new { id = row.Id, mode = accessMode })" class="@linkClass" data-id="@row.Id">@row.RequestNo</a>
                                                     }
                                                     else
                                                     {
@@ -239,6 +241,12 @@
                         @if (Model.CanAddNew)
                         {
                             <a asp-page="./PurchaseRequisitionDetail" asp-route-mode="add" class="btn btn-sm btn-action-add border mx-1 my-1"><i class="fas fa-plus"></i> Add New</a>
+                        }
+                        @if (Model.CanViewDetailRequisition)
+                        {
+                            <button type="button" id="btnViewPrDetail" class="btn btn-sm btn-action-close border mx-1 my-1">
+                                <i class="fas fa-list"></i> View Detail
+                            </button>
                         }
                         <button type="button" id="btnExportExcel" class="btn btn-sm btn-action-export border mx-1 my-1"><i class="fas fa-file-excel"></i> Export Excel</button>
                         @* <button type="button" id="btnDisapproval" class="btn btn-sm btn-action-copy border mx-1 my-1" disabled><i class="fas fa-ban"></i> Disapproval</button> *@
@@ -341,6 +349,126 @@
     </div>
 </div>
 
+<div class="modal fade" id="prqViewDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title">Purchase Requisition Detail</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body pb-2">
+                <div class="row prq-view-detail-filter-row mb-2 align-items-end">
+                    <div style="width: 97px;">
+                        <strong class="prq-detail-label">Request No.</strong>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="text" class="form-control form-control-sm vni-font" id="prqViewDetailRequestNo" />
+                    </div>
+                    <div style="width: 97px;">
+                        <strong class="prq-detail-label">Description</strong>
+                    </div>
+                    <div class="col-md-3">
+                        <input type="text" class="form-control form-control-sm vni-font" id="prqViewDetailDescription" />
+                    </div>
+                    <div class="form-check prq-view-detail-check">
+                        <input type="checkbox" class="form-check-input" id="prqViewDetailUseDateRange" />
+                    </div>
+                    <div>
+                        <strong class="prq-detail-label">From</strong>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="d-flex align-items-center prq-view-detail-inline-date">
+                            <input type="date" class="form-control form-control-sm" id="prqViewDetailFromDate" disabled />
+                        </div>
+                    </div>
+                    <div>
+                        <strong class="prq-detail-label">To</strong>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="date" class="form-control form-control-sm" id="prqViewDetailToDate" disabled />
+                    </div>
+                    @* <div class="col-lg-2 col-md-12 d-flex align-items-end justify-content-lg-end prq-view-detail-filter-actions"> *@
+                </div>
+
+                <div class="row prq-view-detail-filter-row mb-2 align-items-end">
+                    <div style="width: 97px;">
+                        <strong class="prq-detail-label">Rec Qty.</strong>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="input-group input-group-sm">
+                            <div class="input-group-prepend">
+                                <select class="form-control form-control-sm" id="prqViewDetailRecQtyOperator">
+                                    <option value="=">=</option>
+                                    <option value=">">&gt;</option>
+                                    <option value=">=">&gt;=</option>
+                                    <option value="<">&lt;</option>
+                                    <option value="<=">&lt;=</option>
+                                </select>
+                            </div>
+                            <input type="text" class="form-control form-control-sm" id="prqViewDetailRecQty" inputmode="decimal" />
+                        </div>
+                    </div>
+                    <div style="width: 97px;">
+                        <strong class="prq-detail-label">Item Code</strong>
+                    </div>
+                    <div class="col-md-3">
+                        <input type="text" class="form-control form-control-sm" id="prqViewDetailItemCode" />
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-sm btn-action-save border mr-2" id="btnPrqViewDetailSearch">
+                            <i class="fas fa-search"></i> Search
+                        </button>
+                        <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
+                            <i class="fas fa-times"></i> Close
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-responsive prq-view-detail-table-wrap">
+                    <table class="table table-sm table-bordered table-hover mb-0 text-nowrap" id="prqViewDetailTable">
+                        <thead class="thead-light">
+                            <tr>
+                                <th style="width:120px;">Req No.</th>
+                                <th style="width:110px;">Req Date</th>
+                                <th style="width:260px;">Description</th>
+                                <th>Item Code / Name</th>
+                                <th style="width:100px;" class="prq-center">PR Qty.</th>
+                                <th style="width:100px;" class="prq-center">Rec Qty.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="prqViewDetailRows">
+                            <tr id="prqViewDetailEmptyRow">
+                                <td colspan="6" class="text-center text-muted">No detail rows</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-2 flex-wrap prq-view-detail-paging">
+                    <div id="prqViewDetailPaginationInfo" class="prq-pagination-info">
+                        <small>No records</small>
+                    </div>
+                    <div class="d-flex align-items-center flex-wrap mt-2 mt-md-0">
+                        <div class="prq-page-size-form d-inline-flex mr-2">
+                            <label class="mb-0 prq-view-detail-page-size-label" for="prqViewDetailPageSize">Show</label>
+                            <select id="prqViewDetailPageSize" class="form-control form-control-sm prq-page-size-select">
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                                <option value="200">200</option>
+                            </select>
+                        </div>
+                        <ul class="pagination pagination-sm mb-0 d-inline-flex" id="prqViewDetailPagination"></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="prqDangerModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content border-danger">
@@ -375,6 +503,7 @@
             canAddAt: @(Model.CanAddAt ? "true" : "false"),
             canDisapproval: @(Model.PagePerm.HasPermission(6) ? "true" : "false"),
             detailUrlBase: '@Url.Page("./PurchaseRequisitionDetail")',
+            viewDetailEndpoint: '@Url.Page("./Index", "ViewDetailRows")',
             allowedAttachmentExtensions: '@Model.AllowedAttachmentExtensionsText',
             maxAttachmentSizeMb: @Model.MaxAttachmentSizeMb
         };
