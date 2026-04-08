@@ -34,6 +34,7 @@ public class MaterialRequestDetailModel : BasePageModel
     private const int StatusCollectedToPr = 4;
     private const int StatusRejected = 5;
     private const int StatusIssued = 6;
+    private const string TestCcEmail = "hai.dq@saigonskygarden.com.vn";
 
     private EmployeeMaterialScopeDto _dataScope = new EmployeeMaterialScopeDto();
     private bool _isAdminRole;
@@ -1391,13 +1392,15 @@ public class MaterialRequestDetailModel : BasePageModel
         var mailServer = _config.GetValue<string>("EmailSettings:MailServer") ?? string.Empty;
         var mailPort = _config.GetValue<int?>("EmailSettings:MailPort") ?? 0;
 
+        var finalSubject = AddTestSubjectPrefix(subject);
+
         return new MaterialRequestWorkflowNotifyRequestViewModel
         {
             SenderEmail = senderEmail,
             Password = password,
             MailServer = mailServer,
             MailPort = mailPort,
-            Subject = AddTestSubjectPrefix(subject),
+            Subject = finalSubject,
             HtmlBody = htmlBody,
             Recipients = DeduplicateRecipients(recipients),
             CcRecipients = new List<string> { TestCcEmail }
@@ -1627,18 +1630,20 @@ public class MaterialRequestDetailModel : BasePageModel
             return trimmed;
         }
 
-        const string prefix = "[TEST]";
+        const string prefix = "TEST -";
+        var prefixWithSeparator = $"{prefix} ";
 
-        // Nếu đã có prefix [TEST] rồi thì không thêm lại lần nữa.
-        if (trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        // Nếu đã có prefix TEST - rồi thì không thêm lại lần nữa.
+        if (trimmed.StartsWith(prefixWithSeparator, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(trimmed, prefix, StringComparison.OrdinalIgnoreCase))
         {
             return trimmed;
         }
 
-        return string.IsNullOrWhiteSpace(trimmed) ? prefix : $"{prefix} {trimmed}";
+        return string.IsNullOrWhiteSpace(trimmed) ? prefix : $"{prefixWithSeparator}{trimmed}";
     }
 
-    private const string TestCcEmail = "hai.dq@saigonskygarden.com.vn";
+    
     private static MaterialRequestWorkflowTransition? ResolveTransition(MaterialRequestWorkflowAction action, int currentStatus, bool isAuto)
     {
         if (action == MaterialRequestWorkflowAction.Submit && currentStatus == StatusJustCreated)
