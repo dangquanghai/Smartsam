@@ -1,5 +1,7 @@
-﻿@page 
+﻿
+@page 
 @model SmartSam.Pages.Admin.Employee.EmployeeDetailModel
+@Html.AntiForgeryToken()
 @{
     ViewData["Title"] = "Employee Detail";
 }
@@ -9,7 +11,7 @@
         <div class="row mb-2">
             <div class="col-sm-6">
                 @* Dùng toán tử null-conditional để tránh lỗi nếu Employee chưa load kịp *@
-                <h1>Hồ sơ: @Model.Employee?.EmployeeName</h1>
+                <h1>Profile: @Model.Employee?.EmployeeName</h1>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-right">
@@ -26,7 +28,7 @@
     <div class="container-fluid">
         <div class="card card-primary card-outline">
             <div class="card-header">
-                <h3 class="card-title">Thông tin cơ bản</h3>
+                <h3 class="card-title">Basic information n</h3>
                 <div class="card-tools">
                     @* Sửa lại tên property cho khớp với ViewModel: EmployeeID thay vì Id *@
                     <a asp-page="./Detail" asp-route-id="@Model.Employee?.EmployeeID" asp-route-mode="edit" class="btn btn-tool">
@@ -38,20 +40,36 @@
                 <div class="row">
                     <div class="col-md-4">
                         <div class="form-group">
-                            <label>Mã nhân viên</label>
-                            <input type="text" class="form-control" asp-for="Employee.EmployeeCode" readonly />
+                            <label>Emp Code</label>
+                            <input type="text" class="form-control" asp-for="Employee.EmployeeCode" />
+                            <input type="hidden" asp-for="Employee.EmployeeID" />
+                            <input type="hidden" asp-for="Mode" />
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="form-group">
-                            <label>Họ và tên</label>
+                            <label>Emp Name</label>
                             <input type="text" class="form-control" asp-for="Employee.EmployeeName" readonly="@(Model.Mode == "view")" />
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-2">
                         <div class="form-group">
-                            <label>Chức danh (Title)</label>
+                            <label>Title</label>
                             <input type="text" class="form-control" asp-for="Employee.Title" readonly="@(Model.Mode == "view")" />
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label>Password</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" asp-for="Employee.NewPassword"
+                                       readonly="@(Model.Mode == "view")" placeholder="Nhập mật khẩu mới..." />
+                                <div class="input-group-append">
+                                    <span class="input-group-text" style="cursor:pointer" onclick="togglePassword()">
+                                        <i class="fas fa-eye" id="eyeIcon"></i>
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -59,13 +77,28 @@
                 <div class="row">
                     <div class="col-md-4">
                         <div class="form-group">
-                            <label>Email liên hệ (TheEmail)</label>
+                            <label>TheEmail</label>
                             <input type="email" class="form-control" asp-for="Employee.TheEmail" readonly="@(Model.Mode == "view")" />
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-2">
                         <div class="form-group">
-                            <label>Nhóm kho (StoreGR)</label>
+                            <label>Department</label>
+                            @if (Model.Mode == "edit" || Model.Mode == "add")
+                            {
+                                <select asp-for="Employee.DeptID" asp-items="Model.DepartmentList" class="form-control">
+                                    <option value="">-- Không phân nhóm --</option>
+                                </select>
+                            }
+                            else
+                            {
+                                <input type="text" class="form-control" value="@(Model.DepartmentList.FirstOrDefault(x => x.Value == Model.Employee.DeptID?.ToString())?.Text ?? "N/A")" readonly />
+                            }
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label>StoreGR</label>
                             @if (Model.Mode == "edit" || Model.Mode == "add")
                             {
                                 <select asp-for="Employee.StoreGR" asp-items="Model.StoreGroupList" class="form-control">
@@ -80,13 +113,13 @@
                     </div>
                     <div class="col-md-2">
                         <div class="form-group">
-                            <label>Cấp độ ISO</label>
+                            <label>ISO Approve Level</label>
                             <input type="number" class="form-control" asp-for="Employee.ISOLevel" readonly="@(Model.Mode == "view")" />
                         </div>
                     </div>
                     <div class="col-md-2">
                         <div class="form-group">
-                            <label>Level Check NCC</label>
+                            <label>Level Check Supplier</label>
                             <input type="number" class="form-control" asp-for="Employee.LevelCheckSupplier" readonly="@(Model.Mode == "view")" />
                         </div>
                     </div>
@@ -96,50 +129,50 @@
 
                 <div class="row">
                     <div class="col-md-12">
-                        <h5 class="text-primary"><i class="fas fa-user-shield"></i> Quyền hạn & Chức năng</h5>
+                        <h5 class="text-primary"><i class="fas fa-user-shield"></i> Others</h5>
                         <div class="row mt-3">
                             <div class="col-md-3">
                                 <div class="custom-control custom-checkbox mb-2">
                                     <input class="custom-control-input" type="checkbox" asp-for="Employee.IsActive" id="chkActive" disabled="@(Model.Mode == "view")">
-                                    <label class="custom-control-label" for="chkActive">Đang hoạt động</label>
+                                    <label class="custom-control-label" for="chkActive">Is Active</label>
                                 </div>
                                 <div class="custom-control custom-checkbox mb-2">
                                     <input class="custom-control-input" type="checkbox" asp-for="Employee.IsSystemUser" id="chkSys" disabled="@(Model.Mode == "view")">
-                                    <label class="custom-control-label" for="chkSys">User hệ thống</label>
+                                    <label class="custom-control-label" for="chkSys">Is System User </label>
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="custom-control custom-checkbox mb-2">
                                     <input class="custom-control-input" type="checkbox" asp-for="Employee.HeadDept" id="chkHead" disabled="@(Model.Mode == "view")">
-                                    <label class="custom-control-label" for="chkHead">Trưởng bộ phận</label>
+                                    <label class="custom-control-label" for="chkHead">Is Head Dept</label>
                                 </div>
                                 <div class="custom-control custom-checkbox mb-2">
                                     <input class="custom-control-input" type="checkbox" asp-for="Employee.IsSupervisor" id="chkSuper" disabled="@(Model.Mode == "view")">
-                                    <label class="custom-control-label" for="chkSuper">Người giám sát</label>
+                                    <label class="custom-control-label" for="chkSuper">Is Supervisort</label>
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="custom-control custom-checkbox mb-2">
                                     <input class="custom-control-input" type="checkbox" asp-for="Employee.IsCTReceiver" id="chkCT" disabled="@(Model.Mode == "view")">
-                                    <label class="custom-control-label" for="chkCT">Nhận chứng từ</label>
+                                    <label class="custom-control-label" for="chkCT">Receiver Contract</label>
                                 </div>
                                 <div class="custom-control custom-checkbox mb-2">
                                     <input class="custom-control-input" type="checkbox" asp-for="Employee.Approval" id="chkApprove" disabled="@(Model.Mode == "view")">
-                                    <label class="custom-control-label" for="chkApprove">Quyền phê duyệt</label>
+                                    <label class="custom-control-label" for="chkApprove">Approve PO Level</label>
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="custom-control custom-checkbox mb-2">
                                     <input class="custom-control-input" type="checkbox" asp-for="Employee.IsPurchaser" id="chkPur" disabled="@(Model.Mode == "view")">
-                                    <label class="custom-control-label" for="chkPur">NV Mua hàng</label>
+                                    <label class="custom-control-label" for="chkPur">Is Purchaser</label>
                                 </div>
                                 <div class="custom-control custom-checkbox mb-2">
                                     <input class="custom-control-input" type="checkbox" asp-for="Employee.IsCFO" id="chkCFO" disabled="@(Model.Mode == "view")">
-                                    <label class="custom-control-label" for="chkCFO">GĐ Tài chính (CFO)</label>
+                                    <label class="custom-control-label" for="chkCFO">Is CFO</label>
                                 </div>
                                 <div class="custom-control custom-checkbox mb-2">
                                     <input class="custom-control-input" type="checkbox" asp-for="Employee.IsBOD" id="chkBOD" disabled="@(Model.Mode == "view")">
-                                    <label class="custom-control-label" for="chkBOD">Ban giám đốc (BOD)</label>
+                                    <label class="custom-control-label" for="chkBOD">Is BOD</label>
                                 </div>
                             </div>
                         </div>
@@ -149,30 +182,30 @@
                 <hr />
                 <div class="row">
                     <div class="col-md-12">
-                        <h5 class="text-primary"><i class="fas fa-signature"></i> Chữ ký số</h5>
+                        <h5 class="text-primary"><i class="fas fa-signature"></i> Sign</h5>
                         <div class="row mt-2">
                             <div class="col-md-6 text-center">
-                                <label>Chữ ký vừa (Normal)</label>
+                                <label>Normal Sign</label>
                                 <div class="mb-2">
                                     <img id="previewNormal" src="@(string.IsNullOrEmpty(Model.Employee.UrlNomalSign) ? "/img/no-signature.png" : Model.Employee.UrlNomalSign)"
                                          style="height: 100px; border: 1px dashed #ddd; cursor: pointer;"
-                                         onclick="document.getElementById('fileNormal').click();" title="Click để chọn ảnh" />
+                                         onclick="document.getElementById('fileNormal').click();" title="Click to change" />
                                 </div>
                                 <input type="file" id="fileNormal" style="display:none" accept="image/*" onchange="previewImage(this, 'previewNormal', 'urlNormal')">
                                 <input type="hidden" asp-for="Employee.UrlNomalSign" id="urlNormal" />
-                                <small class="text-muted">Click vào khung trên để đổi ảnh</small>
+                                <small class="text-muted">Click to change</small>
                             </div>
 
                             <div class="col-md-6 text-center">
-                                <label>Chữ ký nhỏ (Small)</label>
+                                <label>Small Sign</label>
                                 <div class="mb-2">
                                     <img id="previewSmall" src="@(string.IsNullOrEmpty(Model.Employee.UrlSmallSign) ? "/img/no-signature.png" : Model.Employee.UrlSmallSign)"
                                          style="height: 60px; border: 1px dashed #ddd; cursor: pointer;"
-                                         onclick="document.getElementById('fileSmall').click();" title="Click để chọn ảnh" />
+                                         onclick="document.getElementById('fileSmall').click();" title="Click to change" />
                                 </div>
                                 <input type="file" id="fileSmall" style="display:none" accept="image/*" onchange="previewImage(this, 'previewSmall', 'urlSmall')">
                                 <input type="hidden" asp-for="Employee.UrlSmallSign" id="urlSmall" />
-                                <small class="text-muted">Click vào khung trên để đổi ảnh</small>
+                                <small class="text-muted">Click to change</small>
                             </div>
                         </div>
                     </div>
@@ -181,7 +214,7 @@
                 <div class="card-footer text-center">
                     @if (Model.Mode != "view")
                     {
-                        <button type="submit" asp-page-handler="Save" class="btn btn-primary">
+                        <button type="button" id="btnSaveEmployee" class="btn btn-primary">
                             <i class="fas fa-save"></i> Save Changes
                         </button>
                     }

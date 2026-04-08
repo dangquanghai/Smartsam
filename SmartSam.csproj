@@ -8,9 +8,17 @@
 
   <ItemGroup>
     <Compile Remove="wwwroot\uploads\2025-10\**" />
+    <Compile Remove="wwwroot\uploads\2025-11\**" />
+    <Compile Remove="wwwroot\uploads\2025-12\**" />
     <Content Remove="wwwroot\uploads\2025-10\**" />
+    <Content Remove="wwwroot\uploads\2025-11\**" />
+    <Content Remove="wwwroot\uploads\2025-12\**" />
     <EmbeddedResource Remove="wwwroot\uploads\2025-10\**" />
+    <EmbeddedResource Remove="wwwroot\uploads\2025-11\**" />
+    <EmbeddedResource Remove="wwwroot\uploads\2025-12\**" />
     <None Remove="wwwroot\uploads\2025-10\**" />
+    <None Remove="wwwroot\uploads\2025-11\**" />
+    <None Remove="wwwroot\uploads\2025-12\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -31,9 +39,15 @@
   <ItemGroup>
     <Folder Include="Pages\Apartment\" />
     <Folder Include="wwwroot\css\Admin\Employee\" />
-    <Folder Include="wwwroot\uploads\" />
-    <Folder Include="wwwroot\uploads\2025-11\" />
-    <Folder Include="wwwroot\uploads\2025-12\" />
+    <Folder Include="wwwroot\uploads\Admin\Employee\" />
+    <Folder Include="wwwroot\uploads\Apartment\" />
+    <Folder Include="wwwroot\uploads\Cus\MeterUpload\" />
+    <Folder Include="wwwroot\uploads\Infor\" />
+    <Folder Include="wwwroot\uploads\Inventory\" />
+    <Folder Include="wwwroot\uploads\Accouting\" />
+    <Folder Include="wwwroot\uploads\PhoneNet\" />
+    <Folder Include="wwwroot\uploads\Purchasing\" />
+    <Folder Include="wwwroot\uploads\Sales\" />
   </ItemGroup>
 
   <ItemGroup>
