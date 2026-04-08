@@ -648,8 +648,6 @@ WHERE p.PRID = @PRID", conn);
         }
 
         var report = new PurchaseRequisitionDetailReportModel();
-        report.NoIso = _config.GetValue<string>("PurchaseRequisition:NoIso") ?? string.Empty;
-        report.Rev = _config.GetValue<string>("PurchaseRequisition:Rev") ?? string.Empty;
         int? preparedEmployeeId = null;
         int? checkedEmployeeId = null;
         int? approvedEmployeeId = null;
@@ -749,9 +747,7 @@ ORDER BY d.RecordID", conn))
     {
         var report = new PurchaseRequisitionSummaryReportModel
         {
-            GeneratedDate = DateTime.Today,
-            NoIso = _config.GetValue<string>("PurchaseRequisition:NoIso") ?? string.Empty,
-            Rev = _config.GetValue<string>("PurchaseRequisition:Rev") ?? string.Empty
+            GeneratedDate = DateTime.Today
         };
 
         var whereSql = BuildViewDetailWhereSql(request, allowedStatuses);

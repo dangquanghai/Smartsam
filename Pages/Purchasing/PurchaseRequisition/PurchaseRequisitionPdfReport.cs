@@ -7,6 +7,10 @@ namespace SmartSam.Pages.Purchasing.PurchaseRequisition;
 
 internal static class PurchaseRequisitionPdfReport
 {
+    private const string DetailNoIso = "QF6-2";
+    private const string DetailRev = "1";
+    private const string SummaryNoIso = "QF6-2";
+
     public static byte[] BuildDetailPdf(PurchaseRequisitionDetailReportModel model)
     {
         return Document.Create(container =>
@@ -78,8 +82,8 @@ internal static class PurchaseRequisitionPdfReport
                 });
                 table.Cell().Border(1).Padding(6).AlignMiddle().Column(inner =>
                 {
-                    inner.Item().Text($"No.: {model.NoIso}").Bold();
-                    inner.Item().Text($"Rev.: {model.Rev}").Bold();
+                    inner.Item().Text($"No.: {DetailNoIso}").Bold();
+                    inner.Item().Text($"Rev.: {DetailRev}").Bold();
                 });
             });
 
@@ -212,7 +216,7 @@ internal static class PurchaseRequisitionPdfReport
             });
             table.Cell().Border(1).Padding(6).AlignMiddle().Column(inner =>
             {
-                inner.Item().Text($"No.: {model.NoIso}").Bold();
+                inner.Item().Text($"No.: {SummaryNoIso}").Bold();
             });
         });
     }
@@ -314,8 +318,6 @@ internal static class PurchaseRequisitionPdfReport
 
 internal sealed class PurchaseRequisitionDetailReportModel
 {
-    public string NoIso { get; set; } = string.Empty;
-    public string Rev { get; set; } = string.Empty;
     public string RequestNo { get; set; } = string.Empty;
     public DateTime? RequestDate { get; set; }
     public string Description { get; set; } = string.Empty;
@@ -352,8 +354,6 @@ internal sealed class PurchaseRequisitionApprovalFooterModel
 
 internal sealed class PurchaseRequisitionSummaryReportModel
 {
-    public string NoIso { get; set; } = string.Empty;
-    public string Rev { get; set; } = string.Empty;
     public DateTime GeneratedDate { get; set; } = DateTime.Today;
     public List<PurchaseRequisitionSummaryGroup> Groups { get; set; } = new();
     public PurchaseRequisitionApprovalFooterModel? Footer { get; set; }
