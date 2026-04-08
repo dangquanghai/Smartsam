@@ -1418,7 +1418,8 @@ public class MaterialRequestDetailModel : BasePageModel
         SELECT
             LTRIM(RTRIM(e.TheEmail)) AS Email,
             LTRIM(RTRIM(e.EmployeeName)) AS EmployeeName,
-            LTRIM(RTRIM(e.EmployeeCode)) AS EmployeeCode
+            LTRIM(RTRIM(e.EmployeeCode)) AS EmployeeCode,
+            LTRIM(RTRIM(ISNULL(e.Title, ''))) AS Title
         FROM dbo.INV_KPGroup kp
         INNER JOIN dbo.MS_Employee e ON e.DeptID = kp.DepID
         WHERE kp.KPGroupID = @StoreGroup
@@ -1441,9 +1442,11 @@ public class MaterialRequestDetailModel : BasePageModel
             rows.Add(new MaterialRequestWorkflowRecipientViewModel
             {
                 Email = email.Trim(),
-                DisplayLabel = BuildRecipientLabel(
+                GreetingLabel = BuildRecipientGreetingLabel(
+                    Convert.ToString(rd["Title"]),
                     Convert.ToString(rd["EmployeeName"]),
-                    Convert.ToString(rd["EmployeeCode"]))
+                    Convert.ToString(rd["EmployeeCode"]),
+                    email)
             });
         }
 
@@ -1460,7 +1463,8 @@ public class MaterialRequestDetailModel : BasePageModel
         SELECT
             LTRIM(RTRIM(TheEmail)) AS Email,
             LTRIM(RTRIM(EmployeeName)) AS EmployeeName,
-            LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode
+            LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode,
+            LTRIM(RTRIM(ISNULL(Title, ''))) AS Title
         FROM dbo.MS_Employee
         WHERE ISNULL({flagColumn}, 0) = 1
         AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
@@ -1480,9 +1484,11 @@ public class MaterialRequestDetailModel : BasePageModel
             rows.Add(new MaterialRequestWorkflowRecipientViewModel
             {
                 Email = email.Trim(),
-                DisplayLabel = BuildRecipientLabel(
+                GreetingLabel = BuildRecipientGreetingLabel(
+                    Convert.ToString(rd["Title"]),
                     Convert.ToString(rd["EmployeeName"]),
-                    Convert.ToString(rd["EmployeeCode"]))
+                    Convert.ToString(rd["EmployeeCode"]),
+                    email)
             });
         }
 
@@ -1499,28 +1505,38 @@ public class MaterialRequestDetailModel : BasePageModel
             .ToList();
     }
 
-    // Format the greeting label as Full Name (Emp Code) when both values exist.
-    private static string BuildRecipientLabel(string? employeeName, string? employeeCode)
+    // Build the greeting label for the Dear line: prefer "Mr. Name", then fall back to name/code/email.
+    private static string BuildRecipientGreetingLabel(string? title, string? employeeName, string? employeeCode, string? email)
     {
+        var normalizedTitle = NormalizeGreetingTitle(title);
         var name = (employeeName ?? string.Empty).Trim();
         var code = (employeeCode ?? string.Empty).Trim();
+        var emailValue = (email ?? string.Empty).Trim();
 
-        if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(code))
+        if (!string.IsNullOrWhiteSpace(name))
         {
-            return string.Empty;
+            return string.IsNullOrWhiteSpace(normalizedTitle)
+                ? name
+                : $"{normalizedTitle} {name}";
         }
 
-        if (string.IsNullOrWhiteSpace(code))
-        {
-            return name;
-        }
-
-        if (string.IsNullOrWhiteSpace(name))
+        if (!string.IsNullOrWhiteSpace(code))
         {
             return code;
         }
 
-        return $"{name} ({code})";
+        return emailValue;
+    }
+
+    private static string NormalizeGreetingTitle(string? title)
+    {
+        var trimmed = (title ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return string.Empty;
+        }
+
+        return trimmed.EndsWith(".", StringComparison.Ordinal) ? trimmed : $"{trimmed}.";
     }
 
     private string ResolveStoreGroupText(int? storeGroup)
@@ -1541,9 +1557,9 @@ public class MaterialRequestDetailModel : BasePageModel
             // Send one mail per recipient so each person gets a personal greeting.
             foreach (var recipient in notifyRequest.Recipients.DistinctBy(x => x.Email, StringComparer.OrdinalIgnoreCase))
             {
-                var recipientLabel = string.IsNullOrWhiteSpace(recipient.DisplayLabel)
+                var recipientLabel = string.IsNullOrWhiteSpace(recipient.GreetingLabel)
                     ? recipient.Email
-                    : recipient.DisplayLabel;
+                    : recipient.GreetingLabel;
                 var htmlBody = notifyRequest.HtmlBody.Replace(
                     "{RECIPIENT_LABEL}",
                     WebUtility.HtmlEncode(recipientLabel ?? string.Empty),
@@ -1817,5 +1833,5 @@ internal sealed class MaterialRequestWorkflowNotifyRequestViewModel
 internal sealed class MaterialRequestWorkflowRecipientViewModel
 {
     public string Email { get; set; } = string.Empty;
-    public string DisplayLabel { get; set; } = string.Empty;
+    public string GreetingLabel { get; set; } = string.Empty;
 }
