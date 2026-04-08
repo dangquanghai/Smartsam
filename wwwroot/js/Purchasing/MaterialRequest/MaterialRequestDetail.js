@@ -171,10 +171,12 @@ function initializePage(mode, currentStatusId, actionPerm) {
     const showCalculateAction = isHeadApproved && canCalculate;
     const showWorkflowActions = !isDraft && (canApprove || canReject);
     const enableOrderFields = showEditActions && !isAutoRequest;
-    const enableBuyAndNoteFields = showCalculateAction;
+    const enableBuyFields = showCalculateAction;
+    const enableNoteFields = showEditActions || showCalculateAction;
 
     $form.data('mr-enable-order-fields', enableOrderFields);
-    $form.data('mr-enable-buy-note-fields', enableBuyAndNoteFields);
+    $form.data('mr-enable-buy-fields', enableBuyFields);
+    $form.data('mr-enable-note-fields', enableNoteFields);
 
     // Use the clicked button submit
     $('#addMrLineBtn, #removeMrLineBtn, #createNewItemBtn')
@@ -199,7 +201,8 @@ function initializePage(mode, currentStatusId, actionPerm) {
     // Display only.
     $('#NoIssueCheck').prop('disabled', true);
     $tableBody.find('.mr-line-order').prop('disabled', !enableOrderFields);
-    $tableBody.find('.mr-line-buy, .mr-line-note').prop('disabled', !enableBuyAndNoteFields);
+    $tableBody.find('.mr-line-buy').prop('disabled', !enableBuyFields);
+    $tableBody.find('.mr-line-note').prop('disabled', !enableNoteFields);
     applyBuyZeroLineVisibility($tableBody, hideZeroBuyLines);
     initializePurchaserEditableRowPrompt($form, $tableBody, showCalculateAction);
 
@@ -815,11 +818,13 @@ function addItemToGrid($tableBody, item) {
     const $newRow = $tableBody.find('.mr-line-row').last();
     const $form = $tableBody.closest('form');
     const enableOrderFields = toBoolData($form.data('mr-enable-order-fields'));
-    const enableBuyAndNoteFields = toBoolData($form.data('mr-enable-buy-note-fields'));
+    const enableBuyFields = toBoolData($form.data('mr-enable-buy-fields'));
+    const enableNoteFields = toBoolData($form.data('mr-enable-note-fields'));
 
     $newRow.find('.mr-line-order').prop('disabled', !enableOrderFields);
-    $newRow.find('.mr-line-buy, .mr-line-note').prop('disabled', !enableBuyAndNoteFields);
-    if (enableBuyAndNoteFields) {
+    $newRow.find('.mr-line-buy').prop('disabled', !enableBuyFields);
+    $newRow.find('.mr-line-note').prop('disabled', !enableNoteFields);
+    if (enableBuyFields) {
         storePurchaserEditableSnapshot($newRow);
     }
 

@@ -284,7 +284,12 @@ public class MaterialRequestDetailModel : BasePageModel
 
         var isAutoRequest = IsEdit && existing?.IsAuto == true;
         var lines = ResolvePostedLines();
-        await ApplyReadonlyLineRulesAsync(lines, Id, cancellationToken, preserveReadonlyOrder: isAutoRequest);
+        await ApplyReadonlyLineRulesAsync(
+            lines,
+            Id,
+            cancellationToken,
+            preserveReadonlyOrder: isAutoRequest,
+            preserveEditableNote: ShouldPreserveEditableNote(CurrentStatusId));
 
         if (!ModelState.IsValid)
         {
@@ -517,7 +522,7 @@ public class MaterialRequestDetailModel : BasePageModel
             cancellationToken,
             preserveEditableBuy: ShouldPreserveEditableBuy(currentStatus),
             preserveReadonlyOrder: isAuto,
-            preserveEditableNote: ShouldPreserveEditableBuy(currentStatus));
+            preserveEditableNote: ShouldPreserveEditableNote(currentStatus));
 
         if (action == MaterialRequestWorkflowAction.Submit)
         {
@@ -676,7 +681,7 @@ public class MaterialRequestDetailModel : BasePageModel
             cancellationToken,
             preserveEditableBuy: ShouldPreserveEditableBuy(currentStatus),
             preserveReadonlyOrder: existing.IsAuto,
-            preserveEditableNote: ShouldPreserveEditableBuy(currentStatus));
+            preserveEditableNote: ShouldPreserveEditableNote(currentStatus));
 
         var storeGroup = existing.StoreGroup ?? Input.StoreGroup ?? _dataScope.StoreGroup;
         if (!storeGroup.HasValue)
@@ -1025,6 +1030,16 @@ public class MaterialRequestDetailModel : BasePageModel
     private bool ShouldPreserveEditableBuy(int currentStatus)
     {
         return currentStatus == StatusHeadDeptApproved && (IsAdminUser() || _dataScope.IsPurchaser);
+    }
+
+    private bool ShouldPreserveEditableNote(int currentStatus)
+    {
+        if (currentStatus == StatusJustCreated)
+        {
+            return CanEditDraftMaterialRequest();
+        }
+
+        return ShouldPreserveEditableBuy(currentStatus);
     }
 
     private bool IsAjaxRequest()

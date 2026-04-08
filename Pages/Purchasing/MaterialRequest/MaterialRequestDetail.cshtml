@@ -199,7 +199,7 @@
                 </div>
                 <div class="card-footer py-2">
                     <div class="float-left">
-                        <button type="submit" asp-page-handler="Save" class="btn btn-warning btn-sm mx-1 my-1 d-none @(Model.CurrentStatusId == -1 && Model.CanSave ? string.Empty : "d-none")" id="mrSaveBtn"><i class="fas fa-save"></i> Save</button>
+                        <button type="submit" asp-page-handler="Save" class="btn btn-warning btn-sm mx-1 my-1 @(Model.CurrentStatusId == -1 && Model.CanSave ? string.Empty : "d-none")" id="mrSaveBtn"><i class="fas fa-save"></i> Save</button>
                         <button type="button" class="btn btn-success btn-sm mx-1 my-1 @(Model.CurrentStatusId == -1 && Model.CanSave ? string.Empty : "d-none")" id="addMrLineBtn"><i class="fas fa-plus"></i> Add Detail</button>
                         <button type="button" class="btn btn-danger btn-sm mx-1 my-1 @(Model.CurrentStatusId == -1 && Model.CanSave ? string.Empty : "d-none")" id="removeMrLineBtn"><i class="fas fa-trash-alt"></i> Remove Item</button>
                         <button type="button" class="btn btn-primary btn-sm mx-1 my-1 @(Model.CurrentStatusId == -1 && Model.CanSave ? string.Empty : "d-none")" id="createNewItemBtn"><i class="fas fa-box-open"></i> Create new item</button>
