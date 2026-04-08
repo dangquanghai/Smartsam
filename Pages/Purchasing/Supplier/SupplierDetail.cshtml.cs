@@ -1505,26 +1505,20 @@ namespace SmartSam.Pages.Purchasing.Supplier
                     var employeeName = string.IsNullOrWhiteSpace(EmployeeName) ? string.Empty : EmployeeName.Trim();
                     if (!string.IsNullOrWhiteSpace(employeeName))
                     {
-                        var normalizedTitle = NormalizeGreetingTitle(Title);
-                        return string.IsNullOrWhiteSpace(normalizedTitle)
-                            ? employeeName
-                            : $"{normalizedTitle} {employeeName}";
+                        var title = (Title ?? string.Empty).Trim();
+                        if (!string.IsNullOrWhiteSpace(title))
+                        {
+                            return string.IsNullOrWhiteSpace(EmployeeCode)
+                                ? $"{title}. {employeeName}"
+                                : $"{title}. {employeeName}({EmployeeCode.Trim()})";
+                        }
+
+                        return $"{employeeName}({EmployeeCode.Trim()})";
                     }
 
                     return string.IsNullOrWhiteSpace(EmployeeCode) ? Email : EmployeeCode;
                 }
             }
-        }
-
-        private static string NormalizeGreetingTitle(string? title)
-        {
-            var trimmed = (title ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(trimmed))
-            {
-                return string.Empty;
-            }
-
-            return trimmed.EndsWith(".", StringComparison.Ordinal) ? trimmed : $"{trimmed}.";
         }
     }
 }
