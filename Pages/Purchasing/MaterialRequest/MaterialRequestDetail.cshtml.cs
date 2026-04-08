@@ -34,10 +34,12 @@ public class MaterialRequestDetailModel : BasePageModel
     private const int StatusCollectedToPr = 4;
     private const int StatusRejected = 5;
     private const int StatusIssued = 6;
-    private const string TestCcEmail = "hai.dq@saigonskygarden.com.vn";
+    private const string TestCcEmail = "luckystart79@gmail.com";
 
     private EmployeeMaterialScopeDto _dataScope = new EmployeeMaterialScopeDto();
     private bool _isAdminRole;
+    private string? _draftCreatorEmployeeCode;
+    private bool _draftCreatorResolved;
 
         public MaterialRequestDetailModel(
         ISecurityService securityService,
@@ -219,6 +221,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
         Input = detail;
         Lines = (await _materialRequestService.GetLinesAsync(Id.Value, cancellationToken)).ToList();
+        await LoadDraftCreatorAsync(Id.Value, cancellationToken);
         PagePerm = GetUserPermissions();
         return Page();
     }
@@ -264,7 +267,8 @@ public class MaterialRequestDetailModel : BasePageModel
 
             var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
             PagePerm = GetUserPermissions();
-            if ((!IsAdminUser() && !HasPermission(PermissionEdit)) || currentStatus != StatusJustCreated)
+            await LoadDraftCreatorAsync(Id.Value, cancellationToken);
+            if (currentStatus != StatusJustCreated || !CanEditDraftMaterialRequest())
             {
                 WarningMessage = "You cannot edit this Material Request at current status.";
                 return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
@@ -299,17 +303,23 @@ public class MaterialRequestDetailModel : BasePageModel
 
         try
         {
-        var actionMode = Request.Form["workflowActionModeInput"].ToString();
-        var draftSaveAction = Request.Form["DraftSaveAction"].ToString();
-        if (IsEdit && existing is not null)
-        {
-            Input.IsAuto = existing.IsAuto;
-        }
-        else
-        {
-            Input.IsAuto = false;
-        }
-        var savedNo = await _materialRequestService.SaveAsync(IsEdit ? Id : null, Input, lines, cancellationToken);
+            var actionMode = Request.Form["workflowActionModeInput"].ToString();
+            var draftSaveAction = Request.Form["DraftSaveAction"].ToString();
+            if (IsEdit && existing is not null)
+            {
+                Input.IsAuto = existing.IsAuto;
+            }
+            else
+            {
+                Input.IsAuto = false;
+            }
+
+            var savedNo = await _materialRequestService.SaveAsync(IsEdit ? Id : null, Input, lines, cancellationToken);
+            if (string.Equals(actionMode, "draft-save", StringComparison.OrdinalIgnoreCase))
+            {
+                var draftStatus = existing?.MaterialStatusId ?? Input.MaterialStatusId ?? StatusJustCreated;
+                await WriteDraftSaveHistoryAsync(savedNo, draftStatus, cancellationToken);
+            }
             var isDraftSave = string.Equals(actionMode, "draft-save", StringComparison.OrdinalIgnoreCase);
             var successMessage = isDraftSave
                 ? GetDraftSaveSuccessMessage(draftSaveAction)
@@ -486,6 +496,8 @@ public class MaterialRequestDetailModel : BasePageModel
             return RedirectToPage("./Index");
         }
 
+        await LoadDraftCreatorAsync(Id.Value, cancellationToken);
+
         var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
         PagePerm = GetUserPermissions();
         var isAuto = existing.IsAuto;
@@ -541,6 +553,7 @@ public class MaterialRequestDetailModel : BasePageModel
             if (transition.PostPr.HasValue) toSave.PostPr = transition.PostPr.Value;
 
             var savedNo = await _materialRequestService.SaveAsync(Id, toSave, lines, cancellationToken);
+            await WriteWorkflowHistoryAsync(action, currentStatus, transition, savedNo, cancellationToken);
             TryQueueWorkflowNotifyEmail(action, currentStatus, toSave, isAuto);
             SuccessMessage = transition.SuccessMessage;
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(savedNo));
@@ -1042,6 +1055,65 @@ public class MaterialRequestDetailModel : BasePageModel
         return ShouldPreserveEditableBuy(currentStatus);
     }
 
+    private async Task WriteWorkflowHistoryAsync(
+        MaterialRequestWorkflowAction action,
+        int currentStatus,
+        MaterialRequestWorkflowTransition transition,
+        long requestNo,
+        CancellationToken cancellationToken)
+    {
+        var note = ResolveWorkflowHistoryNote(action, currentStatus);
+        if (string.IsNullOrWhiteSpace(note))
+        {
+            return;
+        }
+
+        var typeEffective = transition.NextStatusId;
+        await _materialRequestService.InsertSuperRequestAsync(
+            requestNo,
+            note,
+            typeEffective,
+            User.Identity?.Name ?? string.Empty,
+            cancellationToken);
+    }
+
+    private async Task WriteDraftSaveHistoryAsync(long requestNo, int currentStatus, CancellationToken cancellationToken)
+    {
+        await _materialRequestService.InsertSuperRequestAsync(
+            requestNo,
+            "Save",
+            currentStatus,
+            User.Identity?.Name ?? string.Empty,
+            cancellationToken);
+    }
+
+    private static string? ResolveWorkflowHistoryNote(MaterialRequestWorkflowAction action, int currentStatus)
+    {
+        if (action == MaterialRequestWorkflowAction.Submit)
+        {
+            return "Submit";
+        }
+
+        if (action == MaterialRequestWorkflowAction.Approve)
+        {
+            return currentStatus switch
+            {
+                StatusSubmittedToHead => "Head approve",
+                StatusHeadDeptApproved => "Purchaser approve",
+                StatusPurchaserChecked => "CFO approve",
+                StatusCfoApproved => "Collected to PR",
+                _ => null
+            };
+        }
+
+        if (action == MaterialRequestWorkflowAction.Reject)
+        {
+            return "Reject request";
+        }
+
+        return null;
+    }
+
     private bool IsAjaxRequest()
     {
         return string.Equals(Request.Headers["X-Requested-With"].ToString(), "XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
@@ -1155,6 +1227,14 @@ public class MaterialRequestDetailModel : BasePageModel
             return true;
         }
 
+        if (IsEdit && CurrentStatusId == StatusJustCreated && !string.IsNullOrWhiteSpace(_draftCreatorEmployeeCode))
+        {
+            return string.Equals(
+                User.Identity?.Name?.Trim(),
+                _draftCreatorEmployeeCode,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
         var isWorkflowUser = _dataScope.IsHeadDept
             || _dataScope.IsPurchaser
             || _dataScope.IsCFO
@@ -1167,6 +1247,34 @@ public class MaterialRequestDetailModel : BasePageModel
         }
 
         return HasPermission(PermissionEdit);
+    }
+
+    private async Task LoadDraftCreatorAsync(long requestNo, CancellationToken cancellationToken)
+    {
+        if (_draftCreatorResolved)
+        {
+            return;
+        }
+
+        _draftCreatorResolved = true;
+        _draftCreatorEmployeeCode = null;
+
+        const string sql = @"
+            SELECT TOP 1 LTRIM(RTRIM(e.EmployeeCode)) AS EmployeeCode
+            FROM dbo.SUPER_REQUEST sr
+            INNER JOIN dbo.MS_Employee e ON e.EmployeeID = sr.EmployeeID
+            WHERE sr.RequestNo = @RequestNo
+              AND sr.TypeEffective = @TypeEffective
+            ORDER BY sr.AutoNum ASC";
+
+        await using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        await conn.OpenAsync(cancellationToken);
+        await using var cmd = new SqlCommand(sql, conn);
+        Helper.AddParameter(cmd, "@RequestNo", requestNo, SqlDbType.Decimal);
+        Helper.AddParameter(cmd, "@TypeEffective", StatusJustCreated, SqlDbType.Int);
+
+        var value = await cmd.ExecuteScalarAsync(cancellationToken);
+        _draftCreatorEmployeeCode = value == null || value == DBNull.Value ? null : Convert.ToString(value);
     }
 
     private bool HasPermission(int permissionNo)

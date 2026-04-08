@@ -297,6 +297,7 @@ public class IndexModel : BasePageModel
     public IActionResult OnPostCreateMr()
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+        var operatorCode = User.Identity?.Name ?? string.Empty;
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
         PagePerm = new PagePermissions();
@@ -366,6 +367,12 @@ public class IndexModel : BasePageModel
         try
         {
             var requestNo = _materialRequestService.SaveAsync(null, header, lines, cancellationToken).GetAwaiter().GetResult();
+            _materialRequestService.InsertSuperRequestAsync(
+                requestNo,
+                "Create",
+                StatusJustCreated,
+                operatorCode,
+                cancellationToken).GetAwaiter().GetResult();
             SuccessMessage = "Material Request created successfully.";
             return RedirectToPage("./MaterialRequestDetail", new { id = requestNo, mode = "edit" });
         }
@@ -386,6 +393,7 @@ public class IndexModel : BasePageModel
     public IActionResult OnPostCreateAuto()
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+        var operatorCode = User.Identity?.Name ?? string.Empty;
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
         PagePerm = new PagePermissions();
@@ -433,6 +441,12 @@ public class IndexModel : BasePageModel
                 fromDate,
                 toDate,
                 description,
+                cancellationToken).GetAwaiter().GetResult();
+            _materialRequestService.InsertSuperRequestAsync(
+                requestNo,
+                "Create",
+                StatusJustCreated,
+                operatorCode,
                 cancellationToken).GetAwaiter().GetResult();
             SuccessMessage = "Auto Material Request created successfully.";
             return RedirectToPage("./MaterialRequestDetail", new { id = requestNo, mode = "edit" });
@@ -2038,6 +2052,37 @@ public class MaterialRequestService
     }
 
     /// <summary>
+    /// Ghi 1 dong lich su workflow vao SUPER_REQUEST.
+    /// </summary>
+    public async Task InsertSuperRequestAsync(long requestNo, string note, int typeEffective, string operatorCode, CancellationToken cancellationToken = default)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync(cancellationToken);
+        await using var tx = await conn.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            var employeeId = await ResolveEmployeeIdAsync(conn, (SqlTransaction)tx, operatorCode, cancellationToken);
+            await InsertSuperRequestAsync(
+                conn,
+                (SqlTransaction)tx,
+                requestNo,
+                employeeId,
+                DateTime.Now,
+                note,
+                typeEffective,
+                cancellationToken);
+
+            await tx.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            await tx.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Xu ly reject theo flow legacy.
     /// </summary>
     public async Task<long> ProcessLegacyRejectAsync(
@@ -2091,6 +2136,15 @@ public class MaterialRequestService
                     sourceHeader.RequestNo,
                     5,
                     cancellationToken);
+                await InsertSuperRequestAsync(
+                    conn,
+                    (SqlTransaction)tx,
+                    sourceHeader.RequestNo,
+                    employeeId,
+                    DateTime.Now,
+                    "Reject request",
+                    5,
+                    cancellationToken);
             }
             else
             {
@@ -2119,7 +2173,7 @@ public class MaterialRequestService
                     };
 
                     rejectedNo = await SaveRequestCoreAsync(conn, (SqlTransaction)tx, null, rejectedHeader, Array.Empty<MaterialRequestLineDto>(), cancellationToken);
-                    await InsertSuperRequestAsync(conn, (SqlTransaction)tx, rejectedNo.Value, employeeId, DateTime.Now, "Reject request", cancellationToken);
+                    await InsertSuperRequestAsync(conn, (SqlTransaction)tx, rejectedNo.Value, employeeId, DateTime.Now, "Reject request", 5, cancellationToken);
                 }
 
                 await MoveLinesToRequestAsync(
@@ -2344,7 +2398,7 @@ public class MaterialRequestService
     /// <summary>
     /// Ghi log vao SUPER_REQUEST.
     /// </summary>
-    private static async Task InsertSuperRequestAsync(SqlConnection conn, SqlTransaction tx, long requestNo, int employeeId, DateTime timeEffective, string note, CancellationToken cancellationToken)
+    private static async Task InsertSuperRequestAsync(SqlConnection conn, SqlTransaction tx, long requestNo, int employeeId, DateTime timeEffective, string note, int typeEffective, CancellationToken cancellationToken)
     {
         const string sql = @"
             INSERT INTO dbo.SUPER_REQUEST
@@ -2353,13 +2407,14 @@ public class MaterialRequestService
             )
             VALUES
             (
-                @RequestNo, @EmployeeID, @TimeEffective, 5, @Note
+                @RequestNo, @EmployeeID, @TimeEffective, @TypeEffective, @Note
             )";
 
         await using var cmd = new SqlCommand(sql, conn, tx);
         AddNumeric18_0Param(cmd, "@RequestNo", requestNo);
         Helper.AddParameter(cmd, "@EmployeeID", employeeId, SqlDbType.Int);
         Helper.AddParameter(cmd, "@TimeEffective", timeEffective, SqlDbType.DateTime);
+        Helper.AddParameter(cmd, "@TypeEffective", typeEffective, SqlDbType.Int);
         Helper.AddParameter(cmd, "@Note", note, SqlDbType.VarChar, 50);
         await cmd.ExecuteNonQueryAsync(cancellationToken);
     }

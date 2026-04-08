@@ -63,6 +63,10 @@
             if (submitter.id === 'mrSubmitBtn') {
                 actionMode = 'submit';
             }
+            else if (submitter.id === 'mrSaveBtn') {
+                actionMode = 'draft-save';
+                $('#draftSaveActionInput').val('manual-save');
+            }
             else if (submitter.id === 'mrApproveBtn') {
                 actionMode = 'approve';
             }
