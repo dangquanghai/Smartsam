@@ -34,7 +34,7 @@ public class MaterialRequestDetailModel : BasePageModel
     private const int StatusCollectedToPr = 4;
     private const int StatusRejected = 5;
     private const int StatusIssued = 6;
-    private const string TestCcEmail = "luckystart79@gmail.com";
+    private const string TestCcEmail = "hai.dq@saigonskygarden.com.vn";
 
     private EmployeeMaterialScopeDto _dataScope = new EmployeeMaterialScopeDto();
     private bool _isAdminRole;
