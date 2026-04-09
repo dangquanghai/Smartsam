@@ -6,6 +6,10 @@
     let currentPage = 1;
     let currentDataRows = [];
 
+    function updateHistoryButtonState() {
+        $('#btnViewHistory').prop('disabled', !selectedRequestNo);
+    }
+
     function buildCurrentReturnUrl() {
         return `${window.location.pathname}${window.location.search || ''}`;
     }
@@ -229,6 +233,73 @@
         window.location.href = buildDetailUrl(requestNo, mode);
     }
 
+    function escapeHtml(value) {
+        return (value == null ? '' : String(value))
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function renderHistoryRows(rows) {
+        const $body = $('#mrHistoryBody');
+        const $emptyRow = $('#mrHistoryEmptyRow');
+
+        if ($body.length === 0) {
+            return;
+        }
+
+        if (!Array.isArray(rows) || rows.length === 0) {
+            $body.html('<tr id="mrHistoryEmptyRow"><td colspan="3" class="text-center text-muted">No history</td></tr>');
+            return;
+        }
+
+        const html = rows.map(function (row) {
+            return `<tr>
+                <td>${escapeHtml(row.employeeDisplayName || '')}</td>
+                <td>${escapeHtml(row.timeEffectiveDisplay || row.timeEffective || '')}</td>
+                <td>${escapeHtml(row.note || '')}</td>
+            </tr>`;
+        }).join('');
+
+        $body.html(html);
+        if ($emptyRow.length > 0) {
+            $emptyRow.remove();
+        }
+    }
+
+    function loadHistory(requestNo) {
+        const $modal = $('#mrHistoryModal');
+        const $body = $('#mrHistoryBody');
+
+        if (!requestNo) {
+            return;
+        }
+
+        $('#mrHistoryModalLabel').text(`History Material Request: Request No: #${requestNo}`);
+        $body.html('<tr><td colspan="3" class="text-center text-muted py-4">Loading...</td></tr>');
+
+        $.ajax({
+            url: '?handler=History',
+            type: 'GET',
+            data: { requestNo: requestNo },
+            success: function (response) {
+                if (!response || response.success !== true) {
+                    $body.html('<tr id="mrHistoryEmptyRow"><td colspan="5" class="text-center text-muted">No history</td></tr>');
+                    return;
+                }
+
+                renderHistoryRows(response.rows || []);
+            },
+            error: function () {
+                $body.html('<tr id="mrHistoryEmptyRow"><td colspan="5" class="text-center text-muted">No history</td></tr>');
+            }
+        });
+
+        $modal.modal({ backdrop: 'static', keyboard: false, show: true });
+    }
+
     // Sử dụng delegation để bắt sự kiện cho link được tạo động
     $(document).on('click', '.mr-request-link', function (e) {
         e.preventDefault();
@@ -266,6 +337,7 @@
         selectedRequestNo = item.data.requestNo || item.data.RequestNo;
         $('#mrTable tbody tr').removeClass('selected');
         $(this).closest('tr').addClass('selected');
+        updateHistoryButtonState();
     });
 
     $(document).on('click focusin', '#mrTable tbody tr', function (e) {
@@ -284,6 +356,7 @@
         selectedRequestNo = null;
         $('#mrTable tbody tr').removeClass('selected');
         $('input[name="selectedMr"]').prop('checked', false);
+        updateHistoryButtonState();
     }
 
     // ========== PAGINATION (ĐÃ SỬA LỖI) ==========
@@ -361,6 +434,15 @@
             performSearch(1);
         });
 
+        $('#btnViewHistory').off('click').on('click', function () {
+            if (!selectedRequestNo) {
+                alert('Please select a request first.');
+                return;
+            }
+
+            loadHistory(selectedRequestNo);
+        });
+
         $('#btnClose').off('click').on('click', function () {
             window.location.href = '/Index';
         });
@@ -374,6 +456,7 @@
         // 4. Tu dong search lan dau khi da khoi tao xong date range
         const initialPage = parseInt($('#mrSearchForm input[name="Filter.PageIndex"]').val() || '1', 10);
         performSearch(Number.isFinite(initialPage) && initialPage > 0 ? initialPage : 1);
+        updateHistoryButtonState();
     }
 
     function showLoading(show) {

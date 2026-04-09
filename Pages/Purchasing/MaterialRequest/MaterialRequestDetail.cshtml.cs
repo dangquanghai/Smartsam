@@ -111,10 +111,10 @@ public class MaterialRequestDetailModel : BasePageModel
         {
             if (IsEdit)
             {
-                return CanEditDraftMaterialRequest() && CurrentStatusId == StatusJustCreated;
+                return CanUpdateDraftMaterialRequest() && CurrentStatusId == StatusJustCreated;
             }
 
-            return CanEditDraftMaterialRequest();
+            return CanCreateDraftMaterialRequest();
         }
     }
 
@@ -130,7 +130,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
     public bool CanSubmit
     {
-        get { return IsEdit && CanEditDraftMaterialRequest() && CurrentStatusId == StatusJustCreated; }
+        get { return IsEdit && CanUpdateDraftMaterialRequest() && CurrentStatusId == StatusJustCreated; }
     }
 
     public bool CanApprove
@@ -190,7 +190,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
         if (!IsEdit)
         {
-            if (!CanEditDraftMaterialRequest())
+            if (!CanCreateDraftMaterialRequest())
             {
                 return Forbid();
             }
@@ -268,7 +268,7 @@ public class MaterialRequestDetailModel : BasePageModel
             var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
             PagePerm = GetUserPermissions();
             await LoadDraftCreatorAsync(Id.Value, cancellationToken);
-            if (currentStatus != StatusJustCreated || !CanEditDraftMaterialRequest())
+            if (currentStatus != StatusJustCreated || !CanUpdateDraftMaterialRequest())
             {
                 WarningMessage = "You cannot edit this Material Request at current status.";
                 return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
@@ -501,7 +501,7 @@ public class MaterialRequestDetailModel : BasePageModel
         var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
         PagePerm = GetUserPermissions();
         var isAuto = existing.IsAuto;
-        if (action == MaterialRequestWorkflowAction.Submit && !CanEditDraftMaterialRequest())
+        if (action == MaterialRequestWorkflowAction.Submit && !CanUpdateDraftMaterialRequest())
         {
             WarningMessage = "You do not have permission to submit this draft.";
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
@@ -783,12 +783,12 @@ public class MaterialRequestDetailModel : BasePageModel
             }
 
             var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
-            if (!CanEditDraftMaterialRequest() || currentStatus != StatusJustCreated)
+            if (!CanUpdateDraftMaterialRequest() || currentStatus != StatusJustCreated)
             {
                 return new JsonResult(new { success = false, message = "You cannot add item at current status." });
             }
         }
-        else if (!CanEditDraftMaterialRequest())
+        else if (!CanCreateDraftMaterialRequest())
         {
             return new JsonResult(new { success = false, message = "Access denied." });
         }
@@ -1049,7 +1049,7 @@ public class MaterialRequestDetailModel : BasePageModel
     {
         if (currentStatus == StatusJustCreated)
         {
-            return CanEditDraftMaterialRequest();
+            return CanUpdateDraftMaterialRequest();
         }
 
         return ShouldPreserveEditableBuy(currentStatus);
@@ -1081,7 +1081,7 @@ public class MaterialRequestDetailModel : BasePageModel
     {
         await _materialRequestService.InsertSuperRequestAsync(
             requestNo,
-            "Save",
+            "Update MR",
             currentStatus,
             User.Identity?.Name ?? string.Empty,
             cancellationToken);
@@ -1216,11 +1216,21 @@ public class MaterialRequestDetailModel : BasePageModel
     }
 
     /// <summary>
-    /// Check if the user can create or edit a draft MR.
-    /// Normal scoped users are allowed. Workflow users need Edit permission.
+    /// Check if the user can create a new MR draft.
+    /// Any authenticated user can start a draft.
     /// </summary>
-    /// <returns>True if draft MR actions are allowed.</returns>
-    private bool CanEditDraftMaterialRequest()
+    /// <returns>True if draft MR creation is allowed.</returns>
+    private bool CanCreateDraftMaterialRequest()
+    {
+        return User.Identity?.IsAuthenticated == true;
+    }
+
+    /// <summary>
+    /// Check if the user can update an existing Just Created MR draft.
+    /// Only the creator, admin, or Edit-permission users may update the draft.
+    /// </summary>
+    /// <returns>True if updating the draft MR is allowed.</returns>
+    private bool CanUpdateDraftMaterialRequest()
     {
         if (IsAdminUser())
         {
@@ -1233,17 +1243,6 @@ public class MaterialRequestDetailModel : BasePageModel
                 User.Identity?.Name?.Trim(),
                 _draftCreatorEmployeeCode,
                 StringComparison.OrdinalIgnoreCase);
-        }
-
-        var isWorkflowUser = _dataScope.IsHeadDept
-            || _dataScope.IsPurchaser
-            || _dataScope.IsCFO
-            || _dataScope.IsBOD
-            || _dataScope.ApprovalLevel >= 2;
-
-        if (!isWorkflowUser)
-        {
-            return User.Identity?.IsAuthenticated == true;
         }
 
         return HasPermission(PermissionEdit);
@@ -1368,7 +1367,7 @@ public class MaterialRequestDetailModel : BasePageModel
     {
         if (action == MaterialRequestWorkflowAction.Submit)
         {
-            return HasPermission(PermissionEdit) && currentStatus == StatusJustCreated;
+            return CanUpdateDraftMaterialRequest() && currentStatus == StatusJustCreated;
         }
 
         if (action == MaterialRequestWorkflowAction.Approve)
