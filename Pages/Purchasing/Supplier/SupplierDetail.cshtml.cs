@@ -650,11 +650,8 @@ namespace SmartSam.Pages.Purchasing.Supplier
             var operatorCode = User.Identity?.Name ?? "SYSTEM";
             SubmitApproval(Id!.Value, operatorCode);
 
-            // If the supplier is new, send the notification email to the next approval level immediately.
-            if (current.IsNew)
-            {
-                TryQueueNotifyNewSupplierAfterSubmit(Id.Value, current, operatorCode);
-            }
+            // Submit should always notify the next approval level in the workflow.
+            TryQueueNotifyNewSupplierAfterSubmit(Id.Value, current, operatorCode);
 
             SetFlashMessage("Supplier submitted successfully.", "success");
             return RedirectToPage("./SupplierDetail", BuildDetailRouteValues(Id.Value));
@@ -1522,5 +1519,4 @@ namespace SmartSam.Pages.Purchasing.Supplier
         }
     }
 }
-
 
