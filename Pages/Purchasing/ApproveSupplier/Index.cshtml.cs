@@ -17,8 +17,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 {
     public class ApproveSupplierDetailModel : BasePageModel
     {
-        private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
-        // private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
+        // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
+        private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
         private readonly ILogger<ApproveSupplierDetailModel> _logger;
         private readonly ISecurityService _securityService;
         private const int NoDepartmentScopeValue = -1;
@@ -1152,7 +1152,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 SELECT DISTINCT
                     LTRIM(RTRIM(TheEmail)) AS TheEmail,
                     LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode,
-                    LTRIM(RTRIM(EmployeeName)) AS EmployeeName
+                    LTRIM(RTRIM(EmployeeName)) AS EmployeeName,
+                    LTRIM(RTRIM(ISNULL(Title, ''))) AS Title
                 FROM dbo.MS_Employee
                 WHERE LevelCheckSupplier = @LevelCheckSupplier
                   AND (@UseDepartmentFilter = 0 OR DeptID = @DeptID)
@@ -1174,7 +1175,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                     {
                         Email = email.Trim(),
                         EmployeeCode = Convert.ToString(rd["EmployeeCode"])?.Trim() ?? string.Empty,
-                        EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty
+                        EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty,
+                        Title = Convert.ToString(rd["Title"])?.Trim() ?? string.Empty
                     });
                 }
             }
@@ -1372,6 +1374,15 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         // Chuẩn hóa tên hiển thị của người nhận trong nội dung mail.
         private static string BuildRecipientDisplayName(ApproveSupplierNotifyRecipientViewModel recipient)
         {
+            var title = (recipient.Title ?? string.Empty).Trim();
+            if (!string.IsNullOrWhiteSpace(title))
+            {
+                var titledEmployeeName = string.IsNullOrWhiteSpace(recipient.EmployeeName) ? recipient.Email : recipient.EmployeeName;
+                return string.IsNullOrWhiteSpace(recipient.EmployeeCode)
+                    ? $"{title}. {titledEmployeeName}"
+                    : $"{title}. {titledEmployeeName}({recipient.EmployeeCode})";
+            }
+
             var employeeName = string.IsNullOrWhiteSpace(recipient.EmployeeName) ? recipient.Email : recipient.EmployeeName;
             return string.IsNullOrWhiteSpace(recipient.EmployeeCode)
                 ? employeeName
@@ -1860,6 +1871,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public string Email { get; set; } = string.Empty;
         public string EmployeeCode { get; set; } = string.Empty;
         public string EmployeeName { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
     }
 
     public class ApproveSupplierValidationViewModel

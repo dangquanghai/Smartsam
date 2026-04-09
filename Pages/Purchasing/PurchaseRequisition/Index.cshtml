@@ -373,7 +373,7 @@
                         <input type="text" class="form-control form-control-sm vni-font" id="prqViewDetailDescription" />
                     </div>
                     <div class="form-check prq-view-detail-check">
-                        <input type="checkbox" class="form-check-input" id="prqViewDetailUseDateRange" />
+                        <input style="margin-bottom: 5px;" type="checkbox" class="form-check-input" id="prqViewDetailUseDateRange" />
                     </div>
                     <div>
                         <strong class="prq-detail-label">From</strong>
@@ -420,9 +420,6 @@
                         <button type="button" class="btn btn-sm btn-action-save border mr-2" id="btnPrqViewDetailSearch">
                             <i class="fas fa-search"></i> Search
                         </button>
-                        <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
-                            <i class="fas fa-times"></i> Close
-                        </button>
                     </div>
                 </div>
 
@@ -464,6 +461,15 @@
                         <ul class="pagination pagination-sm mb-0 d-inline-flex" id="prqViewDetailPagination"></ul>
                     </div>
                 </div>
+
+                <div class="d-flex justify-content-start align-items-center mt-2 flex-wrap">
+                    <button type="button" class="btn btn-sm btn-action-export border mr-2" id="btnPrqViewDetailReport">
+                        <i class="fas fa-file-pdf"></i> Report
+                    </button>
+                    <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
+                        <i class="fas fa-times"></i> Close
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -504,6 +510,7 @@
             canDisapproval: @(Model.PagePerm.HasPermission(6) ? "true" : "false"),
             detailUrlBase: '@Url.Page("./PurchaseRequisitionDetail")',
             viewDetailEndpoint: '@Url.Page("./Index", "ViewDetailRows")',
+            viewDetailReportEndpoint: '@Url.Page("./Index", "ViewDetailReport")',
             allowedAttachmentExtensions: '@Model.AllowedAttachmentExtensionsText',
             maxAttachmentSizeMb: @Model.MaxAttachmentSizeMb
         };

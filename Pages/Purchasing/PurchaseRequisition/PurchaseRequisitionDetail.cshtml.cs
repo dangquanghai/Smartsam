@@ -19,8 +19,8 @@ namespace SmartSam.Pages.Purchasing.PurchaseRequisition;
 public class PurchaseRequisitionDetailModel : BasePageModel
 {
     private static readonly HashSet<int> AllowedPageSizes = [10, 20, 50, 100, 200];
-    private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
-    // private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
+    // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
+    private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
     private const int FUNCTION_ID = 72;
     private const int PermissionViewDetail = 2;
     private const int PermissionAdd = 3;
@@ -1795,7 +1795,8 @@ WHERE EmployeeCode = @EmployeeCode", conn);
 SELECT DISTINCT
     LTRIM(RTRIM(TheEmail)) AS TheEmail,
     LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode,
-    LTRIM(RTRIM(EmployeeName)) AS EmployeeName
+    LTRIM(RTRIM(EmployeeName)) AS EmployeeName,
+    LTRIM(RTRIM(ISNULL(Title, ''))) AS Title
 FROM dbo.MS_Employee
 WHERE ISNULL({flagColumn}, 0) = 1
   AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
@@ -1811,7 +1812,8 @@ WHERE ISNULL({flagColumn}, 0) = 1
                 {
                     Email = email.Trim(),
                     EmployeeCode = Convert.ToString(rd["EmployeeCode"])?.Trim() ?? string.Empty,
-                    EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty
+                    EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty,
+                    Title = Convert.ToString(rd["Title"])?.Trim() ?? string.Empty
                 });
             }
         }
@@ -1838,7 +1840,8 @@ BEGIN
         SELECT DISTINCT
             LTRIM(RTRIM(e.TheEmail)) AS TheEmail,
             LTRIM(RTRIM(e.EmployeeCode)) AS EmployeeCode,
-            LTRIM(RTRIM(e.EmployeeName)) AS EmployeeName
+            LTRIM(RTRIM(e.EmployeeName)) AS EmployeeName,
+            LTRIM(RTRIM(ISNULL(e.Title, ''))) AS Title
         FROM dbo.MS_Employee e
         WHERE ISNULL(e.IsBOD, 0) = 1
           AND ISNULL(LTRIM(RTRIM(e.TheEmail)), '') <> ''
@@ -1850,7 +1853,8 @@ END
 SELECT DISTINCT
     LTRIM(RTRIM(TheEmail)) AS TheEmail,
     LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode,
-    LTRIM(RTRIM(EmployeeName)) AS EmployeeName
+    LTRIM(RTRIM(EmployeeName)) AS EmployeeName,
+    LTRIM(RTRIM(ISNULL(Title, ''))) AS Title
 FROM dbo.MS_Employee
 WHERE ISNULL(IsBOD, 0) = 1
   AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
@@ -1866,7 +1870,8 @@ WHERE ISNULL(IsBOD, 0) = 1
                 {
                     Email = email.Trim(),
                     EmployeeCode = Convert.ToString(rd["EmployeeCode"])?.Trim() ?? string.Empty,
-                    EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty
+                    EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty,
+                    Title = Convert.ToString(rd["Title"])?.Trim() ?? string.Empty
                 });
             }
         }
@@ -2004,9 +2009,14 @@ WHERE PRID = @PRID", conn, trans);
                 }
 
                 var recipientName = string.IsNullOrWhiteSpace(recipient.EmployeeName) ? recipient.Email : recipient.EmployeeName;
-                var recipientLabel = string.IsNullOrWhiteSpace(recipient.EmployeeCode)
-                    ? recipientName
-                    : $"{recipientName} ({recipient.EmployeeCode})";
+                var recipientTitle = (recipient.Title ?? string.Empty).Trim();
+                var recipientLabel = string.IsNullOrWhiteSpace(recipientTitle)
+                    ? (string.IsNullOrWhiteSpace(recipient.EmployeeCode)
+                        ? recipientName
+                        : $"{recipientName} ({recipient.EmployeeCode})")
+                    : (string.IsNullOrWhiteSpace(recipient.EmployeeCode)
+                        ? $"{recipientTitle}. {recipientName}"
+                        : $"{recipientTitle}. {recipientName}({recipient.EmployeeCode})");
 
                 using var mail = new MailMessage
                 {
@@ -2098,15 +2108,37 @@ VALUES
     // Xác định thư mục lưu file đính kèm từ cấu hình FileUploads:FilePath.
     private string ResolveUploadFolder()
     {
-        var configuredPath = _config.GetValue<string>("FileUploads:FilePath");
-        if (string.IsNullOrWhiteSpace(configuredPath))
+        var basePath = _config.GetValue<string>("FileUploads:BasePath");
+        if (string.IsNullOrWhiteSpace(basePath))
         {
-            throw new InvalidOperationException("FileUploads:FilePath is missing in appsettings.json.");
+            var legacyPath = _config.GetValue<string>("FileUploads:FilePath");
+            if (string.IsNullOrWhiteSpace(legacyPath))
+            {
+                throw new InvalidOperationException("FileUploads:BasePath or FileUploads:FilePath is missing in appsettings.json.");
+            }
+
+            return Path.IsPathRooted(legacyPath)
+                ? legacyPath
+                : Path.Combine(Directory.GetCurrentDirectory(), legacyPath);
         }
 
-        return Path.IsPathRooted(configuredPath)
-            ? configuredPath
-            : Path.Combine(Directory.GetCurrentDirectory(), configuredPath);
+        var rootPath = Path.IsPathRooted(basePath)
+            ? basePath
+            : Path.Combine(Directory.GetCurrentDirectory(), basePath);
+
+        var configuredFunctionPath = _config.GetValue<string>($"FileUploads:Funtions:{FUNCTION_ID}");
+        if (string.IsNullOrWhiteSpace(configuredFunctionPath))
+        {
+            return rootPath;
+        }
+
+        var relativeSegments = configuredFunctionPath
+            .Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        return relativeSegments.Length == 0
+            ? rootPath
+            : Path.Combine([rootPath, .. relativeSegments]);
     }
 
     // Sinh tên file mới có thêm ticks để tránh trùng tên khi upload.
@@ -2210,6 +2242,7 @@ public class PurchaseRequisitionNotifyRecipientViewModel
     public string Email { get; set; } = string.Empty;
     public string EmployeeCode { get; set; } = string.Empty;
     public string EmployeeName { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
 }
 
 public class PurchaseRequisitionViewDetailFilterRequest

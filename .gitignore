@@ -36,3 +36,7 @@ user.md
 run.log
 rule.md
 Uploads/
+.codex-temp-build/
+.config/
+.dotnet-cli/
+.dotnet/

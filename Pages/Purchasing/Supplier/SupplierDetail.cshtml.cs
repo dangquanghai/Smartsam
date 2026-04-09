@@ -1272,7 +1272,8 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 SELECT DISTINCT
                     LTRIM(RTRIM(TheEmail)) AS TheEmail,
                     LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode,
-                    LTRIM(RTRIM(EmployeeName)) AS EmployeeName
+                    LTRIM(RTRIM(EmployeeName)) AS EmployeeName,
+                    LTRIM(RTRIM(ISNULL(Title, ''))) AS Title
                 FROM dbo.MS_Employee
                 WHERE LevelCheckSupplier = @LevelCheckSupplier
                   AND DeptID = @DeptID
@@ -1293,7 +1294,8 @@ namespace SmartSam.Pages.Purchasing.Supplier
                     {
                         Email = email.Trim(),
                         EmployeeCode = Convert.ToString(rd["EmployeeCode"])?.Trim() ?? string.Empty,
-                        EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty
+                        EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty,
+                        Title = Convert.ToString(rd["Title"])?.Trim() ?? string.Empty
                     });
                 }
             }
@@ -1311,7 +1313,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                     {
                         From = new MailAddress(notifyRequest.SenderEmail, "SmartSam System"),
                         Subject = notifyRequest.Subject,
-                        Body = notifyRequest.HtmlBody.Replace("{RECIPIENT_LABEL}", WebUtility.HtmlEncode(recipient.DisplayName)),
+                        Body = notifyRequest.HtmlBody.Replace("{RECIPIENT_LABEL}", WebUtility.HtmlEncode(recipient.GreetingName)),
                         IsBodyHtml = true
                     };
 
@@ -1494,15 +1496,27 @@ namespace SmartSam.Pages.Purchasing.Supplier
             public string Email { get; set; } = string.Empty;
             public string EmployeeCode { get; set; } = string.Empty;
             public string EmployeeName { get; set; } = string.Empty;
+            public string Title { get; set; } = string.Empty;
 
-            public string DisplayName
+            public string GreetingName
             {
                 get
                 {
-                    var employeeName = string.IsNullOrWhiteSpace(EmployeeName) ? Email : EmployeeName;
-                    return string.IsNullOrWhiteSpace(EmployeeCode)
-                        ? employeeName
-                        : $"{employeeName} ({EmployeeCode})";
+                    var employeeName = string.IsNullOrWhiteSpace(EmployeeName) ? string.Empty : EmployeeName.Trim();
+                    if (!string.IsNullOrWhiteSpace(employeeName))
+                    {
+                        var title = (Title ?? string.Empty).Trim();
+                        if (!string.IsNullOrWhiteSpace(title))
+                        {
+                            return string.IsNullOrWhiteSpace(EmployeeCode)
+                                ? $"{title}. {employeeName}"
+                                : $"{title}. {employeeName}({EmployeeCode.Trim()})";
+                        }
+
+                        return $"{employeeName}({EmployeeCode.Trim()})";
+                    }
+
+                    return string.IsNullOrWhiteSpace(EmployeeCode) ? Email : EmployeeCode;
                 }
             }
         }

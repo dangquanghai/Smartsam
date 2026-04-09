@@ -295,6 +295,38 @@ public class IndexModel : BasePageModel
         return ExportPurchaseRequisitionListExcel(rows);
     }
 
+    // Xuất PDF từ popup View Detail: có Request No. thì in 1 PR, không có thì in báo cáo tổng hợp.
+    public IActionResult OnGetViewDetailReport([FromQuery] PurchaseRequisitionListViewDetailFilterRequest request)
+    {
+        PagePerm = GetUserPermissions();
+        LoadCurrentWorkflowUser();
+        if (!HasPermission(PermissionViewDetail))
+        {
+            return Redirect("/");
+        }
+
+        var allowedStatuses = GetAllowedViewStatuses();
+        if (allowedStatuses.Count == 0)
+        {
+            return BadRequest("You have no permission to report purchase requisition details.");
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+
+        if (!string.IsNullOrWhiteSpace(request.RequestNo))
+        {
+            var detailReport = LoadPurchaseRequisitionDetailReport(conn, request, allowedStatuses);
+            var pdfBytes = PurchaseRequisitionPdfReport.BuildDetailPdf(detailReport);
+            var fileName = $"purchase_requisition_{SanitizeFileName(detailReport.RequestNo)}.pdf";
+            return File(pdfBytes, "application/pdf", fileName);
+        }
+
+        var summaryReport = LoadPurchaseRequisitionSummaryReport(conn, request, allowedStatuses);
+        var summaryPdfBytes = PurchaseRequisitionPdfReport.BuildSummaryPdf(summaryReport);
+        return File(summaryPdfBytes, "application/pdf", "purchase_report.pdf");
+    }
+
     // Tải danh sách PC_PRDetail của đúng PR đang chọn trong popup View Detail bằng ajax.
     public IActionResult OnGetViewDetailRows([FromQuery] PurchaseRequisitionListViewDetailFilterRequest request)
     {
@@ -605,6 +637,414 @@ WHERE p.PRID = @PRID", conn);
 
         requisition.Details = LoadPurchaseRequisitionDetailRows(conn, prId);
         return requisition;
+    }
+
+    private PurchaseRequisitionDetailReportModel LoadPurchaseRequisitionDetailReport(SqlConnection conn, PurchaseRequisitionListViewDetailFilterRequest request, IReadOnlyCollection<int> allowedStatuses)
+    {
+        var reportPrId = ResolvePurchaseRequisitionIdForReport(conn, request, allowedStatuses);
+        if (!reportPrId.HasValue || reportPrId.Value <= 0)
+        {
+            throw new InvalidOperationException("Purchase requisition not found.");
+        }
+
+        var report = new PurchaseRequisitionDetailReportModel();
+        int? preparedEmployeeId = null;
+        int? checkedEmployeeId = null;
+        int? approvedEmployeeId = null;
+        string preparedDate = string.Empty;
+        string checkedDate = string.Empty;
+        string approvedDate = string.Empty;
+
+        using (var headerCmd = new SqlCommand(@"
+SELECT
+    p.PRID,
+    ISNULL(p.RequestNo, '') AS RequestNo,
+    p.RequestDate,
+    ISNULL(p.[Description], '') AS [Description],
+    ISNULL(p.Currency, 1) AS Currency,
+    p.PurId,
+    ISNULL(p.PurApproDate, '') AS PurApproDate,
+    p.CAId,
+    ISNULL(p.CAApproDate, '') AS CAApproDate,
+    p.GDId,
+    ISNULL(p.GDApproDate, '') AS GDApproDate
+FROM dbo.PC_PR p
+WHERE p.PRID = @PRID
+  AND p.[Status] IN (" + string.Join(",", allowedStatuses) + ")", conn))
+        {
+            headerCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = reportPrId.Value;
+            using var rd = headerCmd.ExecuteReader();
+            if (!rd.Read())
+            {
+                throw new InvalidOperationException("Purchase requisition not found.");
+            }
+
+            report.RequestNo = Convert.ToString(rd["RequestNo"]) ?? string.Empty;
+            report.RequestDate = rd.IsDBNull(rd.GetOrdinal("RequestDate")) ? null : Convert.ToDateTime(rd["RequestDate"]);
+            report.Description = Convert.ToString(rd["Description"]) ?? string.Empty;
+            report.CurrencyText = GetCurrencyDisplayText(rd.IsDBNull(rd.GetOrdinal("Currency")) ? 1 : Convert.ToInt32(rd["Currency"]));
+            preparedEmployeeId = rd.IsDBNull(rd.GetOrdinal("PurId")) ? null : Convert.ToInt32(rd["PurId"]);
+            checkedEmployeeId = rd.IsDBNull(rd.GetOrdinal("CAId")) ? null : Convert.ToInt32(rd["CAId"]);
+            approvedEmployeeId = rd.IsDBNull(rd.GetOrdinal("GDId")) ? null : Convert.ToInt32(rd["GDId"]);
+            preparedDate = NormalizeReportDateText(Convert.ToString(rd["PurApproDate"]));
+            checkedDate = NormalizeReportDateText(Convert.ToString(rd["CAApproDate"]));
+            approvedDate = NormalizeReportDateText(Convert.ToString(rd["GDApproDate"]));
+        }
+
+        report.Footer = new PurchaseRequisitionApprovalFooterModel
+        {
+            PreparedDate = preparedDate,
+            CheckedDate = checkedDate,
+            ApprovedDate = approvedDate,
+            PreparedSignature = LoadEmployeeSignature(conn, preparedEmployeeId),
+            CheckedSignature = LoadEmployeeSignature(conn, checkedEmployeeId),
+            ApprovedSignature = LoadEmployeeSignature(conn, approvedEmployeeId)
+        };
+
+        using (var detailCmd = new SqlCommand(@"
+SELECT
+    ISNULL(i.ItemCode, '') AS ItemCode,
+    LTRIM(RTRIM(
+        CONCAT(
+            ISNULL(i.ItemName, ''),
+            CASE WHEN ISNULL(i.Specification, '') = '' THEN '' ELSE CHAR(10) + ISNULL(i.Specification, '') END
+        )
+    )) AS ItemDescription,
+    ISNULL(i.Unit, '') AS Unit,
+    ISNULL(d.SugQty, 0) AS QtyMr,
+    ISNULL(d.Quantity, 0) AS QtyPur,
+    ISNULL(d.UnitPrice, 0) AS UnitPrice,
+    ISNULL(d.OrdAmount, ISNULL(d.Quantity, 0) * ISNULL(d.UnitPrice, 0)) AS Amount,
+    ISNULL(d.Remark, '') AS Remark
+FROM dbo.PC_PRDetail d
+LEFT JOIN dbo.INV_ItemList i ON d.ItemID = i.ItemID
+WHERE d.PRID = @PRID
+ORDER BY d.RecordID", conn))
+        {
+            detailCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = reportPrId.Value;
+            using var rd = detailCmd.ExecuteReader();
+            while (rd.Read())
+            {
+                report.Items.Add(new PurchaseRequisitionDetailReportItem
+                {
+                    ItemCode = Convert.ToString(rd["ItemCode"]) ?? string.Empty,
+                    ItemDescription = Convert.ToString(rd["ItemDescription"]) ?? string.Empty,
+                    Unit = Convert.ToString(rd["Unit"]) ?? string.Empty,
+                    QtyMr = Convert.ToDecimal(rd["QtyMr"]),
+                    QtyPur = Convert.ToDecimal(rd["QtyPur"]),
+                    UnitPrice = Convert.ToDecimal(rd["UnitPrice"]),
+                    Amount = Convert.ToDecimal(rd["Amount"]),
+                    Remark = Convert.ToString(rd["Remark"]) ?? string.Empty
+                });
+            }
+        }
+
+        report.TotalAmount = report.Items.Sum(x => x.Amount);
+        return report;
+    }
+
+    private PurchaseRequisitionSummaryReportModel LoadPurchaseRequisitionSummaryReport(SqlConnection conn, PurchaseRequisitionListViewDetailFilterRequest request, IReadOnlyCollection<int> allowedStatuses)
+    {
+        var report = new PurchaseRequisitionSummaryReportModel
+        {
+            GeneratedDate = DateTime.Today
+        };
+
+        var whereSql = BuildViewDetailWhereSql(request, allowedStatuses);
+        report.Footer = LoadSummaryReportFooter(conn, request, allowedStatuses);
+
+        using var cmd = new SqlCommand($@"
+SELECT
+    p.PRID,
+    ISNULL(p.RequestNo, '') AS RequestNo,
+    p.RequestDate,
+    ISNULL(p.[Description], '') AS [Description],
+    ISNULL(i.ItemCode, '') AS ItemCode,
+    ISNULL(i.ItemName, '') AS ItemName,
+    ISNULL(d.Quantity, 0) AS PrQty,
+    ISNULL(CASE WHEN ISNULL(poSummary.RecQty, 0) > 0 THEN poSummary.RecQty ELSE d.RecQty END, 0) AS RecQty,
+    CASE
+        WHEN COALESCE(CASE WHEN ISNULL(poSummary.RecQty, 0) > 0 THEN poSummary.RecQty ELSE d.RecQty END, 0) >= ISNULL(d.Quantity, 0)
+            THEN 0
+        ELSE ISNULL(d.Quantity, 0) - COALESCE(CASE WHEN ISNULL(poSummary.RecQty, 0) > 0 THEN poSummary.RecQty ELSE d.RecQty END, 0)
+    END AS DiffQty,
+    COALESCE(poSummary.RecDate, d.RecDate) AS RecDate,
+    ISNULL(poSummary.PONos, '') AS PONos,
+    ISNULL(d.Remark, '') AS Remark
+FROM dbo.PC_PR p
+INNER JOIN dbo.PC_PRDetail d ON p.PRID = d.PRID
+LEFT JOIN dbo.INV_ItemList i ON d.ItemID = i.ItemID
+OUTER APPLY
+(
+    SELECT
+        STUFF((
+            SELECT DISTINCT ', ' + LTRIM(RTRIM(po2.PONo))
+            FROM dbo.PC_PODetail pod2
+            INNER JOIN dbo.PC_PO po2 ON po2.POID = pod2.POID
+            WHERE
+                (
+                    pod2.RecordIDFromPR = d.RecordID
+                    OR (ISNULL(pod2.RecordIDFromPR, 0) = 0 AND po2.PRID = p.PRID AND pod2.ItemID = d.ItemID)
+                )
+                AND ISNULL(LTRIM(RTRIM(po2.PONo)), '') <> ''
+            FOR XML PATH(''), TYPE
+        ).value('.', 'nvarchar(max)'), 1, 2, '') AS PONos,
+        MAX(pod.RecDate) AS RecDate,
+        SUM(ISNULL(pod.RecQty, 0)) AS RecQty
+    FROM dbo.PC_PODetail pod
+    INNER JOIN dbo.PC_PO po ON po.POID = pod.POID
+    WHERE
+        pod.RecordIDFromPR = d.RecordID
+        OR (ISNULL(pod.RecordIDFromPR, 0) = 0 AND po.PRID = p.PRID AND pod.ItemID = d.ItemID)
+) poSummary
+{whereSql}
+ORDER BY p.RequestDate DESC, p.RequestNo DESC, d.RecordID", conn);
+
+        BindViewDetailFilterParams(cmd, request);
+
+        var groupMap = new Dictionary<int, PurchaseRequisitionSummaryGroup>();
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            var prId = Convert.ToInt32(rd["PRID"]);
+            if (!groupMap.TryGetValue(prId, out var group))
+            {
+                group = new PurchaseRequisitionSummaryGroup
+                {
+                    RequestNo = Convert.ToString(rd["RequestNo"]) ?? string.Empty,
+                    RequestDate = rd.IsDBNull(rd.GetOrdinal("RequestDate")) ? null : Convert.ToDateTime(rd["RequestDate"]),
+                    Description = Convert.ToString(rd["Description"]) ?? string.Empty
+                };
+                groupMap[prId] = group;
+                report.Groups.Add(group);
+            }
+
+            DateTime? recDate = rd.IsDBNull(rd.GetOrdinal("RecDate")) ? null : Convert.ToDateTime(rd["RecDate"]);
+            group.Items.Add(new PurchaseRequisitionSummaryItem
+            {
+                ItemCode = Convert.ToString(rd["ItemCode"]) ?? string.Empty,
+                ItemName = Convert.ToString(rd["ItemName"]) ?? string.Empty,
+                PrQty = Convert.ToDecimal(rd["PrQty"]),
+                RecQty = Convert.ToDecimal(rd["RecQty"]),
+                DiffQty = Convert.ToDecimal(rd["DiffQty"]),
+                RecDateText = recDate.HasValue ? recDate.Value.ToString("d-MMM-yyyy", CultureInfo.InvariantCulture) : string.Empty,
+                PoNo = Convert.ToString(rd["PONos"]) ?? string.Empty,
+                Remark = Convert.ToString(rd["Remark"]) ?? string.Empty
+            });
+        }
+
+        return report;
+    }
+
+    private PurchaseRequisitionApprovalFooterModel? LoadSummaryReportFooter(SqlConnection conn, PurchaseRequisitionListViewDetailFilterRequest request, IReadOnlyCollection<int> allowedStatuses)
+    {
+        var whereSql = BuildViewDetailWhereSql(request, allowedStatuses);
+
+        using var cmd = new SqlCommand($@"
+SELECT TOP 1
+    p.PurId,
+    ISNULL(p.PurApproDate, '') AS PurApproDate,
+    p.CAId,
+    ISNULL(p.CAApproDate, '') AS CAApproDate,
+    p.GDId,
+    ISNULL(p.GDApproDate, '') AS GDApproDate
+FROM dbo.PC_PR p
+INNER JOIN dbo.PC_PRDetail d ON p.PRID = d.PRID
+LEFT JOIN dbo.INV_ItemList i ON d.ItemID = i.ItemID
+{whereSql}
+ORDER BY p.RequestDate DESC, p.PRID DESC", conn);
+
+        BindViewDetailFilterParams(cmd, request);
+
+        int? preparedEmployeeId = null;
+        int? checkedEmployeeId = null;
+        int? approvedEmployeeId = null;
+        string preparedDate = string.Empty;
+        string checkedDate = string.Empty;
+        string approvedDate = string.Empty;
+
+        using var rd = cmd.ExecuteReader();
+        if (!rd.Read())
+        {
+            return null;
+        }
+
+        preparedEmployeeId = rd.IsDBNull(rd.GetOrdinal("PurId")) ? null : Convert.ToInt32(rd["PurId"]);
+        checkedEmployeeId = rd.IsDBNull(rd.GetOrdinal("CAId")) ? null : Convert.ToInt32(rd["CAId"]);
+        approvedEmployeeId = rd.IsDBNull(rd.GetOrdinal("GDId")) ? null : Convert.ToInt32(rd["GDId"]);
+        preparedDate = NormalizeReportDateText(Convert.ToString(rd["PurApproDate"]));
+        checkedDate = NormalizeReportDateText(Convert.ToString(rd["CAApproDate"]));
+        approvedDate = NormalizeReportDateText(Convert.ToString(rd["GDApproDate"]));
+        rd.Close();
+
+        return new PurchaseRequisitionApprovalFooterModel
+        {
+            PreparedDate = preparedDate,
+            CheckedDate = checkedDate,
+            ApprovedDate = approvedDate,
+            PreparedSignature = LoadEmployeeSignature(conn, preparedEmployeeId),
+            CheckedSignature = LoadEmployeeSignature(conn, checkedEmployeeId),
+            ApprovedSignature = LoadEmployeeSignature(conn, approvedEmployeeId)
+        };
+    }
+
+    private int? ResolvePurchaseRequisitionIdForReport(SqlConnection conn, PurchaseRequisitionListViewDetailFilterRequest request, IReadOnlyCollection<int> allowedStatuses)
+    {
+        var requestNo = request.RequestNo?.Trim();
+        if (string.IsNullOrWhiteSpace(requestNo))
+        {
+            return null;
+        }
+
+        using (var exactCmd = new SqlCommand($@"
+SELECT TOP 1 p.PRID
+FROM dbo.PC_PR p
+WHERE p.RequestNo = @RequestNo
+  AND p.[Status] IN ({string.Join(",", allowedStatuses)})
+ORDER BY p.PRID DESC", conn))
+        {
+            exactCmd.Parameters.Add("@RequestNo", SqlDbType.VarChar, 50).Value = requestNo;
+            var exactId = exactCmd.ExecuteScalar();
+            if (exactId != null && exactId != DBNull.Value)
+            {
+                return Convert.ToInt32(exactId);
+            }
+        }
+
+        var whereSql = BuildViewDetailWhereSql(request, allowedStatuses);
+        using var cmd = new SqlCommand($@"
+SELECT DISTINCT TOP 2 p.PRID
+FROM dbo.PC_PR p
+INNER JOIN dbo.PC_PRDetail d ON p.PRID = d.PRID
+LEFT JOIN dbo.INV_ItemList i ON d.ItemID = i.ItemID
+{whereSql}
+ORDER BY p.PRID DESC", conn);
+        BindViewDetailFilterParams(cmd, request);
+
+        var ids = new List<int>();
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            ids.Add(Convert.ToInt32(rd["PRID"]));
+        }
+
+        if (ids.Count == 1)
+        {
+            return ids[0];
+        }
+
+        if (ids.Count == 0)
+        {
+            throw new InvalidOperationException("No requisition matches the current Request No.");
+        }
+
+        throw new InvalidOperationException("Request No. filter matches more than one requisition. Please enter an exact Request No.");
+    }
+
+    private static string BuildViewDetailWhereSql(PurchaseRequisitionListViewDetailFilterRequest request, IReadOnlyCollection<int> allowedStatuses)
+    {
+        var whereBuilder = new List<string>
+        {
+            $"p.[Status] IN ({string.Join(",", allowedStatuses)})"
+        };
+
+        if (!string.IsNullOrWhiteSpace(request.RequestNo))
+        {
+            whereBuilder.Add("p.RequestNo LIKE '%' + @RequestNo + '%'");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Description))
+        {
+            whereBuilder.Add("p.[Description] LIKE '%' + @Description + '%'");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.ItemCode))
+        {
+            whereBuilder.Add("(i.ItemCode LIKE '%' + @ItemCode + '%' OR i.ItemName LIKE '%' + @ItemCode + '%')");
+        }
+
+        if (request.UseDateRange)
+        {
+            if (request.FromDate.HasValue)
+            {
+                whereBuilder.Add("CAST(p.RequestDate AS date) >= @FromDate");
+            }
+
+            if (request.ToDate.HasValue)
+            {
+                whereBuilder.Add("CAST(p.RequestDate AS date) <= @ToDate");
+            }
+        }
+
+        if (request.RecQty.HasValue)
+        {
+            var recQtyCondition = request.RecQtyOperator switch
+            {
+                ">" => "ISNULL(d.RecQty, 0) > @RecQty",
+                ">=" => "ISNULL(d.RecQty, 0) >= @RecQty",
+                "<" => "ISNULL(d.RecQty, 0) < @RecQty",
+                "<=" => "ISNULL(d.RecQty, 0) <= @RecQty",
+                "=" => "ISNULL(d.RecQty, 0) = @RecQty",
+                _ => string.Empty
+            };
+
+            if (!string.IsNullOrWhiteSpace(recQtyCondition))
+            {
+                whereBuilder.Add(recQtyCondition);
+            }
+        }
+
+        return $"WHERE {string.Join(" AND ", whereBuilder)}";
+    }
+
+    private static byte[]? LoadEmployeeSignature(SqlConnection conn, int? employeeId)
+    {
+        if (!employeeId.HasValue || employeeId.Value <= 0)
+        {
+            return null;
+        }
+
+        using var cmd = new SqlCommand(@"
+SELECT [Signature]
+FROM dbo.MS_Employee
+WHERE EmployeeID = @EmployeeID", conn);
+        cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId.Value;
+        var value = cmd.ExecuteScalar();
+        if (value == null || value == DBNull.Value)
+        {
+            return null;
+        }
+
+        return value as byte[];
+    }
+
+    private static string NormalizeReportDateText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = value.Trim();
+        return DateTime.TryParse(trimmed, out var parsed)
+            ? parsed.ToString("d/M/yyyy", CultureInfo.InvariantCulture)
+            : trimmed;
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var cleaned = new string(value.Where(ch => !invalidChars.Contains(ch)).ToArray());
+        return string.IsNullOrWhiteSpace(cleaned) ? "purchase_requisition" : cleaned;
+    }
+
+    private static string GetCurrencyDisplayText(int currencyId)
+    {
+        return currencyId switch
+        {
+            1 => "VND",
+            _ => currencyId.ToString(CultureInfo.InvariantCulture)
+        };
     }
 
     // Thực hiện xử lý cho hàm LoadPurchaseRequisitionDetailRows theo nghiệp vụ của màn hình.
@@ -1134,18 +1574,40 @@ VALUES
         docCmd.ExecuteNonQuery();
     }
 
-    // Xác định thư mục lưu file theo cấu hình FileUploads:FilePath trong appsettings.json.
+    // Xác định thư mục lưu file theo cấu hình FileUploads trong appsettings.json.
     private string ResolveAddAtUploadFolder()
     {
-        var configuredPath = _config.GetValue<string>("FileUploads:FilePath");
-        if (string.IsNullOrWhiteSpace(configuredPath))
+        var basePath = _config.GetValue<string>("FileUploads:BasePath");
+        if (string.IsNullOrWhiteSpace(basePath))
         {
-            throw new InvalidOperationException("FileUploads:FilePath is missing in appsettings.json.");
+            var legacyPath = _config.GetValue<string>("FileUploads:FilePath");
+            if (string.IsNullOrWhiteSpace(legacyPath))
+            {
+                throw new InvalidOperationException("FileUploads:BasePath or FileUploads:FilePath is missing in appsettings.json.");
+            }
+
+            return Path.IsPathRooted(legacyPath)
+                ? legacyPath
+                : Path.Combine(_webHostEnvironment.ContentRootPath, legacyPath);
         }
 
-        return Path.IsPathRooted(configuredPath)
-            ? configuredPath
-            : Path.Combine(_webHostEnvironment.ContentRootPath, configuredPath);
+        var rootPath = Path.IsPathRooted(basePath)
+            ? basePath
+            : Path.Combine(_webHostEnvironment.ContentRootPath, basePath);
+
+        var configuredFunctionPath = _config.GetValue<string>($"FileUploads:Funtions:{FUNCTION_ID}");
+        if (string.IsNullOrWhiteSpace(configuredFunctionPath))
+        {
+            return rootPath;
+        }
+
+        var relativeSegments = configuredFunctionPath
+            .Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        return relativeSegments.Length == 0
+            ? rootPath
+            : Path.Combine([rootPath, .. relativeSegments]);
     }
 
     // Sinh tên file mới có gắn timestamp để tránh trùng tên khi upload nhiều lần.

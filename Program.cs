@@ -6,9 +6,11 @@ using SmartSam.Helpers;
 
 using Hangfire;
 using Hangfire.SqlServer;
+using QuestPDF.Infrastructure;
 
 
 var builder = WebApplication.CreateBuilder(args);
+QuestPDF.Settings.License = LicenseType.Community;
 
 // --- ĐĂNG KÝ SERVICES ---
 builder.Services.AddRazorPages();

@@ -8,6 +8,7 @@
             canAddAt: false,
             canDisapproval: false,
             detailUrlBase: "",
+            viewDetailReportEndpoint: "",
             allowedAttachmentExtensions: ".doc,.docx,.xls,.xlsx,.pdf,.jpg,.jpeg,.png",
             maxAttachmentSizeMb: 10
         };
@@ -296,6 +297,7 @@
         const viewDetailFromDate = document.getElementById("prqViewDetailFromDate");
         const viewDetailToDate = document.getElementById("prqViewDetailToDate");
         const viewDetailSearchButton = document.getElementById("btnPrqViewDetailSearch");
+        const viewDetailReportButton = document.getElementById("btnPrqViewDetailReport");
         const viewDetailRows = document.getElementById("prqViewDetailRows");
         const viewDetailEmptyRow = document.getElementById("prqViewDetailEmptyRow");
         const viewDetailPaginationInfo = document.getElementById("prqViewDetailPaginationInfo");
@@ -354,6 +356,26 @@
             pageNumber: viewDetailState.pageNumber,
             pageSize: viewDetailState.pageSize
         });
+
+        const buildViewDetailReportUrl = () => {
+            const endpoint = getConfig().viewDetailReportEndpoint || "";
+            const requestUrl = new URL(endpoint, window.location.origin);
+            const filter = getViewDetailFilter();
+            const params = new URLSearchParams();
+
+            Object.entries(filter).forEach(([key, value]) => {
+                if (key === "pageNumber" || key === "pageSize" || value === "" || value == null) {
+                    return;
+                }
+                params.set(key, String(value));
+            });
+
+            params.forEach((value, key) => {
+                requestUrl.searchParams.set(key, value);
+            });
+
+            return requestUrl.toString();
+        };
 
         const renderViewDetailRows = (response) => {
             if (!viewDetailRows || !viewDetailEmptyRow || !viewDetailPaginationInfo || !viewDetailPagination) {
@@ -585,6 +607,10 @@
         viewDetailSearchButton?.addEventListener("click", () => {
             viewDetailState.pageNumber = 1;
             loadViewDetailRows();
+        });
+
+        viewDetailReportButton?.addEventListener("click", () => {
+            window.open(buildViewDetailReportUrl(), "_blank");
         });
 
         viewDetailPageSize?.addEventListener("change", () => {
