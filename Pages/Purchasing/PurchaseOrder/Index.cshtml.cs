@@ -49,6 +49,7 @@ public class IndexModel : BasePageModel
             return Redirect("/");
         }
 
+        Filter.PageSize = DefaultPageSize;
         NormalizeFilter();
         LoadStatuses();
         LoadAssessLevels();

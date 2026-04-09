@@ -146,6 +146,24 @@
     text-shadow: none;
 }
 
+.supplier-page-size-form {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.supplier-page-size-label {
+    margin-bottom: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.supplier-page-size-select {
+    width: 74px;
+    min-width: 74px;
+}
+
 .supplier-table-header-right .pagination .page-link {
     min-width: 2rem;
     text-align: center;

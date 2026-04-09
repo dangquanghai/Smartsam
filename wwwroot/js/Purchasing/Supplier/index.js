@@ -21,6 +21,20 @@
         return getSelectedStatusIds().join(',');
     }
 
+    function getQueryInt(name) {
+        try {
+            const raw = new URLSearchParams(window.location.search).get(name);
+            if (raw === null || raw === undefined || String(raw).trim() === '') {
+                return null;
+            }
+
+            const parsed = Number.parseInt(String(raw).trim(), 10);
+            return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+        } catch {
+            return null;
+        }
+    }
+
     function initStatusCheckboxDropdown() {
         const $dropdownBtn = $('#supplierStatusDropdownBtn');
         const $menu = $('.supplier-status-menu');
@@ -70,6 +84,63 @@
         updateCaption();
     }
 
+    function syncBrowserUrlToSearchState(page, filter) {
+        if (!window.history || typeof window.history.replaceState !== 'function') {
+            return;
+        }
+
+        const params = new URLSearchParams();
+        const currentPage = Number.isFinite(page) && page > 0 ? page : 1;
+        const currentPageSize = Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 13;
+
+        params.set('PageIndex', String(currentPage));
+        params.set('PageSize', String(currentPageSize));
+        params.set('ViewMode', (filter && filter.viewMode) || 'current');
+
+        const year = filter && Number.isFinite(filter.year) ? filter.year : null;
+        if (year !== null) {
+            params.set('Year', String(year));
+        }
+
+        const deptId = filter && Number.isFinite(filter.deptId) ? filter.deptId : null;
+        if (deptId !== null) {
+            params.set('DeptId', String(deptId));
+        }
+
+        const supplierCode = (filter && filter.supplierCode ? filter.supplierCode : '').toString().trim();
+        if (supplierCode) {
+            params.set('SupplierCode', supplierCode);
+        }
+
+        const supplierName = (filter && filter.supplierName ? filter.supplierName : '').toString().trim();
+        if (supplierName) {
+            params.set('SupplierName', supplierName);
+        }
+
+        const business = (filter && filter.business ? filter.business : '').toString().trim();
+        if (business) {
+            params.set('Business', business);
+        }
+
+        const contact = (filter && filter.contact ? filter.contact : '').toString().trim();
+        if (contact) {
+            params.set('Contact', contact);
+        }
+
+        const statusIdsCsv = getSelectedStatusIdsCsv();
+        if (statusIdsCsv) {
+            params.set('StatusIdsCsv', statusIdsCsv);
+        }
+
+        if (filter && filter.isNew) {
+            params.set('IsNew', 'true');
+        }
+
+        const query = params.toString();
+        const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+        window.history.replaceState({}, '', nextUrl);
+    }
+
     // ========== SEARCH FUNCTION ==========
     function performSearch(page = 1, options = {}) {
         currentPage = page;
@@ -113,6 +184,7 @@
                     currentDataRows = rows;
                     renderSuppliers(currentDataRows);
                     updatePagination(total, current, size, pages);
+                    syncBrowserUrlToSearchState(current, filter);
                     resetActions();
                     if (options && options.reselectSupplierId) {
                         restoreSelectionBySupplierId(options.reselectSupplierId);
@@ -448,12 +520,39 @@
 
     // ========== INITIALIZE ==========
     function initializePage() {
-        const initialPageSize = parseInt(($('#PageSize').val() || '').toString(), 10);
+        const pageSizeSelect = document.getElementById('supplierPageSize');
+        const pageSizeInput = document.getElementById('PageSize');
+        const urlPageSize = getQueryInt('PageSize');
+        const hiddenPageSize = pageSizeInput ? Number.parseInt((pageSizeInput.value || '').toString(), 10) : 0;
+        const selectedPageSize = pageSizeSelect ? Number.parseInt((pageSizeSelect.value || '').toString(), 10) : 0;
+        const defaultPageSizeValue = typeof defaultPageSize !== 'undefined' ? Number.parseInt(defaultPageSize, 10) : 0;
+        const initialPageSize = urlPageSize || selectedPageSize || hiddenPageSize || defaultPageSizeValue;
         if (Number.isFinite(initialPageSize) && initialPageSize > 0) {
             pageSize = initialPageSize;
         }
 
-        const initialPageIndex = parseInt(($('#PageIndex').val() || '').toString(), 10);
+        if (pageSizeSelect) {
+            pageSizeSelect.value = String(pageSize);
+            $(pageSizeSelect).off('change.supplierPageSize').on('change.supplierPageSize', () => {
+                const nextPageSize = Number.parseInt(pageSizeSelect.value || '', 10);
+                if (!Number.isFinite(nextPageSize) || nextPageSize <= 0 || nextPageSize === pageSize) {
+                    return;
+                }
+
+                pageSize = nextPageSize;
+                if (pageSizeInput) {
+                    pageSizeInput.value = String(pageSize);
+                }
+                performSearch(1);
+            });
+        }
+
+        if (pageSizeInput) {
+            pageSizeInput.value = String(pageSize);
+        }
+
+        const urlPageIndex = getQueryInt('PageIndex');
+        const initialPageIndex = urlPageIndex || parseInt(($('#PageIndex').val() || '').toString(), 10);
         const startPage = (Number.isFinite(initialPageIndex) && initialPageIndex > 0) ? initialPageIndex : 1;
 
         // 1. Dang ky su kien nut bam
@@ -520,6 +619,12 @@
         // 5. Tu dong search lan dau khi load trang
         performSearch(startPage);
     }
+
+    window.addEventListener('pageshow', function (event) {
+        if (event.persisted) {
+            initializePage();
+        }
+    });
 
     function buildExportExcelUrl() {
         const query = new URLSearchParams();

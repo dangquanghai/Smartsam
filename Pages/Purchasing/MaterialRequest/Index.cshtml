@@ -25,8 +25,7 @@
 
                     <div class="card-body">
                         <form method="get" id="mrSearchForm">
-                            <input type="hidden" name="Filter.PageIndex" value="1" />
-                            <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+                            <input type="hidden" name="Filter.PageIndex" value="@Model.Filter.PageIndex" />
 
                             <div class="form-group">
                                 <label>Store Group</label>
@@ -149,14 +148,23 @@
                         <span class="badge badge-light ml-2" id="total-records-badge">@Model.TotalRecords records</span>
                         <!-- Pagination info trong header (bên phải) -->
                         <div class="card-tools float-right app-paging-white">
-                            <nav aria-label="Page navigation">
-                                <div id="pagination-info" class="d-inline-block mr-2" style="padding-top: 0.3rem;">
-                                    <small>No records</small>
-                                </div>
-                                <ul class="pagination pagination-sm mb-0 d-inline-flex" id="pagination">
-                                    <!-- Pagination buttons sẽ được thêm bằng JS -->
-                                </ul>
-                            </nav>
+                                <nav aria-label="Page navigation">
+                                    <div id="pagination-info" class="d-inline-block mr-2" style="padding-top: 0.3rem;">
+                                        <small>No records</small>
+                                    </div>
+                                    <div class="d-inline-flex align-items-center mr-2 mr-page-size-form">
+                                        <label class="mb-0 mr-2 mr-page-size-label" for="mrPageSize">Show</label>
+                                        <select id="mrPageSize" name="Filter.PageSize" class="form-control form-control-sm mr-page-size-select">
+                                            @foreach (var pageSizeOption in Model.PageSizeOptions)
+                                            {
+                                                <option value="@pageSizeOption" selected="@(Model.Filter.PageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <ul class="pagination pagination-sm mb-0 d-inline-flex" id="pagination">
+                                        <!-- Pagination buttons sẽ được thêm bằng JS -->
+                                    </ul>
+                                </nav>
                         </div>
                     </div>
 
@@ -224,6 +232,9 @@
                                 <i class="fas fa-plus"></i> Create MR
                             </button>
                         }
+                        <button type="button" id="btnViewHistory" class="btn btn-info btn-sm" disabled>
+                            <i class="fas fa-history"></i> View History
+                        </button>
                         <button type="button" id="btnRefresh" class="btn btn-primary btn-sm">RefreshList</button>
                     </div>
                 </div>
@@ -419,6 +430,37 @@
         </div>
     </div>
 }
+
+<div class="modal fade" id="mrHistoryModal" tabindex="-1" role="dialog" aria-labelledby="mrHistoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="mrHistoryModalLabel">MR History</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                        <div class="table-responsive" style="max-height: 60vh;">
+                            <table class="table table-sm table-bordered table-hover mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width:230px;">EmployeeName</th>
+                                        <th style="width:170px;">TimeEffective</th>
+                                        <th>Note</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="mrHistoryBody">
+                                    <tr id="mrHistoryEmptyRow">
+                                        <td colspan="3" class="text-center text-muted">No history</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 @section Styles {
     <link rel="stylesheet" href="~/css/Purchasing/MaterialRequest/index.css" asp-append-version="true" />

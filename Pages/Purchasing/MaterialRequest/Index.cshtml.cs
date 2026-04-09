@@ -53,6 +53,8 @@ public class IndexModel : BasePageModel
         get { return _config.GetValue<int>("AppSettings:DefaultPageSize", 10); }
     }
 
+    public IReadOnlyList<int> PageSizeOptions => GetPageSizeOptions();
+
     [BindProperty]
     public string? CreateDescription { get; set; }
 
@@ -145,7 +147,11 @@ public class IndexModel : BasePageModel
         PopulateCreateAutoDefaults(cancellationToken);
         if (Filter.PageSize <= 0)
         {
-            Filter.PageSize = DefaultPageSize;
+            Filter.PageSize = NormalizePageSize(DefaultPageSize);
+        }
+        else
+        {
+            Filter.PageSize = NormalizePageSize(Filter.PageSize);
         }
         if (!Filter.FromDate.HasValue)
         {
@@ -164,6 +170,7 @@ public class IndexModel : BasePageModel
         ViewData["StoreGroupLocked"] = IsStoreGroupLocked();
         LoadFilters();
         ViewData["DefaultPageSize"] = DefaultPageSize;
+        ViewData["PageSizeOptions"] = PageSizeOptions;
     }
 
     // ==========================================
@@ -211,20 +218,29 @@ public class IndexModel : BasePageModel
         Filter.AccordingToKeyword = request.AccordingToKeyword;
         Filter.ConditionMode = string.IsNullOrWhiteSpace(request.ConditionMode) ? ConditionModeAllUsers : request.ConditionMode.Trim();
         Filter.PageIndex = request.Page <= 0 ? 1 : request.Page;
-        Filter.PageSize = request.PageSize <= 0 ? DefaultPageSize : Math.Min(request.PageSize, 200);
+        Filter.PageSize = NormalizePageSize(request.PageSize);
 
         NormalizeConditionMode();
         ApplyDefaultInboxStatusIfNeeded();
 
         var result = _materialRequestService.SearchPagedAsync(BuildCriteria(includePaging: true), cancellationToken).GetAwaiter().GetResult();
         var totalPages = Filter.PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(result.TotalCount / (double)Filter.PageSize));
+        var currentEmployeeCode = User.Identity?.Name?.Trim() ?? string.Empty;
 
         var dataWithActions = result.Rows.Select(r =>
         {
             var statusId = r.MaterialStatusId ?? StatusJustCreated;
             var effectivePerms = PagePerm.AllowedNos;
+            // Kiem tra status MR la Just Created va dung user dang login tao ra.
+            var isDraftCreator = statusId == StatusJustCreated
+                && !string.IsNullOrWhiteSpace(currentEmployeeCode)
+                && string.Equals(r.DraftCreatorEmployeeCode, currentEmployeeCode, StringComparison.OrdinalIgnoreCase);
 
-            var canEditRow = effectivePerms.Contains(PermissionEdit) && statusId == StatusJustCreated;
+            // MR chi co the Edit khi status la Just Created va:
+            // - hoac la draft cua user dang login
+            // - hoac user co quyen edit MR (Permission 3 / admin)
+            var canEditRow = statusId == StatusJustCreated
+                && (effectivePerms.Contains(PermissionEdit) || isDraftCreator);
             var isAuto = r.IsAuto;
             var canApprove = CanApproveStatus(statusId, isAuto);
             var canReject = CanRejectStatus(statusId, isAuto);
@@ -234,7 +250,7 @@ public class IndexModel : BasePageModel
                 data = r,
                 actions = new
                 {
-                    canAccess = effectivePerms.Count > 0,
+                    canAccess = effectivePerms.Count > 0 || isDraftCreator,
                     accessMode = canEditRow ? "edit" : "view",
 
                     canEdit = canEditRow,
@@ -369,7 +385,7 @@ public class IndexModel : BasePageModel
             var requestNo = _materialRequestService.SaveAsync(null, header, lines, cancellationToken).GetAwaiter().GetResult();
             _materialRequestService.InsertSuperRequestAsync(
                 requestNo,
-                "Create",
+                "Create MR",
                 StatusJustCreated,
                 operatorCode,
                 cancellationToken).GetAwaiter().GetResult();
@@ -444,7 +460,7 @@ public class IndexModel : BasePageModel
                 cancellationToken).GetAwaiter().GetResult();
             _materialRequestService.InsertSuperRequestAsync(
                 requestNo,
-                "Create",
+                "CreateAT MR",
                 StatusJustCreated,
                 operatorCode,
                 cancellationToken).GetAwaiter().GetResult();
@@ -456,6 +472,31 @@ public class IndexModel : BasePageModel
             ErrorMessage = $"Cannot create Auto MR. {ex.Message}";
             return RedirectToPage("./Index");
         }
+    }
+
+    /// <summary>
+    /// Tra ve lich su workflow cua MR dang duoc chon.
+    /// </summary>
+    public async Task<IActionResult> OnGetHistory(long requestNo, CancellationToken cancellationToken)
+    {
+        PagePerm = new PagePermissions();
+        PagePerm = GetUserPermissions();
+        LoadUserScopeAsync(cancellationToken).GetAwaiter().GetResult();
+        if (!CanAccessPage() || requestNo <= 0)
+        {
+            return new JsonResult(new { success = false, message = "Forbidden" })
+            {
+                StatusCode = StatusCodes.Status403Forbidden
+            };
+        }
+
+        var rows = await _materialRequestService.GetWorkflowHistoryAsync(requestNo, cancellationToken);
+        return new JsonResult(new
+        {
+            success = true,
+            requestNo,
+            rows
+        });
     }
 
     // ==========================================
@@ -575,8 +616,7 @@ public class IndexModel : BasePageModel
     /// <param name="cancellationToken">Token de huy yeu cau neu can.</param>
     private async Task LoadRowsAsync(CancellationToken cancellationToken)
     {
-        if (Filter.PageSize <= 0) Filter.PageSize = DefaultPageSize;
-        if (Filter.PageSize > 200) Filter.PageSize = 200;
+        Filter.PageSize = NormalizePageSize(Filter.PageSize);
         if (Filter.PageIndex <= 0) Filter.PageIndex = 1;
 
         var result = await _materialRequestService.SearchPagedAsync(BuildCriteria(includePaging: true), cancellationToken);
@@ -619,6 +659,35 @@ public class IndexModel : BasePageModel
             PageIndex = includePaging ? Filter.PageIndex : null,
             PageSize = includePaging ? Filter.PageSize : null
         };
+    }
+
+    private IReadOnlyList<int> GetPageSizeOptions()
+    {
+        var configured = _config.GetSection("AppSettings:PageSizeOptions").Get<int[]>() ?? Array.Empty<int>();
+        var options = configured.Where(value => value > 0).Distinct().ToList();
+        if (options.Count == 0)
+        {
+            options = new List<int> { DefaultPageSize, 20, 25, 30, 35 }
+                .Distinct()
+                .ToList();
+        }
+
+        if (!options.Contains(DefaultPageSize))
+        {
+            options.Insert(0, DefaultPageSize);
+        }
+
+        return options;
+    }
+
+    private int NormalizePageSize(int pageSize)
+    {
+        if (pageSize <= 0)
+        {
+            return DefaultPageSize;
+        }
+
+        return PageSizeOptions.Contains(pageSize) ? pageSize : DefaultPageSize;
     }
 
     /// <summary>
@@ -1147,6 +1216,7 @@ public class MaterialRequestListRowDto
     public long RequestNo { get; set; }
     public int? StoreGroup { get; set; }
     public string KPGroupName { get; set; } = string.Empty;
+    public string DraftCreatorEmployeeCode { get; set; } = string.Empty;
     public DateTime? DateCreate { get; set; }
     public string DateCreateDisplay => DateCreate.HasValue ? DateCreate.Value.ToString("dd/MM/yyyy") : string.Empty;
     public DateTime? FromDate { get; set; }
@@ -1258,6 +1328,43 @@ public class MaterialRequestItemLookupDto
     public decimal? OrderQty { get; set; }
 }
 
+public class MaterialRequestWorkflowHistoryDto
+{
+    public int AutoNum { get; set; }
+    public long RequestNo { get; set; }
+    public int? EmployeeId { get; set; }
+    public string EmployeeCode { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public DateTime? TimeEffective { get; set; }
+    public int? TypeEffective { get; set; }
+    public string StatusLabel { get; set; } = string.Empty;
+    public string Note { get; set; } = string.Empty;
+
+    public string TimeEffectiveDisplay => TimeEffective.HasValue ? TimeEffective.Value.ToString("dd/MM/yyyy HH:mm") : string.Empty;
+
+    public string EmployeeDisplayName
+    {
+        get
+        {
+            var employeeName = (EmployeeName ?? string.Empty).Trim();
+            var employeeCode = (EmployeeCode ?? string.Empty).Trim();
+
+            if (!string.IsNullOrWhiteSpace(employeeName))
+            {
+                return string.IsNullOrWhiteSpace(employeeCode)
+                    ? employeeName
+                    : $"{employeeName} ({employeeCode})";
+            }
+
+            return string.IsNullOrWhiteSpace(employeeCode) ? string.Empty : employeeCode;
+        }
+    }
+
+    public string ActionLabel => string.IsNullOrWhiteSpace(Note) ? StatusLabel : Note;
+
+}
+
 public class MaterialRequestService
 {
     private readonly string _connectionString;
@@ -1363,6 +1470,53 @@ public class MaterialRequestService
             cancellationToken);
 
         return rows;
+    }
+
+    /// <summary>
+    /// Lay lich su workflow cua MR tu SUPER_REQUEST.
+    /// </summary>
+    public async Task<IReadOnlyList<MaterialRequestWorkflowHistoryDto>> GetWorkflowHistoryAsync(long requestNo, CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+            SELECT
+                sr.AutoNum,
+                CAST(sr.RequestNo AS bigint) AS RequestNo,
+                sr.EmployeeID,
+                ISNULL(LTRIM(RTRIM(e.EmployeeCode)), '') AS EmployeeCode,
+                ISNULL(LTRIM(RTRIM(e.EmployeeName)), '') AS EmployeeName,
+                ISNULL(LTRIM(RTRIM(e.Title)), '') AS Title,
+                sr.TimeEffective,
+                sr.TypeEffective,
+                ISNULL(LTRIM(RTRIM(sr.Note)), '') AS Note
+            FROM dbo.SUPER_REQUEST sr
+            LEFT JOIN dbo.MS_Employee e ON e.EmployeeID = sr.EmployeeID
+            WHERE sr.RequestNo = @RequestNo
+            ORDER BY sr.AutoNum";
+
+        return await Helper.QueryAsync(
+            _connectionString,
+            sql,
+            rd =>
+            {
+                var typeEffective = rd.IsDBNull(7) ? (int?)null : Convert.ToInt32(rd[7]);
+                var note = rd[8]?.ToString() ?? string.Empty;
+
+                return new MaterialRequestWorkflowHistoryDto
+                {
+                    AutoNum = rd.IsDBNull(0) ? 0 : Convert.ToInt32(rd[0]),
+                    RequestNo = rd.IsDBNull(1) ? 0 : Convert.ToInt64(rd[1]),
+                    EmployeeId = rd.IsDBNull(2) ? null : Convert.ToInt32(rd[2]),
+                    EmployeeCode = rd[3]?.ToString() ?? string.Empty,
+                    EmployeeName = rd[4]?.ToString() ?? string.Empty,
+                    Title = rd[5]?.ToString() ?? string.Empty,
+                    TimeEffective = rd.IsDBNull(6) ? null : rd.GetDateTime(6),
+                    TypeEffective = typeEffective,
+                    StatusLabel = ResolveWorkflowStatusLabel(typeEffective),
+                    Note = note
+                };
+            },
+            cmd => AddNumeric18_0Param(cmd, "@RequestNo", requestNo),
+            cancellationToken);
     }
 
     /// <summary>
@@ -1478,6 +1632,14 @@ public class MaterialRequestService
             FROM dbo.MATERIAL_REQUEST r
             LEFT JOIN dbo.MaterialStatus ms ON ms.MaterialStatusID = r.MATERIALSTATUSID
             LEFT JOIN dbo.INV_KPGroup kp ON kp.KPGroupID = r.STORE_GROUP
+            OUTER APPLY (
+                SELECT TOP 1 LTRIM(RTRIM(e.EmployeeCode)) AS EmployeeCode
+                FROM dbo.SUPER_REQUEST sr
+                INNER JOIN dbo.MS_Employee e ON e.EmployeeID = sr.EmployeeID
+                WHERE sr.RequestNo = r.REQUEST_NO
+                  AND sr.TypeEffective = -1
+                ORDER BY sr.AutoNum ASC
+            ) draftCreator
             WHERE
                 (@RequestNo IS NULL OR CAST(r.REQUEST_NO AS varchar(50)) LIKE '%' + @RequestNo + '%')
                 AND (@StoreGroup IS NULL OR r.STORE_GROUP = @StoreGroup)
@@ -1517,6 +1679,7 @@ public class MaterialRequestService
                 CAST(r.REQUEST_NO AS bigint) AS REQUEST_NO,
                 CAST(r.STORE_GROUP AS int) AS STORE_GROUP,
                 kp.KPGroupName AS KPGroupName,
+                ISNULL(draftCreator.EmployeeCode, '') AS DraftCreatorEmployeeCode,
                 r.DATE_CREATE,
                 r.FROM_DATE,
                 r.TO_DATE,
@@ -1541,18 +1704,19 @@ public class MaterialRequestService
                 RequestNo = rd.IsDBNull(0) ? 0 : rd.GetInt64(0),
                 StoreGroup = rd.IsDBNull(1) ? null : rd.GetInt32(1),
                 KPGroupName = rd[2]?.ToString() ?? string.Empty,
-                DateCreate = rd.IsDBNull(3) ? null : rd.GetDateTime(3),
-                FromDate = rd.IsDBNull(4) ? null : rd.GetDateTime(4),
-                ToDate = rd.IsDBNull(5) ? null : rd.GetDateTime(5),
-                AccordingTo = rd[6]?.ToString() ?? string.Empty,
-                Approval = !rd.IsDBNull(7) && Convert.ToBoolean(rd[7]),
-                ApprovalEnd = !rd.IsDBNull(8) && Convert.ToBoolean(rd[8]),
-                IsAuto = !rd.IsDBNull(9) && Convert.ToBoolean(rd[9]),
-                PostPr = !rd.IsDBNull(10) && Convert.ToBoolean(rd[10]),
-                MaterialStatusId = rd.IsDBNull(11) ? null : Convert.ToInt32(rd[11]),
-                MaterialStatusName = rd[12]?.ToString() ?? string.Empty,
-                NoIssue = rd.IsDBNull(13) ? null : Convert.ToInt32(rd[13]),
-                PrNo = rd[14]?.ToString() ?? string.Empty
+                DraftCreatorEmployeeCode = rd[3]?.ToString() ?? string.Empty,
+                DateCreate = rd.IsDBNull(4) ? null : rd.GetDateTime(4),
+                FromDate = rd.IsDBNull(5) ? null : rd.GetDateTime(5),
+                ToDate = rd.IsDBNull(6) ? null : rd.GetDateTime(6),
+                AccordingTo = rd[7]?.ToString() ?? string.Empty,
+                Approval = !rd.IsDBNull(8) && Convert.ToBoolean(rd[8]),
+                ApprovalEnd = !rd.IsDBNull(9) && Convert.ToBoolean(rd[9]),
+                IsAuto = !rd.IsDBNull(10) && Convert.ToBoolean(rd[10]),
+                PostPr = !rd.IsDBNull(11) && Convert.ToBoolean(rd[11]),
+                MaterialStatusId = rd.IsDBNull(12) ? null : Convert.ToInt32(rd[12]),
+                MaterialStatusName = rd[13]?.ToString() ?? string.Empty,
+                NoIssue = rd.IsDBNull(14) ? null : Convert.ToInt32(rd[14]),
+                PrNo = rd[15]?.ToString() ?? string.Empty
             },
             cmd =>
             {
@@ -2319,6 +2483,23 @@ public class MaterialRequestService
         Helper.AddParameter(cmd, "@StoreGroup", storeGroup, SqlDbType.Int);
         var value = await cmd.ExecuteScalarAsync(cancellationToken);
         return value == null || value == DBNull.Value ? null : Convert.ToInt64(value);
+    }
+
+    private static string ResolveWorkflowStatusLabel(int? typeEffective)
+    {
+        return typeEffective switch
+        {
+            -1 => "Just Created",
+            0 => "Submitted to Head",
+            1 => "Head Dept Approved",
+            2 => "Purchaser Checked",
+            3 => "CFO Approved",
+            4 => "Collected to PR",
+            5 => "Rejected",
+            6 => "Issued",
+            _ when typeEffective.HasValue => typeEffective.Value.ToString(),
+            _ => string.Empty
+        };
     }
 
     /// <summary>

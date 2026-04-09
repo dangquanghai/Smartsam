@@ -2,7 +2,7 @@
     'use strict';
 
     const CONFIG = {
-        pageSize: typeof defaultPageSize !== 'undefined' ? defaultPageSize : 25,
+        pageSize: typeof defaultPageSize !== 'undefined' ? defaultPageSize : 0,
         selectors: {
             tbody: '#purchaseOrderTable tbody',
             pagination: '#pagination',
@@ -20,7 +20,7 @@
         lastRequest: null,
         lastTotal: 0,
         currentPage: 1,
-        pageSize: 25
+        pageSize: typeof defaultPageSize !== 'undefined' ? defaultPageSize : 0
     };
 
     // Dong bo widget date-range voi 2 field an From/To.
@@ -455,20 +455,20 @@
                     viewDetailState.lastRequest = { ...request };
                     viewDetailState.lastTotal = response.total || 0;
                     viewDetailState.currentPage = response.page || page;
-                    viewDetailState.pageSize = response.pageSize || request.pageSize || 25;
+                    viewDetailState.pageSize = response.pageSize || request.pageSize || CONFIG.pageSize || 0;
                     renderViewDetailRows(response.data || []);
                     $('#purchaseOrderViewDetailCount').text(`Total Record(s): ${(response.total || 0)}`);
-                    updateViewDetailPagination(response.total || 0, response.page || page, response.pageSize || request.pageSize || 25, response.totalPages || 1);
+                    updateViewDetailPagination(response.total || 0, response.page || page, response.pageSize || request.pageSize || CONFIG.pageSize || 0, response.totalPages || 1);
                 } else {
                     viewDetailState.lastRequest = { ...request };
                     viewDetailState.lastTotal = 0;
-                    updateViewDetailPagination(0, 1, request.pageSize || 25, 1);
+                    updateViewDetailPagination(0, 1, request.pageSize || CONFIG.pageSize || 0, 1);
                     showViewDetailError(response.message || 'Search detail failed.');
                 }
             },
             error: function (xhr, status, error) {
                 viewDetailState.lastTotal = 0;
-                updateViewDetailPagination(0, 1, request.pageSize || 25, 1);
+                updateViewDetailPagination(0, 1, request.pageSize || CONFIG.pageSize || 0, 1);
                 showViewDetailError('System connection error: ' + error);
             },
             complete: function () {
@@ -528,7 +528,7 @@
             return;
         }
 
-        const safePageSize = pageSize > 0 ? pageSize : 25;
+        const safePageSize = pageSize > 0 ? pageSize : (CONFIG.pageSize || 0);
         const safePage = page > 0 ? page : 1;
         const start = ((safePage - 1) * safePageSize) + 1;
         const end = Math.min(safePage * safePageSize, total);
@@ -584,7 +584,7 @@
             recFromDate: $('#ViewDetail_RecFromDate').val() || null,
             recToDate: $('#ViewDetail_RecToDate').val() || null,
             page: page,
-            pageSize: 25
+            pageSize: CONFIG.pageSize || 0
         };
 
         if (!request.usePoDateRange) {

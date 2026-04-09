@@ -34,7 +34,7 @@ public class MaterialRequestDetailModel : BasePageModel
     private const int StatusCollectedToPr = 4;
     private const int StatusRejected = 5;
     private const int StatusIssued = 6;
-    private const string TestCcEmail = "luckystart79@gmail.com";
+    private const string TestCcEmail = "hai.dq@saigonskygarden.com.vn";
 
     private EmployeeMaterialScopeDto _dataScope = new EmployeeMaterialScopeDto();
     private bool _isAdminRole;
@@ -111,10 +111,10 @@ public class MaterialRequestDetailModel : BasePageModel
         {
             if (IsEdit)
             {
-                return CanEditDraftMaterialRequest() && CurrentStatusId == StatusJustCreated;
+                return CanUpdateDraftMaterialRequest() && CurrentStatusId == StatusJustCreated;
             }
 
-            return CanEditDraftMaterialRequest();
+            return CanCreateDraftMaterialRequest();
         }
     }
 
@@ -130,7 +130,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
     public bool CanSubmit
     {
-        get { return IsEdit && CanEditDraftMaterialRequest() && CurrentStatusId == StatusJustCreated; }
+        get { return IsEdit && CanUpdateDraftMaterialRequest() && CurrentStatusId == StatusJustCreated; }
     }
 
     public bool CanApprove
@@ -190,7 +190,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
         if (!IsEdit)
         {
-            if (!CanEditDraftMaterialRequest())
+            if (!CanCreateDraftMaterialRequest())
             {
                 return Forbid();
             }
@@ -268,7 +268,7 @@ public class MaterialRequestDetailModel : BasePageModel
             var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
             PagePerm = GetUserPermissions();
             await LoadDraftCreatorAsync(Id.Value, cancellationToken);
-            if (currentStatus != StatusJustCreated || !CanEditDraftMaterialRequest())
+            if (currentStatus != StatusJustCreated || !CanUpdateDraftMaterialRequest())
             {
                 WarningMessage = "You cannot edit this Material Request at current status.";
                 return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
@@ -501,7 +501,7 @@ public class MaterialRequestDetailModel : BasePageModel
         var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
         PagePerm = GetUserPermissions();
         var isAuto = existing.IsAuto;
-        if (action == MaterialRequestWorkflowAction.Submit && !CanEditDraftMaterialRequest())
+        if (action == MaterialRequestWorkflowAction.Submit && !CanUpdateDraftMaterialRequest())
         {
             WarningMessage = "You do not have permission to submit this draft.";
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
@@ -783,12 +783,12 @@ public class MaterialRequestDetailModel : BasePageModel
             }
 
             var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
-            if (!CanEditDraftMaterialRequest() || currentStatus != StatusJustCreated)
+            if (!CanUpdateDraftMaterialRequest() || currentStatus != StatusJustCreated)
             {
                 return new JsonResult(new { success = false, message = "You cannot add item at current status." });
             }
         }
-        else if (!CanEditDraftMaterialRequest())
+        else if (!CanCreateDraftMaterialRequest())
         {
             return new JsonResult(new { success = false, message = "Access denied." });
         }
@@ -1049,7 +1049,7 @@ public class MaterialRequestDetailModel : BasePageModel
     {
         if (currentStatus == StatusJustCreated)
         {
-            return CanEditDraftMaterialRequest();
+            return CanUpdateDraftMaterialRequest();
         }
 
         return ShouldPreserveEditableBuy(currentStatus);
@@ -1081,7 +1081,7 @@ public class MaterialRequestDetailModel : BasePageModel
     {
         await _materialRequestService.InsertSuperRequestAsync(
             requestNo,
-            "Save",
+            "Update MR",
             currentStatus,
             User.Identity?.Name ?? string.Empty,
             cancellationToken);
@@ -1216,11 +1216,21 @@ public class MaterialRequestDetailModel : BasePageModel
     }
 
     /// <summary>
-    /// Check if the user can create or edit a draft MR.
-    /// Normal scoped users are allowed. Workflow users need Edit permission.
+    /// Check if the user can create a new MR draft.
+    /// Any authenticated user can start a draft.
     /// </summary>
-    /// <returns>True if draft MR actions are allowed.</returns>
-    private bool CanEditDraftMaterialRequest()
+    /// <returns>True if draft MR creation is allowed.</returns>
+    private bool CanCreateDraftMaterialRequest()
+    {
+        return User.Identity?.IsAuthenticated == true;
+    }
+
+    /// <summary>
+    /// Check if the user can update an existing Just Created MR draft.
+    /// Only the creator, admin, or Edit-permission users may update the draft.
+    /// </summary>
+    /// <returns>True if updating the draft MR is allowed.</returns>
+    private bool CanUpdateDraftMaterialRequest()
     {
         if (IsAdminUser())
         {
@@ -1233,17 +1243,6 @@ public class MaterialRequestDetailModel : BasePageModel
                 User.Identity?.Name?.Trim(),
                 _draftCreatorEmployeeCode,
                 StringComparison.OrdinalIgnoreCase);
-        }
-
-        var isWorkflowUser = _dataScope.IsHeadDept
-            || _dataScope.IsPurchaser
-            || _dataScope.IsCFO
-            || _dataScope.IsBOD
-            || _dataScope.ApprovalLevel >= 2;
-
-        if (!isWorkflowUser)
-        {
-            return User.Identity?.IsAuthenticated == true;
         }
 
         return HasPermission(PermissionEdit);
@@ -1368,7 +1367,7 @@ public class MaterialRequestDetailModel : BasePageModel
     {
         if (action == MaterialRequestWorkflowAction.Submit)
         {
-            return HasPermission(PermissionEdit) && currentStatus == StatusJustCreated;
+            return CanUpdateDraftMaterialRequest() && currentStatus == StatusJustCreated;
         }
 
         if (action == MaterialRequestWorkflowAction.Approve)
@@ -1515,7 +1514,7 @@ public class MaterialRequestDetailModel : BasePageModel
         var mailServer = _config.GetValue<string>("EmailSettings:MailServer") ?? string.Empty;
         var mailPort = _config.GetValue<int?>("EmailSettings:MailPort") ?? 0;
 
-        var finalSubject = AddTestSubjectPrefix(subject);
+        var finalSubject = ApplyMailSubjectPrefix(subject);
 
         return new MaterialRequestWorkflowNotifyRequestViewModel
         {
@@ -1725,45 +1724,35 @@ public class MaterialRequestDetailModel : BasePageModel
         }
     }
 
-    private string AddTestSubjectPrefix(string subject)
+    // Ap dung tien to subject tu EmailSettings khi FunctionID cua Material Request nam trong danh sach test.
+    private string ApplyMailSubjectPrefix(string subject)
     {
-        var trimmed = (subject ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
+        if (string.IsNullOrWhiteSpace(subject))
         {
-            return trimmed;
+            return subject;
         }
 
-        // Đọc danh sách function được đánh dấu test từ appsettings.json.
-        // Chỉ những function nằm trong danh sách này mới bị prefix [TEST].
-        var testFunctionIds = (_config.GetValue<string>("EmailSettings:TestFunctionIDs") ?? string.Empty)
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var isTestFunction = false;
-        foreach (var item in testFunctionIds)
+        var prefix = _config.GetValue<string>("EmailSettings:PrefixSubject")?.Trim();
+        if (string.IsNullOrWhiteSpace(prefix) || !ShouldApplyTestSubjectPrefix())
         {
-            if (int.TryParse(item, out var functionId) && functionId == MaterialRequestFunctionId)
-            {
-                isTestFunction = true;
-                break;
-            }
+            return subject;
         }
 
-        // Nếu function hiện tại không phải test function thì giữ subject nguyên bản.
-        if (!isTestFunction)
+        return $"{prefix} - {subject}";
+    }
+
+    // Kiem tra FunctionID cua Material Request co nam trong danh sach test hay khong.
+    private bool ShouldApplyTestSubjectPrefix()
+    {
+        var configuredIds = _config.GetValue<string>("EmailSettings:TestFunctionIDs");
+        if (string.IsNullOrWhiteSpace(configuredIds))
         {
-            return trimmed;
+            return false;
         }
 
-        const string prefix = "TEST -";
-        var prefixWithSeparator = $"{prefix} ";
-
-        // Nếu đã có prefix TEST - rồi thì không thêm lại lần nữa.
-        if (trimmed.StartsWith(prefixWithSeparator, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, prefix, StringComparison.OrdinalIgnoreCase))
-        {
-            return trimmed;
-        }
-
-        return string.IsNullOrWhiteSpace(trimmed) ? prefix : $"{prefixWithSeparator}{trimmed}";
+        return configuredIds
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(value => int.TryParse(value, out var id) && id == MaterialRequestFunctionId);
     }
 
     
