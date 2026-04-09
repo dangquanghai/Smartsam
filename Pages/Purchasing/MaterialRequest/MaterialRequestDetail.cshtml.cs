@@ -554,7 +554,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
             var savedNo = await _materialRequestService.SaveAsync(Id, toSave, lines, cancellationToken);
             await WriteWorkflowHistoryAsync(action, currentStatus, transition, savedNo, cancellationToken);
-            TryQueueWorkflowNotifyEmail(action, currentStatus, toSave, isAuto);
+            TryQueueWorkflowNotifyEmail(action, currentStatus, toSave, isAuto, lines);
             SuccessMessage = transition.SuccessMessage;
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(savedNo));
         }
@@ -1392,9 +1392,10 @@ public class MaterialRequestDetailModel : BasePageModel
         MaterialRequestWorkflowAction action,
         int currentStatus,
         MaterialRequestDetailDto header,
-        bool isAuto)
+        bool isAuto,
+        IReadOnlyList<MaterialRequestLineDto> lines)
     {
-        var notifyRequest = BuildWorkflowNotifyRequest(action, currentStatus, header, isAuto);
+        var notifyRequest = BuildWorkflowNotifyRequest(action, currentStatus, header, isAuto, lines);
         if (notifyRequest is null)
         {
             return;
@@ -1416,7 +1417,8 @@ public class MaterialRequestDetailModel : BasePageModel
         MaterialRequestWorkflowAction action,
         int currentStatus,
         MaterialRequestDetailDto header,
-        bool isAuto)
+        bool isAuto,
+        IReadOnlyList<MaterialRequestLineDto> lines)
     {
         if (action == MaterialRequestWorkflowAction.Submit && currentStatus == StatusJustCreated)
         {
@@ -1456,6 +1458,11 @@ public class MaterialRequestDetailModel : BasePageModel
 
         if (action == MaterialRequestWorkflowAction.Approve && currentStatus == StatusHeadDeptApproved && !isAuto)
         {
+            if (!HasPositiveBuyLines(lines))
+            {
+                return null;
+            }
+
             var recipients = GetRecipientsByEmployeeFlag("IsCFO");
             if (recipients.Count == 0)
             {
@@ -1576,6 +1583,12 @@ public class MaterialRequestDetailModel : BasePageModel
         }
 
         return DeduplicateRecipients(rows);
+    }
+
+    // Chi gui mail CFO neu MR con it nhat 1 line Buy > 0.
+    private static bool HasPositiveBuyLines(IEnumerable<MaterialRequestLineDto> lines)
+    {
+        return lines.Any(line => line.Buy.GetValueOrDefault() > 0m);
     }
 
     // Load workflow recipients by flag and keep one row per email only.
