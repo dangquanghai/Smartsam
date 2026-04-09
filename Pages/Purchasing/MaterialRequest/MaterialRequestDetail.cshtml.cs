@@ -1514,7 +1514,7 @@ public class MaterialRequestDetailModel : BasePageModel
         var mailServer = _config.GetValue<string>("EmailSettings:MailServer") ?? string.Empty;
         var mailPort = _config.GetValue<int?>("EmailSettings:MailPort") ?? 0;
 
-        var finalSubject = AddTestSubjectPrefix(subject);
+        var finalSubject = ApplyMailSubjectPrefix(subject);
 
         return new MaterialRequestWorkflowNotifyRequestViewModel
         {
@@ -1724,51 +1724,35 @@ public class MaterialRequestDetailModel : BasePageModel
         }
     }
 
-    private string AddTestSubjectPrefix(string subject)
+    // Ap dung tien to subject tu EmailSettings khi FunctionID cua Material Request nam trong danh sach test.
+    private string ApplyMailSubjectPrefix(string subject)
     {
-        var trimmed = (subject ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
+        if (string.IsNullOrWhiteSpace(subject))
         {
-            return trimmed;
-        }
-
-        // Đọc danh sách function được đánh dấu test từ appsettings.json.
-        // Chỉ những function nằm trong danh sách này mới bị prefix [TEST].
-        var testFunctionIds = (_config.GetValue<string>("EmailSettings:TestFunctionIDs") ?? string.Empty)
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var isTestFunction = false;
-        foreach (var item in testFunctionIds)
-        {
-            if (int.TryParse(item, out var functionId) && functionId == MaterialRequestFunctionId)
-            {
-                isTestFunction = true;
-                break;
-            }
-        }
-
-        // Nếu function hiện tại không phải test function thì giữ subject nguyên bản.
-        if (!isTestFunction)
-        {
-            return trimmed;
+            return subject;
         }
 
         var prefix = _config.GetValue<string>("EmailSettings:PrefixSubject")?.Trim();
-        if (string.IsNullOrWhiteSpace(prefix))
+        if (string.IsNullOrWhiteSpace(prefix) || !ShouldApplyTestSubjectPrefix())
         {
-            prefix = "TEST";
+            return subject;
         }
 
-        var prefixWithSeparator = $"{prefix} - ";
+        return $"{prefix} - {subject}";
+    }
 
-        // Nếu đã có prefix rồi thì không thêm lại lần nữa.
-        if (trimmed.StartsWith(prefixWithSeparator, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, prefix, StringComparison.OrdinalIgnoreCase) ||
-            trimmed.StartsWith($"{prefix} -", StringComparison.OrdinalIgnoreCase))
+    // Kiem tra FunctionID cua Material Request co nam trong danh sach test hay khong.
+    private bool ShouldApplyTestSubjectPrefix()
+    {
+        var configuredIds = _config.GetValue<string>("EmailSettings:TestFunctionIDs");
+        if (string.IsNullOrWhiteSpace(configuredIds))
         {
-            return trimmed;
+            return false;
         }
 
-        return string.IsNullOrWhiteSpace(trimmed) ? prefix : $"{prefixWithSeparator}{trimmed}";
+        return configuredIds
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(value => int.TryParse(value, out var id) && id == MaterialRequestFunctionId);
     }
 
     

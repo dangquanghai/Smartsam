@@ -91,6 +91,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         public int PageSize { get; set; }
 
         public int DefaultPageSize => _config.GetValue<int>("AppSettings:DefaultPageSize", 10);
+        public IReadOnlyList<int> PageSizeOptions => GetPageSizeOptions();
 
         [BindProperty]
         public int CopyYear { get; set; }
@@ -139,10 +140,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             LoadUserDataScope();
 
             // Khởi tạo các giá trị mặc định cho paging
-            if (PageSize <= 0)
-            {
-                PageSize = DefaultPageSize;
-            }
+            PageSize = NormalizePageSize(DefaultPageSize);
 
             // Load dữ liệu cho các Dropdown
             LoadDepartments();
@@ -150,6 +148,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             InitializeStatusSelection();
 
             ViewData["DefaultPageSize"] = DefaultPageSize;
+            ViewData["PageSizeOptions"] = PageSizeOptions;
         }
 
         // ==========================================
@@ -480,7 +479,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             var isByYear = string.Equals(viewMode, "byyear", StringComparison.OrdinalIgnoreCase);
 
             var page = request.Page <= 0 ? 1 : request.Page;
-            var pageSize = request.PageSize <= 0 ? DefaultPageSize : Math.Min(request.PageSize, 200);
+            var pageSize = NormalizePageSize(request.PageSize);
 
             var restrictedDeptId = !CanLoadAllDepartments()
                 ? (_dataScope.DeptID ?? NoDepartmentScopeValue)
@@ -694,8 +693,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         // Nap du lieu grid theo paging hien tai.
         private async Task LoadRowsAsync(CancellationToken cancellationToken)
         {
-            if (PageSize <= 0) PageSize = DefaultPageSize;
-            if (PageSize > 200) PageSize = 200;
+            PageSize = NormalizePageSize(PageSize);
             if (PageIndex <= 0) PageIndex = 1;
 
             var result = await SearchPagedAsync(BuildCriteria(includePaging: true), cancellationToken);
@@ -730,6 +728,35 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 PageIndex = includePaging ? PageIndex : null,
                 PageSize = includePaging ? PageSize : null
             };
+        }
+
+        private IReadOnlyList<int> GetPageSizeOptions()
+        {
+            var configured = _config.GetSection("AppSettings:PageSizeOptions").Get<int[]>() ?? Array.Empty<int>();
+            var options = configured.Where(value => value > 0).Distinct().ToList();
+            if (options.Count == 0)
+            {
+                options = new List<int> { DefaultPageSize, 20, 25, 30, 35 }
+                    .Distinct()
+                    .ToList();
+            }
+
+            if (!options.Contains(DefaultPageSize))
+            {
+                options.Insert(0, DefaultPageSize);
+            }
+
+            return options;
+        }
+
+        private int NormalizePageSize(int pageSize)
+        {
+            if (pageSize <= 0)
+            {
+                return DefaultPageSize;
+            }
+
+            return PageSizeOptions.Contains(pageSize) ? pageSize : DefaultPageSize;
         }
 
         // Chuan hoa chuoi rong ve null de query SQL de hon.
@@ -1068,7 +1095,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             var isByYear = string.Equals(criteria.ViewMode, "byyear", StringComparison.OrdinalIgnoreCase);
             var sourceTable = isByYear ? "dbo.PC_SupplierAnualy" : "dbo.PC_Suppliers";
             var pageIndex = criteria.PageIndex.GetValueOrDefault() <= 0 ? 1 : criteria.PageIndex!.Value;
-            var pageSize = criteria.PageSize.GetValueOrDefault() <= 0 ? DefaultPageSize : criteria.PageSize!.Value;
+            var pageSize = NormalizePageSize(criteria.PageSize.GetValueOrDefault());
             var applyPaging = criteria.PageIndex.HasValue && criteria.PageSize.HasValue;
             var statusIds = (criteria.StatusIds ?? [])
                 .Where(x => x >= 0)

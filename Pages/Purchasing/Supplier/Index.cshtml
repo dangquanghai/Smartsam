@@ -31,7 +31,7 @@
                     <div class="card-body">
                         <form method="get" id="supplierSearchForm">
                             <input type="hidden" id="PageIndex" name="PageIndex" value="@Model.PageIndex" />
-                            <input type="hidden" id="PageSize" name="PageSize" value="@(Model.PageSize > 0 ? Model.PageSize : Model.DefaultPageSize)" />
+                            <input type="hidden" id="PageSize" name="PageSize" value="@Model.DefaultPageSize" />
                             <!-- Row 1 -->
                             <div class="form-group">
                                 <div class="custom-control custom-radio">
@@ -145,6 +145,15 @@
                             <nav aria-label="Page navigation">
                                 <div id="pagination-info" class="d-inline-block mr-2" style="padding-top: 0.3rem;">
                                     <small>No records</small>
+                                </div>
+                                <div class="d-inline-flex align-items-center mr-2 supplier-page-size-form">
+                                    <label class="mb-0 mr-2 supplier-page-size-label" for="supplierPageSize">Show</label>
+                                    <select id="supplierPageSize" class="form-control form-control-sm supplier-page-size-select">
+                                        @foreach (var pageSizeOption in Model.PageSizeOptions)
+                                        {
+                                            <option value="@pageSizeOption" selected="@(Model.DefaultPageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                        }
+                                    </select>
                                 </div>
                                 <ul class="pagination pagination-sm mb-0 d-inline-flex" id="pagination">
                                     <!-- Pagination buttons render by JS -->

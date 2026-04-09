@@ -53,6 +53,8 @@ public class IndexModel : BasePageModel
         get { return _config.GetValue<int>("AppSettings:DefaultPageSize", 10); }
     }
 
+    public IReadOnlyList<int> PageSizeOptions => GetPageSizeOptions();
+
     [BindProperty]
     public string? CreateDescription { get; set; }
 
@@ -145,7 +147,11 @@ public class IndexModel : BasePageModel
         PopulateCreateAutoDefaults(cancellationToken);
         if (Filter.PageSize <= 0)
         {
-            Filter.PageSize = DefaultPageSize;
+            Filter.PageSize = NormalizePageSize(DefaultPageSize);
+        }
+        else
+        {
+            Filter.PageSize = NormalizePageSize(Filter.PageSize);
         }
         if (!Filter.FromDate.HasValue)
         {
@@ -164,6 +170,7 @@ public class IndexModel : BasePageModel
         ViewData["StoreGroupLocked"] = IsStoreGroupLocked();
         LoadFilters();
         ViewData["DefaultPageSize"] = DefaultPageSize;
+        ViewData["PageSizeOptions"] = PageSizeOptions;
     }
 
     // ==========================================
@@ -211,7 +218,7 @@ public class IndexModel : BasePageModel
         Filter.AccordingToKeyword = request.AccordingToKeyword;
         Filter.ConditionMode = string.IsNullOrWhiteSpace(request.ConditionMode) ? ConditionModeAllUsers : request.ConditionMode.Trim();
         Filter.PageIndex = request.Page <= 0 ? 1 : request.Page;
-        Filter.PageSize = request.PageSize <= 0 ? DefaultPageSize : Math.Min(request.PageSize, 200);
+        Filter.PageSize = NormalizePageSize(request.PageSize);
 
         NormalizeConditionMode();
         ApplyDefaultInboxStatusIfNeeded();
@@ -609,8 +616,7 @@ public class IndexModel : BasePageModel
     /// <param name="cancellationToken">Token de huy yeu cau neu can.</param>
     private async Task LoadRowsAsync(CancellationToken cancellationToken)
     {
-        if (Filter.PageSize <= 0) Filter.PageSize = DefaultPageSize;
-        if (Filter.PageSize > 200) Filter.PageSize = 200;
+        Filter.PageSize = NormalizePageSize(Filter.PageSize);
         if (Filter.PageIndex <= 0) Filter.PageIndex = 1;
 
         var result = await _materialRequestService.SearchPagedAsync(BuildCriteria(includePaging: true), cancellationToken);
@@ -653,6 +659,35 @@ public class IndexModel : BasePageModel
             PageIndex = includePaging ? Filter.PageIndex : null,
             PageSize = includePaging ? Filter.PageSize : null
         };
+    }
+
+    private IReadOnlyList<int> GetPageSizeOptions()
+    {
+        var configured = _config.GetSection("AppSettings:PageSizeOptions").Get<int[]>() ?? Array.Empty<int>();
+        var options = configured.Where(value => value > 0).Distinct().ToList();
+        if (options.Count == 0)
+        {
+            options = new List<int> { DefaultPageSize, 20, 25, 30, 35 }
+                .Distinct()
+                .ToList();
+        }
+
+        if (!options.Contains(DefaultPageSize))
+        {
+            options.Insert(0, DefaultPageSize);
+        }
+
+        return options;
+    }
+
+    private int NormalizePageSize(int pageSize)
+    {
+        if (pageSize <= 0)
+        {
+            return DefaultPageSize;
+        }
+
+        return PageSizeOptions.Contains(pageSize) ? pageSize : DefaultPageSize;
     }
 
     /// <summary>

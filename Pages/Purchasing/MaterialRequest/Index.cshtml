@@ -25,8 +25,7 @@
 
                     <div class="card-body">
                         <form method="get" id="mrSearchForm">
-                            <input type="hidden" name="Filter.PageIndex" value="1" />
-                            <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+                            <input type="hidden" name="Filter.PageIndex" value="@Model.Filter.PageIndex" />
 
                             <div class="form-group">
                                 <label>Store Group</label>
@@ -149,14 +148,23 @@
                         <span class="badge badge-light ml-2" id="total-records-badge">@Model.TotalRecords records</span>
                         <!-- Pagination info trong header (bên phải) -->
                         <div class="card-tools float-right app-paging-white">
-                            <nav aria-label="Page navigation">
-                                <div id="pagination-info" class="d-inline-block mr-2" style="padding-top: 0.3rem;">
-                                    <small>No records</small>
-                                </div>
-                                <ul class="pagination pagination-sm mb-0 d-inline-flex" id="pagination">
-                                    <!-- Pagination buttons sẽ được thêm bằng JS -->
-                                </ul>
-                            </nav>
+                                <nav aria-label="Page navigation">
+                                    <div id="pagination-info" class="d-inline-block mr-2" style="padding-top: 0.3rem;">
+                                        <small>No records</small>
+                                    </div>
+                                    <div class="d-inline-flex align-items-center mr-2 mr-page-size-form">
+                                        <label class="mb-0 mr-2 mr-page-size-label" for="mrPageSize">Show</label>
+                                        <select id="mrPageSize" name="Filter.PageSize" class="form-control form-control-sm mr-page-size-select">
+                                            @foreach (var pageSizeOption in Model.PageSizeOptions)
+                                            {
+                                                <option value="@pageSizeOption" selected="@(Model.Filter.PageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <ul class="pagination pagination-sm mb-0 d-inline-flex" id="pagination">
+                                        <!-- Pagination buttons sẽ được thêm bằng JS -->
+                                    </ul>
+                                </nav>
                         </div>
                     </div>
 

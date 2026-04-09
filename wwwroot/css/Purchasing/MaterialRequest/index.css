@@ -5,7 +5,8 @@
 .mr-result-panel-container {
     display: flex;
     flex-direction: column;
-    min-height: max(520px, calc(100vh - 100px));
+    height: calc(100vh - 100px);
+    min-height: 520px;
     overflow: visible;
 }
 
@@ -36,6 +37,24 @@
 .mr-table-wrap {
     max-height: 62vh;
     overflow: auto;
+}
+
+.mr-page-size-form {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.mr-page-size-label {
+    margin-bottom: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.mr-page-size-select {
+    width: 74px;
+    min-width: 74px;
 }
 
 .mr-search-panel .mr-header-filter-grid,
