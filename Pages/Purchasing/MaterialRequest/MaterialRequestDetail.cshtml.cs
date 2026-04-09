@@ -1630,7 +1630,7 @@ public class MaterialRequestDetailModel : BasePageModel
             .ToList();
     }
 
-    // Build the greeting label for the Dear line: prefer "Mr. Name", then fall back to name/code/email.
+    // Build the greeting label for the Dear line: prefer "Mr. Name(Code)", then fall back to code/email.
     private static string BuildRecipientGreetingLabel(string? title, string? employeeName, string? employeeCode, string? email)
     {
         var normalizedTitle = NormalizeGreetingTitle(title);
@@ -1641,8 +1641,8 @@ public class MaterialRequestDetailModel : BasePageModel
         if (!string.IsNullOrWhiteSpace(name))
         {
             return string.IsNullOrWhiteSpace(normalizedTitle)
-                ? name
-                : $"{normalizedTitle} {name}";
+                ? (string.IsNullOrWhiteSpace(code) ? name : $"{name}({code})")
+                : (string.IsNullOrWhiteSpace(code) ? $"{normalizedTitle} {name}" : $"{normalizedTitle} {name}({code})");
         }
 
         if (!string.IsNullOrWhiteSpace(code))
