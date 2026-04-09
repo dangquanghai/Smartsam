@@ -1752,12 +1752,18 @@ public class MaterialRequestDetailModel : BasePageModel
             return trimmed;
         }
 
-        const string prefix = "TEST -";
-        var prefixWithSeparator = $"{prefix} ";
+        var prefix = _config.GetValue<string>("EmailSettings:PrefixSubject")?.Trim();
+        if (string.IsNullOrWhiteSpace(prefix))
+        {
+            prefix = "TEST";
+        }
 
-        // Nếu đã có prefix TEST - rồi thì không thêm lại lần nữa.
+        var prefixWithSeparator = $"{prefix} - ";
+
+        // Nếu đã có prefix rồi thì không thêm lại lần nữa.
         if (trimmed.StartsWith(prefixWithSeparator, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(trimmed, prefix, StringComparison.OrdinalIgnoreCase))
+            string.Equals(trimmed, prefix, StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith($"{prefix} -", StringComparison.OrdinalIgnoreCase))
         {
             return trimmed;
         }
