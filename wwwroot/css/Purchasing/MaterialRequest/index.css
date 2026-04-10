@@ -1,5 +1,5 @@
 .mr-search-panel .card-body {
-    padding: 15px;
+    padding: 5px;
 }
 
 .mr-result-panel-container {
@@ -8,6 +8,36 @@
     height: calc(100vh - 100px);
     min-height: 520px;
     overflow: visible;
+}
+
+.mr-search-column {
+    flex: 0 0 clamp(190px, 18vw, 320px);
+    width: clamp(190px, 18vw, 320px);
+    max-width: clamp(190px, 18vw, 320px);
+    min-width: 190px;
+}
+
+.mr-result-column {
+    min-width: 0;
+}
+
+@media (min-width: 768px) {
+    .mr-layout-row {
+        flex-wrap: nowrap;
+    }
+
+    .mr-layout-row > .mr-search-column {
+        flex: 0 0 clamp(190px, 18vw, 239px);
+        width: clamp(190px, 18vw, 320px);
+        max-width: clamp(190px, 18vw, 320px);
+        min-width: 190px;
+    }
+
+    .mr-layout-row > .mr-result-column {
+        flex: 1 1 0;
+        max-width: none;
+        min-width: 0;
+    }
 }
 
 .mr-result-panel-container > .card.card-primary:not(.mr-action-panel) {
@@ -211,7 +241,7 @@
 .mr-condition-box {
     border: 1px solid #d9dee5;
     margin: 0;
-    padding: 0.45rem 0.55rem 0.35rem 0.55rem;
+    padding: 0.35rem 0.35rem 0.35rem 0.35rem;
     width: 100%;
 }
 
@@ -485,6 +515,33 @@
         min-height: 0;
         overflow: visible;
     }
+
+    .mr-search-column {
+        min-width: 0;
+    }
+
+    .mr-search-panel .mr-condition-box,
+    .mr-search-panel .mr-condition-grid,
+    .mr-search-panel .mr-condition-grid > *,
+    .mr-search-panel .mr-inline-field,
+    .mr-search-panel .mr-inline-field > .form-control,
+    .mr-search-panel .mr-request-no-input,
+    .mr-search-panel .mr-status-dropdown,
+    .mr-search-panel .mr-status-dropdown .dropdown-toggle {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    .mr-search-panel .mr-status-dropdown .dropdown-toggle {
+        display: flex;
+    }
+
+        .mr-search-panel .mr-status-dropdown .dropdown-menu {
+        min-width: 100%;
+        width: 100%;
+    }
 }
 
 .mr-create-desc-wrap {
@@ -572,6 +629,30 @@
 
 .mr-table-header .card-title {
     color: #fff;
+}
+
+#mrTable {
+    table-layout: fixed;
+    width: 100%;
+    min-width: 1080px;
+}
+
+#mrTable > thead > tr > th:first-child,
+#mrTable > tbody > tr > td:first-child {
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    text-align: center;
+}
+
+.app-table-ellipsis {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .mr-detail-grid {
@@ -720,11 +801,14 @@
 }
 
 .mr-col-select {
-    width: 42px;
+    width: 34px;
 }
 
 .mr-line-select-cell {
-    width: 42px;
+    width: 34px;
+    min-width: 34px;
+    padding-left: 0;
+    padding-right: 0;
     text-align: center;
     vertical-align: middle;
 }
@@ -733,18 +817,41 @@
     width: 1rem;
     height: 1rem;
     accent-color: #0d6efd;
+    display: inline-block;
+    margin: 0;
 }
 
 #mrLineTable {
     table-layout: fixed;
 }
 
+#mrLineTable > thead > tr > th:first-child,
+#mrLineTable > tbody > tr > td:first-child,
+#mrLineTable > tfoot > tr > td:first-child {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+#mrLineTable .mr-readonly-cell-text {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#mrLineTable td:nth-child(3) .mr-readonly-cell-text {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+}
+
 #mrLineTable .mr-col-itemcode {
-    width: 110px;
+    width: 72px;
 }
 
 #mrLineTable .mr-col-itemname {
-    width: 180px;
+    width: 360px;
 }
 
 #mrLineTable .mr-col-unit {
@@ -752,23 +859,23 @@
 }
 
 #mrLineTable .mr-col-order {
-    width: 76px;
+    width: 40px;
 }
 
 #mrLineTable .mr-col-notrec {
-    width: 76px;
+    width: 40px;
 }
 
 #mrLineTable .mr-col-in {
-    width: 76px;
+    width: 40px;
 }
 
 #mrLineTable .mr-col-accin {
-    width: 76px;
+    width: 40px;
 }
 
 #mrLineTable .mr-col-buy {
-    width: 76px;
+    width: 40px;
 }
 
 #mrLineTable .mr-col-note {
