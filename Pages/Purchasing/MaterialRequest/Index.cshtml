@@ -2,20 +2,20 @@
 @model SmartSam.Pages.Purchasing.MaterialRequest.IndexModel
 @{
     ViewData["Title"] = "Material Request";
-    var canAllUsersCondition = (bool?)ViewData["CanShowPcCondition"] ?? false;
-    var canStoremanCondition = (bool?)ViewData["CanShowStoreCondition"] ?? false;
+    var canAllUsersCondition = true;
+    var canStoremanCondition = true;
     var storeGroupLocked = (bool?)ViewData["StoreGroupLocked"] ?? false;
     var isStoremanMode = string.Equals(Model.Filter.ConditionMode, "storeman", StringComparison.OrdinalIgnoreCase);
-    var allUsersDisabledAttr = (!canAllUsersCondition || isStoremanMode) ? "disabled" : null;
-    var storemanDisabledAttr = (!canStoremanCondition || !isStoremanMode) ? "disabled" : null;
+    var allUsersDisabledAttr = isStoremanMode ? "disabled" : null;
+    var storemanDisabledAttr = !isStoremanMode ? "disabled" : null;
 }
 
 <section class="content">
     <div class="container-fluid">
-        <div class="row">
+        <div class="row mr-layout-row">
 
             <!-- SEARCH PANEL (LEFT) -->
-            <div class="col-md-2">
+            <div class="col-md-2 mr-search-column">
                 <div class="card card-info mr-search-panel">
                     <div class="card-header">
                         <h3 class="card-title">
@@ -51,7 +51,7 @@
                                 <input asp-for="Filter.ToDate" type="hidden" />
                             </div>
 
-                            <fieldset class="mr-condition-box @(canAllUsersCondition ? string.Empty : "d-none") mr-condition-group @(isStoremanMode ? "mr-condition-group-disabled" : string.Empty)" data-condition-group="allUsers">
+                            <fieldset class="mr-condition-box mr-condition-group @(isStoremanMode ? "mr-condition-group-disabled" : string.Empty)" data-condition-group="allUsers">
                                 <legend class="mr-condition-legend">
                                     <div class="mr-condition-legend-control">
                                         <input type="radio" id="conditionModeAllUsers" name="Filter.ConditionMode" value="allUsers" class="mr-condition-mode-radio" @(!isStoremanMode ? "checked" : null) @(canAllUsersCondition ? null : "disabled") />
@@ -107,7 +107,7 @@
                                 </div>
                             </fieldset>
 
-                            <fieldset class="mr-condition-box @(canStoremanCondition ? string.Empty : "d-none") mr-condition-group @(!isStoremanMode ? "mr-condition-group-disabled" : string.Empty)" data-condition-group="storeman">
+                            <fieldset class="mr-condition-box mr-condition-group @(!isStoremanMode ? "mr-condition-group-disabled" : string.Empty)" data-condition-group="storeman">
                                 <legend class="mr-condition-legend">
                                     <div class="mr-condition-legend-control">
                                         <input type="radio" id="conditionModeStoreman" name="Filter.ConditionMode" value="storeman" class="mr-condition-mode-radio" @(isStoremanMode ? "checked" : null) @(canStoremanCondition ? null : "disabled") />
@@ -140,46 +140,47 @@
             </div>
 
             <!-- RESULT + ACTION (RIGHT) -->
-            <div class="col-md-10 mr-result-panel-container" id="mrResultPanelContainer">
+            <div class="col-md-10 mr-result-panel-container mr-result-column" id="mrResultPanelContainer">
                 <!-- RESULT GRID -->
                 <div class="card card-primary">
-                    <div class="card-header">
-                        <h3 class="card-title">Request</h3>
-                        <span class="badge badge-light ml-2" id="total-records-badge">@Model.TotalRecords records</span>
-                        <!-- Pagination info trong header (bên phải) -->
-                        <div class="card-tools float-right app-paging-white">
-                                <nav aria-label="Page navigation">
-                                    <div id="pagination-info" class="d-inline-block mr-2" style="padding-top: 0.3rem;">
-                                        <small>No records</small>
-                                    </div>
-                                    <div class="d-inline-flex align-items-center mr-2 mr-page-size-form">
-                                        <label class="mb-0 mr-2 mr-page-size-label" for="mrPageSize">Show</label>
-                                        <select id="mrPageSize" name="Filter.PageSize" class="form-control form-control-sm mr-page-size-select">
-                                            @foreach (var pageSizeOption in Model.PageSizeOptions)
-                                            {
-                                                <option value="@pageSizeOption" selected="@(Model.Filter.PageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
-                                            }
-                                        </select>
-                                    </div>
-                                    <ul class="pagination pagination-sm mb-0 d-inline-flex" id="pagination">
-                                        <!-- Pagination buttons sẽ được thêm bằng JS -->
-                                    </ul>
-                                </nav>
+                    <div class="card-header mr-table-header">
+                        <div class="mr-table-header-left">
+                            <h3 class="card-title">Request</h3>
+                            <span class="badge badge-light ml-2" id="total-records-badge">@Model.TotalRecords records</span>
+                        </div>
+                        <div class="mr-table-header-right app-paging-white">
+                            <nav aria-label="Page navigation">
+                                <div id="pagination-info" class="d-inline-block mr-2 mr-table-paging-info">
+                                    <small>No records</small>
+                                </div>
+                                <div class="d-inline-flex align-items-center mr-2 mr-page-size-form">
+                                    <label class="mb-0 mr-2 mr-page-size-label" for="mrPageSize">Show</label>
+                                    <select id="mrPageSize" name="Filter.PageSize" class="form-control form-control-sm mr-page-size-select">
+                                        @foreach (var pageSizeOption in Model.PageSizeOptions)
+                                        {
+                                            <option value="@pageSizeOption" selected="@(Model.Filter.PageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                        }
+                                    </select>
+                                </div>
+                                <ul class="pagination pagination-sm mb-0 d-inline-flex" id="pagination">
+                                    <!-- Pagination buttons sẽ được thêm bằng JS -->
+                                </ul>
+                            </nav>
                         </div>
                     </div>
 
                     <div class="card-body p-0">
                         <div class="table-responsive">
-                            <table class="table table-hover table-bordered" id="mrTable">
+                            <table class="table table-hover table-bordered mb-0 text-nowrap mr-table" id="mrTable">
                                 <thead class="thead-light">
                                     <tr>
-                                        <th></th>
-                                        <th>REQUEST_NO</th>
-                                        <th>DATE_CREATE</th>
-                                        <th>ACCORDINGTO</th>
-                                        <th>KPGroupName</th>
-                                        <th>MaterialStatusName</th>
-                                        <th>PRNO</th>
+                                        <th style="width: 32px;"></th>
+                                        <th style="width: 110px;">REQUEST_NO</th>
+                                        <th style="width: 110px;">DATE_CREATE</th>
+                                        <th style="width: 260px;">ACCORDINGTO</th>
+                                        <th style="width: 200px;">KPGroupName</th>
+                                        <th style="width: 180px;">MaterialStatusName</th>
+                                        <th style="width: 140px;">PRNO</th>
                                         <th class="d-none">MaterialStatusID</th>
                                     </tr>
                                 </thead>

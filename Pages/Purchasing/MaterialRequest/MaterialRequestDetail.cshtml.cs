@@ -98,6 +98,7 @@ public class MaterialRequestDetailModel : BasePageModel
         get
         {
             return IsAdminUser()
+                || _dataScope.StoreGroup == 1
                 || _dataScope.IsPurchaser
                 || _dataScope.IsCFO
                 || _dataScope.IsBOD
@@ -814,7 +815,7 @@ public class MaterialRequestDetailModel : BasePageModel
                     kp.KPGroupID,
                     CASE
                         WHEN kp.KPGroupName IS NOT NULL AND dep.DeptCode IS NOT NULL THEN CONCAT(kp.KPGroupName, ' (', dep.DeptCode, ')')
-                        ELSE NULL
+                        ELSE kp.KPGroupName
                     END AS KPGroupName
               FROM dbo.INV_KPGroup kp
               LEFT JOIN dbo.MS_Department dep ON dep.DeptID = kp.DepID
@@ -1512,7 +1513,7 @@ public class MaterialRequestDetailModel : BasePageModel
         <li>According To: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(header.AccordingTo ?? string.Empty)}</span></b></li>
         <li>Step: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(stepLabel)}</span></b></li>
         </ul>
-        {(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Material Request Detail</a></p>")}
+        {(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Material Request Detail</a></p>")}
         <p>SmartSam System</p>";
 
         var htmlBody = EmailTemplateHelper.WrapInNotifyTemplate(title, color, DateTime.Now, body);

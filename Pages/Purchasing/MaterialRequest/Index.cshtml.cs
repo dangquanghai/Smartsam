@@ -512,7 +512,7 @@ public class IndexModel : BasePageModel
                     kp.KPGroupID,
                     CASE
                         WHEN kp.KPGroupName IS NOT NULL AND dep.DeptCode IS NOT NULL THEN CONCAT(kp.KPGroupName, ' (', dep.DeptCode, ')')
-                        ELSE NULL
+                        ELSE kp.KPGroupName
                     END AS KPGroupName
               FROM dbo.INV_KPGroup kp
               LEFT JOIN dbo.MS_Department dep ON dep.DeptID = kp.DepID
@@ -695,31 +695,29 @@ public class IndexModel : BasePageModel
     /// </summary>
     private void NormalizeConditionMode()
     {
-        if (AllowShowStoreCondition() && !AllowShowPcCondition())
+        if (string.IsNullOrWhiteSpace(Filter.ConditionMode))
+        {
+            Filter.ConditionMode = IsStoremanDefaultCondition()
+                ? ConditionModeStoreman
+                : ConditionModeAllUsers;
+            return;
+        }
+
+        if (string.Equals(Filter.ConditionMode, ConditionModeAllUsers, StringComparison.OrdinalIgnoreCase))
+        {
+            Filter.ConditionMode = ConditionModeAllUsers;
+            return;
+        }
+
+        if (string.Equals(Filter.ConditionMode, ConditionModeStoreman, StringComparison.OrdinalIgnoreCase))
         {
             Filter.ConditionMode = ConditionModeStoreman;
             return;
         }
 
-        if (!AllowShowStoreCondition() && AllowShowPcCondition())
-        {
-            Filter.ConditionMode = ConditionModeAllUsers;
-            return;
-        }
-
-        if (!AllowShowStoreCondition() && !AllowShowPcCondition())
-        {
-            Filter.ConditionMode = ConditionModeAllUsers;
-            return;
-        }
-
-        if (!string.Equals(Filter.ConditionMode, ConditionModeStoreman, StringComparison.OrdinalIgnoreCase))
-        {
-            Filter.ConditionMode = ConditionModeAllUsers;
-            return;
-        }
-
-        Filter.ConditionMode = ConditionModeStoreman;
+        Filter.ConditionMode = IsStoremanDefaultCondition()
+            ? ConditionModeStoreman
+            : ConditionModeAllUsers;
     }
 
     /// <summary>
@@ -923,6 +921,7 @@ public class IndexModel : BasePageModel
     private bool CanAccessAllStoreGroups()
     {
         return IsAdminUser()
+            || _dataScope.StoreGroup == 1
             || _dataScope.IsPurchaser
             || _dataScope.IsCFO
             || _dataScope.IsBOD
@@ -944,7 +943,15 @@ public class IndexModel : BasePageModel
     /// <returns>True neu co the xem Store condition.</returns>
     private bool AllowShowStoreCondition()
     {
-        return IsAdminUser() || HasPermission(PermissionShowStore);
+        return User.Identity?.IsAuthenticated == true;
+    }
+
+    /// <summary>
+    /// Kiem tra mode storeman co nen duoc chon mac dinh khong.
+    /// </summary>
+    private bool IsStoremanDefaultCondition()
+    {
+        return _dataScope.IsInventoryControlInDep && _dataScope.StoreGroup.HasValue;
     }
 
     /// <summary>
@@ -1158,7 +1165,7 @@ public class MaterialRequestFilter
     public DateTime? FromDate { get; set; }
     public DateTime? ToDate { get; set; }
     public string? AccordingToKeyword { get; set; }
-    public string ConditionMode { get; set; } = "allUsers";
+    public string? ConditionMode { get; set; }
     public int PageIndex { get; set; } = 1;
     public int PageSize { get; set; } = 10;
 }
@@ -1315,7 +1322,6 @@ public class EmployeeMaterialScopeDto
     public bool IsCFO { get; set; }
     public bool IsBOD { get; set; }
     public bool IsInventoryControlInDep { get; set; }
-    public bool SeeDataAllDept { get; set; }
 }
 
 public class MaterialRequestItemLookupDto
@@ -1395,8 +1401,7 @@ public class MaterialRequestService
                 ISNULL(IsPurchaser, 0) AS IsPurchaser,
                 ISNULL(IsCFO, 0) AS IsCFO,
                 ISNULL(IsBOD, 0) AS IsBOD,
-                ISNULL(IsInventoryControlInDep, 0) AS IsInventoryControlInDep,
-                ISNULL(SeeDataAllDept, 0) AS SeeDataAllDept
+                ISNULL(IsInventoryControlInDep, 0) AS IsInventoryControlInDep
             FROM dbo.MS_Employee
             WHERE EmployeeCode = @EmployeeCode";
 
@@ -1411,8 +1416,7 @@ public class MaterialRequestService
                 IsPurchaser = !rd.IsDBNull(3) && Convert.ToInt32(rd[3]) == 1,
                 IsCFO = !rd.IsDBNull(4) && Convert.ToInt32(rd[4]) == 1,
                 IsBOD = !rd.IsDBNull(5) && Convert.ToInt32(rd[5]) == 1,
-                IsInventoryControlInDep = !rd.IsDBNull(6) && Convert.ToInt32(rd[6]) == 1,
-                SeeDataAllDept = !rd.IsDBNull(7) && Convert.ToInt32(rd[7]) == 1
+                IsInventoryControlInDep = !rd.IsDBNull(6) && Convert.ToInt32(rd[6]) == 1
             },
             cmd => Helper.AddParameter(cmd, "@EmployeeCode", employeeCode.Trim(), SqlDbType.VarChar, 50),
             cancellationToken) ?? new EmployeeMaterialScopeDto();
@@ -1428,7 +1432,7 @@ public class MaterialRequestService
                 kp.KPGroupID,
                 CASE
                     WHEN kp.KPGroupName IS NOT NULL AND dep.DeptCode IS NOT NULL THEN CONCAT(kp.KPGroupName, ' (', dep.DeptCode, ')')
-                    ELSE NULL
+                    ELSE kp.KPGroupName
                 END AS KPGroupName
             FROM dbo.INV_KPGroup kp
             LEFT JOIN dbo.MS_Department dep ON dep.DeptID = kp.DepID

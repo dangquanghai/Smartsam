@@ -207,8 +207,8 @@
                     ${requestNoHtml}
                 </td>
                 <td>${r.dateCreateDisplay || r.DateCreateDisplay || ''}</td>
-                <td class="vni-font" style="white-space:nowrap">${r.accordingTo || r.AccordingTo || ''}</td>
-                <td class="vni-font" style="white-space:nowrap">${r.kpGroupName || r.KPGroupName || r.kPGroupName || ''}</td>
+                <td class="vni-font">${buildEllipsisCell(r.accordingTo || r.AccordingTo || '')}</td>
+                <td class="vni-font">${buildEllipsisCell(r.kpGroupName || r.KPGroupName || r.kPGroupName || '')}</td>
                 <td>${r.materialStatusName || r.MaterialStatusName || ''}</td>
                 <td>${r.prNo || r.PrNo || ''}</td>
                 <td style="display:none">${r.materialStatusId || r.MaterialStatusId || ''}</td>
@@ -254,6 +254,11 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+    }
+
+    function buildEllipsisCell(input) {
+        const raw = (input || '').toString();
+        return `<span class="app-table-ellipsis" title="${escapeHtml(raw)}">${escapeHtml(raw)}</span>`;
     }
 
     function renderHistoryRows(rows) {
