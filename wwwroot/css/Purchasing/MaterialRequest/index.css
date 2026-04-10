@@ -1,5 +1,5 @@
 .mr-search-panel .card-body {
-    padding: 5px;
+    padding: 10px;
 }
 
 .mr-result-panel-container {
@@ -243,10 +243,19 @@
     margin: 0;
     padding: 0.35rem 0.35rem 0.35rem 0.35rem;
     width: 100%;
+    border-radius: 0.25rem;
+    background-color: #f8fbff;
+}
+
+.mr-condition-box[data-condition-group="allUsers"] {
+    background-color: #f0f3f7;
+    border-color: #d9dee5;
 }
 
 .mr-condition-box[data-condition-group="storeman"] {
     margin-top: 10px;
+    background-color: #fff8f8;
+    border-color: #f1c0c0;
 }
 
 .mr-condition-box > legend {
@@ -279,6 +288,7 @@
     color: #212529;
     font-weight: 600;
     margin: 0;
+    background-color: inherit;
 }
 
 .mr-condition-group-disabled {

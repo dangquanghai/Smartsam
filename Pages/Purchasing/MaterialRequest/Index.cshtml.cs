@@ -515,7 +515,7 @@ public class IndexModel : BasePageModel
                         ELSE kp.KPGroupName
                     END AS KPGroupName
               FROM dbo.INV_KPGroup kp
-              LEFT JOIN dbo.MS_Department dep ON dep.DeptID = kp.DepID
+              INNER JOIN dbo.MS_Department dep ON dep.DeptID = kp.DepID
               ORDER BY kp.KPGroupID",
             "KPGroupID",
             "KPGroupName");
@@ -700,6 +700,10 @@ public class IndexModel : BasePageModel
             Filter.ConditionMode = IsStoremanDefaultCondition()
                 ? ConditionModeStoreman
                 : ConditionModeAllUsers;
+            if (string.Equals(Filter.ConditionMode, ConditionModeStoreman, StringComparison.OrdinalIgnoreCase))
+            {
+                Filter.IssueLessThanOrder = true;
+            }
             return;
         }
 
@@ -712,12 +716,18 @@ public class IndexModel : BasePageModel
         if (string.Equals(Filter.ConditionMode, ConditionModeStoreman, StringComparison.OrdinalIgnoreCase))
         {
             Filter.ConditionMode = ConditionModeStoreman;
+            Filter.IssueLessThanOrder = true;
             return;
         }
 
         Filter.ConditionMode = IsStoremanDefaultCondition()
             ? ConditionModeStoreman
             : ConditionModeAllUsers;
+
+        if (string.Equals(Filter.ConditionMode, ConditionModeStoreman, StringComparison.OrdinalIgnoreCase))
+        {
+            Filter.IssueLessThanOrder = true;
+        }
     }
 
     /// <summary>
@@ -1435,7 +1445,7 @@ public class MaterialRequestService
                     ELSE kp.KPGroupName
                 END AS KPGroupName
             FROM dbo.INV_KPGroup kp
-            LEFT JOIN dbo.MS_Department dep ON dep.DeptID = kp.DepID
+            INNER JOIN dbo.MS_Department dep ON dep.DeptID = kp.DepID
             ORDER BY KPGroupID";
 
         var rows = await Helper.QueryAsync(

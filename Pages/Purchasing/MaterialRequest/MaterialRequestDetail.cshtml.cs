@@ -818,7 +818,7 @@ public class MaterialRequestDetailModel : BasePageModel
                         ELSE kp.KPGroupName
                     END AS KPGroupName
               FROM dbo.INV_KPGroup kp
-              LEFT JOIN dbo.MS_Department dep ON dep.DeptID = kp.DepID
+              INNER JOIN dbo.MS_Department dep ON dep.DeptID = kp.DepID
               ORDER BY kp.KPGroupID",
             "KPGroupID",
             "KPGroupName");
