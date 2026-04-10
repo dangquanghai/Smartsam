@@ -145,7 +145,8 @@ namespace SmartSam.Services
                         {
                             var t = tenants[i];
 
-                            // 1. Chừa 2 dòng đầu cho Letterhead
+                            // 1. Chừa 3 dòng đầu cho Letterhead
+                            body.AppendChild(new Paragraph(new Run(new Text(""))));
                             body.AppendChild(new Paragraph(new Run(new Text(""))));
                             body.AppendChild(new Paragraph(new Run(new Text(""))));
 
