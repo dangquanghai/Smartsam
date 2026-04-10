@@ -961,7 +961,7 @@ public class IndexModel : BasePageModel
     /// </summary>
     private bool IsStoremanDefaultCondition()
     {
-        return _dataScope.IsInventoryControlInDep && _dataScope.StoreGroup.HasValue;
+        return _dataScope.IsInventoryControlInDep && _dataScope.StoreGroup == 1;
     }
 
     /// <summary>
