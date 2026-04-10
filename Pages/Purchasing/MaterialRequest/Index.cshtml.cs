@@ -876,7 +876,7 @@ public class IndexModel : BasePageModel
     private bool CanCreateAutoMrCore()
     {
         return IsAdminUser()
-            || (_dataScope.IsInventoryControlInDep && _dataScope.StoreGroup.HasValue);
+            || (_dataScope.IsInventoryControlInDep && _dataScope.StoreGroup > 1);
     }
 
     /// <summary>
@@ -961,7 +961,7 @@ public class IndexModel : BasePageModel
     /// </summary>
     private bool IsStoremanDefaultCondition()
     {
-        return _dataScope.IsInventoryControlInDep && _dataScope.StoreGroup.HasValue;
+        return _dataScope.IsInventoryControlInDep && _dataScope.StoreGroup == 1;
     }
 
     /// <summary>
