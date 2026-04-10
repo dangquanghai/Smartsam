@@ -321,17 +321,13 @@
         selectedSupplierId = supplierId;
 
         const canCopy = item && item.actions ? item.actions.canCopy === true : false;
-        const updateVisibility = (selector, hasPermission) => {
-            if (hasPermission) {
-                $(selector).removeClass('d-none');
-            } else {
-                $(selector).addClass('d-none');
-            }
+        const updateButtonState = (selector, enabled) => {
+            $(selector).prop('disabled', !enabled);
         };
 
         $('#copySelectedSupplierIdsCsvInput').val(selectedSupplierId);
 
-        updateVisibility("#btnCopy", canCopy);
+        updateButtonState("#btnCopy", canCopy);
 
         $('#supplierTable tbody tr').removeClass('selected');
         $(this).closest('tr').addClass('selected');
@@ -401,7 +397,7 @@
     function resetActions() {
         selectedSupplierId = null;
         $('#copySelectedSupplierIdsCsvInput').val('');
-        $('#btnCopy').addClass('d-none');
+        $('#btnCopy').prop('disabled', true);
     }
 
     // ========== PAGINATION ==========

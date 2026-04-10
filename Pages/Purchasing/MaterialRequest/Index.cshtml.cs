@@ -1008,11 +1008,6 @@ public class IndexModel : BasePageModel
     /// <returns>Status mac dinh.</returns>
     private int GetDefaultInboxStatusId()
     {
-        if (_dataScope.IsHeadDept)
-        {
-            return 0;
-        }
-
         if (_dataScope.IsCFO || _dataScope.ApprovalLevel >= 3)
         {
             return 2;
@@ -1021,6 +1016,11 @@ public class IndexModel : BasePageModel
         if (_dataScope.IsPurchaser || _dataScope.ApprovalLevel >= 2)
         {
             return 1;
+        }
+
+        if (_dataScope.IsHeadDept)
+        {
+            return 0;
         }
 
         return StatusJustCreated;
