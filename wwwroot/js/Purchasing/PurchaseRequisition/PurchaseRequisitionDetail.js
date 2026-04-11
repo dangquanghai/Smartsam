@@ -498,7 +498,9 @@
                 }
             });
 
-            descriptionInput.value = uniqueRequestNos.join(", ");
+            descriptionInput.value = uniqueRequestNos.length > 0
+                ? `MR ${uniqueRequestNos.join(", ")}`
+                : "";
         };
 
         const updateToMrButton = () => {

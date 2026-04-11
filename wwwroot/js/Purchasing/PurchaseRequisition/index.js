@@ -770,7 +770,9 @@
                     }
                 });
 
-            descriptionEl.value = uniqueRequestNos.join(", ");
+            descriptionEl.value = uniqueRequestNos.length > 0
+                ? `MR ${uniqueRequestNos.join(", ")}`
+                : "";
         };
 
         const renderRows = () => {

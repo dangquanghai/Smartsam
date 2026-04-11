@@ -1543,13 +1543,20 @@ SET [Description] = ISNULL(src.[Description], '')
 FROM dbo.PC_PR pr
 OUTER APPLY
 (
-    SELECT STUFF((
-        SELECT DISTINCT ', ' + LTRIM(RTRIM(ISNULL(d.MRRequestNO, '')))
-        FROM dbo.PC_PRDetail d
-        WHERE d.PRID = pr.PRID
-          AND ISNULL(LTRIM(RTRIM(d.MRRequestNO)), '') <> ''
-        FOR XML PATH(''), TYPE
-    ).value('.', 'nvarchar(max)'), 1, 2, '') AS [Description]
+    SELECT CASE
+        WHEN ISNULL(src.RequestNos, '') = '' THEN ''
+        ELSE 'MR ' + src.RequestNos
+    END AS [Description]
+    FROM
+    (
+        SELECT STUFF((
+            SELECT DISTINCT ', ' + LTRIM(RTRIM(ISNULL(d.MRRequestNO, '')))
+            FROM dbo.PC_PRDetail d
+            WHERE d.PRID = pr.PRID
+              AND ISNULL(LTRIM(RTRIM(d.MRRequestNO)), '') <> ''
+            FOR XML PATH(''), TYPE
+        ).value('.', 'nvarchar(max)'), 1, 2, '') AS RequestNos
+    ) src
 ) src
 WHERE pr.PRID = @PRID", conn, trans);
 
