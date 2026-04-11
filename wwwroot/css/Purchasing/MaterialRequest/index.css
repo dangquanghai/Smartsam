@@ -842,6 +842,10 @@
     padding-right: 0 !important;
 }
 
+#mrLineTable > tbody > tr > td {
+    vertical-align: middle;
+}
+
 #mrLineTable .mr-readonly-cell-text {
     display: block;
     white-space: nowrap;
@@ -857,7 +861,7 @@
 }
 
 #mrLineTable .mr-col-itemcode {
-    width: 72px;
+    width: 100px;
 }
 
 #mrLineTable .mr-col-itemname {
@@ -869,11 +873,11 @@
 }
 
 #mrLineTable .mr-col-order {
-    width: 40px;
+    width: 45px;
 }
 
 #mrLineTable .mr-col-notrec {
-    width: 40px;
+    width: 50px;
 }
 
 #mrLineTable .mr-col-in {
@@ -881,7 +885,7 @@
 }
 
 #mrLineTable .mr-col-accin {
-    width: 40px;
+    width: 50px;
 }
 
 #mrLineTable .mr-col-buy {
@@ -889,7 +893,32 @@
 }
 
 #mrLineTable .mr-col-note {
-    width: 260px;
+    width: 160px;
+}
+
+#mrLineTable .mr-col-normqty {
+    width: 60px;
+}
+
+#mrLineTable .mr-col-issued {
+    width: 60px;
+}
+
+#mrLineTable .mr-col-new-item {
+    width: 60px;
+}
+
+#mrLineTable .mr-col-manual {
+    width: 60px;
+}
+
+#mrLineTable .mr-col-tempstore {
+    width: 68px;
+}
+
+#mrLineTable .mr-line-flag-checkbox {
+    display: block;
+    margin: 0 auto;
 }
 
 .mr-item-lookup-toolbar .form-group {
@@ -923,6 +952,24 @@
 
 .mr-item-lookup-search-btn {
     min-width: 110px;
+}
+
+.mr-item-lookup-result-table tbody tr {
+    cursor: pointer;
+}
+
+.mr-item-lookup-result-table tbody td {
+    cursor: pointer;
+    user-select: none;
+}
+
+.mr-item-lookup-result-table .mr-lookup-order-input {
+    cursor: text;
+    user-select: text;
+}
+
+.mr-item-lookup-result-table .mr-lookup-add-btn {
+    cursor: pointer;
 }
 
 .module-action-bar .btn {

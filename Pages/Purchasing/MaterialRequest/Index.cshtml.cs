@@ -29,6 +29,8 @@ public class IndexModel : BasePageModel
     private const int PermissionShowPc = 5;
     private const int PermissionShowStore = 6;
     private const int StatusJustCreated = -1;
+    private const int StatusRejected = 5;
+    private const int StatusIssued = 6;
     private const int NoScopeStoreGroup = -1;
     private const string ConditionModeAllUsers = "allUsers";
     private const string ConditionModeStoreman = "storeman";
@@ -771,10 +773,14 @@ public class IndexModel : BasePageModel
 
     /// <summary>
     /// Kiem tra user co la admin hay khong.
+    /// Hàm này đang được để riêng trong page/service hiện tại vì BasePageModel chưa
+    /// có helper admin chung cho toàn app; MaterialRequest Index và Detail cùng dùng
+    /// đúng 1 rule kiểm tra nên code bị lặp theo pattern hiện hành.
     /// </summary>
     /// <returns>True neu la admin.</returns>
     private bool IsAdminUser()
     {
+        // Uu tien claim dang co san trong auth ticket neu he thong da set.
         var adminClaim = (User.FindFirst("IsAdminRole")?.Value ?? string.Empty).Trim();
         if (string.Equals(adminClaim, "True", StringComparison.OrdinalIgnoreCase)
             || string.Equals(adminClaim, "1", StringComparison.OrdinalIgnoreCase))
@@ -782,6 +788,9 @@ public class IndexModel : BasePageModel
             return true;
         }
 
+        // Neu claim chua co thi fallback ve DB, theo thu tu:
+        // 1) MS_Employee.IsAdminUser
+        // 2) SYS_RoleMember/SYS_Role.IsAdminRole
         var employeeCode = User.Identity?.Name?.Trim();
         if (string.IsNullOrWhiteSpace(employeeCode))
         {
@@ -1051,6 +1060,11 @@ public class IndexModel : BasePageModel
     /// <returns>True neu duoc approve.</returns>
     private bool CanApproveStatus(int statusId, bool isAuto)
     {
+        if (IsTerminalWorkflowStatus(statusId))
+        {
+            return false;
+        }
+
         if (_isAdminRole)
         {
             return true;
@@ -1073,6 +1087,11 @@ public class IndexModel : BasePageModel
     /// <returns>True neu duoc reject.</returns>
     private bool CanRejectStatus(int statusId, bool isAuto)
     {
+        if (IsTerminalWorkflowStatus(statusId))
+        {
+            return false;
+        }
+
         if (_isAdminRole)
         {
             return true;
@@ -1084,6 +1103,11 @@ public class IndexModel : BasePageModel
             3 => !isAuto && _dataScope.IsCFO,
             _ => false
         };
+    }
+
+    private static bool IsTerminalWorkflowStatus(int statusId)
+    {
+        return statusId == StatusRejected || statusId == StatusIssued;
     }
 
     /// <summary>
@@ -1146,11 +1170,15 @@ public class IndexModel : BasePageModel
                 InStock = item.InStock,
                 AccIn = 0,
                 Buy = 0,
+                NormQty = 0,
                 NormMain = 0,
                 Price = 0,
                 Note = string.Empty,
                 NewItem = false,
-                Selected = true
+                Selected = true,
+                ManualCheck = false,
+                TempStore = 0,
+                Issued = 0
             };
 
             result.Add(line);
@@ -1300,8 +1328,11 @@ public class MaterialRequestLineDto
     public decimal? InStock { get; set; }
     public decimal? AccIn { get; set; }
     public decimal? Buy { get; set; }
+    public decimal? NormQty { get; set; }
     public decimal? NormMain { get; set; }
     public decimal? Price { get; set; }
+    public bool ManualCheck { get; set; }
+    public decimal? TempStore { get; set; }
 
     [StringLength(255, ErrorMessage = "Note must be at most 255 characters.")]
     public string? Note { get; set; }
@@ -1809,11 +1840,14 @@ public class MaterialRequestService
                 d.INSTOCK,
                 d.acctualyInventory,
                 d.BUY,
+                ISNULL(d.NORM_Q, 0) AS NORM_Q,
                 ISNULL(d.NORM_Q_MAIN, 0) AS NORM_Q_MAIN,
                 d.PRICE,
                 d.NOTE,
                 ISNULL(d.NEW_ITEM, 0) AS NEW_ITEM,
                 ISNULL(d.SELECTED, 0) AS SELECTED,
+                ISNULL(d.ManualCheck, 0) AS ManualCheck,
+                ISNULL(d.TempStore, 0) AS TempStore,
                 ISNULL(d.ISSUED, 0) AS ISSUED
             FROM dbo.MATERIAL_REQUEST_DETAIL d
             LEFT JOIN dbo.INV_ItemList i ON i.ItemCode = d.ITEMCODE
@@ -1834,12 +1868,15 @@ public class MaterialRequestService
                 InStock = rd.IsDBNull(6) ? null : Convert.ToDecimal(rd[6]),
                 AccIn = rd.IsDBNull(7) ? null : Convert.ToDecimal(rd[7]),
                 Buy = rd.IsDBNull(8) ? null : Convert.ToDecimal(rd[8]),
-                NormMain = rd.IsDBNull(9) ? null : Convert.ToDecimal(rd[9]),
-                Price = rd.IsDBNull(10) ? null : Convert.ToDecimal(rd[10]),
-                Note = rd[11]?.ToString(),
-                NewItem = !rd.IsDBNull(12) && Convert.ToBoolean(rd[12]),
-                Selected = !rd.IsDBNull(13) && Convert.ToBoolean(rd[13]),
-                Issued = rd.IsDBNull(14) ? null : Convert.ToDecimal(rd[14])
+                NormQty = rd.IsDBNull(9) ? null : Convert.ToDecimal(rd[9]),
+                NormMain = rd.IsDBNull(10) ? null : Convert.ToDecimal(rd[10]),
+                Price = rd.IsDBNull(11) ? null : Convert.ToDecimal(rd[11]),
+                Note = rd[12]?.ToString(),
+                NewItem = !rd.IsDBNull(13) && Convert.ToBoolean(rd[13]),
+                Selected = !rd.IsDBNull(14) && Convert.ToBoolean(rd[14]),
+                ManualCheck = !rd.IsDBNull(15) && Convert.ToBoolean(rd[15]),
+                TempStore = rd.IsDBNull(16) ? null : Convert.ToDecimal(rd[16]),
+                Issued = rd.IsDBNull(17) ? null : Convert.ToDecimal(rd[17])
             },
             cmd => AddNumeric18_0Param(cmd, "@RequestNo", requestNo),
             cancellationToken);
@@ -2175,52 +2212,77 @@ public class MaterialRequestService
                 await insertCmd.ExecuteNonQueryAsync(cancellationToken);
             }
 
-            const string deleteLineSql = "DELETE FROM dbo.MATERIAL_REQUEST_DETAIL WHERE REQUEST_NO = @RequestNo";
-            await using (var deleteCmd = new SqlCommand(deleteLineSql, conn, (SqlTransaction)tx))
-            {
-                AddNumeric18_0Param(deleteCmd, "@RequestNo", resolvedRequestNo);
-                await deleteCmd.ExecuteNonQueryAsync(cancellationToken);
-            }
-
-            if (lines.Count > 0)
-            {
-                const string insertLineSql = @"
-                    INSERT INTO dbo.MATERIAL_REQUEST_DETAIL
-                    (
-                        REQUEST_NO, ITEMCODE, UNIT, BEGIN_Q, RECEIPT_Q, USING_Q, END_Q,
-                        NORM_Q, NOT_RECEIPT, NEW_ORDER, INSTOCK, acctualyInventory, BUY, ISSUED,
-                        NEW_ITEM, SELECTED, NORM_Q_MAIN, PRICE, NOTE, PostedPR, ManualCheck, TempStore, CreatedAsset
-                    )
-                    VALUES
-                    (
-                        @RequestNo, @ItemCode, @Unit, 0, 0, 0, 0,
-                        0, @NotReceipt, @OrderQty, @InStock, @AccIn, @Buy, 0,
-                        @NewItem, @Selected, @NormMain, @Price, @Note, 0, 0, 0, 0
-                    )";
-
-                foreach (var line in lines)
-                {
-                    await using var lineCmd = new SqlCommand(insertLineSql, conn, (SqlTransaction)tx);
-                    AddNumeric18_0Param(lineCmd, "@RequestNo", resolvedRequestNo);
-                    Helper.AddParameter(lineCmd, "@ItemCode", (line.ItemCode ?? string.Empty).Trim(), SqlDbType.VarChar, 20);
-                    Helper.AddParameter(lineCmd, "@Unit", (line.Unit ?? string.Empty).Trim(), SqlDbType.VarChar, 50);
-                    AddDecimal18_2Param(lineCmd, "@OrderQty", line.OrderQty ?? 0m);
-                    AddDecimal18_2Param(lineCmd, "@NotReceipt", line.NotReceipt ?? 0m);
-                    AddDecimal18_2Param(lineCmd, "@InStock", line.InStock ?? 0m);
-                    AddDecimal18_2Param(lineCmd, "@AccIn", line.AccIn ?? 0m);
-                    AddDecimal18_2Param(lineCmd, "@Buy", line.Buy ?? 0m);
-                    AddDecimal18_2Param(lineCmd, "@NormMain", line.NormMain ?? 0m);
-                    AddDecimal18_2Param(lineCmd, "@Price", line.Price ?? 0m);
-                    Helper.AddParameter(lineCmd, "@Note", (line.Note ?? string.Empty).Trim(), SqlDbType.VarChar, 255);
-                    Helper.AddParameter(lineCmd, "@NewItem", line.NewItem, SqlDbType.Bit);
-                    Helper.AddParameter(lineCmd, "@Selected", line.Selected, SqlDbType.Bit);
-
-                    await lineCmd.ExecuteNonQueryAsync(cancellationToken);
-                }
-            }
+            await SaveDetailLinesCoreAsync(conn, (SqlTransaction)tx, resolvedRequestNo, lines, cancellationToken);
 
             await tx.CommitAsync(cancellationToken);
             return resolvedRequestNo;
+        }
+        catch
+        {
+            await tx.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Luu chi detail line cua MR, giu nguyen header hien co.
+    /// </summary>
+    public async Task<long> SaveDetailLinesAsync(long requestNo, IReadOnlyList<MaterialRequestLineDto> lines, CancellationToken cancellationToken = default)
+    {
+        if (requestNo <= 0)
+        {
+            throw new InvalidOperationException("Material Request not found.");
+        }
+
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync(cancellationToken);
+        await using var tx = await conn.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            const string existsSql = "SELECT 1 FROM dbo.MATERIAL_REQUEST WHERE REQUEST_NO = @RequestNo";
+            await using (var existsCmd = new SqlCommand(existsSql, conn, (SqlTransaction)tx))
+            {
+                AddNumeric18_0Param(existsCmd, "@RequestNo", requestNo);
+                var exists = await existsCmd.ExecuteScalarAsync(cancellationToken);
+                if (exists is null || exists == DBNull.Value)
+                {
+                    throw new InvalidOperationException("Material Request not found.");
+                }
+            }
+
+            await SaveDetailLinesCoreAsync(conn, (SqlTransaction)tx, requestNo, lines, cancellationToken);
+
+            await tx.CommitAsync(cancellationToken);
+            return requestNo;
+        }
+        catch
+        {
+            await tx.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Cap nhat chi header MR cho luong workflow.
+    /// </summary>
+    public async Task<long> UpdateWorkflowHeaderAsync(
+        long requestNo,
+        int statusId,
+        bool? approval,
+        bool? approvalEnd,
+        bool? postPr,
+        CancellationToken cancellationToken = default)
+    {
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync(cancellationToken);
+        await using var tx = await conn.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            await UpdateHeaderStatusOnlyAsync(conn, (SqlTransaction)tx, requestNo, statusId, approval, approvalEnd, postPr, cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            return requestNo;
         }
         catch
         {
@@ -2313,6 +2375,9 @@ public class MaterialRequestService
                     (SqlTransaction)tx,
                     sourceHeader.RequestNo,
                     5,
+                    false,
+                    true,
+                    false,
                     cancellationToken);
                 await InsertSuperRequestAsync(
                     conn,
@@ -2334,21 +2399,7 @@ public class MaterialRequestService
 
                 if (!rejectedNo.HasValue)
                 {
-                    var rejectedHeader = new MaterialRequestDetailDto
-                    {
-                        StoreGroup = sourceHeader.StoreGroup,
-                        DateCreate = DateTime.Now,
-                        AccordingTo = "This request contain items that were reject from another requests",
-                        Approval = false,
-                        ApprovalEnd = true,
-                        PostPr = false,
-                        IsAuto = false,
-                        FromDate = sourceHeader.FromDate,
-                        ToDate = sourceHeader.ToDate,
-                        MaterialStatusId = 5,
-                        PrNo = null,
-                        NoIssue = sourceHeader.NoIssue
-                    };
+                    var rejectedHeader = CloneRejectedHeader(sourceHeader, DateTime.Now);
 
                     rejectedNo = await SaveRequestCoreAsync(conn, (SqlTransaction)tx, null, rejectedHeader, Array.Empty<MaterialRequestLineDto>(), cancellationToken);
                     await InsertSuperRequestAsync(conn, (SqlTransaction)tx, rejectedNo.Value, employeeId, DateTime.Now, "Reject request", 5, cancellationToken);
@@ -2454,8 +2505,8 @@ public class MaterialRequestService
                 VALUES
                 (
                     @RequestNo, @ItemCode, @Unit, 0, 0, 0, 0,
-                    0, @NotReceipt, @OrderQty, @InStock, @AccIn, @Buy, 0,
-                    @NewItem, @Selected, @NormMain, @Price, @Note, 0, 0, 0, 0
+                    @NormQty, @NotReceipt, @OrderQty, @InStock, @AccIn, @Buy, 0,
+                    @NewItem, @Selected, @NormMain, @Price, @Note, 0, @ManualCheck, @TempStore, 0
                 )";
 
             foreach (var line in lines)
@@ -2469,11 +2520,14 @@ public class MaterialRequestService
                 AddDecimal18_2Param(lineCmd, "@InStock", line.InStock ?? 0m);
                 AddDecimal18_2Param(lineCmd, "@AccIn", line.AccIn ?? 0m);
                 AddDecimal18_2Param(lineCmd, "@Buy", line.Buy ?? 0m);
+                AddDecimal18_2Param(lineCmd, "@NormQty", line.NormQty ?? 0m);
                 AddDecimal18_2Param(lineCmd, "@NormMain", line.NormMain ?? 0m);
                 AddDecimal18_2Param(lineCmd, "@Price", line.Price ?? 0m);
                 Helper.AddParameter(lineCmd, "@Note", (line.Note ?? string.Empty).Trim(), SqlDbType.VarChar, 255);
                 Helper.AddParameter(lineCmd, "@NewItem", line.NewItem, SqlDbType.Bit);
                 Helper.AddParameter(lineCmd, "@Selected", line.Selected, SqlDbType.Bit);
+                Helper.AddParameter(lineCmd, "@ManualCheck", line.ManualCheck, SqlDbType.Bit);
+                AddDecimal18_2Param(lineCmd, "@TempStore", line.TempStore ?? 0m);
                 await lineCmd.ExecuteNonQueryAsync(cancellationToken);
             }
         }
@@ -2524,20 +2578,86 @@ public class MaterialRequestService
         SqlTransaction tx,
         long requestNo,
         int statusId,
+        bool? approval,
+        bool? approvalEnd,
+        bool? postPr,
         CancellationToken cancellationToken)
     {
         const string sql = @"
             UPDATE dbo.MATERIAL_REQUEST
             SET MATERIALSTATUSID = @StatusId,
-                APPROVAL = CASE WHEN @StatusId = 5 THEN 0 ELSE APPROVAL END,
-                APPROVAL_END = CASE WHEN @StatusId = 5 THEN 1 ELSE APPROVAL_END END,
-                POST_PR = CASE WHEN @StatusId = 5 THEN 0 ELSE POST_PR END
+                APPROVAL = CASE WHEN @Approval IS NULL THEN APPROVAL ELSE @Approval END,
+                APPROVAL_END = CASE WHEN @ApprovalEnd IS NULL THEN APPROVAL_END ELSE @ApprovalEnd END,
+                POST_PR = CASE WHEN @PostPr IS NULL THEN POST_PR ELSE @PostPr END
             WHERE REQUEST_NO = @RequestNo";
 
         await using var cmd = new SqlCommand(sql, conn, tx);
         AddNumeric18_0Param(cmd, "@RequestNo", requestNo);
         Helper.AddParameter(cmd, "@StatusId", statusId, SqlDbType.Int);
+        cmd.Parameters.Add("@Approval", SqlDbType.Bit).Value = approval.HasValue ? approval.Value : DBNull.Value;
+        cmd.Parameters.Add("@ApprovalEnd", SqlDbType.Bit).Value = approvalEnd.HasValue ? approvalEnd.Value : DBNull.Value;
+        cmd.Parameters.Add("@PostPr", SqlDbType.Bit).Value = postPr.HasValue ? postPr.Value : DBNull.Value;
         await cmd.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Ghi lai danh sach line MR ma khong can sua header.
+    /// </summary>
+    private static async Task SaveDetailLinesCoreAsync(
+        SqlConnection conn,
+        SqlTransaction tx,
+        long requestNo,
+        IReadOnlyList<MaterialRequestLineDto> lines,
+        CancellationToken cancellationToken)
+    {
+        const string deleteLineSql = "DELETE FROM dbo.MATERIAL_REQUEST_DETAIL WHERE REQUEST_NO = @RequestNo";
+        await using (var deleteCmd = new SqlCommand(deleteLineSql, conn, tx))
+        {
+            AddNumeric18_0Param(deleteCmd, "@RequestNo", requestNo);
+            await deleteCmd.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        if (lines.Count == 0)
+        {
+            return;
+        }
+
+        const string insertLineSql = @"
+            INSERT INTO dbo.MATERIAL_REQUEST_DETAIL
+            (
+                REQUEST_NO, ITEMCODE, UNIT, BEGIN_Q, RECEIPT_Q, USING_Q, END_Q,
+                NORM_Q, NOT_RECEIPT, NEW_ORDER, INSTOCK, acctualyInventory, BUY, ISSUED,
+                NEW_ITEM, SELECTED, NORM_Q_MAIN, PRICE, NOTE, PostedPR, ManualCheck, TempStore, CreatedAsset
+            )
+            VALUES
+            (
+                @RequestNo, @ItemCode, @Unit, 0, 0, 0, 0,
+                @NormQty, @NotReceipt, @OrderQty, @InStock, @AccIn, @Buy, 0,
+                @NewItem, @Selected, @NormMain, @Price, @Note, 0, @ManualCheck, @TempStore, 0
+            )";
+
+        foreach (var line in lines)
+        {
+            await using var lineCmd = new SqlCommand(insertLineSql, conn, tx);
+            AddNumeric18_0Param(lineCmd, "@RequestNo", requestNo);
+            Helper.AddParameter(lineCmd, "@ItemCode", (line.ItemCode ?? string.Empty).Trim(), SqlDbType.VarChar, 20);
+            Helper.AddParameter(lineCmd, "@Unit", (line.Unit ?? string.Empty).Trim(), SqlDbType.VarChar, 50);
+            AddDecimal18_2Param(lineCmd, "@OrderQty", line.OrderQty ?? 0m);
+            AddDecimal18_2Param(lineCmd, "@NotReceipt", line.NotReceipt ?? 0m);
+            AddDecimal18_2Param(lineCmd, "@InStock", line.InStock ?? 0m);
+            AddDecimal18_2Param(lineCmd, "@AccIn", line.AccIn ?? 0m);
+            AddDecimal18_2Param(lineCmd, "@Buy", line.Buy ?? 0m);
+            AddDecimal18_2Param(lineCmd, "@NormQty", line.NormQty ?? 0m);
+            AddDecimal18_2Param(lineCmd, "@NormMain", line.NormMain ?? 0m);
+            AddDecimal18_2Param(lineCmd, "@Price", line.Price ?? 0m);
+            Helper.AddParameter(lineCmd, "@Note", (line.Note ?? string.Empty).Trim(), SqlDbType.VarChar, 255);
+            Helper.AddParameter(lineCmd, "@NewItem", line.NewItem, SqlDbType.Bit);
+            Helper.AddParameter(lineCmd, "@Selected", line.Selected, SqlDbType.Bit);
+            Helper.AddParameter(lineCmd, "@ManualCheck", line.ManualCheck, SqlDbType.Bit);
+            AddDecimal18_2Param(lineCmd, "@TempStore", line.TempStore ?? 0m);
+
+            await lineCmd.ExecuteNonQueryAsync(cancellationToken);
+        }
     }
 
     /// <summary>
@@ -2676,6 +2796,9 @@ public class MaterialRequestService
                 && !(line.InStock.HasValue && line.InStock.Value != 0)
                 && !(line.AccIn.HasValue && line.AccIn.Value != 0)
                 && !(line.Buy.HasValue && line.Buy.Value != 0)
+                && !(line.NormQty.HasValue && line.NormQty.Value != 0)
+                && !(line.Issued.HasValue && line.Issued.Value != 0)
+                && !(line.TempStore.HasValue && line.TempStore.Value != 0)
                 && !(line.Price.HasValue && line.Price.Value != 0);
 
             if (isBlank)
@@ -2694,12 +2817,15 @@ public class MaterialRequestService
                 InStock = line.InStock ?? 0,
                 AccIn = line.AccIn ?? 0,
                 Buy = line.Buy ?? 0,
+                NormQty = line.NormQty ?? 0,
                 NormMain = line.NormMain ?? 0,
                 Price = line.Price ?? 0,
                 Note = note,
                 NewItem = line.NewItem,
                 Selected = line.Selected,
-                Issued = line.Issued
+                ManualCheck = line.ManualCheck,
+                TempStore = line.TempStore ?? 0,
+                Issued = line.Issued ?? 0
             });
         }
 
@@ -2923,15 +3049,10 @@ public class MaterialRequestService
     }
 
     /// <summary>
-    /// Lay status mac dinh neu trang thai chua co.
+    /// Lay status mac dinh khi tao moi.
     /// </summary>
-    private static async Task<int> GetDefaultStatusIdAsync(SqlConnection conn, SqlTransaction tx, CancellationToken cancellationToken)
-    {
-        const string sql = "SELECT ISNULL(MIN(MaterialStatusID), -1) FROM dbo.MaterialStatus";
-        await using var cmd = new SqlCommand(sql, conn, tx);
-        var value = await cmd.ExecuteScalarAsync(cancellationToken);
-        return Convert.ToInt32(value);
-    }
+    private static Task<int> GetDefaultStatusIdAsync(SqlConnection conn, SqlTransaction tx, CancellationToken cancellationToken)
+        => Task.FromResult(-1);
 
     /// <summary>
     /// Tao ma item nhanh.
@@ -2959,58 +3080,6 @@ public class MaterialRequestService
         }
 
         throw new InvalidOperationException("Cannot generate Item Code. Please retry.");
-    }
-
-    /// <summary>
-    /// Tao danh sach detail line cho Auto MR.
-    /// </summary>
-    public async Task<IReadOnlyList<MaterialRequestLineDto>> BuildAutoLinesAsync(int storeGroup, CancellationToken cancellationToken = default)
-    {
-        const string sql = @"
-            SELECT
-                i.ItemCode,
-                i.ItemName,
-                ISNULL(i.Unit, '') AS Unit,
-                CAST(COALESCE(NULLIF(i.StoreNormInMain, 0), NULLIF(i.ReOrderPoint, 0), 1) AS decimal(18,2)) AS OrderQty
-            FROM dbo.INV_ItemList i
-            WHERE
-                (i.IsActive = 1 OR i.IsActive IS NULL)
-                AND (i.IsPurchase = 1 OR i.IsPurchase IS NULL)
-                AND i.KPGroupItem = @StoreGroup
-            ORDER BY i.ItemCode";
-
-        var rows = await Helper.QueryAsync(
-            _connectionString,
-            sql,
-            rd =>
-            {
-                var orderQty = rd.IsDBNull(3) ? 1m : Convert.ToDecimal(rd[3]);
-                if (orderQty <= 0)
-                {
-                    orderQty = 1m;
-                }
-
-                return new MaterialRequestLineDto
-                {
-                    ItemCode = rd[0]?.ToString() ?? string.Empty,
-                    ItemName = rd[1]?.ToString() ?? string.Empty,
-                    Unit = rd[2]?.ToString() ?? string.Empty,
-                    OrderQty = orderQty,
-                    NotReceipt = 0,
-                    InStock = 0,
-                    AccIn = 0,
-                    Buy = 0,
-                    NormMain = 0,
-                    Price = 0,
-                    Note = string.Empty,
-                    NewItem = false,
-                    Selected = true
-                };
-            },
-            cmd => Helper.AddParameter(cmd, "@StoreGroup", storeGroup, SqlDbType.Int),
-            cancellationToken);
-
-        return rows;
     }
 
     /// <summary>

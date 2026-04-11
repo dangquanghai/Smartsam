@@ -19,6 +19,7 @@
               data-can-issue="@Model.CanIssue.ToString().ToLowerInvariant()"
               data-can-reject="@Model.CanReject.ToString().ToLowerInvariant()"
               data-store-group-locked="@Model.StoreGroupLocked.ToString().ToLowerInvariant()"
+              data-show-advanced-columns="@Model.ShowAdvancedDetailColumns.ToString().ToLowerInvariant()"
               data-hide-zero-buy-lines="@Model.HideZeroBuyLines.ToString().ToLowerInvariant()">
               <input type="hidden" asp-for="Id" />
               <input type="hidden" asp-for="LinesJson" id="linesJsonInput" />
@@ -126,6 +127,11 @@
                                 <col class="mr-col-accin" />
                                 <col class="mr-col-buy" />
                                 <col class="mr-col-note" />
+                                <col class="mr-col-normqty @(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")" />
+                                <col class="mr-col-issued @(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")" />
+                                <col class="mr-col-new-item @(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")" />
+                                <col class="mr-col-manual @(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")" />
+                                <col class="mr-col-tempstore @(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")" />
                             </colgroup>
                             <thead class="thead-light">
                                 <tr>
@@ -139,12 +145,17 @@
                                     <th>Acc.In</th>
                                     <th>Buy</th>
                                     <th>Note</th>
+                                    <th class="@(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">Norm_Q</th>
+                                    <th class="@(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">ISSUED</th>
+                                    <th class="@(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">NEW_IT</th>
+                                    <th class="@(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">Manual</th>
+                                    <th class="@(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">TempSt</th>
                                 </tr>
                             </thead>
                             <tbody id="mrLineTableBody">
                                 @if (Model.Lines.Count == 0)
                                 {
-                                    <tr class="mr-line-empty"><td colspan="10" class="text-center text-muted">No line items.</td></tr>
+                                    <tr class="mr-line-empty"><td colspan="@(Model.ShowAdvancedDetailColumns ? 15 : 10)" class="text-center text-muted">No line items.</td></tr>
                                 }
                                 else
                                 {
@@ -186,9 +197,29 @@
                                             </td>
                                             <td>
                                                 <input type="text" class="form-control form-control-sm mr-line-note vni-font" value="@line.Note" />
+                                                <input type="hidden" class="mr-line-selected" value="@(line.Selected ? "true" : "false")" />
                                                 <input type="hidden" class="mr-line-normmain" value="@(line.NormMain?.ToString("0.##") ?? "0")" />
                                                 <input type="hidden" class="mr-line-price" value="@(line.Price?.ToString("0.##") ?? "0")" />
+                                            </td>
+                                            <td class="@(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">
+                                                <span class="mr-readonly-cell-text">@(line.NormQty?.ToString("0.##") ?? "0")</span>
+                                                <input type="hidden" class="mr-line-normqty" value="@(line.NormQty?.ToString("0.##") ?? "0")" />
+                                            </td>
+                                            <td class="@(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">
+                                                <span class="mr-readonly-cell-text">@(line.Issued?.ToString("0.##") ?? "0")</span>
+                                                <input type="hidden" class="mr-line-issued" value="@(line.Issued?.ToString("0.##") ?? "0")" />
+                                            </td>
+                                            <td class="text-center align-middle @(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">
+                                                <input type="checkbox" class="mr-line-flag-checkbox" disabled @(line.NewItem ? "checked" : string.Empty) />
                                                 <input type="hidden" class="mr-line-new-item" value="@(line.NewItem ? "true" : "false")" />
+                                            </td>
+                                            <td class="text-center align-middle @(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">
+                                                <input type="checkbox" class="mr-line-flag-checkbox" disabled @(line.ManualCheck ? "checked" : string.Empty) />
+                                                <input type="hidden" class="mr-line-manual-check" value="@(line.ManualCheck ? "true" : "false")" />
+                                            </td>
+                                            <td class="@(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">
+                                                <span class="mr-readonly-cell-text">@(line.TempStore?.ToString("0.##") ?? "0")</span>
+                                                <input type="hidden" class="mr-line-tempstore" value="@(line.TempStore?.ToString("0.##") ?? "0")" />
                                             </td>
                                         </tr>
                                     }
