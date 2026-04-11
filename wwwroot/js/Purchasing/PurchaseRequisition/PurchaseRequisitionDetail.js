@@ -564,8 +564,10 @@
                 row.innerHTML = `
                     <td class="prq-center">${selectorCell}</td>
                     <td><span class="vni-font">${escapeHtml(detail.mrRequestNo || "")}</span></td>
-                    <td>${detail.itemCode || ""}</td>
-                    <td class="prq-detail-col-item-name"><span class="tcvn3-font">${escapeHtml(detail.itemName || "")}</span></td>
+                    <td title="${escapeHtml(detail.itemCode || "")}">${escapeHtml(detail.itemCode || "")}</td>
+                    <td class="prq-detail-col-item-name" title="${escapeHtml(detail.itemName || "")}">
+                        <span class="tcvn3-font">${escapeHtml(detail.itemName || "")}</span>
+                    </td>
                     <td class="prq-center">${detail.unit || ""}</td>
                     <td class="prq-center">${formatNumber(detail.qtyFromM)}</td>
                     <td class="prq-center">${formatNumber(detail.qtyPur)}</td>

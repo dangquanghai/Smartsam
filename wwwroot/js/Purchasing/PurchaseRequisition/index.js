@@ -790,7 +790,7 @@
                         <input type="checkbox" class="prq-add-at-check" data-index="${index}" ${row.checked ? "checked" : ""} />
                     </td>
                     <td>${escapeHtml(row.requestNo)}</td>
-                    <td>${escapeHtml(row.itemCode)}</td>
+                    <td title="${escapeHtml(row.itemCode)}">${escapeHtml(row.itemCode)}</td>
                     <td class="prq-add-at-col-item-name"><span class="prq-add-at-ellipsis tcvn3-font" title="${escapeHtml(row.itemName)}">${escapeHtml(row.itemName)}</span></td>
                     <td class="prq-center">${formatNumber(row.buy)}</td>
                     <td class="prq-center">
