@@ -1241,7 +1241,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
   <li>Action by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
   <li>Action time: <b>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</b></li>
 </ul>
-{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">{WebUtility.HtmlEncode(PageTitle)}</a></p>")}
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">{WebUtility.HtmlEncode(PageTitle)}</a></p>")}
 <p>SmartSam System</p>"
                 : $@"
 <p>Dear {{RECIPIENT_LABEL}},</p>
@@ -1251,7 +1251,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
   <li>Action by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
   <li>Action time: <b>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</b></li>
 </ul>
-{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">{WebUtility.HtmlEncode(PageTitle)}</a></p>")}
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">{WebUtility.HtmlEncode(PageTitle)}</a></p>")}
 <p>SmartSam System</p>";
             var htmlBody = IsApproveSupplierNewMode
                 ? EmailTemplateHelper.WrapInNotifyTemplate("APPROVE SUPPLIER NEW", "#17a2b8", DateTime.Now, body)

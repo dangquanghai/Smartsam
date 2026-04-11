@@ -2,7 +2,7 @@
     "use strict";
 
     function getConfig() {
-        return window.purchaseRequisitionDetailPage || { canSave: false, canEditExistingDetailFields: false, canMoveToMr: false, canSelectDetail: false };
+        return window.purchaseRequisitionDetailPage || { canSave: false, canEditExistingDetailFields: false, canMoveToMr: false, canSelectDetail: false, isViewMode: false };
     }
 
     function getAllowedExtensions() {
@@ -96,6 +96,16 @@
             </div>`;
     }
 
+    function buildSingleLineEllipsisText(text, extraClass = "") {
+        const safeText = String(text ?? "").trim();
+        if (!safeText) {
+            return "";
+        }
+
+        const className = extraClass ? ` ${extraClass}` : "";
+        return `<span class="prq-add-detail-ellipsis${className}" title="${escapeHtml(safeText)}">${escapeHtml(safeText)}</span>`;
+    }
+
     function normalizeDetailRow(row) {
         if (!row || typeof row !== "object") {
             return {
@@ -108,6 +118,7 @@
                 qtyFromM: 0,
                 qtyPur: 0,
                 unitPrice: 0,
+                amount: 0,
                 remark: "",
                 supplierId: null,
                 supplierText: "",
@@ -126,6 +137,7 @@
             qtyFromM: row.qtyFromM ?? row.QtyFromM ?? 0,
             qtyPur: row.qtyPur ?? row.QtyPur ?? 0,
             unitPrice: row.unitPrice ?? row.UnitPrice ?? 0,
+            amount: row.amount ?? row.Amount ?? ((row.qtyPur ?? row.QtyPur ?? 0) * (row.unitPrice ?? row.UnitPrice ?? 0)),
             remark: row.remark ?? row.Remark ?? "",
             supplierId: row.supplierId ?? row.SupplierId ?? null,
             supplierText: row.supplierText ?? row.SupplierText ?? "",
@@ -152,6 +164,10 @@
         const detailAttachmentUploadButton = document.getElementById("btnDetailAttachmentUpload");
         const detailAttachmentDeleteButton = document.getElementById("btnDetailAttachmentDelete");
         const attachmentSelectors = Array.from(document.querySelectorAll(".prq-attachment-selector"));
+        const confirmActionModal = document.getElementById("prqConfirmActionModal");
+        const confirmActionMessage = document.getElementById("prqConfirmActionMessage");
+        const confirmActionYesButton = document.getElementById("btnPrqConfirmActionYes");
+        const confirmActionButtons = Array.from(document.querySelectorAll(".prq-confirm-action-btn"));
         const addDetailRows = Array.from(document.querySelectorAll("tr[data-add-detail-row='1']"));
         const viewDetailModal = document.getElementById("prqViewDetailModal");
         const openViewDetailButton = document.getElementById("btnOpenViewDetailModal");
@@ -200,6 +216,8 @@
             detailAttachmentError.textContent = "";
             detailAttachmentError.style.display = "none";
         };
+
+        let pendingConfirmedFormAction = "";
 
         const showAttachmentError = (message) => {
             if (!detailAttachmentError) return;
@@ -436,6 +454,7 @@
                 qtyFromM: detail.qtyFromM,
                 qtyPur: detail.qtyPur,
                 unitPrice: detail.unitPrice,
+                amount: detail.amount,
                 remark: detail.remark,
                 supplierId: detail.supplierId,
                 supplierText: detail.supplierText || "",
@@ -445,7 +464,7 @@
         };
 
         const updateSummary = () => {
-            const totalAmount = details.reduce((sum, detail) => sum + (toNumber(detail.qtyPur) * toNumber(detail.unitPrice)), 0);
+            const totalAmount = details.reduce((sum, detail) => sum + toNumber(detail.amount), 0);
             if (totalAmountEl) {
                 if ("value" in totalAmountEl) {
                     totalAmountEl.value = formatSummaryAmount(totalAmount);
@@ -459,6 +478,27 @@
             if (recordCountEl) {
                 recordCountEl.textContent = String(details.length);
             }
+        };
+
+        const syncDescriptionFromDetailRequestNos = () => {
+            const descriptionInput = document.getElementById("Requisition_Description");
+            if (!(descriptionInput instanceof HTMLTextAreaElement) || getConfig().isViewMode) {
+                return;
+            }
+
+            const uniqueRequestNos = [];
+            details.forEach((detail) => {
+                const requestNo = String(detail.mrRequestNo || "").trim();
+                if (!requestNo) {
+                    return;
+                }
+
+                if (!uniqueRequestNos.includes(requestNo)) {
+                    uniqueRequestNos.push(requestNo);
+                }
+            });
+
+            descriptionInput.value = uniqueRequestNos.join(", ");
         };
 
         const updateToMrButton = () => {
@@ -506,8 +546,8 @@
             }
 
             emptyRow.style.display = "none";
-            details.forEach((detail) => {
-                const amount = toNumber(detail.qtyPur) * toNumber(detail.unitPrice);
+            details.forEach((detail, index) => {
+                const amount = toNumber(detail.amount);
                 const rowKey = getRowKey(detail);
                 const row = document.createElement("tr");
                 row.dataset.row = "1";
@@ -516,21 +556,26 @@
                 if (Number(detail.detailId) <= 0) {
                     row.classList.add("prq-detail-row-unsaved");
                 }
-                const selectorCell = Number(detail.detailId) <= 0
-                    ? `<button type="button" class="btn btn-xs btn-outline-danger border prq-unsaved-remove" data-remove-temp-key="${escapeHtml(detail.tempKey || "")}" title="Remove"><i class="fas fa-trash"></i></button>`
-                    : (getConfig().canSelectDetail ? `<input type="checkbox" class="prq-detail-selector" ${selectedRowKey === rowKey ? "checked" : ""} />` : "");
+                const selectorCell = getConfig().isViewMode
+                    ? String(index + 1)
+                    : Number(detail.detailId) <= 0
+                        ? `<button type="button" class="btn btn-xs btn-outline-danger border prq-unsaved-remove" data-remove-temp-key="${escapeHtml(detail.tempKey || "")}" title="Remove"><i class="fas fa-trash"></i></button>`
+                        : (getConfig().canSelectDetail ? `<input type="checkbox" class="prq-detail-selector" ${selectedRowKey === rowKey ? "checked" : ""} />` : "");
                 row.innerHTML = `
                     <td class="prq-center">${selectorCell}</td>
+                    <td><span class="vni-font">${escapeHtml(detail.mrRequestNo || "")}</span></td>
                     <td>${detail.itemCode || ""}</td>
-                    <td><span class="tcvn3-font">${escapeHtml(detail.itemName || "")}</span></td>
+                    <td class="prq-detail-col-item-name"><span class="tcvn3-font">${escapeHtml(detail.itemName || "")}</span></td>
                     <td class="prq-center">${detail.unit || ""}</td>
                     <td class="prq-center">${formatNumber(detail.qtyFromM)}</td>
                     <td class="prq-center">${formatNumber(detail.qtyPur)}</td>
                     <td class="prq-center">${getConfig().canEditExistingDetailFields
                         ? `<input type="text" inputmode="decimal" class="form-control form-control-sm prq-detail-edit-price" value="${formatNumber(detail.unitPrice)}" />`
                         : formatNumber(detail.unitPrice)}</td>
-                    <td class="prq-center prq-detail-amount">${formatNumber(amount)}</td>
-                    <td class="prq-center">${getConfig().canEditExistingDetailFields
+                    <td class="prq-center prq-detail-col-amount">${getConfig().canEditExistingDetailFields
+                        ? `<input type="text" inputmode="decimal" class="form-control form-control-sm prq-detail-edit-amount" value="${formatNumber(amount)}" />`
+                        : formatNumber(amount)}</td>
+                    <td class="prq-center prq-detail-col-remark">${getConfig().canEditExistingDetailFields
                         ? `<input type="text" class="form-control form-control-sm prq-detail-edit-remark vni-font" value="${escapeHtml(detail.remark || "")}" />`
                         : `<span class="vni-font">${escapeHtml(detail.remark || "")}</span>`}</td>
                     <td><span class="vni-font">${escapeHtml(detail.supplierText || "")}</span></td>`;
@@ -543,14 +588,37 @@
                 const selectedDetail = details.find((detail) => getRowKey(detail) === selectedRowKey) || null;
                 setSelectedDetail(selectedDetail);
             }
+            syncDescriptionFromDetailRequestNos();
             syncHiddenInput();
             updateSummary();
             updateAddDetailAvailability();
         };
 
-        if (!getConfig().canSave) {
-            renderRows();
-        }
+        confirmActionButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                pendingConfirmedFormAction = button.getAttribute("data-formaction") || "";
+                const actionLabel = String(button.getAttribute("data-action-label") || "continue").trim().toLowerCase();
+                if (confirmActionMessage) {
+                    confirmActionMessage.textContent = `Are you sure you want to ${actionLabel} this purchase requisition?`;
+                }
+                if (confirmActionModal && window.jQuery) {
+                    window.jQuery(confirmActionModal).modal("show");
+                }
+            });
+        });
+
+        confirmActionYesButton?.addEventListener("click", () => {
+            const detailForm = document.getElementById("prqDetailForm");
+            if (!(detailForm instanceof HTMLFormElement) || !pendingConfirmedFormAction) {
+                return;
+            }
+
+            detailForm.action = pendingConfirmedFormAction;
+            if (confirmActionModal && window.jQuery) {
+                window.jQuery(confirmActionModal).modal("hide");
+            }
+            detailForm.submit();
+        });
 
         rowsContainer.addEventListener("input", (ev) => {
             const target = ev.target;
@@ -572,15 +640,19 @@
             if (target.classList.contains("prq-detail-edit-price")) {
                 target.value = sanitizeNonNegativeDecimal(target.value);
                 detail.unitPrice = toNumber(target.value);
+                detail.amount = toNumber(detail.qtyPur) * toNumber(detail.unitPrice);
+            } else if (target.classList.contains("prq-detail-edit-amount")) {
+                target.value = sanitizeNonNegativeDecimal(target.value);
+                detail.amount = toNumber(target.value);
             } else if (target.classList.contains("prq-detail-edit-remark")) {
                 detail.remark = target.value || "";
             } else {
                 return;
             }
 
-            const amountCell = row.querySelector(".prq-detail-amount");
-            if (amountCell) {
-                amountCell.textContent = formatNumber(toNumber(detail.qtyPur) * toNumber(detail.unitPrice));
+            const amountInput = row.querySelector(".prq-detail-edit-amount");
+            if (amountInput instanceof HTMLInputElement) {
+                amountInput.value = formatNumber(detail.amount);
             }
 
             syncHiddenInput();
@@ -593,7 +665,7 @@
                 return;
             }
 
-            if (target.classList.contains("prq-detail-edit-price")) {
+            if (target.classList.contains("prq-detail-edit-price") || target.classList.contains("prq-detail-edit-amount")) {
                 clampNonNegativeDecimalInput(target);
                 target.dispatchEvent(new Event("input", { bubbles: true }));
             }
@@ -732,10 +804,10 @@
             const specificationCell = row.querySelector(".prq-add-detail-specification");
             const noteCell = row.querySelector(".prq-add-detail-note");
             if (specificationCell) {
-                specificationCell.innerHTML = buildCollapsibleText(row.getAttribute("data-specification") || "", 36);
+                specificationCell.innerHTML = buildSingleLineEllipsisText(row.getAttribute("data-specification") || "", "vni-font");
             }
             if (noteCell) {
-                noteCell.innerHTML = buildCollapsibleText(row.getAttribute("data-note") || "", 34);
+                noteCell.innerHTML = buildSingleLineEllipsisText(row.getAttribute("data-note") || "", "vni-font");
             }
             checkbox?.addEventListener("change", () => {
                 row.classList.toggle("prq-detail-row-selected", checkbox.checked);
@@ -801,6 +873,7 @@
                     qtyFromM: mrDetailId > 0 ? initialAllocatedQty + baseBuy : baseBuy,
                     qtyPur: qtyPurValue,
                     unitPrice: unitPrice,
+                    amount: qtyPurValue * unitPrice,
                     remark: specification,
                     supplierId: null,
                     supplierText: "",

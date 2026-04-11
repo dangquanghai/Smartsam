@@ -36,7 +36,7 @@
 }
 
 #prqAddDetailModal .modal-dialog {
-    max-width: 1140px;
+    max-width: min(96vw, 1720px);
 }
 
 .prq-detail-table-wrap thead th {
@@ -44,6 +44,17 @@
     top: 0;
     z-index: 3;
     background: #f8f9fa;
+}
+
+.prq-detail-table-wrap table th,
+.prq-detail-table-wrap table td,
+.prq-add-detail-table-wrap table th,
+.prq-add-detail-table-wrap table td,
+#prqAttachmentModal table th,
+#prqAttachmentModal table td,
+.prq-view-detail-table-wrap table th,
+.prq-view-detail-table-wrap table td {
+    vertical-align: middle;
 }
 
 .prq-add-detail-table-wrap thead th {
@@ -174,6 +185,54 @@
 
 #prqViewDetailModal .modal-dialog {
     max-width: 1280px;
+}
+
+.prq-detail-col-item-name {
+    max-width: 300px;
+    white-space: normal !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+.prq-detail-col-remark {
+    width: 400px;
+    min-width: 400px;
+    max-width: 400px;
+    white-space: normal !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+.prq-add-detail-modal-dialog {
+    max-width: min(96vw, 1720px);
+}
+
+.prq-add-detail-col-item-name {
+    max-width: 300px;
+}
+
+.prq-add-detail-col-specification {
+    max-width: 200px;
+}
+
+.prq-add-detail-col-note {
+    max-width: 400px;
+}
+
+.prq-add-detail-specification {
+    max-width: 200px;
+}
+
+.prq-add-detail-note {
+    max-width: 400px;
+}
+
+.prq-add-detail-ellipsis {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .prq-view-detail-filter-row {

@@ -128,11 +128,10 @@
                                 <div class="prq-page-size-form d-inline-flex mr-2">
                                     <label class="mb-0 prq-page-size-label" for="prqPageSize">Show</label>
                                     <select id="prqPageSize" class="form-control form-control-sm prq-page-size-select">
-                                        <option value="10" selected="@(Model.Filter.PageSize == 10 ? "selected" : null)">10</option>
-                                        <option value="20" selected="@(Model.Filter.PageSize == 20 ? "selected" : null)">20</option>
-                                        <option value="50" selected="@(Model.Filter.PageSize == 50 ? "selected" : null)">50</option>
-                                        <option value="100" selected="@(Model.Filter.PageSize == 100 ? "selected" : null)">100</option>
-                                        <option value="200" selected="@(Model.Filter.PageSize == 200 ? "selected" : null)">200</option>
+                                        @foreach (var pageSizeOption in Model.PageSizeOptions)
+                                        {
+                                            <option value="@pageSizeOption" selected="@(Model.Filter.PageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                        }
                                     </select>
                                 </div>
                                 <ul class="pagination pagination-sm mb-0 d-inline-flex" id="pagination">
@@ -196,28 +195,17 @@
                                                     @if (Model.CanEditRow(row.StatusId) || Model.CanApproveRow(row) || Model.CanViewDetailRow(row.StatusId))
                                                     {
                                                         var accessMode = Model.GetAccessMode(row);
-                                                        var linkClass = accessMode == "view" ? "prq-row-link prq-row-link-view text-bold" : "prq-row-link text-bold";
+                                                        var linkClass = "prq-row-link prq-row-link-request-no text-bold";
                                                         <a href="@Url.Page("./PurchaseRequisitionDetail", new { id = row.Id, mode = accessMode })" class="@linkClass" data-id="@row.Id">@row.RequestNo</a>
                                                     }
                                                     else
                                                     {
-                                                        <span class="text-bold">@row.RequestNo</span>
+                                                        <span class="prq-row-link-request-no text-bold">@row.RequestNo</span>
                                                     }
                                                 </td>
                                                 <td>@row.RequestDate.ToString("dd/MM/yyyy")</td>
                                                 <td class="prq-description-column">
-                                                    <div class="prq-description-cell">
-                                                        @if (Model.NeedCollapseDescription(row.Description))
-                                                        {
-                                                            <span class="prq-description-preview vni-font">@Model.GetDescriptionPreview(row.Description)</span>
-                                                            <button type="button" class="prq-read-more">Read more</button>
-                                                            <span class="prq-description-full d-none vni-font">@row.Description</span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="prq-description-full vni-font">@row.Description</span>
-                                                        }
-                                                    </div>
+                                                    <span class="prq-description-ellipsis vni-font" title="@row.Description">@row.Description</span>
                                                 </td>
                                                 <td>@row.StatusName</td>
                                                 <td>@row.PurchaserCode</td>
@@ -258,7 +246,7 @@
 </section>
 
 <div class="modal fade" id="prqAddAtModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-xl" role="document">
+    <div class="modal-dialog modal-xl prq-add-at-modal-dialog" role="document">
         <div class="modal-content">
             <form method="post" enctype="multipart/form-data" asp-page="./Index" asp-page-handler="AddAt" id="prqAddAtForm">
                 <div class="modal-header py-2">
@@ -286,11 +274,11 @@
                     <div class="form-row">
                         <div class="form-group col-md-4">
                             <label class="mb-1">No.</label>
-                            <input id="prqAddAtRequestNoDisplay" class="form-control form-control-sm vni-font" readonly />
+                            <input id="prqAddAtRequestNoDisplay" class="form-control form-control-sm vni-font" />
                         </div>
                         <div class="form-group col-md-4">
                             <label class="mb-1">Date</label>
-                            <input id="prqAddAtRequestDateDisplay" class="form-control form-control-sm" readonly />
+                            <input id="prqAddAtRequestDateDisplay" type="date" class="form-control form-control-sm" />
                         </div>
                         <div class="form-group col-md-4">
                             <label class="mb-1">Currency</label>
@@ -316,7 +304,7 @@
                             <i class="fas fa-check"></i> Save
                         </button>
                         <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
-                            <i class="fas fa-times"></i> Close
+                            <i class="fas fa-arrow-left"></i> Back to list
                         </button>
                     </div>
 
@@ -327,13 +315,13 @@
                                     <th style="width:70px;">Check</th>
                                     <th style="width:110px;">RequestNo</th>
                                     <th style="width:140px;">Item Code</th>
-                                    <th>Item Name</th>
+                                    <th class="prq-add-at-col-item-name">Item Name</th>
                                     <th style="width:90px;" class="prq-center">BUY</th>
                                     <th style="width:110px;" class="prq-center prq-sugbuy-header">SugBuy</th>
                                     <th style="width:80px;" class="prq-center">Unit</th>
                                     <th style="width:100px;" class="prq-center">U.Price</th>
-                                    <th style="width:220px;">Specification</th>
-                                    <th style="width:260px;">Note</th>
+                                    <th class="prq-add-at-col-specification">Specification</th>
+                                    <th class="prq-add-at-col-note">Note</th>
                                 </tr>
                             </thead>
                             <tbody id="prqAddAtDetailRows">
@@ -350,7 +338,7 @@
 </div>
 
 <div class="modal fade" id="prqViewDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-xl" role="document">
+    <div class="modal-dialog modal-xl prq-view-detail-modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header py-2">
                 <h5 class="modal-title">Purchase Requisition Detail</h5>
@@ -423,14 +411,23 @@
                     </div>
                 </div>
 
+                <div class="d-flex justify-content-start align-items-center mt-2 flex-wrap mb-2">
+                    <button type="button" class="btn btn-sm btn-action-export border mr-2 btn-primary" id="btnPrqViewDetailReport">
+                        <i class="fas fa-file-pdf"></i> Report
+                    </button>
+                    <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
+                        <i class="fas fa-arrow-left"></i> Back to list
+                    </button>
+                </div>
+
                 <div class="table-responsive prq-view-detail-table-wrap">
                     <table class="table table-sm table-bordered table-hover mb-0 text-nowrap" id="prqViewDetailTable">
                         <thead class="thead-light">
                             <tr>
                                 <th style="width:120px;">Req No.</th>
                                 <th style="width:110px;">Req Date</th>
-                                <th style="width:260px;">Description</th>
-                                <th>Item Code / Name</th>
+                                <th class="prq-view-detail-col-description">Description</th>
+                                <th class="prq-view-detail-col-item">Item Code / Name</th>
                                 <th style="width:100px;" class="prq-center">PR Qty.</th>
                                 <th style="width:100px;" class="prq-center">Rec Qty.</th>
                             </tr>
@@ -451,24 +448,14 @@
                         <div class="prq-page-size-form d-inline-flex mr-2">
                             <label class="mb-0 prq-view-detail-page-size-label" for="prqViewDetailPageSize">Show</label>
                             <select id="prqViewDetailPageSize" class="form-control form-control-sm prq-page-size-select">
-                                <option value="10">10</option>
-                                <option value="20">20</option>
-                                <option value="50">50</option>
-                                <option value="100">100</option>
-                                <option value="200">200</option>
+                                @foreach (var pageSizeOption in Model.PageSizeOptions)
+                                {
+                                    <option value="@pageSizeOption" selected="@(Model.DefaultPageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                }
                             </select>
                         </div>
                         <ul class="pagination pagination-sm mb-0 d-inline-flex" id="prqViewDetailPagination"></ul>
                     </div>
-                </div>
-
-                <div class="d-flex justify-content-start align-items-center mt-2 flex-wrap">
-                    <button type="button" class="btn btn-sm btn-action-export border mr-2" id="btnPrqViewDetailReport">
-                        <i class="fas fa-file-pdf"></i> Report
-                    </button>
-                    <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
-                        <i class="fas fa-times"></i> Close
-                    </button>
                 </div>
             </div>
         </div>
@@ -479,7 +466,7 @@
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content border-danger">
             <div class="modal-header bg-danger text-white py-2">
-                <h5 class="modal-title">Thông báo lỗi</h5>
+                <h5 class="modal-title">Error</h5>
                 <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
