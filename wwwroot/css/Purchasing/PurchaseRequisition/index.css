@@ -12,6 +12,15 @@
     box-shadow: inset 0 -1px 0 #dee2e6;
 }
 
+.prq-table th,
+.prq-table td,
+.prq-add-at-table-wrap table th,
+.prq-add-at-table-wrap table td,
+.prq-view-detail-table-wrap table th,
+.prq-view-detail-table-wrap table td {
+    vertical-align: middle;
+}
+
 .prq-row {
     cursor: pointer;
 }
@@ -86,9 +95,9 @@
 }
 
 .prq-description-column {
-    width: 320px;
-    min-width: 320px;
-    max-width: 320px;
+    width: 400px;
+    min-width: 400px;
+    max-width: 400px;
 }
 
 .prq-description-cell {
@@ -122,6 +131,21 @@
 .prq-row-link-view:focus {
     color: #212529;
     font-weight: 700;
+}
+
+.prq-row-link-request-no,
+.prq-row-link-request-no:hover,
+.prq-row-link-request-no:focus {
+    color: #007bff;
+    font-weight: 700;
+}
+
+.prq-description-ellipsis {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .prq-table-paging-info {
@@ -189,8 +213,12 @@
     overflow: auto;
 }
 
-#prqViewDetailModal .modal-dialog {
-    max-width: 1280px;
+#prqAddAtModal .prq-add-at-modal-dialog {
+    max-width: min(96vw, 1720px);
+}
+
+#prqViewDetailModal .prq-view-detail-modal-dialog {
+    max-width: min(96vw, 1720px);
 }
 
 .prq-view-detail-filter-row {
@@ -240,6 +268,22 @@
     background: #f8f9fa;
 }
 
+.prq-view-detail-col-description {
+    max-width: 400px;
+}
+
+.prq-view-detail-col-item {
+    max-width: 300px;
+}
+
+.prq-view-detail-ellipsis {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .prq-view-detail-page-size-label {
     margin-bottom: 0;
     font-size: 0.75rem;
@@ -282,6 +326,32 @@
     word-break: break-word;
     overflow-wrap: anywhere;
     line-height: 1.35;
+}
+
+.prq-add-at-col-item-name {
+    width: 200px;
+    min-width: 200px;
+    max-width: 200px;
+}
+
+.prq-add-at-col-specification {
+    width: 200px;
+    min-width: 200px;
+    max-width: 200px;
+}
+
+.prq-add-at-col-note {
+    width: 400px;
+    min-width: 400px;
+    max-width: 400px;
+}
+
+.prq-add-at-ellipsis {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .prq-add-at-file-input {

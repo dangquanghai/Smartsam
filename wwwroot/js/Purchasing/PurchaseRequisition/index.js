@@ -98,6 +98,16 @@
             </div>`;
     }
 
+    function buildSingleLineEllipsisText(value, extraClass = "") {
+        const text = String(value ?? "").trim();
+        if (!text) {
+            return "";
+        }
+
+        const className = extraClass ? ` ${extraClass}` : "";
+        return `<span class="prq-add-at-ellipsis${className}" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
+    }
+
     function buildDetailUrl(id, mode) {
         const base = getConfig().detailUrlBase || "";
         const params = new URLSearchParams();
@@ -405,11 +415,12 @@
                 rows.forEach((row) => {
                     const tr = document.createElement("tr");
                     tr.dataset.viewDetailRow = "1";
+                    const itemText = `${escapeHtml(row.itemCode || "")}${row.itemName ? ` / ${escapeHtml(row.itemName)}` : ""}`;
                     tr.innerHTML = `
                         <td>${escapeHtml(row.requestNo || "")}</td>
                         <td>${escapeHtml(row.requestDateText || "")}</td>
-                        <td>${buildCollapsibleText(row.description || "", 60)}</td>
-                        <td class="tcvn3-font">${escapeHtml(row.itemCode || "")}${row.itemName ? ` / ${escapeHtml(row.itemName)}` : ""}</td>
+                        <td class="prq-view-detail-col-description">${buildSingleLineEllipsisText(row.description || "", "vni-font prq-view-detail-ellipsis")}</td>
+                        <td class="prq-view-detail-col-item"><span class="prq-view-detail-ellipsis tcvn3-font" title="${itemText}">${itemText}</span></td>
                         <td class="prq-center">${formatNumber(row.prQty || 0)}</td>
                         <td class="prq-center">${formatNumber(row.recQty || 0)}</td>`;
                     viewDetailRows.appendChild(tr);
@@ -744,6 +755,26 @@
             currencyIdHiddenEl.value = currencySelectEl.value || "1";
         };
 
+        const syncDescriptionFromSelection = () => {
+            const uniqueRequestNos = [];
+            sourceRows
+                .filter((row) => row.checked)
+                .forEach((row) => {
+                    const requestNo = String(row.requestNo || "").trim();
+                    if (!requestNo) {
+                        return;
+                    }
+
+                    if (!uniqueRequestNos.includes(requestNo)) {
+                        uniqueRequestNos.push(requestNo);
+                    }
+                });
+
+            descriptionEl.value = uniqueRequestNos.length > 0
+                ? `MR ${uniqueRequestNos.join(", ")}`
+                : "";
+        };
+
         const renderRows = () => {
             rowsContainer.querySelectorAll("tr[data-row='1']").forEach((row) => row.remove());
             if (!sourceRows.length) {
@@ -761,16 +792,16 @@
                         <input type="checkbox" class="prq-add-at-check" data-index="${index}" ${row.checked ? "checked" : ""} />
                     </td>
                     <td>${escapeHtml(row.requestNo)}</td>
-                    <td>${escapeHtml(row.itemCode)}</td>
-                    <td class="tcvn3-font">${escapeHtml(row.itemName)}</td>
+                    <td title="${escapeHtml(row.itemCode)}">${escapeHtml(row.itemCode)}</td>
+                    <td class="prq-add-at-col-item-name"><span class="prq-add-at-ellipsis tcvn3-font" title="${escapeHtml(row.itemName)}">${escapeHtml(row.itemName)}</span></td>
                     <td class="prq-center">${formatNumber(row.buy)}</td>
                     <td class="prq-center">
                         <input type="text" inputmode="decimal" class="form-control form-control-sm prq-add-at-sugbuy" data-index="${index}" value="${formatNumber(row.sugBuy)}" />
                     </td>
                     <td class="prq-center">${escapeHtml(row.unit)}</td>
                     <td class="prq-center">${formatNumber(row.unitPrice)}</td>
-                    <td>${buildCollapsibleText(row.specification, 36)}</td>
-                    <td>${buildCollapsibleText(row.note, 34)}</td>`;
+                    <td class="prq-add-at-col-specification">${buildSingleLineEllipsisText(row.specification, "vni-font")}</td>
+                    <td class="prq-add-at-col-note">${buildSingleLineEllipsisText(row.note, "vni-font")}</td>`;
                 rowsContainer.appendChild(tr);
             });
         };
@@ -873,6 +904,8 @@
             loadSourceRows();
         });
 
+        requestNoDisplayEl.addEventListener("input", syncHiddenValues);
+        requestDateDisplayEl.addEventListener("change", syncHiddenValues);
         currencySelectEl.addEventListener("change", syncHiddenValues);
         attachmentEl.addEventListener("change", validateAttachment);
 
@@ -887,6 +920,7 @@
                 if (row) {
                     row.classList.toggle("selected", check.checked);
                 }
+                syncDescriptionFromSelection();
                 return;
             }
 
