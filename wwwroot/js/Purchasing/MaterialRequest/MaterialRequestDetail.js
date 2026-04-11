@@ -851,19 +851,6 @@ function savePurchaserEditableLines($form, $tableBody, $targetRow) {
 }
 
 function addItemToGrid($tableBody, item) {
-    const newItemCode = (item.itemCode || '').toString().trim().toLowerCase();
-    if (newItemCode) {
-        const $existed = $tableBody.find('.mr-line-row').filter(function () {
-            const rowCode = ($(this).find('.mr-line-itemcode').val() || '').toString().trim().toLowerCase();
-            return rowCode === newItemCode;
-        });
-
-        if ($existed.length > 0) {
-            focusErrorField($existed.first().find('.mr-line-order'));
-            return false;
-        }
-    }
-
     $tableBody.append(createLineRowHtml(item));
     const $newRow = $tableBody.find('.mr-line-row').last();
     const $form = $tableBody.closest('form');
