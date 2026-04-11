@@ -65,6 +65,20 @@
     margin-right: 0 !important;
 }
 
+.po-detail-itemname,
+.po-pr-itemname {
+    min-width: 260px;
+}
+
+.po-detail-itemcode,
+.po-pr-itemcode {
+    min-width: 110px;
+}
+
+.po-wide-table {
+    min-width: 1240px;
+}
+
 /* PO page only: keep Select2 dropdowns below Bootstrap modals. */
 .purchase-order-header-layout .select2-container,
 .purchase-order-header-layout .select2-container--open,

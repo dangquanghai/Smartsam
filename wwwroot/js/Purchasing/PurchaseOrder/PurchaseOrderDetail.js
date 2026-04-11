@@ -185,6 +185,14 @@ function bindMainEvents(mode) {
         $('#purchaseOrderEvaluateModal').modal('show');
     });
 
+    $('#btnPurchaserApprove').on('click', function () {
+        if (!confirm('Approve this purchase order and send it to CFO?')) {
+            return;
+        }
+
+        $('#poPurchaserApproveForm').submit();
+    });
+
     $('#btnConfirmEvaluate').on('click', function () {
         const point = $('input[name="estimatePointOption"]:checked').val();
         if (!point) {
@@ -326,7 +334,7 @@ function renderDetailRows() {
         return `
             <tr data-key="${escapeHtml(row.tempKey)}">
                 <td></td>
-                <td>${escapeHtml(row.itemCode)}</td>
+                <td class="po-detail-itemcode">${escapeHtml(row.itemCode)}</td>
                 <td class="tcvn3-font">${escapeHtml(row.itemName)}</td>
                 <td>${escapeHtml(row.unit)}</td>
                 <td><input type="text" class="form-control form-control-sm text-right po-detail-qty" value="${formatNumber(row.quantity)}" ${canSave ? '' : 'readonly'} /></td>
@@ -358,7 +366,7 @@ function renderPrLineRows() {
             <tr data-index="${index}">
                 <td class="text-center"><input type="checkbox" class="po-pr-check" /></td>
                 <td>${escapeHtml(row.itemCode || row.ItemCode || '')}</td>
-                <td class="tcvn3-font">${escapeHtml(row.itemName || row.ItemName || '')}</td>
+                <td class="tcvn3-font po-pr-itemname">${escapeHtml(row.itemName || row.ItemName || '')}</td>
                 <td>${escapeHtml(row.unit || row.Unit || '')}</td>
                 <td class="text-right">${formatNumber(row.quantity || row.Quantity || 0)}</td>
                 <td class="text-right">${formatNumber(row.unitPrice || row.UnitPrice || 0)}</td>
@@ -383,6 +391,10 @@ function addSelectedPrLines() {
         return;
     }
 
+    const supplierId = $('#SupplierID').val();
+    const supplierText = ($('#SupplierID option:selected').text() || '').trim();
+    const expectedSupplierId = supplierId ? parseInt(supplierId, 10) : 0;
+
     selectedIndexes.forEach(function (index) {
         const source = purchaseOrderPrLines[index];
         if (!source) {
@@ -398,7 +410,9 @@ function addSelectedPrLines() {
             UnitPrice: source.unitPrice || source.UnitPrice || 0,
             POAmount: toNumber(source.quantity || source.Quantity || 0) * toNumber(source.unitPrice || source.UnitPrice || 0),
             Note: source.remark || source.Remark || '',
-            MRRequestNo: $('#PRID option:selected').text() || ''
+            MRRequestNo: $('#PRID option:selected').text() || '',
+            SupplierID: expectedSupplierId || null,
+            SupplierText: supplierText
         }));
     });
 

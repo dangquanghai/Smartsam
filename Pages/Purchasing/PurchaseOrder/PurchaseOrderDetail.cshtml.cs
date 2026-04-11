@@ -33,6 +33,7 @@ public class PurchaseOrderDetailModel : BasePageModel
 
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
     public bool CanSave { get; private set; }
+    public bool CanPurchaserApprove { get; private set; }
     public bool CanEvaluate { get; private set; }
     public bool CanApprove { get; private set; }
     public bool CanBackToProcessing { get; private set; }
@@ -175,6 +176,54 @@ public class PurchaseOrderDetailModel : BasePageModel
         SetActionFlags();
         DetailsJson = JsonSerializer.Serialize(Details);
         return Page();
+    }
+
+    public IActionResult OnPostPurchaserApprove()
+    {
+        var prepare = PrepareExistingRecordForWorkflow();
+        if (prepare != null)
+        {
+            return prepare;
+        }
+
+        if (!CanPurchaserApprove)
+        {
+            TempData["SuccessMessage"] = "You have no permission to approve this purchase order.";
+            return RedirectToCurrentDetail();
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        using var trans = conn.BeginTransaction();
+        try
+        {
+            using var cmd = new SqlCommand(@"
+            UPDATE dbo.PC_PO
+            SET PurId = @EmployeeID,
+                PurApproDate = @ApproveDate,
+                StatusID = 2,
+                noted = ''
+            WHERE POID = @POID
+            AND ISNULL(StatusID, 0) = 1", conn, trans);
+            cmd.Parameters.Add("@POID", SqlDbType.Int).Value = Header.Id;
+            cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = _workflowUser.EmployeeId;
+            cmd.Parameters.Add("@ApproveDate", SqlDbType.VarChar, 12).Value = DateTime.Now.ToString("dd/MM/yyyy");
+
+            if (cmd.ExecuteNonQuery() <= 0)
+            {
+                throw new InvalidOperationException("Purchaser approval failed because purchase order is not in processing status.");
+            }
+
+            trans.Commit();
+            TempData["SuccessMessage"] = "Purchase order sent to approval successfully.";
+        }
+        catch (Exception ex)
+        {
+            trans.Rollback();
+            TempData["SuccessMessage"] = ex.Message;
+        }
+
+        return RedirectToCurrentDetail("view");
     }
 
     public IActionResult OnGetPrLines(int prId)
@@ -980,19 +1029,13 @@ public class PurchaseOrderDetailModel : BasePageModel
 
     private void SetActionFlags()
     {
-        if (IsViewMode)
-        {
-            CanSave = false;
-            CanEvaluate = false;
-            CanApprove = false;
-            CanBackToProcessing = false;
-            return;
-        }
-
         var effectivePermissions = GetEffectivePermissionsByStatus(Header.StatusId <= 0 ? 1 : Header.StatusId);
-        CanSave = Mode == "add"
+        CanSave = !IsViewMode && (Mode == "add"
             ? effectivePermissions.Contains(PermissionAdd)
-            : effectivePermissions.Contains(PermissionEdit);
+            : effectivePermissions.Contains(PermissionEdit));
+        CanPurchaserApprove = Header.Id > 0
+            && Header.StatusId == 1
+            && (IsAdminRole() || _workflowUser.IsPurchaser);
         // Evaluate chi hien sau khi CFO va BOD da ghi nhan xong.
         CanEvaluate = Header.Id > 0
             && Header.StatusId == 2
