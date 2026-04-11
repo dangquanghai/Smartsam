@@ -2610,19 +2610,91 @@ public class MaterialRequestService
         IReadOnlyList<MaterialRequestLineDto> lines,
         CancellationToken cancellationToken)
     {
-        const string deleteLineSql = "DELETE FROM dbo.MATERIAL_REQUEST_DETAIL WHERE REQUEST_NO = @RequestNo";
-        await using (var deleteCmd = new SqlCommand(deleteLineSql, conn, tx))
+        const string existingIdSql = @"
+            SELECT ID
+            FROM dbo.MATERIAL_REQUEST_DETAIL
+            WHERE REQUEST_NO = @RequestNo
+            ORDER BY ID";
+
+        var existingIds = new List<int>();
+        await using (var existingCmd = new SqlCommand(existingIdSql, conn, tx))
         {
-            AddNumeric18_0Param(deleteCmd, "@RequestNo", requestNo);
-            await deleteCmd.ExecuteNonQueryAsync(cancellationToken);
+            AddNumeric18_0Param(existingCmd, "@RequestNo", requestNo);
+            await using var reader = await existingCmd.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                if (!reader.IsDBNull(0))
+                {
+                    existingIds.Add(Convert.ToInt32(reader[0]));
+                }
+            }
         }
 
-        if (lines.Count == 0)
+        var postedIds = new HashSet<int>();
+        foreach (var line in lines)
         {
-            return;
+            if (line.Id.HasValue && line.Id.Value > 0)
+            {
+                postedIds.Add(line.Id.Value);
+            }
         }
 
-        const string insertLineSql = @"
+        const string deleteLineSql = "DELETE FROM dbo.MATERIAL_REQUEST_DETAIL WHERE REQUEST_NO = @RequestNo AND ID = @LineId";
+        const string updateLineSql = @"
+            UPDATE dbo.MATERIAL_REQUEST_DETAIL
+            SET ITEMCODE = @ItemCode,
+                UNIT = @Unit,
+                NORM_Q = @NormQty,
+                NOT_RECEIPT = @NotReceipt,
+                NEW_ORDER = @OrderQty,
+                INSTOCK = @InStock,
+                acctualyInventory = @AccIn,
+                BUY = @Buy,
+                ISSUED = @Issued,
+                NEW_ITEM = @NewItem,
+                SELECTED = @Selected,
+                NORM_Q_MAIN = @NormMain,
+                PRICE = @Price,
+                NOTE = @Note,
+                ManualCheck = @ManualCheck,
+                TempStore = @TempStore
+            WHERE ID = @LineId
+              AND REQUEST_NO = @RequestNo";
+
+        foreach (var line in lines)
+        {
+            if (line.Id.HasValue && line.Id.Value > 0)
+            {
+                await using var updateCmd = new SqlCommand(updateLineSql, conn, tx);
+                AddNumeric18_0Param(updateCmd, "@RequestNo", requestNo);
+                AddNumeric18_0Param(updateCmd, "@LineId", line.Id.Value);
+                Helper.AddParameter(updateCmd, "@ItemCode", (line.ItemCode ?? string.Empty).Trim(), SqlDbType.VarChar, 20);
+                Helper.AddParameter(updateCmd, "@Unit", (line.Unit ?? string.Empty).Trim(), SqlDbType.VarChar, 50);
+                AddDecimal18_2Param(updateCmd, "@OrderQty", line.OrderQty ?? 0m);
+                AddDecimal18_2Param(updateCmd, "@NotReceipt", line.NotReceipt ?? 0m);
+                AddDecimal18_2Param(updateCmd, "@InStock", line.InStock ?? 0m);
+                AddDecimal18_2Param(updateCmd, "@AccIn", line.AccIn ?? 0m);
+                AddDecimal18_2Param(updateCmd, "@Buy", line.Buy ?? 0m);
+                AddDecimal18_2Param(updateCmd, "@NormQty", line.NormQty ?? 0m);
+                AddDecimal18_2Param(updateCmd, "@NormMain", line.NormMain ?? 0m);
+                AddDecimal18_2Param(updateCmd, "@Price", line.Price ?? 0m);
+                Helper.AddParameter(updateCmd, "@Note", (line.Note ?? string.Empty).Trim(), SqlDbType.VarChar, 255);
+                Helper.AddParameter(updateCmd, "@NewItem", line.NewItem, SqlDbType.Bit);
+                Helper.AddParameter(updateCmd, "@Selected", line.Selected, SqlDbType.Bit);
+                Helper.AddParameter(updateCmd, "@Issued", line.Issued ?? 0m);
+                Helper.AddParameter(updateCmd, "@ManualCheck", line.ManualCheck, SqlDbType.Bit);
+                AddDecimal18_2Param(updateCmd, "@TempStore", line.TempStore ?? 0m);
+
+                var affected = await updateCmd.ExecuteNonQueryAsync(cancellationToken);
+                if (affected == 0)
+                {
+                    throw new InvalidOperationException("Material Request detail row not found.");
+                }
+
+                continue;
+            }
+
+            const string insertLineSql = @"
             INSERT INTO dbo.MATERIAL_REQUEST_DETAIL
             (
                 REQUEST_NO, ITEMCODE, UNIT, BEGIN_Q, RECEIPT_Q, USING_Q, END_Q,
@@ -2632,12 +2704,10 @@ public class MaterialRequestService
             VALUES
             (
                 @RequestNo, @ItemCode, @Unit, 0, 0, 0, 0,
-                @NormQty, @NotReceipt, @OrderQty, @InStock, @AccIn, @Buy, 0,
+                @NormQty, @NotReceipt, @OrderQty, @InStock, @AccIn, @Buy, @Issued,
                 @NewItem, @Selected, @NormMain, @Price, @Note, 0, @ManualCheck, @TempStore, 0
             )";
 
-        foreach (var line in lines)
-        {
             await using var lineCmd = new SqlCommand(insertLineSql, conn, tx);
             AddNumeric18_0Param(lineCmd, "@RequestNo", requestNo);
             Helper.AddParameter(lineCmd, "@ItemCode", (line.ItemCode ?? string.Empty).Trim(), SqlDbType.VarChar, 20);
@@ -2653,10 +2723,19 @@ public class MaterialRequestService
             Helper.AddParameter(lineCmd, "@Note", (line.Note ?? string.Empty).Trim(), SqlDbType.VarChar, 255);
             Helper.AddParameter(lineCmd, "@NewItem", line.NewItem, SqlDbType.Bit);
             Helper.AddParameter(lineCmd, "@Selected", line.Selected, SqlDbType.Bit);
+            Helper.AddParameter(lineCmd, "@Issued", line.Issued ?? 0m);
             Helper.AddParameter(lineCmd, "@ManualCheck", line.ManualCheck, SqlDbType.Bit);
             AddDecimal18_2Param(lineCmd, "@TempStore", line.TempStore ?? 0m);
 
             await lineCmd.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        foreach (var existingId in existingIds.Where(id => !postedIds.Contains(id)))
+        {
+            await using var deleteCmd = new SqlCommand(deleteLineSql, conn, tx);
+            AddNumeric18_0Param(deleteCmd, "@RequestNo", requestNo);
+            AddNumeric18_0Param(deleteCmd, "@LineId", existingId);
+            await deleteCmd.ExecuteNonQueryAsync(cancellationToken);
         }
     }
 

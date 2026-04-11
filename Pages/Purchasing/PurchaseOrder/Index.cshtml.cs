@@ -29,7 +29,8 @@ public class IndexModel : BasePageModel
     }
 
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
-    public int DefaultPageSize => _config.GetValue<int>("AppSettings:DefaultPageSize", 25);
+    public int DefaultPageSize => _config.GetValue<int>("AppSettings:DefaultPageSize", 10);
+    public IReadOnlyList<int> PageSizeOptions => GetPageSizeOptions();
 
     [BindProperty(SupportsGet = true)]
     public PurchaseOrderFilter Filter { get; set; } = new PurchaseOrderFilter();
@@ -49,7 +50,7 @@ public class IndexModel : BasePageModel
             return Redirect("/");
         }
 
-        Filter.PageSize = DefaultPageSize;
+        Filter.PageSize = NormalizePageSize(DefaultPageSize);
         NormalizeFilter();
         LoadStatuses();
         LoadAssessLevels();
@@ -274,7 +275,7 @@ public class IndexModel : BasePageModel
     private void NormalizeFilter()
     {
         Filter.Page = Filter.Page <= 0 ? 1 : Filter.Page;
-        Filter.PageSize = Filter.PageSize <= 0 ? DefaultPageSize : Filter.PageSize;
+        Filter.PageSize = NormalizePageSize(Filter.PageSize);
 
         if (!Filter.StatusId.HasValue)
         {
@@ -310,7 +311,7 @@ public class IndexModel : BasePageModel
             FromDate = request.UseDateRange ? request.FromDate : null,
             ToDate = request.UseDateRange ? request.ToDate : null,
             Page = request.Page <= 0 ? 1 : request.Page,
-            PageSize = request.PageSize <= 0 ? DefaultPageSize : request.PageSize
+            PageSize = NormalizePageSize(request.PageSize)
         };
     }
 
@@ -462,8 +463,37 @@ public class IndexModel : BasePageModel
             RecFromDate = filter.UseRecDateRange ? filter.RecFromDate : null,
             RecToDate = filter.UseRecDateRange ? filter.RecToDate : null,
             Page = filter.Page <= 0 ? 1 : filter.Page,
-            PageSize = filter.PageSize <= 0 ? DefaultPageSize : filter.PageSize
+            PageSize = NormalizePageSize(filter.PageSize)
         };
+    }
+
+    private IReadOnlyList<int> GetPageSizeOptions()
+    {
+        var configured = _config.GetSection("AppSettings:PageSizeOptions").Get<int[]>() ?? Array.Empty<int>();
+        var options = configured.Where(value => value > 0).Distinct().ToList();
+        if (options.Count == 0)
+        {
+            options = new List<int> { DefaultPageSize, 20, 25, 30, 35 }
+                .Distinct()
+                .ToList();
+        }
+
+        if (!options.Contains(DefaultPageSize))
+        {
+            options.Insert(0, DefaultPageSize);
+        }
+
+        return options;
+    }
+
+    private int NormalizePageSize(int pageSize)
+    {
+        if (pageSize <= 0)
+        {
+            return DefaultPageSize;
+        }
+
+        return PageSizeOptions.Contains(pageSize) ? pageSize : DefaultPageSize;
     }
 
     private (List<PurchaseOrderViewDetailRow> Rows, int Total) SearchPurchaseOrderDetails(PurchaseOrderViewDetailSearchRequest filter)
@@ -740,7 +770,7 @@ public class PurchaseOrderFilter
     public DateTime? FromDate { get; set; }
     public DateTime? ToDate { get; set; }
     public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 25;
+    public int PageSize { get; set; }
 }
 
 public class PurchaseOrderSearchRequest
@@ -755,7 +785,7 @@ public class PurchaseOrderSearchRequest
     public DateTime? FromDate { get; set; }
     public DateTime? ToDate { get; set; }
     public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 25;
+    public int PageSize { get; set; }
 }
 
 public class PurchaseOrderViewDetailSearchRequest
@@ -775,7 +805,7 @@ public class PurchaseOrderViewDetailSearchRequest
     public DateTime? RecFromDate { get; set; }
     public DateTime? RecToDate { get; set; }
     public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 25;
+    public int PageSize { get; set; }
 }
 
 public class PurchaseOrderRow

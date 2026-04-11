@@ -30,6 +30,42 @@
     overflow: auto;
 }
 
+.supplier-layout-row {
+    align-items: stretch;
+}
+
+.supplier-search-column {
+    flex: 0 0 clamp(190px, 18vw, 239px);
+    width: clamp(190px, 18vw, 239px);
+    max-width: clamp(190px, 18vw, 239px);
+    min-width: 190px;
+}
+
+.supplier-result-column {
+    min-width: 0;
+}
+
+.supplier-search-panel .card-body {
+    padding: 10px;
+}
+
+.supplier-search-panel .form-group {
+    margin-bottom: 0.75rem;
+}
+
+.supplier-search-panel .form-control,
+.supplier-search-panel .dropdown-toggle,
+.supplier-search-panel select {
+    width: 100%;
+    min-width: 0;
+}
+
+.supplier-search-panel .dropdown-toggle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Khai báo font VNI nếu máy client đã cài */
 .vni-font {
     font-family: "VNI-Times", "VNI-Helve", sans-serif !important;
@@ -169,11 +205,52 @@
     text-align: center;
 }
 
+@media (min-width: 768px) {
+    .supplier-layout-row {
+        flex-wrap: nowrap;
+    }
+
+    .supplier-layout-row > .supplier-search-column {
+        flex: 0 0 clamp(190px, 18vw, 239px);
+        width: clamp(190px, 18vw, 239px);
+        max-width: clamp(190px, 18vw, 239px);
+        min-width: 190px;
+    }
+
+    .supplier-layout-row > .supplier-result-column {
+        flex: 1 1 0;
+        max-width: none;
+        min-width: 0;
+    }
+}
+
+#supplierTable > thead > tr > th:first-child,
+#supplierTable > tbody > tr > td:first-child {
+    width: 45px !important;
+    min-width: 45px !important;
+    max-width: 45px !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.supplier-radio-cell input[type="radio"] {
+    margin: 0;
+}
+
 @media (max-width: 767.98px) {
     #supplierResultPanelContainer {
         height: auto;
         min-height: 0;
         overflow: visible;
+    }
+
+    .supplier-search-column {
+        flex: 0 0 100%;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
     }
 
     .supplier-table-header-right {

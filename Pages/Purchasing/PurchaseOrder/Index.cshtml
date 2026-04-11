@@ -18,6 +18,8 @@
 
                     <div class="card-body">
                         <form method="get" id="purchaseOrderSearchForm">
+                            <input type="hidden" id="PageIndex" name="PageIndex" value="1" />
+                            <input type="hidden" id="PageSize" name="PageSize" value="@Model.DefaultPageSize" />
                             <div class="form-group">
                                 <label>Order No.</label>
                                 <input class="form-control form-control-sm" asp-for="Filter.PONo" id="Filter_PONo" />
@@ -83,15 +85,26 @@
                 </div>
             </div>
 
-            <div class="col-md-10">
+            <div class="col-md-10" id="purchaseOrderResultPanelContainer">
                 <div class="card card-primary">
-                    <div class="card-header">
-                        <h3 class="card-title">Purchase Orders</h3>
-                        <span class="badge badge-light ml-2" id="total-records-badge">0 records</span>
-                        <div class="card-tools float-right app-paging-white">
+                    <div class="card-header po-table-header">
+                        <div class="po-table-header-left">
+                            <h3 class="card-title">Purchase Orders</h3>
+                            <span class="badge badge-light ml-2" id="total-records-badge">0 records</span>
+                        </div>
+                        <div class="po-table-header-right app-paging-white">
                             <nav aria-label="Page navigation">
-                                <div id="pagination-info" class="d-inline-block mr-2" style="padding-top: 0.3rem;">
+                                <div id="pagination-info" class="d-inline-block mr-2 po-table-paging-info">
                                     <small>No records</small>
+                                </div>
+                                <div class="d-inline-flex align-items-center mr-2 po-page-size-form">
+                                    <label class="mb-0 mr-2 po-page-size-label" for="purchaseOrderPageSize">Show</label>
+                                    <select id="purchaseOrderPageSize" class="form-control form-control-sm po-page-size-select">
+                                        @foreach (var pageSizeOption in Model.PageSizeOptions)
+                                        {
+                                            <option value="@pageSizeOption" selected="@(Model.DefaultPageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                        }
+                                    </select>
                                 </div>
                                 <ul class="pagination pagination-sm mb-0 d-inline-flex" id="pagination">
                                 </ul>
@@ -101,10 +114,10 @@
 
                     <div class="card-body p-0">
                         <div class="table-responsive">
-                            <table class="table table-hover table-bordered mb-0" id="purchaseOrderTable">
+                            <table class="table table-hover table-bordered mb-0 text-nowrap" id="purchaseOrderTable">
                                 <thead class="thead-light">
                                     <tr>
-                                        <th></th>
+                                        <th style="width: 32px;"></th>
                                         <th>No.</th>
                                         <th>Date</th>
                                         <th>Request No.</th>
@@ -126,7 +139,7 @@
                     </div>
                 </div>
 
-                <div class="card card-outline card-primary">
+                <div class="card card-outline card-primary po-action-panel">
                     <div class="card-footer p-2 text-center">
                         @if (Model.PagePerm.HasPermission(3))
                         {
@@ -244,35 +257,52 @@
                                 </div>
                             </div>
 
-                            <div class="table-responsive">
-                                <table class="table table-sm table-bordered table-hover mb-0 text-nowrap" id="purchaseOrderViewDetailTable">
-                                    <thead class="thead-light">
-                                        <tr>
-                                            <th>Item Code</th>
-                                            <th>Item Name</th>
-                                            <th class="text-right">Quantity</th>
-                                            <th class="text-right">U.Price</th>
-                                            <th class="text-right">PO Amount</th>
-                                            <th>For Department</th>
-                                            <th>Note</th>
-                                            <th class="text-right">Rec Qty</th>
-                                            <th class="text-right">Rec Amount</th>
-                                            <th>Rec Date</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="purchaseOrderViewDetailRows">
-                                        <tr>
-                                            <td colspan="10" class="text-center text-muted">No data</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <div class="d-flex align-items-center justify-content-between mt-2">
-                                <div id="purchaseOrderViewDetailPaginationInfo" class="text-muted small">
-                                    <small>No records</small>
+                            <div class="card card-primary po-viewdetail-card mb-0">
+                                <div class="card-header po-viewdetail-card-header d-flex align-items-center justify-content-between flex-wrap">
+                                    <div id="purchaseOrderViewDetailPaginationInfo" class="d-inline-block mr-2 app-paging-white" style="padding-top: 0.3rem;">
+                                        <small>No records</small>
+                                    </div>
+                                    <div class="card-tools app-paging-white po-viewdetail-card-tools ml-auto">
+                                        <nav aria-label="Page navigation" class="d-inline-flex align-items-center flex-nowrap">
+                                            <div class="d-inline-flex align-items-center mr-2 po-viewdetail-page-size-form">
+                                                <label class="mb-0 mr-2 po-viewdetail-page-size-label" for="purchaseOrderViewDetailPageSize">Show</label>
+                                                <select id="purchaseOrderViewDetailPageSize" class="form-control form-control-sm po-viewdetail-page-size-select">
+                                                    @foreach (var pageSizeOption in Model.PageSizeOptions)
+                                                    {
+                                                        <option value="@pageSizeOption" selected="@(Model.DefaultPageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <ul class="pagination pagination-sm mb-0 d-inline-flex" id="purchaseOrderViewDetailPagination"></ul>
+                                        </nav>
+                                    </div>
                                 </div>
-                                <ul class="pagination pagination-sm mb-0" id="purchaseOrderViewDetailPagination"></ul>
+
+                                <div class="card-body p-0 po-viewdetail-table-wrap">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-bordered table-hover mb-0 text-nowrap" id="purchaseOrderViewDetailTable">
+                                            <thead class="thead-light">
+                                                <tr>
+                                                    <th>Item Code</th>
+                                                    <th>Item Name</th>
+                                                    <th class="text-right">Quantity</th>
+                                                    <th class="text-right">U.Price</th>
+                                                    <th class="text-right">PO Amount</th>
+                                                    <th>For Department</th>
+                                                    <th>Note</th>
+                                                    <th class="text-right">Rec Qty</th>
+                                                    <th class="text-right">Rec Amount</th>
+                                                    <th>Rec Date</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="purchaseOrderViewDetailRows">
+                                                <tr>
+                                                    <td colspan="10" class="text-center text-muted">No data</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="modal-footer py-2 d-flex align-items-center">
@@ -282,7 +312,6 @@
                             <button type="button" class="btn btn-sm btn-outline-success mx-auto" id="btnViewDetailExportExcel">
                                 Export Excel
                             </button>
-                            <span class="badge badge-light ml-auto mr-2" id="purchaseOrderViewDetailCount">Total Record(s): 0</span>
                         </div>
                     </div>
                 </div>

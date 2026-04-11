@@ -18,10 +18,10 @@
         }
         <div id="supplierAjaxMessageHost" class="mb-3 d-none"></div>
 
-        <div class="row">
+        <div class="row supplier-layout-row">
             <!-- SEARCH PANEL (LEFT) -->
-            <div class="col-md-2">
-                <div class="card card-info">
+            <div class="col-md-2 supplier-search-column">
+                <div class="card card-info supplier-search-panel">
                     <div class="card-header">
                         <h3 class="card-title">
                             <i class="fas fa-search"></i> Search
@@ -134,16 +134,18 @@
             </div>
 
 	        <!-- RESULT + ACTION (RIGHT) -->
-	        <div class="col-md-10" id="supplierResultPanelContainer">
+	        <div class="col-md-10 supplier-result-column" id="supplierResultPanelContainer">
 	            <!-- RESULT GRID -->
-	            <div class="card card-primary">
-                    <div class="card-header">
-                        <h3 class="card-title">Suppliers</h3>
-                        <span class="badge badge-light ml-2" id="total-records-badge">@Model.TotalRecords records</span>
+                <div class="card card-primary">
+                    <div class="card-header supplier-table-header">
+                        <div class="supplier-table-header-left">
+                            <h3 class="card-title">Suppliers</h3>
+                            <span class="badge badge-light ml-2" id="total-records-badge">@Model.TotalRecords records</span>
+                        </div>
                         <!-- Pagination info trong header (bên phải) -->
-                        <div class="card-tools float-right app-paging-white">
+                        <div class="supplier-table-header-right app-paging-white">
                             <nav aria-label="Page navigation">
-                                <div id="pagination-info" class="d-inline-block mr-2" style="padding-top: 0.3rem;">
+                                <div id="pagination-info" class="d-inline-block mr-2 supplier-table-paging-info">
                                     <small>No records</small>
                                 </div>
                                 <div class="d-inline-flex align-items-center mr-2 supplier-page-size-form">
@@ -164,22 +166,37 @@
 
 	                    <div class="card-body p-0">
 	                        <div class="table-responsive">
-	                            <table class="table table-hover table-bordered text-nowrap" id="supplierTable">
+	                            <table class="table table-hover table-bordered mb-0 text-nowrap supplier-table" id="supplierTable">
+	                                <colgroup>
+	                                    <col style="width: 45px;" />
+	                                    <col style="width: 120px;" />
+	                                    <col style="width: 180px;" />
+	                                    <col style="width: 260px;" />
+	                                    <col style="width: 96px;" />
+	                                    <col style="width: 96px;" />
+	                                    <col style="width: 96px;" />
+	                                    <col style="width: 160px;" />
+	                                    <col style="width: 120px;" />
+	                                    <col style="width: 180px;" />
+	                                    <col style="width: 160px;" />
+	                                    <col style="width: 0;" />
+	                                    <col style="width: 120px;" />
+	                                </colgroup>
 	                                <thead class="thead-light">
 	                                    <tr>
 	                                        <th></th>
-	                                        <th>Supplier Code</th>
-	                                        <th>Supplier Name</th>
-	                                        <th>Address</th>
-	                                        <th>Phone</th>
-	                                        <th>Mobile</th>
-	                                        <th>Fax</th>
-	                                        <th>Contact</th>
-	                                        <th>Position</th>
-	                                        <th>Business</th>
-	                                        <th>Status</th>
+	                                        <th style="width: 120px;">Supplier Code</th>
+	                                        <th style="width: 180px;">Supplier Name</th>
+	                                        <th style="width: 260px;">Address</th>
+	                                        <th style="width: 96px;">Phone</th>
+	                                        <th style="width: 96px;">Mobile</th>
+	                                        <th style="width: 96px;">Fax</th>
+	                                        <th style="width: 160px;">Contact</th>
+	                                        <th style="width: 120px;">Position</th>
+	                                        <th style="width: 180px;">Business</th>
+	                                        <th style="width: 160px;">Status</th>
 	                                        <th class="d-none">Supplier Status ID</th> <!-- Header cho cột ẩn -->
-	                                        <th>Dept</th>
+	                                        <th style="width: 120px;">Dept</th>
 	                                    </tr>
 	                                </thead>
 	                                <tbody>
@@ -187,7 +204,7 @@
 	                                    {
 	                                        var s = Model.Rows[supplierRowIndex];
 	                                        <tr data-id="@s.SupplierID" data-supplier-id="@s.SupplierID" data-index="@supplierRowIndex">
-	                                            <td>
+	                                            <td class="supplier-radio-cell">
 	                                                <input type="radio" name="selectedSupplier">
 	                                            </td>
 	                                            <td style="white-space: nowrap;">

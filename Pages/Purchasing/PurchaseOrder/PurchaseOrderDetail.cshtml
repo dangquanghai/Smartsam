@@ -99,14 +99,14 @@
                             <div class="row no-gutters align-items-start mb-2">
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">Comment</label></div>
                                 <div class="col-10">
-                                    <textarea asp-for="Header.Comment" id="Comment" rows="3" class="form-control form-control-sm vni-font" readonly="@Model.IsViewMode"></textarea>
+                                    <textarea asp-for="Header.Comment" id="Comment" rows="2" maxlength="100" class="form-control form-control-sm vni-font" readonly="@Model.IsViewMode"></textarea>
                                 </div>
                             </div>
 
                             <div class="row no-gutters align-items-start mb-0">
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">Remark</label></div>
                                 <div class="col-10">
-                                    <textarea asp-for="Header.Remark" id="Remark" rows="2" class="form-control form-control-sm vni-font" readonly="@Model.IsViewMode"></textarea>
+                                    <input asp-for="Header.Remark" id="Remark" maxlength="100" class="form-control form-control-sm vni-font" readonly="@Model.IsViewMode" />
                                 </div>
                             </div>
                         </div>

@@ -2,13 +2,14 @@
     'use strict';
 
     const CONFIG = {
-        pageSize: typeof defaultPageSize !== 'undefined' ? defaultPageSize : 0,
         selectors: {
             tbody: '#purchaseOrderTable tbody',
             pagination: '#pagination',
             actionBtns: '#btnEdit, #btnBackToProcessing'
         }
     };
+
+    let pageSize = typeof defaultPageSize !== 'undefined' ? defaultPageSize : 10;
 
     let state = {
         selectedRow: null,
@@ -20,8 +21,38 @@
         lastRequest: null,
         lastTotal: 0,
         currentPage: 1,
-        pageSize: typeof defaultPageSize !== 'undefined' ? defaultPageSize : 0
+        pageSize: typeof defaultPageSize !== 'undefined' ? defaultPageSize : 10
     };
+
+    function getQueryInt(name) {
+        const value = new URLSearchParams(window.location.search).get(name);
+        if (!value) {
+            return null;
+        }
+
+        const parsed = Number.parseInt(value, 10);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    }
+
+    function syncBrowserUrlToSearchState(page, filter) {
+        const query = new URLSearchParams();
+        const currentFilter = filter || {};
+
+        if (currentFilter.poNo) query.set('PONo', currentFilter.poNo);
+        if (currentFilter.requestNo) query.set('RequestNo', currentFilter.requestNo);
+        if (currentFilter.statusId) query.set('StatusId', currentFilter.statusId);
+        if (currentFilter.supplierKeyword) query.set('SupplierKeyword', currentFilter.supplierKeyword);
+        if (currentFilter.assessLevelId) query.set('AssessLevelId', currentFilter.assessLevelId);
+        if (currentFilter.remark) query.set('Remark', currentFilter.remark);
+        query.set('UseDateRange', currentFilter.useDateRange ? 'true' : 'false');
+        if (currentFilter.useDateRange && currentFilter.fromDate) query.set('FromDate', currentFilter.fromDate);
+        if (currentFilter.useDateRange && currentFilter.toDate) query.set('ToDate', currentFilter.toDate);
+        query.set('Page', String(page || 1));
+        query.set('PageSize', String(pageSize || defaultPageSize || 10));
+
+        const nextUrl = `${window.location.pathname}${query.toString() ? `?${query.toString()}` : ''}`;
+        window.history.replaceState({}, document.title, nextUrl);
+    }
 
     // Dong bo widget date-range voi 2 field an From/To.
     function initializeSearchDateRange() {
@@ -43,6 +74,14 @@
     // Gui filter hien tai len server va ve lai danh sach.
     function performSearch(page = 1) {
         state.currentPage = page;
+        const pageIndexInput = document.getElementById('PageIndex');
+        const pageSizeInput = document.getElementById('PageSize');
+        if (pageIndexInput) {
+            pageIndexInput.value = String(state.currentPage);
+        }
+        if (pageSizeInput) {
+            pageSizeInput.value = String(pageSize);
+        }
         const token = $('input[name="__RequestVerificationToken"]').val();
 
         const filter = {
@@ -56,7 +95,7 @@
             fromDate: $('#Filter_FromDate').val() || null,
             toDate: $('#Filter_ToDate').val() || null,
             page: state.currentPage,
-            pageSize: CONFIG.pageSize
+            pageSize: pageSize
         };
 
         showLoading(true);
@@ -71,7 +110,8 @@
                 if (response.success) {
                     state.currentDataRows = response.data || [];
                     renderPurchaseOrders(response.data || []);
-                    updatePagination(response.total || 0, response.page || 1, response.pageSize || CONFIG.pageSize, response.totalPages || 1);
+                    updatePagination(response.total || 0, response.page || 1, response.pageSize || pageSize, response.totalPages || 1);
+                    syncBrowserUrlToSearchState(response.page || page, filter);
                     resetActions();
                 } else {
                     showError('Search failed: ' + (response.message || 'Unknown error'));
@@ -108,12 +148,12 @@
                     </td>
                     <td>${row.poDateDisplay || ''}</td>
                     <td>${row.requestNo || ''}</td>
-                    <td class="vni-font">${row.supplier || ''}</td>
+                    <td class="vni-font">${buildEllipsisCell(row.supplier || '')}</td>
                     <td>${row.statusName || ''}</td>
                     <td>${row.purchaserCode || ''}</td>
                     <td>${row.chiefACode || ''}</td>
                     <td>${row.gDirectorCode || ''}</td>
-                    <td class="vni-font">${row.remark || ''}</td>
+                    <td class="vni-font">${buildEllipsisCell(row.remark || '')}</td>
                 </tr>`;
         });
 
@@ -258,8 +298,63 @@
         syncDateRangeState();
         syncViewDetailDateRangeState();
 
+        const queryPage = getQueryInt('Page') || getQueryInt('PageIndex') || 1;
+        const queryPageSize = getQueryInt('PageSize');
+        const pageSizeSelect = document.getElementById('purchaseOrderPageSize');
+        const viewDetailPageSizeSelect = document.getElementById('purchaseOrderViewDetailPageSize');
+        const pageSizeInput = document.getElementById('PageSize');
+        const pageIndexInput = document.getElementById('PageIndex');
+
+        if (queryPageSize) {
+            pageSize = queryPageSize;
+        } else if (pageSizeSelect) {
+            const selectedPageSize = Number.parseInt(pageSizeSelect.value || '', 10);
+            if (Number.isFinite(selectedPageSize) && selectedPageSize > 0) {
+                pageSize = selectedPageSize;
+            }
+        }
+
+        if (pageSizeSelect) {
+            pageSizeSelect.value = String(pageSize);
+            $(pageSizeSelect).off('change.poPageSize').on('change.poPageSize', function () {
+                const nextPageSize = Number.parseInt(pageSizeSelect.value || '', 10);
+                if (!Number.isFinite(nextPageSize) || nextPageSize <= 0 || nextPageSize === pageSize) {
+                    return;
+                }
+
+                pageSize = nextPageSize;
+                if (pageSizeInput) {
+                    pageSizeInput.value = String(pageSize);
+                }
+                if (pageIndexInput) {
+                    pageIndexInput.value = '1';
+                }
+                performSearch(1);
+            });
+        }
+
+        if (pageSizeInput) {
+            pageSizeInput.value = String(pageSize);
+        }
+
+        if (viewDetailPageSizeSelect) {
+            viewDetailPageSizeSelect.value = String(viewDetailState.pageSize || pageSize);
+            $(viewDetailPageSizeSelect).off('change.poViewDetailPageSize').on('change.poViewDetailPageSize', function () {
+                const nextPageSize = Number.parseInt(viewDetailPageSizeSelect.value || '', 10);
+                if (!Number.isFinite(nextPageSize) || nextPageSize <= 0 || nextPageSize === viewDetailState.pageSize) {
+                    return;
+                }
+
+                viewDetailState.pageSize = nextPageSize;
+                performViewDetailSearch(1);
+            });
+        }
+
         $('#purchaseOrderSearchForm').off('submit').on('submit', function (e) {
             e.preventDefault();
+            if (pageIndexInput) {
+                pageIndexInput.value = '1';
+            }
             performSearch(1);
         });
 
@@ -313,7 +408,8 @@
             }
         });
 
-        performSearch(1);
+        state.currentPage = queryPage;
+        performSearch(queryPage);
     }
 
     // Hien dong loading don gian trong luc dang search.
@@ -435,6 +531,11 @@
         $('#ViewDetail_RecFromDate').val('');
         $('#ViewDetail_RecToDate').val('');
         $('#ViewDetailRecDateRange').val('');
+        viewDetailState.pageSize = pageSize || viewDetailState.pageSize || 10;
+        const pageSizeSelect = document.getElementById('purchaseOrderViewDetailPageSize');
+        if (pageSizeSelect) {
+            pageSizeSelect.value = String(viewDetailState.pageSize);
+        }
     }
 
     // Search detail PO trong modal theo PO Date.
@@ -455,20 +556,20 @@
                     viewDetailState.lastRequest = { ...request };
                     viewDetailState.lastTotal = response.total || 0;
                     viewDetailState.currentPage = response.page || page;
-                    viewDetailState.pageSize = response.pageSize || request.pageSize || CONFIG.pageSize || 0;
+                    viewDetailState.pageSize = response.pageSize || request.pageSize || pageSize || 0;
                     renderViewDetailRows(response.data || []);
                     $('#purchaseOrderViewDetailCount').text(`Total Record(s): ${(response.total || 0)}`);
-                    updateViewDetailPagination(response.total || 0, response.page || page, response.pageSize || request.pageSize || CONFIG.pageSize || 0, response.totalPages || 1);
+                    updateViewDetailPagination(response.total || 0, response.page || page, response.pageSize || request.pageSize || pageSize || 0, response.totalPages || 1);
                 } else {
                     viewDetailState.lastRequest = { ...request };
                     viewDetailState.lastTotal = 0;
-                    updateViewDetailPagination(0, 1, request.pageSize || CONFIG.pageSize || 0, 1);
+                    updateViewDetailPagination(0, 1, request.pageSize || pageSize || 0, 1);
                     showViewDetailError(response.message || 'Search detail failed.');
                 }
             },
             error: function (xhr, status, error) {
                 viewDetailState.lastTotal = 0;
-                updateViewDetailPagination(0, 1, request.pageSize || CONFIG.pageSize || 0, 1);
+                updateViewDetailPagination(0, 1, request.pageSize || pageSize || 0, 1);
                 showViewDetailError('System connection error: ' + error);
             },
             complete: function () {
@@ -528,7 +629,7 @@
             return;
         }
 
-        const safePageSize = pageSize > 0 ? pageSize : (CONFIG.pageSize || 0);
+        const safePageSize = pageSize > 0 ? pageSize : (viewDetailState.pageSize || 0);
         const safePage = page > 0 ? page : 1;
         const start = ((safePage - 1) * safePageSize) + 1;
         const end = Math.min(safePage * safePageSize, total);
@@ -553,6 +654,11 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+    }
+
+    function buildEllipsisCell(input) {
+        const raw = (input || '').toString();
+        return `<span class="app-table-ellipsis" title="${escapeHtml(raw)}">${escapeHtml(raw)}</span>`;
     }
 
     function formatNumber(value) {
@@ -584,7 +690,7 @@
             recFromDate: $('#ViewDetail_RecFromDate').val() || null,
             recToDate: $('#ViewDetail_RecToDate').val() || null,
             page: page,
-            pageSize: CONFIG.pageSize || 0
+            pageSize: viewDetailState.pageSize || pageSize || 0
         };
 
         if (!request.usePoDateRange) {
@@ -662,6 +768,8 @@
         params.set('UseDateRange', useDateRange ? 'true' : 'false');
         if (useDateRange && fromDate) params.set('FromDate', fromDate);
         if (useDateRange && toDate) params.set('ToDate', toDate);
+        params.set('Page', String(state.currentPage || 1));
+        params.set('PageSize', String(pageSize || defaultPageSize || 10));
 
         return window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
     }

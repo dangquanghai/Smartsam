@@ -828,6 +828,16 @@ public class PurchaseOrderDetailModel : BasePageModel
             ModelState.AddModelError("Header.SupplierID", "Supplier is required.");
         }
 
+        if (!string.IsNullOrWhiteSpace(Header.Comment) && Header.Comment.Length > 100)
+        {
+            ModelState.AddModelError("Header.Comment", "Comment must not exceed 100 characters.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(Header.Remark) && Header.Remark.Length > 100)
+        {
+            ModelState.AddModelError("Header.Remark", "Remark must not exceed 100 characters.");
+        }
+
         if (details.Count == 0)
         {
             ModelState.AddModelError(string.Empty, "Please add at least one detail row.");
@@ -1071,11 +1081,13 @@ public class PurchaseOrderHeader
     public int? AssessLevel { get; set; }
     public int Currency { get; set; } = 1;
     public decimal ExRate { get; set; }
+    [StringLength(100)]
     public string? Comment { get; set; }
     public decimal BeforeVAT { get; set; }
     public decimal PerVAT { get; set; }
     public decimal VAT { get; set; }
     public decimal AfterVAT { get; set; }
+    [StringLength(100)]
     public string? Remark { get; set; }
     public int? PurId { get; set; }
     public int? CAId { get; set; }
