@@ -264,6 +264,13 @@ function initializePage(mode, currentStatusId, actionPerm) {
         runItemLookupSearch();
     });
 
+    $('#lookupResultBody').off('input.mrLookupOrder').on('input.mrLookupOrder', '.mr-lookup-order-input', function () {
+        const normalized = normalizeEditableNumericInput($(this).val());
+        if ($(this).val() !== normalized) {
+            $(this).val(normalized);
+        }
+    });
+
     $('#lookupResultBody').off('click.mrLookupAdd').on('click.mrLookupAdd', '.mr-lookup-add-btn', function () {
         const tr = this.closest('tr');
         if (!tr || !tr.dataset.itemCode) return;
@@ -590,18 +597,18 @@ function createLineRowHtml(row) {
             </td>
             <td>
                 <input type="hidden" class="mr-line-id" value="${row.id ?? ''}" />
-                <span class="mr-readonly-cell-text">${escapeHtml(row.itemCode || '')}</span>
+                <span class="mr-readonly-cell-text" title="${escapeHtml(row.itemCode || '')}">${escapeHtml(row.itemCode || '')}</span>
                 <input type="hidden" class="mr-line-itemcode" value="${escapeHtml(row.itemCode || '')}" />
             </td>
             <td>
-                <span class="mr-readonly-cell-text tcvn3-font">${escapeHtml(row.itemName || '')}</span>
+                <span class="mr-readonly-cell-text tcvn3-font" title="${escapeHtml(row.itemName || '')}">${escapeHtml(row.itemName || '')}</span>
                 <input type="hidden" class="mr-line-itemname" value="${escapeHtml(row.itemName || '')}" />
             </td>
             <td>
                 <span class="mr-readonly-cell-text">${escapeHtml(row.unit || '')}</span>
                 <input type="hidden" class="mr-line-unit" value="${escapeHtml(row.unit || '')}" />
             </td>
-            <td><input type="number" min="1" step="1" class="form-control form-control-sm mr-line-order" value="${row.orderQty ?? 0}" /></td>
+            <td><input type="text" inputmode="decimal" class="form-control form-control-sm mr-line-order" value="${row.orderQty ?? 0}" /></td>
             <td>
                 <span class="mr-readonly-cell-text">${row.notReceipt ?? 0}</span>
                 <input type="hidden" class="mr-line-notrec" value="${row.notReceipt ?? 0}" />
@@ -681,6 +688,13 @@ function initializePurchaserEditableRowPrompt($form, $tableBody, enablePrompt) {
     });
 
     $tableBody.on('input.mrPurchaserEditPrompt', '.mr-line-buy', function () {
+        const normalized = normalizeEditableNumericInput($(this).val());
+        if ($(this).val() !== normalized) {
+            $(this).val(normalized);
+        }
+    });
+
+    $tableBody.on('input.mrLineOrder', '.mr-line-order', function () {
         const normalized = normalizeEditableNumericInput($(this).val());
         if ($(this).val() !== normalized) {
             $(this).val(normalized);
@@ -1069,7 +1083,7 @@ function renderLookupResults($resultBody, items) {
         $tr.append(`<td class="tcvn3-font">${escapeHtml(item.itemName || '')}</td>`);
         $tr.append(`<td>${escapeHtml(item.unit || '')}</td>`);
         $tr.append(`<td class="text-center">${formatLookupNumber(item.inStock)}</td>`);
-        $tr.append(`<td><input type="number" min="0.01" step="0.01" class="form-control form-control-sm mr-lookup-order-input" value="${item.orderQty && item.orderQty > 0 ? item.orderQty : 1}"></td>`);
+        $tr.append(`<td><input type="text" inputmode="decimal" class="form-control form-control-sm mr-lookup-order-input" value="${item.orderQty && item.orderQty > 0 ? item.orderQty : 1}"></td>`);
         $tr.append('<td class="text-center"><button type="button" class="btn btn-sm btn-primary mr-lookup-add-btn">Add Detail</button></td>');
 
         $tr.attr('data-item-code', item.itemCode || '');
