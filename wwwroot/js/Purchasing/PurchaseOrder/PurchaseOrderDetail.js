@@ -99,6 +99,54 @@ function closeOpenSelect2() {
     });
 }
 
+function buildPurchaseOrderQuestPdfUrl() {
+    const baseUrl = window.purchaseOrderDetailPage?.questPdfUrl || '';
+    const reportId = window.purchaseOrderDetailPage?.reportId || 0;
+    if (!baseUrl || !reportId) {
+        return '';
+    }
+
+    return `${baseUrl}&id=${encodeURIComponent(reportId)}`;
+}
+
+async function downloadPurchaseOrderQuestPdf() {
+    const reportUrl = buildPurchaseOrderQuestPdfUrl();
+    if (!reportUrl) {
+        alert('Purchase order QuestPDF report is not available.');
+        return;
+    }
+
+    const poNo = (window.purchaseOrderDetailPage?.reportFileName || 'purchase_order').trim() || 'purchase_order';
+    const fileName = `PurchaseOrder_No_${poNo.replace(/[\\/:*?"<>|]+/g, '_')}.pdf`;
+    const response = await fetch(reportUrl, {
+        method: 'GET',
+        credentials: 'same-origin'
+    });
+
+    if (!response.ok) {
+        throw new Error(`Cannot generate QuestPDF report. HTTP ${response.status}`);
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.toLowerCase().includes('application/pdf')) {
+        const text = await response.text();
+        throw new Error(text || 'QuestPDF report is not available.');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    try {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    } finally {
+        window.URL.revokeObjectURL(url);
+    }
+}
+
 // Kiem tra form truoc khi post PO header.
 function validateMainForm() {
     const fields = [
@@ -164,6 +212,13 @@ function normalizeDetail(detail) {
 function bindMainEvents(mode) {
     $('#PerVAT').on('input', updateTotals);
     $('#btnCalculateTotal').on('click', updateTotals);
+
+    $('#btnOpenPurchaseOrderReport').on('click', function () {
+        downloadPurchaseOrderQuestPdf().catch(function (error) {
+            console.error(error);
+            alert(error?.message || 'Cannot export QuestPDF.');
+        });
+    });
 
     $('#btnAddDetail').on('click', function () {
         closeOpenSelect2();
@@ -290,6 +345,7 @@ function bindMainEvents(mode) {
     $(document).on('change', '#purchaseOrderPrLineRows .po-pr-check', function () {
         syncPrLineCheckAllState();
     });
+
 }
 
 // Nap dong PR vao modal de chon copy sang PO.

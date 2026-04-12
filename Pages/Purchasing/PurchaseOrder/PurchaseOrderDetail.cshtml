@@ -188,6 +188,12 @@
                         <button type="button" class="btn btn-sm btn-secondary mr-2" id="btnCalculateTotal">
                             <i class="fas fa-calculator"></i> CalSum
                         </button>
+                        @if (Model.Header.Id > 0)
+                        {
+                            <button type="button" class="btn btn-sm btn-primary mr-2" id="btnOpenPurchaseOrderReport">
+                                <i class="fas fa-file-pdf"></i> Report
+                            </button>
+                        }
                         <a href="@Model.BackToListUrl" class="btn btn-sm btn-default">
                             <i class="fas fa-arrow-left"></i> Back to list
                         </a>
@@ -422,6 +428,9 @@
             supplierLookupUrl: '@Url.Page("./PurchaseOrderDetail", "SupplierLookup")',
             prLookupUrl: '@Url.Page("./PurchaseOrderDetail", "PrLookup")',
             prLinesUrl: '@Url.Page("./PurchaseOrderDetail", "PrLines")',
+            questPdfUrl: '@Url.Page("./PurchaseOrderDetail", "ReportQuestPdf")',
+            reportId: @Model.Header.Id,
+            reportFileName: '@Model.Header.PONo',
             departmentOptions: @Html.Raw(Model.DepartmentOptionsJson),
             openConvertModal: @(Model.OpenConvertModal ? "true" : "false")
         };

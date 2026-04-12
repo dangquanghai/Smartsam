@@ -19,6 +19,7 @@
 
     let viewDetailState = {
         lastRequest: null,
+        lastRows: [],
         lastTotal: 0,
         currentPage: 1,
         pageSize: typeof defaultPageSize !== 'undefined' ? defaultPageSize : 10
@@ -380,9 +381,29 @@
             performViewDetailSearch(1);
         });
 
-        $('#btnViewDetailReport').off('click').on('click', function () {
-            window.print();
-        });
+    $('#btnViewDetailReport').off('click').on('click', function () {
+        const rows = Array.isArray(viewDetailState.lastRows) ? viewDetailState.lastRows : [];
+        const poIds = [...new Set(rows.map(function (row) {
+                const rawValue = row?.poid ?? row?.pOID ?? row?.POID ?? row?.poId ?? row?.id ?? row?.Id;
+                const parsed = Number.parseInt(rawValue, 10);
+                return Number.isFinite(parsed) ? parsed : 0;
+            }).filter(function (value) {
+                return value > 0;
+            }))];
+
+            if (poIds.length === 0) {
+                alert('Please search detail first.');
+                return;
+            }
+
+        if (poIds.length > 1) {
+            alert('Please filter to one PO before exporting the report.');
+            return;
+        }
+
+        const reportUrl = `${window.purchaseOrderPage?.detailUrlBase || ''}?handler=Report&id=${poIds[0]}`;
+        downloadPurchaseOrderPdf(reportUrl, `purchase_order_${poIds[0]}.pdf`);
+    });
 
         $('#btnViewDetailExportExcel').off('click').on('click', function () {
             if (!viewDetailState.lastRequest) {
@@ -398,7 +419,129 @@
             const params = buildViewDetailQueryParams(viewDetailState.lastRequest);
             const exportUrl = `?handler=ExportDetailExcel${params ? `&${params}` : ''}`;
             window.location.href = exportUrl;
+});
+
+async function downloadPurchaseOrderPdf(reportUrl, fileName) {
+    if (!reportUrl) {
+        alert('Purchase order report is not available.');
+        return;
+    }
+
+    try {
+        const response = await fetch(reportUrl, {
+            method: 'GET',
+            credentials: 'same-origin'
         });
+
+        if (!response.ok) {
+            throw new Error(`Cannot export PDF. HTTP ${response.status}`);
+        }
+
+        if (!window.html2pdf) {
+            throw new Error('PDF export library is missing.');
+        }
+
+        const html = await response.text();
+        const parser = new DOMParser();
+        const reportDoc = parser.parseFromString(html, 'text/html');
+        const reportRoot = reportDoc.querySelector('.po-container.print-container');
+        if (!reportRoot) {
+            throw new Error('Purchase order report content was not found.');
+        }
+
+        const reportCss = Array.from(reportDoc.querySelectorAll('style'))
+            .map(function (styleNode) {
+                return styleNode.textContent || '';
+            })
+            .join('\n');
+
+        const exportHost = document.createElement('div');
+        const exportNode = reportRoot.cloneNode(true);
+        const exportWidth = 1123;
+
+        exportHost.style.position = 'fixed';
+        exportHost.style.left = '0';
+        exportHost.style.top = '0';
+        exportHost.style.width = `${exportWidth}px`;
+        exportHost.style.minWidth = `${exportWidth}px`;
+        exportHost.style.maxWidth = `${exportWidth}px`;
+        exportHost.style.background = '#ffffff';
+        exportHost.style.margin = '0';
+        exportHost.style.padding = '0';
+        exportHost.style.boxSizing = 'border-box';
+        exportHost.style.zIndex = '-1';
+        exportHost.style.pointerEvents = 'none';
+
+        exportNode.style.width = '100%';
+        exportNode.style.minWidth = '0';
+        exportNode.style.maxWidth = 'none';
+        exportNode.style.margin = '0';
+        exportNode.style.boxShadow = 'none';
+        exportNode.style.transform = 'none';
+        exportNode.style.boxSizing = 'border-box';
+
+        exportHost.innerHTML = `<style>${reportCss}</style>`;
+        exportHost.appendChild(exportNode);
+        document.body.appendChild(exportHost);
+
+        await new Promise(function (resolve) {
+            window.requestAnimationFrame(function () {
+                window.requestAnimationFrame(resolve);
+            });
+        });
+
+        const options = {
+            margin: [6, 6, 6, 6],
+            filename: fileName || 'purchase_order.pdf',
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: {
+                scale: 2,
+                useCORS: true,
+                scrollY: 0,
+                scrollX: 0,
+                x: 0,
+                y: 0,
+                windowWidth: exportWidth,
+                width: exportWidth,
+                backgroundColor: '#ffffff',
+                onclone: function (clonedDoc) {
+                    const clonedRoot = clonedDoc.querySelector('.po-container.print-container');
+                    if (clonedRoot) {
+                        clonedRoot.style.width = `${exportWidth}px`;
+                        clonedRoot.style.minWidth = `${exportWidth}px`;
+                        clonedRoot.style.maxWidth = 'none';
+                        clonedRoot.style.margin = '0';
+                        clonedRoot.style.boxShadow = 'none';
+                        clonedRoot.style.transform = 'none';
+                        clonedRoot.style.boxSizing = 'border-box';
+                    }
+
+                    const clonedBody = clonedDoc.body;
+                    if (clonedBody) {
+                        clonedBody.style.margin = '0';
+                        clonedBody.style.padding = '0';
+                        clonedBody.style.background = '#ffffff';
+                    }
+                }
+            },
+            jsPDF: {
+                unit: 'mm',
+                format: 'a4',
+                orientation: 'landscape'
+            },
+            pagebreak: { mode: ['css', 'legacy'] }
+        };
+
+        try {
+            await window.html2pdf().set(options).from(exportHost).save();
+        } finally {
+            exportHost.remove();
+        }
+    } catch (error) {
+        console.error(error);
+        alert(error?.message || 'Cannot export PDF.');
+    }
+}
 
         $(document).off('click', '#purchaseOrderViewDetailPagination a.page-link').on('click', '#purchaseOrderViewDetailPagination a.page-link', function (e) {
             e.preventDefault();
@@ -554,6 +697,7 @@
             success: function (response) {
                 if (response.success) {
                     viewDetailState.lastRequest = { ...request };
+                    viewDetailState.lastRows = Array.isArray(response.data) ? response.data : [];
                     viewDetailState.lastTotal = response.total || 0;
                     viewDetailState.currentPage = response.page || page;
                     viewDetailState.pageSize = response.pageSize || request.pageSize || pageSize || 0;
@@ -562,12 +706,14 @@
                     updateViewDetailPagination(response.total || 0, response.page || page, response.pageSize || request.pageSize || pageSize || 0, response.totalPages || 1);
                 } else {
                     viewDetailState.lastRequest = { ...request };
+                    viewDetailState.lastRows = [];
                     viewDetailState.lastTotal = 0;
                     updateViewDetailPagination(0, 1, request.pageSize || pageSize || 0, 1);
                     showViewDetailError(response.message || 'Search detail failed.');
                 }
             },
             error: function (xhr, status, error) {
+                viewDetailState.lastRows = [];
                 viewDetailState.lastTotal = 0;
                 updateViewDetailPagination(0, 1, request.pageSize || pageSize || 0, 1);
                 showViewDetailError('System connection error: ' + error);
