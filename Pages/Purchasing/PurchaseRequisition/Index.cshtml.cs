@@ -754,7 +754,7 @@ ORDER BY d.RecordID", conn))
         };
 
         var whereSql = BuildViewDetailWhereSql(request, allowedStatuses);
-        report.Footer = LoadSummaryReportFooter(conn, request, allowedStatuses);
+        report.Footer = new PurchaseRequisitionApprovalFooterModel();
 
         using var cmd = new SqlCommand($@"
 SELECT
@@ -837,61 +837,6 @@ ORDER BY p.RequestDate DESC, p.RequestNo DESC, d.RecordID", conn);
         }
 
         return report;
-    }
-
-    private PurchaseRequisitionApprovalFooterModel? LoadSummaryReportFooter(SqlConnection conn, PurchaseRequisitionListViewDetailFilterRequest request, IReadOnlyCollection<int> allowedStatuses)
-    {
-        var whereSql = BuildViewDetailWhereSql(request, allowedStatuses);
-
-        using var cmd = new SqlCommand($@"
-SELECT TOP 1
-    p.PurId,
-    ISNULL(p.PurApproDate, '') AS PurApproDate,
-    p.CAId,
-    ISNULL(p.CAApproDate, '') AS CAApproDate,
-    p.GDId,
-    ISNULL(p.GDApproDate, '') AS GDApproDate
-FROM dbo.PC_PR p
-INNER JOIN dbo.PC_PRDetail d ON p.PRID = d.PRID
-LEFT JOIN dbo.INV_ItemList i ON d.ItemID = i.ItemID
-{whereSql}
-ORDER BY p.RequestDate DESC, p.PRID DESC", conn);
-
-        BindViewDetailFilterParams(cmd, request);
-
-        int? preparedEmployeeId = null;
-        int? checkedEmployeeId = null;
-        int? approvedEmployeeId = null;
-        string preparedDate = string.Empty;
-        string checkedDate = string.Empty;
-        string approvedDate = string.Empty;
-
-        using var rd = cmd.ExecuteReader();
-        if (!rd.Read())
-        {
-            return null;
-        }
-
-        preparedEmployeeId = rd.IsDBNull(rd.GetOrdinal("PurId")) ? null : Convert.ToInt32(rd["PurId"]);
-        checkedEmployeeId = rd.IsDBNull(rd.GetOrdinal("CAId")) ? null : Convert.ToInt32(rd["CAId"]);
-        approvedEmployeeId = rd.IsDBNull(rd.GetOrdinal("GDId")) ? null : Convert.ToInt32(rd["GDId"]);
-        preparedDate = NormalizeReportDateText(Convert.ToString(rd["PurApproDate"]));
-        checkedDate = NormalizeReportDateText(Convert.ToString(rd["CAApproDate"]));
-        approvedDate = NormalizeReportDateText(Convert.ToString(rd["GDApproDate"]));
-        rd.Close();
-
-        return new PurchaseRequisitionApprovalFooterModel
-        {
-            PreparedDate = preparedDate,
-            CheckedDate = checkedDate,
-            ApprovedDate = approvedDate,
-            PreparedName = LoadEmployeeFullName(conn, preparedEmployeeId),
-            CheckedName = LoadEmployeeFullName(conn, checkedEmployeeId),
-            ApprovedName = LoadEmployeeFullName(conn, approvedEmployeeId),
-            PreparedSignature = LoadEmployeeSignature(conn, preparedEmployeeId),
-            CheckedSignature = LoadEmployeeSignature(conn, checkedEmployeeId),
-            ApprovedSignature = LoadEmployeeSignature(conn, approvedEmployeeId)
-        };
     }
 
     private int? ResolvePurchaseRequisitionIdForReport(SqlConnection conn, PurchaseRequisitionListViewDetailFilterRequest request, IReadOnlyCollection<int> allowedStatuses)
