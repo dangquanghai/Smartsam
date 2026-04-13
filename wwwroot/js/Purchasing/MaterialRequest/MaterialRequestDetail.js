@@ -283,6 +283,10 @@ function initializePage(mode, currentStatusId, actionPerm) {
             itemCode: tr.dataset.itemCode || '',
             itemName: tr.dataset.itemName || '',
             unit: tr.dataset.unit || '',
+            beginQty: 0,
+            receiptQty: 0,
+            usingQty: 0,
+            endQty: 0,
             orderQty: orderQty,
             notReceipt: 0,
             inStock: Number.parseFloat(tr.dataset.inStock || '0') || 0,
@@ -329,6 +333,10 @@ function initializePage(mode, currentStatusId, actionPerm) {
                 itemCode: createdItem.itemCode || '',
                 itemName: createdItem.itemName || '',
                 unit: createdItem.unit || '',
+                beginQty: 0,
+                receiptQty: 0,
+                usingQty: 0,
+                endQty: 0,
                 orderQty: 1,
                 notReceipt: 0,
                 inStock: 0,
@@ -599,6 +607,10 @@ function createLineRowHtml(row) {
                 <input type="hidden" class="mr-line-id" value="${row.id ?? ''}" />
                 <span class="mr-readonly-cell-text" title="${escapeHtml(row.itemCode || '')}">${escapeHtml(row.itemCode || '')}</span>
                 <input type="hidden" class="mr-line-itemcode" value="${escapeHtml(row.itemCode || '')}" />
+                <input type="hidden" class="mr-line-beginqty" value="${row.beginQty ?? 0}" />
+                <input type="hidden" class="mr-line-receiptqty" value="${row.receiptQty ?? 0}" />
+                <input type="hidden" class="mr-line-usingqty" value="${row.usingQty ?? 0}" />
+                <input type="hidden" class="mr-line-endqty" value="${row.endQty ?? 0}" />
             </td>
             <td>
                 <span class="mr-readonly-cell-text tcvn3-font" title="${escapeHtml(row.itemName || '')}">${escapeHtml(row.itemName || '')}</span>
@@ -881,6 +893,10 @@ function serializeLines($tableBody) {
             itemCode: ($row.find('.mr-line-itemcode').val() || '').toString().trim(),
             itemName: ($row.find('.mr-line-itemname').val() || '').toString().trim(),
             unit: ($row.find('.mr-line-unit').val() || '').toString().trim(),
+            beginQty: toNumber($row.find('.mr-line-beginqty').val()),
+            receiptQty: toNumber($row.find('.mr-line-receiptqty').val()),
+            usingQty: toNumber($row.find('.mr-line-usingqty').val()),
+            endQty: toNumber($row.find('.mr-line-endqty').val()),
             orderQty: toNumber($row.find('.mr-line-order').val()),
             notReceipt: toNumber($row.find('.mr-line-notrec').val()),
             inStock: toNumber($row.find('.mr-line-in').val()),
@@ -919,6 +935,10 @@ function syncLineInputNames($tableBody) {
         setLineInputName($row, '.mr-line-itemcode', index, 'ItemCode');
         setLineInputName($row, '.mr-line-itemname', index, 'ItemName');
         setLineInputName($row, '.mr-line-unit', index, 'Unit');
+        setLineInputName($row, '.mr-line-beginqty', index, 'BeginQty');
+        setLineInputName($row, '.mr-line-receiptqty', index, 'ReceiptQty');
+        setLineInputName($row, '.mr-line-usingqty', index, 'UsingQty');
+        setLineInputName($row, '.mr-line-endqty', index, 'EndQty');
         setLineInputName($row, '.mr-line-order', index, 'OrderQty');
         setLineInputName($row, '.mr-line-notrec', index, 'NotReceipt');
         setLineInputName($row, '.mr-line-in', index, 'InStock');

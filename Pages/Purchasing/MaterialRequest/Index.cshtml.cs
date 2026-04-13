@@ -1323,6 +1323,10 @@ public class MaterialRequestLineDto
     [StringLength(50, ErrorMessage = "Unit must be at most 50 characters.")]
     public string? Unit { get; set; }
 
+    public decimal? BeginQty { get; set; }
+    public decimal? ReceiptQty { get; set; }
+    public decimal? UsingQty { get; set; }
+    public decimal? EndQty { get; set; }
     public decimal? OrderQty { get; set; }
     public decimal? NotReceipt { get; set; }
     public decimal? InStock { get; set; }
@@ -1835,6 +1839,10 @@ public class MaterialRequestService
                 d.ITEMCODE,
                 ISNULL(i.ItemName, '') AS ITEMNAME,
                 d.UNIT,
+                ISNULL(d.BEGIN_Q, 0) AS BEGIN_Q,
+                ISNULL(d.RECEIPT_Q, 0) AS RECEIPT_Q,
+                ISNULL(d.USING_Q, 0) AS USING_Q,
+                ISNULL(d.END_Q, 0) AS END_Q,
                 d.NEW_ORDER,
                 d.NOT_RECEIPT,
                 d.INSTOCK,
@@ -1863,20 +1871,24 @@ public class MaterialRequestService
                 ItemCode = rd[1]?.ToString(),
                 ItemName = rd[2]?.ToString(),
                 Unit = rd[3]?.ToString(),
-                OrderQty = rd.IsDBNull(4) ? null : Convert.ToDecimal(rd[4]),
-                NotReceipt = rd.IsDBNull(5) ? null : Convert.ToDecimal(rd[5]),
-                InStock = rd.IsDBNull(6) ? null : Convert.ToDecimal(rd[6]),
-                AccIn = rd.IsDBNull(7) ? null : Convert.ToDecimal(rd[7]),
-                Buy = rd.IsDBNull(8) ? null : Convert.ToDecimal(rd[8]),
-                NormQty = rd.IsDBNull(9) ? null : Convert.ToDecimal(rd[9]),
-                NormMain = rd.IsDBNull(10) ? null : Convert.ToDecimal(rd[10]),
-                Price = rd.IsDBNull(11) ? null : Convert.ToDecimal(rd[11]),
-                Note = rd[12]?.ToString(),
-                NewItem = !rd.IsDBNull(13) && Convert.ToBoolean(rd[13]),
-                Selected = !rd.IsDBNull(14) && Convert.ToBoolean(rd[14]),
-                ManualCheck = !rd.IsDBNull(15) && Convert.ToBoolean(rd[15]),
-                TempStore = rd.IsDBNull(16) ? null : Convert.ToDecimal(rd[16]),
-                Issued = rd.IsDBNull(17) ? null : Convert.ToDecimal(rd[17])
+                BeginQty = rd.IsDBNull(4) ? null : Convert.ToDecimal(rd[4]),
+                ReceiptQty = rd.IsDBNull(5) ? null : Convert.ToDecimal(rd[5]),
+                UsingQty = rd.IsDBNull(6) ? null : Convert.ToDecimal(rd[6]),
+                EndQty = rd.IsDBNull(7) ? null : Convert.ToDecimal(rd[7]),
+                OrderQty = rd.IsDBNull(8) ? null : Convert.ToDecimal(rd[8]),
+                NotReceipt = rd.IsDBNull(9) ? null : Convert.ToDecimal(rd[9]),
+                InStock = rd.IsDBNull(10) ? null : Convert.ToDecimal(rd[10]),
+                AccIn = rd.IsDBNull(11) ? null : Convert.ToDecimal(rd[11]),
+                Buy = rd.IsDBNull(12) ? null : Convert.ToDecimal(rd[12]),
+                NormQty = rd.IsDBNull(13) ? null : Convert.ToDecimal(rd[13]),
+                NormMain = rd.IsDBNull(14) ? null : Convert.ToDecimal(rd[14]),
+                Price = rd.IsDBNull(15) ? null : Convert.ToDecimal(rd[15]),
+                Note = rd[16]?.ToString(),
+                NewItem = !rd.IsDBNull(17) && Convert.ToBoolean(rd[17]),
+                Selected = !rd.IsDBNull(18) && Convert.ToBoolean(rd[18]),
+                ManualCheck = !rd.IsDBNull(19) && Convert.ToBoolean(rd[19]),
+                TempStore = rd.IsDBNull(20) ? null : Convert.ToDecimal(rd[20]),
+                Issued = rd.IsDBNull(21) ? null : Convert.ToDecimal(rd[21])
             },
             cmd => AddNumeric18_0Param(cmd, "@RequestNo", requestNo),
             cancellationToken);
@@ -1967,7 +1979,7 @@ public class MaterialRequestService
                 continue;
             }
 
-            var normMain = 0m;
+            var normMain = line.NormMain ?? 0m;
             var normDept = 0m;
             var rawInventory = 0m;
             var reservedQty = 0m;
@@ -1976,7 +1988,6 @@ public class MaterialRequestService
             await using (var itemCmd = new SqlCommand(@"
                 SELECT TOP 1
                     i.ItemID,
-                    CAST(COALESCE(NULLIF(i.StoreNormInMain, 0), NULLIF(i.ReOrderPoint, 0), 1) AS decimal(18,2)) AS NormMain,
                     CAST(ISNULL(kgi.ReOrderPoint, 0) AS decimal(18,2)) AS NormDept
                 FROM dbo.INV_ItemList i
                 LEFT JOIN dbo.INV_KPGroupIndex kgi
@@ -1991,8 +2002,7 @@ public class MaterialRequestService
                 if (await reader.ReadAsync(cancellationToken))
                 {
                     itemId = reader.IsDBNull(0) ? (int?)null : Convert.ToInt32(reader[0]);
-                    normMain = reader.IsDBNull(1) ? 0m : Convert.ToDecimal(reader[1]);
-                    normDept = reader.IsDBNull(2) ? 0m : Convert.ToDecimal(reader[2]);
+                    normDept = reader.IsDBNull(1) ? 0m : Convert.ToDecimal(reader[1]);
                 }
             }
 
@@ -2001,7 +2011,7 @@ public class MaterialRequestService
                 rawInventory = await GetMainInventoryAsync(conn, itemId.Value, storeGroup, cancellationToken);
             }
 
-            reservedQty = await GetReservedQtyAsync(conn, requestNo, itemCode, cancellationToken);
+            reservedQty = await GetReservedQtyAsync(conn, itemCode, cancellationToken);
 
             line.NormMain = normMain;
             line.NotReceipt = reservedQty;
@@ -2070,55 +2080,10 @@ public class MaterialRequestService
     /// </summary>
     private static async Task<decimal> GetMainInventoryAsync(SqlConnection conn, int itemId, int storeGroup, CancellationToken cancellationToken)
     {
-        const string sql = @"
-            SELECT
-                ISNULL(bg.BGQty, 0)
-                + ISNULL(rcv.RecQty, 0)
-                - ISNULL(iss.IssQty, 0) AS EndQty
-            FROM
-                (
-                    SELECT SUM(bg.BGQuantity) AS BGQty
-                    FROM dbo.INV_ItemStoreBG bg
-                    INNER JOIN dbo.INV_StoreList sl ON bg.StoreID = sl.StoreID
-                    INNER JOIN dbo.INV_KPGroup kp ON sl.DeptID = kp.KPGroupID
-                    WHERE bg.[Year] = YEAR(GETDATE())
-                      AND bg.ItemID = @ItemID
-                      AND kp.KPGroupID = @StoreGroup
-                      AND sl.StoreID <> 23
-                      AND sl.StoreID <> 24
-                ) bg
-            CROSS APPLY
-                (
-                    SELECT SUM(fd.Act_Qty) AS RecQty
-                    FROM dbo.INV_ItemFlowDetail fd
-                    INNER JOIN dbo.INV_ItemFlow f ON fd.FlowID = f.FlowID
-                    INNER JOIN dbo.INV_StoreList sl ON f.ToStore = sl.StoreID
-                    INNER JOIN dbo.INV_KPGroup kp ON sl.DeptID = kp.KPGroupID
-                    WHERE (f.FlowType = 2 OR f.FlowType = 3)
-                      AND YEAR(f.FlowDate) = YEAR(GETDATE())
-                      AND fd.ItemID = @ItemID
-                      AND kp.KPGroupID = @StoreGroup
-                      AND sl.StoreID <> 23
-                      AND sl.StoreID <> 24
-                ) rcv
-            CROSS APPLY
-                (
-                    SELECT SUM(fd.Act_Qty) AS IssQty
-                    FROM dbo.INV_ItemFlowDetail fd
-                    INNER JOIN dbo.INV_ItemFlow f ON fd.FlowID = f.FlowID
-                    INNER JOIN dbo.INV_StoreList sl ON f.FromStore = sl.StoreID
-                    INNER JOIN dbo.INV_KPGroup kp ON sl.DeptID = kp.KPGroupID
-                    WHERE (f.FlowType = 1 OR f.FlowType = 3)
-                      AND YEAR(f.FlowDate) = YEAR(GETDATE())
-                      AND fd.ItemID = @ItemID
-                      AND kp.KPGroupID = @StoreGroup
-                      AND sl.StoreID <> 23
-                      AND sl.StoreID <> 24
-                ) iss";
+        const string sql = "EXEC dbo.INV_CheckInMainInventory @ItemID, 1, NULL";
 
         await using var cmd = new SqlCommand(sql, conn);
         Helper.AddParameter(cmd, "@ItemID", itemId, SqlDbType.Int);
-        Helper.AddParameter(cmd, "@StoreGroup", storeGroup, SqlDbType.Int);
 
         var value = await cmd.ExecuteScalarAsync(cancellationToken);
         return value == null || value == DBNull.Value ? 0m : Convert.ToDecimal(value);
@@ -2127,7 +2092,7 @@ public class MaterialRequestService
     /// <summary>
     /// Lay so luong da giu o cac MR khac.
     /// </summary>
-    private static async Task<decimal> GetReservedQtyAsync(SqlConnection conn, long requestNo, string itemCode, CancellationToken cancellationToken)
+    private static async Task<decimal> GetReservedQtyAsync(SqlConnection conn, string itemCode, CancellationToken cancellationToken)
     {
         const string sql = @"
             SELECT ISNULL(SUM(
@@ -2140,12 +2105,11 @@ public class MaterialRequestService
             FROM dbo.MATERIAL_REQUEST r
             INNER JOIN dbo.MATERIAL_REQUEST_DETAIL d ON r.REQUEST_NO = d.REQUEST_NO
             WHERE d.ITEMCODE = @ItemCode
-              AND r.REQUEST_NO <> @RequestNo
+              AND r.DATE_CREATE > '2014-12-31'
               AND ISNULL(r.NO_ISSUE, 0) = 0
               AND r.MATERIALSTATUSID BETWEEN 2 AND 4";
 
         await using var cmd = new SqlCommand(sql, conn);
-        AddNumeric18_0Param(cmd, "@RequestNo", requestNo);
         Helper.AddParameter(cmd, "@ItemCode", itemCode, SqlDbType.VarChar, 20);
 
         var value = await cmd.ExecuteScalarAsync(cancellationToken);
@@ -2870,6 +2834,10 @@ public class MaterialRequestService
                 && string.IsNullOrWhiteSpace(itemName)
                 && string.IsNullOrWhiteSpace(unit)
                 && string.IsNullOrWhiteSpace(note)
+                && !(line.BeginQty.HasValue && line.BeginQty.Value != 0)
+                && !(line.ReceiptQty.HasValue && line.ReceiptQty.Value != 0)
+                && !(line.UsingQty.HasValue && line.UsingQty.Value != 0)
+                && !(line.EndQty.HasValue && line.EndQty.Value != 0)
                 && !(line.OrderQty.HasValue && line.OrderQty.Value != 0)
                 && !(line.NotReceipt.HasValue && line.NotReceipt.Value != 0)
                 && !(line.InStock.HasValue && line.InStock.Value != 0)
@@ -2891,6 +2859,10 @@ public class MaterialRequestService
                 ItemCode = itemCode,
                 ItemName = itemName,
                 Unit = unit,
+                BeginQty = line.BeginQty ?? 0,
+                ReceiptQty = line.ReceiptQty ?? 0,
+                UsingQty = line.UsingQty ?? 0,
+                EndQty = line.EndQty ?? 0,
                 OrderQty = line.OrderQty ?? 0,
                 NotReceipt = line.NotReceipt ?? 0,
                 InStock = line.InStock ?? 0,

@@ -170,6 +170,10 @@
                                                 <input type="hidden" class="mr-line-id" value="@(line.Id?.ToString() ?? string.Empty)" />
                                                 <span class="mr-readonly-cell-text" title="@(line.ItemCode ?? string.Empty)">@(line.ItemCode ?? string.Empty)</span>
                                                 <input type="hidden" class="mr-line-itemcode" value="@line.ItemCode" />
+                                                <input type="hidden" class="mr-line-beginqty" value="@(line.BeginQty?.ToString("0.##") ?? "0")" />
+                                                <input type="hidden" class="mr-line-receiptqty" value="@(line.ReceiptQty?.ToString("0.##") ?? "0")" />
+                                                <input type="hidden" class="mr-line-usingqty" value="@(line.UsingQty?.ToString("0.##") ?? "0")" />
+                                                <input type="hidden" class="mr-line-endqty" value="@(line.EndQty?.ToString("0.##") ?? "0")" />
                                             </td>
                                             <td>
                                                 <span class="mr-readonly-cell-text tcvn3-font" title="@(line.ItemName ?? string.Empty)">@(line.ItemName ?? string.Empty)</span>
