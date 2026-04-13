@@ -73,25 +73,8 @@
         });
     }
 
-    function initCloseButton() {
-        const closeButton = document.getElementById("btnSupplierPoClose");
-        if (!closeButton) {
-            return;
-        }
-
-        closeButton.addEventListener("click", () => {
-            if (window.history.length > 1) {
-                window.history.back();
-                return;
-            }
-
-            window.location.href = "/";
-        });
-    }
-
     document.addEventListener("DOMContentLoaded", () => {
         initDateRangeToggle();
         initPageSizeSubmit();
-        initCloseButton();
     });
 })();
