@@ -99,6 +99,54 @@ function closeOpenSelect2() {
     });
 }
 
+function buildPurchaseOrderQuestPdfUrl() {
+    const baseUrl = window.purchaseOrderDetailPage?.questPdfUrl || '';
+    const reportId = window.purchaseOrderDetailPage?.reportId || 0;
+    if (!baseUrl || !reportId) {
+        return '';
+    }
+
+    return `${baseUrl}&id=${encodeURIComponent(reportId)}`;
+}
+
+async function downloadPurchaseOrderQuestPdf() {
+    const reportUrl = buildPurchaseOrderQuestPdfUrl();
+    if (!reportUrl) {
+        alert('Purchase order QuestPDF report is not available.');
+        return;
+    }
+
+    const poNo = (window.purchaseOrderDetailPage?.reportFileName || 'purchase_order').trim() || 'purchase_order';
+    const fileName = `PurchaseOrder_No_${poNo.replace(/[\\/:*?"<>|]+/g, '_')}.pdf`;
+    const response = await fetch(reportUrl, {
+        method: 'GET',
+        credentials: 'same-origin'
+    });
+
+    if (!response.ok) {
+        throw new Error(`Cannot generate QuestPDF report. HTTP ${response.status}`);
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.toLowerCase().includes('application/pdf')) {
+        const text = await response.text();
+        throw new Error(text || 'QuestPDF report is not available.');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    try {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    } finally {
+        window.URL.revokeObjectURL(url);
+    }
+}
+
 // Kiem tra form truoc khi post PO header.
 function validateMainForm() {
     const fields = [
@@ -165,6 +213,13 @@ function bindMainEvents(mode) {
     $('#PerVAT').on('input', updateTotals);
     $('#btnCalculateTotal').on('click', updateTotals);
 
+    $('#btnOpenPurchaseOrderReport').on('click', function () {
+        downloadPurchaseOrderQuestPdf().catch(function (error) {
+            console.error(error);
+            alert(error?.message || 'Cannot export QuestPDF.');
+        });
+    });
+
     $('#btnAddDetail').on('click', function () {
         closeOpenSelect2();
         loadPrLines();
@@ -183,6 +238,14 @@ function bindMainEvents(mode) {
     $('#btnEvaluate').on('click', function () {
         closeOpenSelect2();
         $('#purchaseOrderEvaluateModal').modal('show');
+    });
+
+    $('#btnPurchaserApprove').on('click', function () {
+        if (!confirm('Approve this purchase order and send it to CFO?')) {
+            return;
+        }
+
+        $('#poPurchaserApproveForm').submit();
     });
 
     $('#btnConfirmEvaluate').on('click', function () {
@@ -282,6 +345,7 @@ function bindMainEvents(mode) {
     $(document).on('change', '#purchaseOrderPrLineRows .po-pr-check', function () {
         syncPrLineCheckAllState();
     });
+
 }
 
 // Nap dong PR vao modal de chon copy sang PO.
@@ -326,7 +390,7 @@ function renderDetailRows() {
         return `
             <tr data-key="${escapeHtml(row.tempKey)}">
                 <td></td>
-                <td>${escapeHtml(row.itemCode)}</td>
+                <td class="po-detail-itemcode">${escapeHtml(row.itemCode)}</td>
                 <td class="tcvn3-font">${escapeHtml(row.itemName)}</td>
                 <td>${escapeHtml(row.unit)}</td>
                 <td><input type="text" class="form-control form-control-sm text-right po-detail-qty" value="${formatNumber(row.quantity)}" ${canSave ? '' : 'readonly'} /></td>
@@ -358,7 +422,7 @@ function renderPrLineRows() {
             <tr data-index="${index}">
                 <td class="text-center"><input type="checkbox" class="po-pr-check" /></td>
                 <td>${escapeHtml(row.itemCode || row.ItemCode || '')}</td>
-                <td class="tcvn3-font">${escapeHtml(row.itemName || row.ItemName || '')}</td>
+                <td class="tcvn3-font po-pr-itemname">${escapeHtml(row.itemName || row.ItemName || '')}</td>
                 <td>${escapeHtml(row.unit || row.Unit || '')}</td>
                 <td class="text-right">${formatNumber(row.quantity || row.Quantity || 0)}</td>
                 <td class="text-right">${formatNumber(row.unitPrice || row.UnitPrice || 0)}</td>
@@ -383,6 +447,10 @@ function addSelectedPrLines() {
         return;
     }
 
+    const supplierId = $('#SupplierID').val();
+    const supplierText = ($('#SupplierID option:selected').text() || '').trim();
+    const expectedSupplierId = supplierId ? parseInt(supplierId, 10) : 0;
+
     selectedIndexes.forEach(function (index) {
         const source = purchaseOrderPrLines[index];
         if (!source) {
@@ -398,7 +466,9 @@ function addSelectedPrLines() {
             UnitPrice: source.unitPrice || source.UnitPrice || 0,
             POAmount: toNumber(source.quantity || source.Quantity || 0) * toNumber(source.unitPrice || source.UnitPrice || 0),
             Note: source.remark || source.Remark || '',
-            MRRequestNo: $('#PRID option:selected').text() || ''
+            MRRequestNo: $('#PRID option:selected').text() || '',
+            SupplierID: expectedSupplierId || null,
+            SupplierText: supplierText
         }));
     });
 

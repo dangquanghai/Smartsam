@@ -65,6 +65,20 @@
     margin-right: 0 !important;
 }
 
+.po-detail-itemname,
+.po-pr-itemname {
+    min-width: 260px;
+}
+
+.po-detail-itemcode,
+.po-pr-itemcode {
+    min-width: 110px;
+}
+
+.po-wide-table {
+    min-width: 1240px;
+}
+
 /* PO page only: keep Select2 dropdowns below Bootstrap modals. */
 .purchase-order-header-layout .select2-container,
 .purchase-order-header-layout .select2-container--open,
@@ -90,5 +104,36 @@
 
     .purchase-order-vat-value-sm {
         max-width: none;
+    }
+}
+
+@media print {
+    body.purchase-order-report-printing > *:not(#purchaseOrderReportModal),
+    body.purchase-order-report-printing .modal-backdrop,
+    body.purchase-order-report-printing .modal-header,
+    body.purchase-order-report-printing .modal-footer {
+        display: none !important;
+    }
+
+    body.purchase-order-report-printing #purchaseOrderReportModal {
+        display: block !important;
+        position: static !important;
+        overflow: visible !important;
+        background: #fff !important;
+    }
+
+    body.purchase-order-report-printing #purchaseOrderReportModal .modal-dialog {
+        max-width: none !important;
+        width: 100% !important;
+        margin: 0 !important;
+    }
+
+    body.purchase-order-report-printing #purchaseOrderReportModal .modal-content {
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    body.purchase-order-report-printing #purchaseOrderReportContent {
+        display: block !important;
     }
 }

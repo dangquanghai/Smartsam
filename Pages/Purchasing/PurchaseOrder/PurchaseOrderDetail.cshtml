@@ -99,14 +99,14 @@
                             <div class="row no-gutters align-items-start mb-2">
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">Comment</label></div>
                                 <div class="col-10">
-                                    <textarea asp-for="Header.Comment" id="Comment" rows="3" class="form-control form-control-sm vni-font" readonly="@Model.IsViewMode"></textarea>
+                                    <textarea asp-for="Header.Comment" id="Comment" rows="2" maxlength="100" class="form-control form-control-sm vni-font" readonly="@Model.IsViewMode"></textarea>
                                 </div>
                             </div>
 
                             <div class="row no-gutters align-items-start mb-0">
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">Remark</label></div>
                                 <div class="col-10">
-                                    <textarea asp-for="Header.Remark" id="Remark" rows="2" class="form-control form-control-sm vni-font" readonly="@Model.IsViewMode"></textarea>
+                                    <input asp-for="Header.Remark" id="Remark" maxlength="100" class="form-control form-control-sm vni-font" readonly="@Model.IsViewMode" />
                                 </div>
                             </div>
                         </div>
@@ -161,6 +161,12 @@
                                 <i class="fas fa-save"></i> Save
                             </button>
                         }
+                        @if (Model.CanPurchaserApprove)
+                        {
+                            <button type="button" class="btn btn-sm btn-success mr-2" id="btnPurchaserApprove">
+                                <i class="fas fa-check"></i> Purchaser Approve
+                            </button>
+                        }
                         @if (Model.CanEvaluate)
                         {
                             <button type="button" class="btn btn-sm btn-primary mr-2" id="btnEvaluate">
@@ -182,6 +188,12 @@
                         <button type="button" class="btn btn-sm btn-secondary mr-2" id="btnCalculateTotal">
                             <i class="fas fa-calculator"></i> CalSum
                         </button>
+                        @if (Model.Header.Id > 0)
+                        {
+                            <button type="button" class="btn btn-sm btn-primary mr-2" id="btnOpenPurchaseOrderReport">
+                                <i class="fas fa-file-pdf"></i> Report
+                            </button>
+                        }
                         <a href="@Model.BackToListUrl" class="btn btn-sm btn-default">
                             <i class="fas fa-arrow-left"></i> Back to list
                         </a>
@@ -190,12 +202,30 @@
 
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-sm table-bordered table-hover mb-0" id="purchaseOrderDetailTable">
+                        <table class="table table-sm table-bordered table-hover mb-0 po-wide-table" id="purchaseOrderDetailTable">
+                            <colgroup>
+                                <col style="width: 40px;" />
+                                <col style="width: 110px;" />
+                                <col style="min-width: 260px;" />
+                                <col style="width: 80px;" />
+                                <col style="width: 90px;" />
+                                <col style="width: 100px;" />
+                                <col style="width: 120px;" />
+                                <col style="width: 180px;" />
+                                <col style="width: 180px;" />
+                                <col style="width: 90px;" />
+                                <col style="width: 120px;" />
+                                <col style="width: 110px;" />
+                                @if (Model.CanSave)
+                                {
+                                    <col style="width: 55px;" />
+                                }
+                            </colgroup>
                             <thead class="thead-light">
                                 <tr>
                                     <th style="width: 40px;"></th>
-                                    <th style="width: 140px;">Item Code</th>
-                                    <th>Item Name</th>
+                                    <th style="width: 110px;">Item Code</th>
+                                    <th style="min-width: 260px;">Item Name</th>
                                     <th style="width: 80px;">Unit</th>
                                     <th style="width: 90px;" class="text-center">Qty</th>
                                     <th style="width: 100px;" class="text-center">U.Price</th>
@@ -239,6 +269,12 @@
             <input type="hidden" name="EstimatePoint" id="EvaluateEstimatePointInput" />
         </form>
 
+        <form method="post" asp-page-handler="PurchaserApprove" id="poPurchaserApproveForm">
+            <input type="hidden" name="Header.Id" value="@Model.Header.Id" />
+            <input type="hidden" name="Mode" value="@Model.Mode" />
+            <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+        </form>
+
         <form method="post" asp-page-handler="Approve" id="poApproveForm">
             <input type="hidden" name="Header.Id" value="@Model.Header.Id" />
             <input type="hidden" name="Mode" value="@Model.Mode" />
@@ -266,14 +302,24 @@
                         <div class="modal-body pb-2">
                             <div class="text-danger small mb-2 d-none" id="purchaseOrderAddDetailError"></div>
                             <div class="table-responsive">
-                                <table class="table table-sm table-bordered table-hover mb-0" id="purchaseOrderPrLineTable">
-                                    <thead class="thead-light">
-                                        <tr>
-                                            <th style="width: 50px;" class="text-center">
-                                                <input type="checkbox" id="purchaseOrderPrCheckAll" />
-                                            </th>
-                                            <th style="width: 140px;">Item Code</th>
-                                            <th>Item Name</th>
+                        <table class="table table-sm table-bordered table-hover mb-0 po-wide-table" id="purchaseOrderPrLineTable">
+                            <colgroup>
+                                <col style="width: 50px;" />
+                                <col style="width: 110px;" />
+                                <col style="min-width: 260px;" />
+                                <col style="width: 80px;" />
+                                <col style="width: 90px;" />
+                                <col style="width: 100px;" />
+                                <col style="width: 180px;" />
+                                <col style="width: 180px;" />
+                            </colgroup>
+                            <thead class="thead-light">
+                                <tr>
+                                    <th style="width: 50px;" class="text-center">
+                                        <input type="checkbox" id="purchaseOrderPrCheckAll" />
+                                    </th>
+                                            <th style="width: 110px;">Item Code</th>
+                                            <th style="min-width: 260px;">Item Name</th>
                                             <th style="width: 80px;">Unit</th>
                                             <th style="width: 90px;" class="text-center">Qty</th>
                                             <th style="width: 100px;" class="text-center">U.Price</th>
@@ -375,12 +421,16 @@
         window.purchaseOrderDetailPage = {
             canSave: @(Model.CanSave ? "true" : "false"),
             isViewMode: @(Model.IsViewMode ? "true" : "false"),
+            canPurchaserApprove: @(Model.CanPurchaserApprove ? "true" : "false"),
             canEvaluate: @(Model.CanEvaluate ? "true" : "false"),
             canApprove: @(Model.CanApprove ? "true" : "false"),
             canBackToProcessing: @(Model.CanBackToProcessing ? "true" : "false"),
             supplierLookupUrl: '@Url.Page("./PurchaseOrderDetail", "SupplierLookup")',
             prLookupUrl: '@Url.Page("./PurchaseOrderDetail", "PrLookup")',
             prLinesUrl: '@Url.Page("./PurchaseOrderDetail", "PrLines")',
+            questPdfUrl: '@Url.Page("./PurchaseOrderDetail", "ReportQuestPdf")',
+            reportId: @Model.Header.Id,
+            reportFileName: '@Model.Header.PONo',
             departmentOptions: @Html.Raw(Model.DepartmentOptionsJson),
             openConvertModal: @(Model.OpenConvertModal ? "true" : "false")
         };

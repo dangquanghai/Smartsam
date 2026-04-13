@@ -15,7 +15,6 @@ namespace SmartSam.Pages.Purchasing.PurchaseRequisition;
 
 public class IndexModel : BasePageModel
 {
-    private static readonly HashSet<int> AllowedPageSizes = [10, 20, 50, 100, 200];
     private static readonly string[] AcceptedDateFormats = ["yyyy-MM-dd", "M/d/yyyy", "MM/dd/yyyy", "d/M/yyyy", "dd/MM/yyyy"];
     private const int FUNCTION_ID = 72;
     private const int PermissionViewList = 1;
@@ -40,7 +39,8 @@ public class IndexModel : BasePageModel
     }
 
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
-    public int DefaultPageSize => _config.GetValue<int>("AppSettings:DefaultPageSize", 10);
+    public int DefaultPageSize => _config.GetValue<int?>("AppSettings:DefaultPageSize") ?? 10;
+    public IReadOnlyList<int> PageSizeOptions => GetConfiguredPageSizeOptions();
 
     [BindProperty(SupportsGet = true)]
     public PurchaseRequisitionFilter Filter { get; set; } = new PurchaseRequisitionFilter();
@@ -339,7 +339,7 @@ public class IndexModel : BasePageModel
         }
 
         request.PageNumber = request.PageNumber <= 0 ? 1 : request.PageNumber;
-        request.PageSize = AllowedPageSizes.Contains(request.PageSize) ? request.PageSize : DefaultPageSize;
+        request.PageSize = NormalizePageSize(request.PageSize);
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
@@ -696,6 +696,9 @@ WHERE p.PRID = @PRID
             PreparedDate = preparedDate,
             CheckedDate = checkedDate,
             ApprovedDate = approvedDate,
+            PreparedName = LoadEmployeeFullName(conn, preparedEmployeeId),
+            CheckedName = LoadEmployeeFullName(conn, checkedEmployeeId),
+            ApprovedName = LoadEmployeeFullName(conn, approvedEmployeeId),
             PreparedSignature = LoadEmployeeSignature(conn, preparedEmployeeId),
             CheckedSignature = LoadEmployeeSignature(conn, checkedEmployeeId),
             ApprovedSignature = LoadEmployeeSignature(conn, approvedEmployeeId)
@@ -751,7 +754,7 @@ ORDER BY d.RecordID", conn))
         };
 
         var whereSql = BuildViewDetailWhereSql(request, allowedStatuses);
-        report.Footer = LoadSummaryReportFooter(conn, request, allowedStatuses);
+        report.Footer = new PurchaseRequisitionApprovalFooterModel();
 
         using var cmd = new SqlCommand($@"
 SELECT
@@ -834,58 +837,6 @@ ORDER BY p.RequestDate DESC, p.RequestNo DESC, d.RecordID", conn);
         }
 
         return report;
-    }
-
-    private PurchaseRequisitionApprovalFooterModel? LoadSummaryReportFooter(SqlConnection conn, PurchaseRequisitionListViewDetailFilterRequest request, IReadOnlyCollection<int> allowedStatuses)
-    {
-        var whereSql = BuildViewDetailWhereSql(request, allowedStatuses);
-
-        using var cmd = new SqlCommand($@"
-SELECT TOP 1
-    p.PurId,
-    ISNULL(p.PurApproDate, '') AS PurApproDate,
-    p.CAId,
-    ISNULL(p.CAApproDate, '') AS CAApproDate,
-    p.GDId,
-    ISNULL(p.GDApproDate, '') AS GDApproDate
-FROM dbo.PC_PR p
-INNER JOIN dbo.PC_PRDetail d ON p.PRID = d.PRID
-LEFT JOIN dbo.INV_ItemList i ON d.ItemID = i.ItemID
-{whereSql}
-ORDER BY p.RequestDate DESC, p.PRID DESC", conn);
-
-        BindViewDetailFilterParams(cmd, request);
-
-        int? preparedEmployeeId = null;
-        int? checkedEmployeeId = null;
-        int? approvedEmployeeId = null;
-        string preparedDate = string.Empty;
-        string checkedDate = string.Empty;
-        string approvedDate = string.Empty;
-
-        using var rd = cmd.ExecuteReader();
-        if (!rd.Read())
-        {
-            return null;
-        }
-
-        preparedEmployeeId = rd.IsDBNull(rd.GetOrdinal("PurId")) ? null : Convert.ToInt32(rd["PurId"]);
-        checkedEmployeeId = rd.IsDBNull(rd.GetOrdinal("CAId")) ? null : Convert.ToInt32(rd["CAId"]);
-        approvedEmployeeId = rd.IsDBNull(rd.GetOrdinal("GDId")) ? null : Convert.ToInt32(rd["GDId"]);
-        preparedDate = NormalizeReportDateText(Convert.ToString(rd["PurApproDate"]));
-        checkedDate = NormalizeReportDateText(Convert.ToString(rd["CAApproDate"]));
-        approvedDate = NormalizeReportDateText(Convert.ToString(rd["GDApproDate"]));
-        rd.Close();
-
-        return new PurchaseRequisitionApprovalFooterModel
-        {
-            PreparedDate = preparedDate,
-            CheckedDate = checkedDate,
-            ApprovedDate = approvedDate,
-            PreparedSignature = LoadEmployeeSignature(conn, preparedEmployeeId),
-            CheckedSignature = LoadEmployeeSignature(conn, checkedEmployeeId),
-            ApprovedSignature = LoadEmployeeSignature(conn, approvedEmployeeId)
-        };
     }
 
     private int? ResolvePurchaseRequisitionIdForReport(SqlConnection conn, PurchaseRequisitionListViewDetailFilterRequest request, IReadOnlyCollection<int> allowedStatuses)
@@ -997,7 +948,28 @@ ORDER BY p.PRID DESC", conn);
         return $"WHERE {string.Join(" AND ", whereBuilder)}";
     }
 
-    private static byte[]? LoadEmployeeSignature(SqlConnection conn, int? employeeId)
+    private string LoadEmployeeFullName(SqlConnection conn, int? employeeId)
+    {
+        if (!employeeId.HasValue || employeeId.Value <= 0)
+        {
+            return string.Empty;
+        }
+
+        using var cmd = new SqlCommand(@"
+SELECT ISNULL(EmployeeName, '')
+FROM dbo.MS_Employee
+WHERE EmployeeID = @EmployeeID", conn);
+        cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId.Value;
+        var value = cmd.ExecuteScalar();
+        if (value == null || value == DBNull.Value)
+        {
+            return string.Empty;
+        }
+
+        return Convert.ToString(value)?.Trim() ?? string.Empty;
+    }
+
+    private byte[]? LoadEmployeeSignature(SqlConnection conn, int? employeeId)
     {
         if (!employeeId.HasValue || employeeId.Value <= 0)
         {
@@ -1005,17 +977,57 @@ ORDER BY p.PRID DESC", conn);
         }
 
         using var cmd = new SqlCommand(@"
-SELECT [Signature]
+SELECT ISNULL(UrlNomalSign, '') AS UrlNomalSign
 FROM dbo.MS_Employee
 WHERE EmployeeID = @EmployeeID", conn);
         cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId.Value;
-        var value = cmd.ExecuteScalar();
-        if (value == null || value == DBNull.Value)
+        var fileName = Convert.ToString(cmd.ExecuteScalar())?.Trim();
+        if (string.IsNullOrWhiteSpace(fileName))
         {
             return null;
         }
 
-        return value as byte[];
+        var signaturePath = ResolveEmployeeSignaturePath(fileName);
+        if (string.IsNullOrWhiteSpace(signaturePath) || !System.IO.File.Exists(signaturePath))
+        {
+            return null;
+        }
+
+        return System.IO.File.ReadAllBytes(signaturePath);
+    }
+
+    private string ResolveEmployeeSignaturePath(string fileName)
+    {
+        var cleanedFileName = Path.GetFileName(fileName.Trim());
+        if (string.IsNullOrWhiteSpace(cleanedFileName))
+        {
+            return string.Empty;
+        }
+
+        var basePath = _config.GetValue<string>("FileUploads:BasePath");
+        if (string.IsNullOrWhiteSpace(basePath))
+        {
+            return string.Empty;
+        }
+
+        var rootPath = Path.IsPathRooted(basePath)
+            ? basePath
+            : Path.Combine(_webHostEnvironment.ContentRootPath, basePath);
+
+        var functionPath = _config.GetValue<string>("FileUploads:Funtions:18");
+        if (!string.IsNullOrWhiteSpace(functionPath))
+        {
+            var relativeSegments = functionPath
+                .Replace('\\', '/')
+                .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            if (relativeSegments.Length > 0)
+            {
+                rootPath = Path.Combine([rootPath, .. relativeSegments]);
+            }
+        }
+
+        return Path.Combine(rootPath, cleanedFileName);
     }
 
     private static string NormalizeReportDateText(string? value)
@@ -1150,9 +1162,8 @@ ORDER BY d.RecordID", conn);
         var rows = new List<PurchaseRequisitionRow>();
         var totalRecords = 0;
         var page = filter.Page <= 0 ? 1 : filter.Page;
-        var pageSize = AllowedPageSizes.Contains(filter.PageSize) ? filter.PageSize : DefaultPageSize;
+        var pageSize = NormalizePageSize(filter.PageSize);
         var offset = (page - 1) * pageSize;
-
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
 
@@ -1745,7 +1756,7 @@ VALUES
         detailCmd.Parameters.Add("@Quantity", SqlDbType.Decimal).Value = detail.QtyPur;
         detailCmd.Parameters.Add("@UnitPrice", SqlDbType.Decimal).Value = detail.UnitPrice;
         detailCmd.Parameters.Add("@Remark", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(detail.Remark) ? DBNull.Value : detail.Remark.Trim();
-        detailCmd.Parameters.Add("@OrdAmount", SqlDbType.Decimal).Value = detail.QtyPur * detail.UnitPrice;
+        detailCmd.Parameters.Add("@OrdAmount", SqlDbType.Decimal).Value = detail.Amount;
         detailCmd.Parameters.Add("@MRRequestNO", SqlDbType.VarChar, 50).Value = string.IsNullOrWhiteSpace(detail.MrRequestNo) ? DBNull.Value : detail.MrRequestNo.Trim();
         detailCmd.Parameters.Add("@SugQty", SqlDbType.Decimal).Value = detail.QtyFromM;
         detailCmd.Parameters.Add("@SupplierID", SqlDbType.Int).Value = detail.SupplierId.HasValue ? detail.SupplierId.Value : DBNull.Value;
@@ -1794,10 +1805,7 @@ WHERE ID = @MRDetailID", conn, trans);
     // Thực hiện xử lý cho hàm NormalizeFilter theo nghiệp vụ của màn hình.
     private void NormalizeFilter()
     {
-        if (!AllowedPageSizes.Contains(Filter.PageSize))
-        {
-            Filter.PageSize = DefaultPageSize;
-        }
+        Filter.PageSize = NormalizePageSize(Filter.PageSize);
 
         if (Filter.Page <= 0)
         {
@@ -1833,8 +1841,50 @@ WHERE ID = @MRDetailID", conn, trans);
             FromDate = request.FromDate,
             ToDate = request.ToDate,
             Page = request.Page <= 0 ? 1 : request.Page,
-            PageSize = AllowedPageSizes.Contains(request.PageSize) ? request.PageSize : DefaultPageSize
+            PageSize = NormalizePageSize(request.PageSize)
         };
+    }
+
+    private IReadOnlyList<int> GetConfiguredPageSizeOptions()
+    {
+        var configured = _config.GetSection("AppSettings:PageSizeOptions").Get<int[]>() ?? Array.Empty<int>();
+
+        var options = configured
+            .Where(value => value > 0)
+            .Distinct()
+            .OrderBy(value => value)
+            .ToList();
+
+        if (options.Count == 0)
+        {
+            options = new List<int> { DefaultPageSize, 20, 50, 100, 200 }
+                .Where(value => value > 0)
+                .Distinct()
+                .OrderBy(value => value)
+                .ToList();
+        }
+
+        if (!options.Contains(DefaultPageSize))
+        {
+            options.Insert(0, DefaultPageSize);
+            options = options
+                .Where(value => value > 0)
+                .Distinct()
+                .OrderBy(value => value)
+                .ToList();
+        }
+
+        return options;
+    }
+
+    private int NormalizePageSize(int pageSize)
+    {
+        if (pageSize <= 0)
+        {
+            return DefaultPageSize;
+        }
+
+        return PageSizeOptions.Contains(pageSize) ? pageSize : DefaultPageSize;
     }
 
     private object BuildRouteValues() => new
@@ -2225,17 +2275,12 @@ WHERE ID = @MRDetailID", conn, trans);
         return statuses;
     }
 
-    // Xác định mode ưu tiên cho link No. theo thứ tự edit => approve => view.
+    // Xác định mode ưu tiên cho link No. theo thứ tự edit => view.
     public string GetAccessMode(PurchaseRequisitionRow row)
     {
         if (CanEditRow(row.StatusId))
         {
             return "edit";
-        }
-
-        if (CanApproveRow(row))
-        {
-            return "approve";
         }
 
         return "view";
@@ -2406,6 +2451,7 @@ public class PurchaseRequisitionDetailInput
     public decimal QtyFromM { get; set; }
     public decimal QtyPur { get; set; }
     public decimal UnitPrice { get; set; }
+    public decimal Amount { get; set; }
     public string? Remark { get; set; }
     public int? SupplierId { get; set; }
     public string SupplierText { get; set; } = string.Empty;

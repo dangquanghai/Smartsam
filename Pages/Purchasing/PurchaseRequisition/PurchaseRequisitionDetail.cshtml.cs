@@ -49,9 +49,8 @@ public class PurchaseRequisitionDetailModel : BasePageModel
     public bool CanEditExistingDetailFields { get; private set; }
     public bool CanOpenViewDetailDialog => PagePerm.HasPermission(PermissionViewDetail);
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
-    public bool IsApproveMode => string.Equals(Mode, "approve", StringComparison.OrdinalIgnoreCase);
     public bool IsStatusReadOnlyMode => Mode == "edit" && Requisition.Status != 1;
-    public bool IsReadOnlyMode => IsViewMode || IsApproveMode || IsStatusReadOnlyMode;
+    public bool IsReadOnlyMode => IsViewMode || IsStatusReadOnlyMode;
     public decimal TotalAmount { get; private set; }
     public string AllowedAttachmentExtensionsText => _config.GetValue<string>("FileUploads:AllowedExtensions") ?? ".doc,.docx,.xls,.xlsx,.pdf,.jpg,.jpeg,.png";
     public int MaxAttachmentSizeMb => _config.GetValue<int?>("FileUploads:MaxFileSizeMb") ?? 10;
@@ -90,6 +89,10 @@ public class PurchaseRequisitionDetailModel : BasePageModel
     {
         PagePerm = GetUserPermissions();
         Mode = string.IsNullOrWhiteSpace(mode) ? "view" : mode.Trim().ToLowerInvariant();
+        if (Mode != "edit" && Mode != "view" && Mode != "add")
+        {
+            Mode = "view";
+        }
         LoadAllDropdowns();
         LoadCurrentWorkflowUser();
 
@@ -116,16 +119,6 @@ public class PurchaseRequisitionDetailModel : BasePageModel
                 return RedirectToPage("./Index");
             }
 
-            if (IsApproveMode)
-            {
-                SetActionFlags();
-                if (!CanApproveWorkflow && !CanDisapproveWorkflow)
-                {
-                    TempData["Message"] = "You have no permission to approve this requisition at the current step.";
-                    TempData["MessageType"] = "warning";
-                    return RedirectToPage("./Index");
-                }
-            }
         }
         else
         {
@@ -299,6 +292,34 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
         });
     }
 
+    public IActionResult OnGetReport(int id)
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionViewDetail))
+        {
+            return RedirectToPage("./Index");
+        }
+
+        if (id <= 0)
+        {
+            return RedirectToPage("./Index");
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand("SELECT TOP 1 ISNULL(RequestNo, '') FROM dbo.PC_PR WHERE PRID = @PRID", conn);
+        cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = id;
+        conn.Open();
+        var requestNo = Convert.ToString(cmd.ExecuteScalar())?.Trim();
+        if (string.IsNullOrWhiteSpace(requestNo))
+        {
+            TempData["Message"] = "Purchase requisition is not found.";
+            TempData["MessageType"] = "warning";
+            return RedirectToPage("./Index");
+        }
+
+        return RedirectToPage("./Index", "ViewDetailReport", new { RequestNo = requestNo });
+    }
+
     // Lưu dữ liệu header và detail của phiếu đề nghị mua hàng.
     public IActionResult OnPost()
     {
@@ -311,13 +332,20 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
 
         if (!isNew)
         {
+            var requestNo = Requisition.RequestNo;
             var requestDate = Requisition.RequestDate;
             var description = Requisition.Description;
             var currency = Requisition.Currency;
             LoadExistingWorkflowData(Requisition.Id);
+            Requisition.RequestNo = requestNo;
             Requisition.RequestDate = requestDate;
             Requisition.Description = description;
             Requisition.Currency = currency;
+        }
+        else
+        {
+            // Status dropdown is disabled in UI, so keep the initial "New" status on add.
+            Requisition.Status = 1;
         }
 
         var effectivePermissions = isNew
@@ -334,8 +362,12 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
         }
 
         var details = ParseDetails();
-        TotalAmount = details.Sum(x => x.QtyPur * x.UnitPrice);
+        TotalAmount = details.Sum(x => x.Amount);
 
+        if (string.IsNullOrWhiteSpace(Requisition.RequestNo))
+        {
+            ModelState.AddModelError("Requisition.RequestNo", "No. is required.");
+        }
         if (string.IsNullOrWhiteSpace(Requisition.Description))
         {
             ModelState.AddModelError("Requisition.Description", "Description is required.");
@@ -406,15 +438,30 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
             return RedirectToCurrentDetail("edit");
         }
 
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+
+        using (var countCmd = new SqlCommand(@"
+SELECT COUNT(1)
+FROM dbo.PC_PRDetail
+WHERE PRID = @PRID", conn))
+        {
+            countCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
+            var detailCount = Convert.ToInt32(countCmd.ExecuteScalar() ?? 0);
+            if (detailCount <= 1)
+            {
+                TempData["Message"] = "Cannot move item back to MR because purchase requisition must contain at least 1 item after To MR.";
+                TempData["MessageType"] = "error";
+                return RedirectToCurrentDetail("edit");
+            }
+        }
+
         if (SelectedDetailId <= 0)
         {
             TempData["Message"] = "Please select one detail row to move back to MR.";
             TempData["MessageType"] = "warning";
             return RedirectToCurrentDetail("edit");
         }
-
-        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
-        conn.Open();
         using var trans = conn.BeginTransaction();
 
         try
@@ -483,6 +530,8 @@ WHERE PRID = @PRID
                 deleteCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = mrDetailId;
                 deleteCmd.ExecuteNonQuery();
             }
+
+            UpdateDescriptionFromMrRequestNos(conn, trans, Requisition.Id);
 
             trans.Commit();
             TempData["Message"] = "Selected item has been moved back to MR.";
@@ -961,7 +1010,7 @@ WHERE PRID = @PRID", conn))
         {
             var details = LoadDetailRows(conn, Requisition.Id);
             DetailsJson = JsonSerializer.Serialize(details);
-            TotalAmount = details.Sum(x => x.QtyPur * x.UnitPrice);
+            TotalAmount = details.Sum(x => x.Amount);
             AttachmentList = LoadAttachmentRows(Requisition.Id);
         }
     }
@@ -1025,6 +1074,7 @@ SELECT d.RecordID,
        ISNULL(d.SugQty, 0) AS QtyFromM,
        ISNULL(d.Quantity, 0) AS QtyPur,
        ISNULL(d.UnitPrice, 0) AS UnitPrice,
+       ISNULL(d.OrdAmount, ISNULL(d.Quantity, 0) * ISNULL(d.UnitPrice, 0)) AS Amount,
        ISNULL(d.Remark, '') AS Remark,
        d.SupplierID,
        CASE WHEN s.SupplierID IS NULL THEN '' ELSE ISNULL(s.SupplierCode, '') + ' - ' + ISNULL(s.SupplierName, '') END AS SupplierText,
@@ -1050,6 +1100,7 @@ ORDER BY d.RecordID", conn);
                 QtyFromM = Convert.ToDecimal(rd["QtyFromM"]),
                 QtyPur = Convert.ToDecimal(rd["QtyPur"]),
                 UnitPrice = Convert.ToDecimal(rd["UnitPrice"]),
+                Amount = Convert.ToDecimal(rd["Amount"]),
                 Remark = Convert.ToString(rd["Remark"]),
                 SupplierId = rd.IsDBNull(rd.GetOrdinal("SupplierID")) ? null : Convert.ToInt32(rd["SupplierID"]),
                 SupplierText = Convert.ToString(rd["SupplierText"]) ?? string.Empty,
@@ -1214,14 +1265,14 @@ ORDER BY SupplierCode";
             string requestNo;
             if (isNew)
             {
-                requestNo = GetSuggestedRequestNo(conn, trans);
+                requestNo = string.IsNullOrWhiteSpace(Requisition.RequestNo)
+                    ? GetSuggestedRequestNo(conn, trans)
+                    : Requisition.RequestNo.Trim();
                 Requisition.RequestNo = requestNo;
             }
             else
             {
-                using var requestNoCmd = new SqlCommand("SELECT TOP 1 ISNULL(RequestNo, '') FROM dbo.PC_PR WHERE PRID = @PRID", conn, trans);
-                requestNoCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
-                requestNo = Convert.ToString(requestNoCmd.ExecuteScalar()) ?? string.Empty;
+                requestNo = Requisition.RequestNo?.Trim() ?? string.Empty;
                 if (string.IsNullOrWhiteSpace(requestNo))
                 {
                     throw new InvalidOperationException("Request No. is not found.");
@@ -1273,7 +1324,8 @@ SELECT CAST(SCOPE_IDENTITY() AS int);", conn, trans);
             {
                 using var headerCmd = new SqlCommand(@"
 UPDATE dbo.PC_PR
-SET RequestDate = @RequestDate,
+SET RequestNo = @RequestNo,
+    RequestDate = @RequestDate,
     [Description] = @Description,
     Currency = @Currency,
     [Status] = @Status,
@@ -1281,6 +1333,7 @@ SET RequestDate = @RequestDate,
 WHERE PRID = @PRID", conn, trans);
 
                 headerCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Requisition.Id;
+                headerCmd.Parameters.Add("@RequestNo", SqlDbType.VarChar, 20).Value = requestNo.Trim();
                 headerCmd.Parameters.Add("@RequestDate", SqlDbType.DateTime).Value = Requisition.RequestDate.Date;
                 headerCmd.Parameters.Add("@Description", SqlDbType.NVarChar, 500).Value = Requisition.Description!.Trim();
                 headerCmd.Parameters.Add("@Currency", SqlDbType.Int).Value = Requisition.Currency;
@@ -1361,6 +1414,7 @@ WHERE PRID = @PRID", conn, trans);
                     QtyFromM = detail.QtyFromM,
                     QtyPur = detail.QtyPur,
                     UnitPrice = detail.UnitPrice,
+                    Amount = detail.Amount,
                     Remark = detail.Remark,
                     SupplierId = detail.SupplierId,
                     SupplierText = detail.SupplierText,
@@ -1373,6 +1427,7 @@ WHERE PRID = @PRID", conn, trans);
             target.QtyPur += detail.QtyPur;
             target.QtyFromM = Math.Max(target.QtyFromM, detail.QtyFromM);
             target.UnitPrice = detail.UnitPrice;
+            target.Amount += detail.Amount;
 
             if (string.IsNullOrWhiteSpace(target.Remark) && !string.IsNullOrWhiteSpace(detail.Remark))
             {
@@ -1418,7 +1473,7 @@ END", conn, trans);
 UPDATE dbo.PC_PRDetail
 SET UnitPrice = @UnitPrice,
     Remark = @Remark,
-    OrdAmount = ISNULL(Quantity, 0) * @UnitPrice
+    OrdAmount = @OrdAmount
 WHERE PRID = @PRID
   AND RecordID = @RecordID", conn, trans);
 
@@ -1426,6 +1481,7 @@ WHERE PRID = @PRID
             cmd.Parameters.Add("@RecordID", SqlDbType.BigInt).Value = detail.DetailId;
             cmd.Parameters.Add("@UnitPrice", SqlDbType.Decimal).Value = detail.UnitPrice;
             cmd.Parameters.Add("@Remark", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(detail.Remark) ? DBNull.Value : detail.Remark.Trim();
+            cmd.Parameters.Add("@OrdAmount", SqlDbType.Decimal).Value = detail.Amount;
             cmd.ExecuteNonQuery();
         }
     }
@@ -1477,6 +1533,35 @@ WHERE ID = @MRDetailID", conn, trans);
             postedCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = allocation.MrDetailId;
             postedCmd.ExecuteNonQuery();
         }
+    }
+
+    private static void UpdateDescriptionFromMrRequestNos(SqlConnection conn, SqlTransaction trans, int prId)
+    {
+        using var cmd = new SqlCommand(@"
+UPDATE dbo.PC_PR
+SET [Description] = ISNULL(src.[Description], '')
+FROM dbo.PC_PR pr
+OUTER APPLY
+(
+    SELECT CASE
+        WHEN ISNULL(src.RequestNos, '') = '' THEN ''
+        ELSE 'MR ' + src.RequestNos
+    END AS [Description]
+    FROM
+    (
+        SELECT STUFF((
+            SELECT DISTINCT ', ' + LTRIM(RTRIM(ISNULL(d.MRRequestNO, '')))
+            FROM dbo.PC_PRDetail d
+            WHERE d.PRID = pr.PRID
+              AND ISNULL(LTRIM(RTRIM(d.MRRequestNO)), '') <> ''
+            FOR XML PATH(''), TYPE
+        ).value('.', 'nvarchar(max)'), 1, 2, '') AS RequestNos
+    ) src
+) src
+WHERE pr.PRID = @PRID", conn, trans);
+
+        cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = prId;
+        cmd.ExecuteNonQuery();
     }
 
     // Parse JSON detail do frontend gửi lên thành danh sách object để backend kiểm tra và lưu.
@@ -1592,20 +1677,6 @@ WHERE EmployeeCode = @EmployeeCode", conn);
         if (IsViewMode)
         {
             CanSave = false;
-            CanApproveWorkflow = false;
-            CanDisapproveWorkflow = false;
-            CanResetToNew = false;
-            CanMoveToMr = false;
-            CanManageAttachments = false;
-            CanEditExistingDetailFields = false;
-            return;
-        }
-
-        var effectivePermissions = GetEffectivePermissionsByStatus(Requisition.Status <= 0 ? 1 : Requisition.Status);
-
-        if (IsApproveMode)
-        {
-            CanSave = false;
             CanApproveWorkflow = CanApproveCurrentStep();
             CanDisapproveWorkflow = CanApproveAsCfo() || CanApproveAsBod();
             CanResetToNew = false;
@@ -1614,6 +1685,8 @@ WHERE EmployeeCode = @EmployeeCode", conn);
             CanEditExistingDetailFields = false;
             return;
         }
+
+        var effectivePermissions = GetEffectivePermissionsByStatus(Requisition.Status <= 0 ? 1 : Requisition.Status);
 
         CanSave = Mode == "add"
             ? effectivePermissions.Contains(PermissionAdd)
@@ -1914,7 +1987,7 @@ WHERE PRID = @PRID", conn, trans);
         var detailUrl = Url.Page("/Purchasing/PurchaseRequisition/PurchaseRequisitionDetail", values: new
         {
             id = Requisition.Id,
-            mode = "approve"
+            mode = "view"
         });
 
         var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl)
@@ -1930,7 +2003,7 @@ WHERE PRID = @PRID", conn, trans);
   <li>Description: <b>{WebUtility.HtmlEncode(Requisition.Description ?? string.Empty)}</b></li>
   <li>Total Amount: <b>{FormatAmountForView(totalAmount)} {WebUtility.HtmlEncode(GetCurrencyDisplayText(Requisition.Currency))}</b></li>
 </ul>
-{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Purchase Requisition Approve</a></p>")}
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Purchase Requisition Approve</a></p>")}
 <p>SmartSam System</p>";
 
         return EmailTemplateHelper.WrapInNotifyTemplate(title, color, DateTime.Now, body);

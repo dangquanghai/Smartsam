@@ -833,6 +833,9 @@
 
 #mrLineTable {
     table-layout: fixed;
+    width: 100%;
+    min-width: 1400px;
+    max-width: none;
 }
 
 #mrLineTable > thead > tr > th:first-child,
@@ -840,6 +843,14 @@
 #mrLineTable > tfoot > tr > td:first-child {
     padding-left: 0 !important;
     padding-right: 0 !important;
+}
+
+#mrLineTable > tbody > tr > td {
+    vertical-align: middle;
+}
+
+#mrLineTable > thead > tr > th {
+    white-space: nowrap;
 }
 
 #mrLineTable .mr-readonly-cell-text {
@@ -857,11 +868,13 @@
 }
 
 #mrLineTable .mr-col-itemcode {
-    width: 72px;
+    width: 110px;
+    min-width: 110px;
 }
 
 #mrLineTable .mr-col-itemname {
     width: 360px;
+    min-width: 360px;
 }
 
 #mrLineTable .mr-col-unit {
@@ -869,27 +882,74 @@
 }
 
 #mrLineTable .mr-col-order {
-    width: 40px;
+    width: 60px;
+    min-width: 60px;
 }
 
 #mrLineTable .mr-col-notrec {
-    width: 40px;
+    width: 60px;
+    min-width: 60px;
 }
 
 #mrLineTable .mr-col-in {
-    width: 40px;
+    width: 60px;
+    min-width: 60px;
 }
 
 #mrLineTable .mr-col-accin {
-    width: 40px;
+    width: 60px;
+    min-width: 60px;
 }
 
 #mrLineTable .mr-col-buy {
-    width: 40px;
+    width: 60px;
+    min-width: 60px;
 }
 
 #mrLineTable .mr-col-note {
-    width: 260px;
+    width: 160px;
+}
+
+#mrLineTable .mr-col-normqty {
+    width: 72px;
+    min-width: 72px;
+}
+
+#mrLineTable .mr-col-issued {
+    width: 72px;
+    min-width: 72px;
+}
+
+#mrLineTable .mr-col-new-item {
+    width: 72px;
+    min-width: 72px;
+}
+
+#mrLineTable .mr-col-manual {
+    width: 72px;
+    min-width: 72px;
+}
+
+#mrLineTable .mr-col-tempstore {
+    width: 72px;
+    min-width: 72px;
+}
+
+#mrLineTable .mr-line-flag-checkbox {
+    display: block;
+    margin: 0 auto;
+}
+
+#mrLineTable > thead > tr > th:nth-child(2),
+#mrLineTable > tbody > tr > td:nth-child(2) {
+    width: 100px;
+    min-width: 100px;
+}
+
+#mrLineTable > thead > tr > th:nth-child(3),
+#mrLineTable > tbody > tr > td:nth-child(3) {
+    width: 360px;
+    min-width: 360px;
 }
 
 .mr-item-lookup-toolbar .form-group {
@@ -923,6 +983,24 @@
 
 .mr-item-lookup-search-btn {
     min-width: 110px;
+}
+
+.mr-item-lookup-result-table tbody tr {
+    cursor: pointer;
+}
+
+.mr-item-lookup-result-table tbody td {
+    cursor: pointer;
+    user-select: none;
+}
+
+.mr-item-lookup-result-table .mr-lookup-order-input {
+    cursor: text;
+    user-select: text;
+}
+
+.mr-item-lookup-result-table .mr-lookup-add-btn {
+    cursor: pointer;
 }
 
 .module-action-bar .btn {

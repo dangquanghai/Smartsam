@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Data;
+using System.Globalization;
+using System.IO;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -21,18 +23,21 @@ public class PurchaseOrderDetailModel : BasePageModel
     private readonly PermissionService _permissionService;
     private readonly ISecurityService _securityService;
     private readonly ILogger<PurchaseOrderDetailModel> _logger;
+    private readonly IWebHostEnvironment _webHostEnvironment;
     private PurchaseOrderWorkflowUser _workflowUser = new PurchaseOrderWorkflowUser();
 
-    public PurchaseOrderDetailModel(IConfiguration config, PermissionService permissionService, ISecurityService securityService, ILogger<PurchaseOrderDetailModel> logger)
+    public PurchaseOrderDetailModel(IConfiguration config, PermissionService permissionService, ISecurityService securityService, ILogger<PurchaseOrderDetailModel> logger, IWebHostEnvironment webHostEnvironment)
         : base(config)
     {
         _permissionService = permissionService;
         _securityService = securityService;
         _logger = logger;
+        _webHostEnvironment = webHostEnvironment;
     }
 
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
     public bool CanSave { get; private set; }
+    public bool CanPurchaserApprove { get; private set; }
     public bool CanEvaluate { get; private set; }
     public bool CanApprove { get; private set; }
     public bool CanBackToProcessing { get; private set; }
@@ -177,6 +182,54 @@ public class PurchaseOrderDetailModel : BasePageModel
         return Page();
     }
 
+    public IActionResult OnPostPurchaserApprove()
+    {
+        var prepare = PrepareExistingRecordForWorkflow();
+        if (prepare != null)
+        {
+            return prepare;
+        }
+
+        if (!CanPurchaserApprove)
+        {
+            TempData["SuccessMessage"] = "You have no permission to approve this purchase order.";
+            return RedirectToCurrentDetail();
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        using var trans = conn.BeginTransaction();
+        try
+        {
+            using var cmd = new SqlCommand(@"
+            UPDATE dbo.PC_PO
+            SET PurId = @EmployeeID,
+                PurApproDate = @ApproveDate,
+                StatusID = 2,
+                noted = ''
+            WHERE POID = @POID
+            AND ISNULL(StatusID, 0) = 1", conn, trans);
+            cmd.Parameters.Add("@POID", SqlDbType.Int).Value = Header.Id;
+            cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = _workflowUser.EmployeeId;
+            cmd.Parameters.Add("@ApproveDate", SqlDbType.VarChar, 12).Value = DateTime.Now.ToString("dd/MM/yyyy");
+
+            if (cmd.ExecuteNonQuery() <= 0)
+            {
+                throw new InvalidOperationException("Purchaser approval failed because purchase order is not in processing status.");
+            }
+
+            trans.Commit();
+            TempData["SuccessMessage"] = "Purchase order sent to approval successfully.";
+        }
+        catch (Exception ex)
+        {
+            trans.Rollback();
+            TempData["SuccessMessage"] = ex.Message;
+        }
+
+        return RedirectToCurrentDetail("view");
+    }
+
     public IActionResult OnGetPrLines(int prId)
     {
         try
@@ -197,6 +250,61 @@ public class PurchaseOrderDetailModel : BasePageModel
     public IActionResult OnGetPrLookup(string? term)
     {
         return new JsonResult(LoadPrLookup(term));
+    }
+
+    public IActionResult OnGetReport(int id, bool autoPrint = false)
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionView))
+        {
+            return RedirectToPage("./Index");
+        }
+
+        if (id <= 0)
+        {
+            return RedirectToPage("./Index");
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+
+        var report = LoadPurchaseOrderReport(conn, id);
+        if (string.IsNullOrWhiteSpace(report.PONo))
+        {
+            TempData["SuccessMessage"] = "Purchase order is not found.";
+            return RedirectToPage("./Index");
+        }
+
+        var html = PurchaseOrderPdfReport.BuildDetailHtml(report, _webHostEnvironment.ContentRootPath, autoPrint);
+        return Content(html, "text/html; charset=utf-8");
+    }
+
+    public IActionResult OnGetReportQuestPdf(int id)
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionView))
+        {
+            return RedirectToPage("./Index");
+        }
+
+        if (id <= 0)
+        {
+            return RedirectToPage("./Index");
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+
+        var report = LoadPurchaseOrderReport(conn, id);
+        if (string.IsNullOrWhiteSpace(report.PONo))
+        {
+            TempData["SuccessMessage"] = "Purchase order is not found.";
+            return RedirectToPage("./Index");
+        }
+
+        var pdf = PurchaseOrderQuestPdfReport.BuildDetailPdf(report);
+        var fileName = BuildReportPdfFileName(report.PONo, "questpdf");
+        return File(pdf, "application/pdf", fileName);
     }
 
     public IActionResult OnPostEvaluate()
@@ -466,6 +574,295 @@ public class PurchaseOrderDetailModel : BasePageModel
         cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = prId.Value;
         conn.Open();
         return Convert.ToString(cmd.ExecuteScalar()) ?? string.Empty;
+    }
+
+    private PurchaseOrderDetailReportModel LoadPurchaseOrderReport(SqlConnection conn, int id)
+    {
+        var report = new PurchaseOrderDetailReportModel();
+
+        int? preparedEmployeeId = null;
+        int? checkedEmployeeId = null;
+        int? approvedEmployeeId = null;
+        string preparedDateText = string.Empty;
+        string checkedDateText = string.Empty;
+        string approvedDateText = string.Empty;
+        string notesText = string.Empty;
+
+        using (var cmd = new SqlCommand(@"
+        SELECT TOP 1
+            p.POID,
+            ISNULL(p.PONo, '') AS PONo,
+            p.PODate,
+            ISNULL(pr.RequestNo, '') AS RequestNo,
+            ISNULL(s.SupplierCode, '') AS SupplierCode,
+            ISNULL(s.SupplierName, '') AS SupplierName,
+            ISNULL(s.Phone, '') AS SupplierTel,
+            ISNULL(s.Fax, '') AS SupplierFax,
+            ISNULL(s.Contact, '') AS SupplierContact,
+            ISNULL(c.CurrencyName, '') AS CurrencyName,
+            ISNULL(p.POTerms, '') AS POTerms,
+            ISNULL(p.Comment, '') AS Comment,
+            ISNULL(p.Remark, '') AS Remark,
+            ISNULL(p.BeforeVAT, 0) AS BeforeVAT,
+            ISNULL(p.PerVAT, 0) AS PerVAT,
+            ISNULL(p.VAT, 0) AS VAT,
+            ISNULL(p.AfterVAT, 0) AS AfterVAT,
+            p.PurId,
+            p.CAId,
+            p.GDId,
+            p.PurApproDate,
+            p.CAApproDate,
+            p.GDApproDate
+        FROM dbo.PC_PO p
+        LEFT JOIN dbo.PC_PR pr ON pr.PRID = p.PRID
+        LEFT JOIN dbo.PC_Suppliers s ON s.SupplierID = p.SupplierID
+        LEFT JOIN dbo.MS_CurrencyFL c ON c.CurrencyID = p.Currency
+        WHERE p.POID = @POID", conn))
+        {
+            cmd.Parameters.Add("@POID", SqlDbType.Int).Value = id;
+            using var rd = cmd.ExecuteReader();
+            if (!rd.Read())
+            {
+                return report;
+            }
+
+            var supplierCode = Convert.ToString(rd["SupplierCode"]) ?? string.Empty;
+            var supplierName = Convert.ToString(rd["SupplierName"]) ?? string.Empty;
+            var supplierDisplay = string.IsNullOrWhiteSpace(supplierName)
+                ? supplierCode
+                : string.IsNullOrWhiteSpace(supplierCode)
+                    ? supplierName
+                    : $"{supplierCode} / {supplierName}";
+
+            report.PONo = Convert.ToString(rd["PONo"]) ?? string.Empty;
+            report.PODate = rd.IsDBNull(rd.GetOrdinal("PODate")) ? null : Convert.ToDateTime(rd["PODate"]);
+            report.RequestNo = Convert.ToString(rd["RequestNo"]) ?? string.Empty;
+            report.SupplierDisplay = supplierDisplay;
+            report.SupplierTel = Convert.ToString(rd["SupplierTel"]) ?? string.Empty;
+            report.SupplierFax = Convert.ToString(rd["SupplierFax"]) ?? string.Empty;
+            report.SupplierContact = Convert.ToString(rd["SupplierContact"]) ?? string.Empty;
+            report.CurrencyText = Convert.ToString(rd["CurrencyName"]) ?? string.Empty;
+            report.TermsAndConditions = Convert.ToString(rd["POTerms"]) ?? string.Empty;
+            report.BeforeVAT = rd.IsDBNull(rd.GetOrdinal("BeforeVAT")) ? 0 : Convert.ToDecimal(rd["BeforeVAT"]);
+            report.PerVAT = rd.IsDBNull(rd.GetOrdinal("PerVAT")) ? 0 : Convert.ToDecimal(rd["PerVAT"]);
+            report.VAT = rd.IsDBNull(rd.GetOrdinal("VAT")) ? 0 : Convert.ToDecimal(rd["VAT"]);
+            report.AfterVAT = rd.IsDBNull(rd.GetOrdinal("AfterVAT")) ? 0 : Convert.ToDecimal(rd["AfterVAT"]);
+
+            preparedEmployeeId = rd.IsDBNull(rd.GetOrdinal("PurId")) ? null : Convert.ToInt32(rd["PurId"]);
+            checkedEmployeeId = rd.IsDBNull(rd.GetOrdinal("CAId")) ? null : Convert.ToInt32(rd["CAId"]);
+            approvedEmployeeId = rd.IsDBNull(rd.GetOrdinal("GDId")) ? null : Convert.ToInt32(rd["GDId"]);
+            preparedDateText = NormalizeReportDateText(Convert.ToString(rd["PurApproDate"]));
+            checkedDateText = NormalizeReportDateText(Convert.ToString(rd["CAApproDate"]));
+            approvedDateText = NormalizeReportDateText(Convert.ToString(rd["GDApproDate"]));
+            notesText = BuildNotesText(
+                Convert.ToString(rd["POTerms"]) ?? string.Empty,
+                Convert.ToString(rd["Comment"]) ?? string.Empty,
+                Convert.ToString(rd["Remark"]) ?? string.Empty);
+            rd.Close();
+        }
+
+        report.Notes = notesText;
+        var preparedTitle = LoadEmployeeTitle(conn, preparedEmployeeId);
+        var checkedTitle = LoadEmployeeTitle(conn, checkedEmployeeId);
+        var approvedTitle = LoadEmployeeTitle(conn, approvedEmployeeId);
+
+        report.Footer = new PurchaseOrderApprovalFooterModel
+        {
+            PreparedDate = preparedDateText,
+            CheckedDate = checkedDateText,
+            ApprovedDate = approvedDateText,
+            PreparedName = LoadEmployeeFullName(conn, preparedEmployeeId),
+            CheckedName = LoadEmployeeFullName(conn, checkedEmployeeId),
+            ApprovedName = LoadEmployeeFullName(conn, approvedEmployeeId),
+            PreparedTitle = string.IsNullOrWhiteSpace(preparedTitle) ? "Purchaser" : preparedTitle,
+            CheckedTitle = string.IsNullOrWhiteSpace(checkedTitle) ? "Chief Accountant" : checkedTitle,
+            ApprovedTitle = string.IsNullOrWhiteSpace(approvedTitle) ? "General Director" : approvedTitle,
+            DeliveryDate = report.PODate.HasValue ? report.PODate.Value.ToString("MMMM yyyy", CultureInfo.InvariantCulture) : string.Empty,
+            DeliveryPlace = "20 Le Thanh Ton st, Sai Gon Ward, HCMC, VN",
+            Receiver = BuildReceiverText(report.SupplierContact, report.SupplierTel),
+            PaymentTerm = report.TermsAndConditions,
+            PreparedSignature = LoadEmployeeSignature(conn, preparedEmployeeId),
+            CheckedSignature = LoadEmployeeSignature(conn, checkedEmployeeId),
+            ApprovedSignature = LoadEmployeeSignature(conn, approvedEmployeeId),
+            Notes = notesText
+        };
+
+        using var detailCmd = new SqlCommand(@"
+        SELECT
+            ROW_NUMBER() OVER (ORDER BY d.RecordID) AS No,
+            ISNULL(i.ItemCode, '') AS ItemCode,
+            ISNULL(i.ItemName, '') AS ItemName,
+            ISNULL(i.Unit, '') AS Unit,
+            ISNULL(d.Quantity, 0) AS Quantity,
+            ISNULL(d.UnitPrice, 0) AS UnitPrice,
+            ISNULL(d.POAmount, 0) AS Amount,
+            ISNULL(d.Note, '') AS Remark
+        FROM dbo.PC_PODetail d
+        LEFT JOIN dbo.INV_ItemList i ON i.ItemID = d.ItemID
+        WHERE d.POID = @POID
+        ORDER BY d.RecordID", conn);
+        detailCmd.Parameters.Add("@POID", SqlDbType.Int).Value = id;
+
+        using var detailReader = detailCmd.ExecuteReader();
+        while (detailReader.Read())
+        {
+            report.Items.Add(new PurchaseOrderDetailReportItem
+            {
+                No = detailReader.IsDBNull(detailReader.GetOrdinal("No")) ? 0 : Convert.ToInt32(detailReader["No"]),
+                ItemCode = Convert.ToString(detailReader["ItemCode"]) ?? string.Empty,
+                ItemName = Convert.ToString(detailReader["ItemName"]) ?? string.Empty,
+                Unit = Convert.ToString(detailReader["Unit"]) ?? string.Empty,
+                Quantity = detailReader.IsDBNull(detailReader.GetOrdinal("Quantity")) ? 0 : Convert.ToDecimal(detailReader["Quantity"]),
+                UnitPrice = detailReader.IsDBNull(detailReader.GetOrdinal("UnitPrice")) ? 0 : Convert.ToDecimal(detailReader["UnitPrice"]),
+                Amount = detailReader.IsDBNull(detailReader.GetOrdinal("Amount")) ? 0 : Convert.ToDecimal(detailReader["Amount"]),
+                Remark = Convert.ToString(detailReader["Remark"]) ?? string.Empty
+            });
+        }
+
+        return report;
+    }
+
+    private string LoadEmployeeFullName(SqlConnection conn, int? employeeId)
+    {
+        if (!employeeId.HasValue || employeeId.Value <= 0)
+        {
+            return string.Empty;
+        }
+
+        using var cmd = new SqlCommand(@"
+        SELECT TOP 1 ISNULL(EmployeeName, '')
+        FROM dbo.MS_Employee
+        WHERE EmployeeID = @EmployeeID", conn);
+        cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId.Value;
+        var value = cmd.ExecuteScalar();
+        return value == null || value == DBNull.Value ? string.Empty : Convert.ToString(value)?.Trim() ?? string.Empty;
+    }
+
+    private string LoadEmployeeTitle(SqlConnection conn, int? employeeId)
+    {
+        if (!employeeId.HasValue || employeeId.Value <= 0)
+        {
+            return string.Empty;
+        }
+
+        using var cmd = new SqlCommand(@"
+        SELECT TOP 1 ISNULL([Position], '')
+        FROM dbo.MS_Employee
+        WHERE EmployeeID = @EmployeeID", conn);
+        cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId.Value;
+        var value = cmd.ExecuteScalar();
+        return value == null || value == DBNull.Value ? string.Empty : Convert.ToString(value)?.Trim() ?? string.Empty;
+    }
+
+    private byte[]? LoadEmployeeSignature(SqlConnection conn, int? employeeId)
+    {
+        if (!employeeId.HasValue || employeeId.Value <= 0)
+        {
+            return null;
+        }
+
+        using var cmd = new SqlCommand(@"
+        SELECT ISNULL(UrlNomalSign, '') AS UrlNomalSign
+        FROM dbo.MS_Employee
+        WHERE EmployeeID = @EmployeeID", conn);
+        cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId.Value;
+        var fileName = Convert.ToString(cmd.ExecuteScalar())?.Trim();
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return null;
+        }
+
+        var signaturePath = ResolveEmployeeSignaturePath(fileName);
+        if (string.IsNullOrWhiteSpace(signaturePath) || !System.IO.File.Exists(signaturePath))
+        {
+            return null;
+        }
+
+        return System.IO.File.ReadAllBytes(signaturePath);
+    }
+
+    private string ResolveEmployeeSignaturePath(string fileName)
+    {
+        var cleanedFileName = Path.GetFileName(fileName.Trim());
+        if (string.IsNullOrWhiteSpace(cleanedFileName))
+        {
+            return string.Empty;
+        }
+
+        var basePath = _config.GetValue<string>("FileUploads:BasePath");
+        if (string.IsNullOrWhiteSpace(basePath))
+        {
+            return string.Empty;
+        }
+
+        var rootPath = Path.IsPathRooted(basePath)
+            ? basePath
+            : Path.Combine(_webHostEnvironment.ContentRootPath, basePath);
+
+        var functionPath = _config.GetValue<string>("FileUploads:Funtions:18");
+        if (!string.IsNullOrWhiteSpace(functionPath))
+        {
+            var relativeSegments = functionPath
+                .Replace('\\', '/')
+                .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            if (relativeSegments.Length > 0)
+            {
+                rootPath = Path.Combine([rootPath, .. relativeSegments]);
+            }
+        }
+
+        return Path.Combine(rootPath, cleanedFileName);
+    }
+
+    private static string NormalizeReportDateText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = value.Trim();
+        return DateTime.TryParse(trimmed, out var parsed)
+            ? parsed.ToString("d/M/yyyy", CultureInfo.InvariantCulture)
+            : trimmed;
+    }
+
+    private static string BuildNotesText(string terms, string comment, string remark)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(terms))
+        {
+            parts.Add(terms.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(comment))
+        {
+            parts.Add(comment.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(remark))
+        {
+            parts.Add(remark.Trim());
+        }
+
+        return string.Join(Environment.NewLine, parts);
+    }
+
+    private static string BuildReceiverText(string contact, string tel)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(contact))
+        {
+            parts.Add(contact.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(tel))
+        {
+            parts.Add($"Tel: {tel.Trim()}");
+        }
+
+        return string.Join(" - ", parts);
     }
 
     private List<object> LoadSupplierLookup(string? term)
@@ -828,6 +1225,16 @@ public class PurchaseOrderDetailModel : BasePageModel
             ModelState.AddModelError("Header.SupplierID", "Supplier is required.");
         }
 
+        if (!string.IsNullOrWhiteSpace(Header.Comment) && Header.Comment.Length > 100)
+        {
+            ModelState.AddModelError("Header.Comment", "Comment must not exceed 100 characters.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(Header.Remark) && Header.Remark.Length > 100)
+        {
+            ModelState.AddModelError("Header.Remark", "Remark must not exceed 100 characters.");
+        }
+
         if (details.Count == 0)
         {
             ModelState.AddModelError(string.Empty, "Please add at least one detail row.");
@@ -970,19 +1377,13 @@ public class PurchaseOrderDetailModel : BasePageModel
 
     private void SetActionFlags()
     {
-        if (IsViewMode)
-        {
-            CanSave = false;
-            CanEvaluate = false;
-            CanApprove = false;
-            CanBackToProcessing = false;
-            return;
-        }
-
         var effectivePermissions = GetEffectivePermissionsByStatus(Header.StatusId <= 0 ? 1 : Header.StatusId);
-        CanSave = Mode == "add"
+        CanSave = !IsViewMode && (Mode == "add"
             ? effectivePermissions.Contains(PermissionAdd)
-            : effectivePermissions.Contains(PermissionEdit);
+            : effectivePermissions.Contains(PermissionEdit));
+        CanPurchaserApprove = Header.Id > 0
+            && Header.StatusId == 1
+            && (IsAdminRole() || _workflowUser.IsPurchaser);
         // Evaluate chi hien sau khi CFO va BOD da ghi nhan xong.
         CanEvaluate = Header.Id > 0
             && Header.StatusId == 2
@@ -1051,6 +1452,17 @@ public class PurchaseOrderDetailModel : BasePageModel
     {
         return User.FindFirst("IsAdminRole")?.Value == "True";
     }
+
+    private static string BuildReportPdfFileName(string poNo, string suffix)
+    {
+        var safeName = string.IsNullOrWhiteSpace(poNo) ? "purchase_order" : poNo.Trim();
+        foreach (var invalidChar in Path.GetInvalidFileNameChars())
+        {
+            safeName = safeName.Replace(invalidChar, '_');
+        }
+
+        return $"PurchaseOrder_No_{safeName}.pdf";
+    }
 }
 
 public class PurchaseOrderHeader
@@ -1071,11 +1483,13 @@ public class PurchaseOrderHeader
     public int? AssessLevel { get; set; }
     public int Currency { get; set; } = 1;
     public decimal ExRate { get; set; }
+    [StringLength(100)]
     public string? Comment { get; set; }
     public decimal BeforeVAT { get; set; }
     public decimal PerVAT { get; set; }
     public decimal VAT { get; set; }
     public decimal AfterVAT { get; set; }
+    [StringLength(100)]
     public string? Remark { get; set; }
     public int? PurId { get; set; }
     public int? CAId { get; set; }

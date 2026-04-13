@@ -14,6 +14,8 @@
         canIssue: toBoolData($form.data('can-issue')),
         canReject: toBoolData($form.data('can-reject'))
     };
+    mrShowAdvancedColumns = toBoolData($form.data('show-advanced-columns'));
+    mrLineColspan = mrShowAdvancedColumns ? 15 : 10;
 
     // Start page
     initializePage(mode, currentStatusId, actionPerm);
@@ -154,7 +156,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
 
     // Stop browser submit
     $form.find('input, textarea, select')
-        .not('[type="hidden"], .mr-line-select, .mr-line-buy, .mr-line-note, #Input_IsAuto, #mrSubmitBtn, #mrApproveBtn, #mrRejectBtn, #addMrLineBtn, #removeMrLineBtn, #createNewItemBtn, #calculateBtn')
+        .not('[type="hidden"], .mr-line-select, .mr-line-buy, .mr-line-note, .mr-line-flag-checkbox, #Input_IsAuto, #mrSubmitBtn, #mrApproveBtn, #mrRejectBtn, #addMrLineBtn, #removeMrLineBtn, #createNewItemBtn, #calculateBtn')
         .prop('disabled', disableEditFields);
 
     $('#Input_IsAuto').prop('disabled', true);
@@ -262,6 +264,13 @@ function initializePage(mode, currentStatusId, actionPerm) {
         runItemLookupSearch();
     });
 
+    $('#lookupResultBody').off('input.mrLookupOrder').on('input.mrLookupOrder', '.mr-lookup-order-input', function () {
+        const normalized = normalizeEditableNumericInput($(this).val());
+        if ($(this).val() !== normalized) {
+            $(this).val(normalized);
+        }
+    });
+
     $('#lookupResultBody').off('click.mrLookupAdd').on('click.mrLookupAdd', '.mr-lookup-add-btn', function () {
         const tr = this.closest('tr');
         if (!tr || !tr.dataset.itemCode) return;
@@ -279,10 +288,15 @@ function initializePage(mode, currentStatusId, actionPerm) {
             inStock: Number.parseFloat(tr.dataset.inStock || '0') || 0,
             accIn: 0,
             buy: 0,
+            normQty: 0,
             price: 0,
             note: '',
             normMain: 0,
-            newItem: false
+            manualCheck: false,
+            tempStore: 0,
+            issued: 0,
+            newItem: false,
+            selected: true
         });
 
         if (added) {
@@ -323,6 +337,9 @@ function initializePage(mode, currentStatusId, actionPerm) {
                 price: 0,
                 note: '',
                 normMain: 0,
+                manualCheck: false,
+                tempStore: 0,
+                selected: true,
                 newItem: true
         });
             if (added) {
@@ -561,7 +578,7 @@ function syncEmptyRow($tableBody) {
     const $emptyRow = $tableBody.find('.mr-line-empty');
 
     if (!hasRows && $emptyRow.length === 0) {
-        $tableBody.append('<tr class="mr-line-empty"><td colspan="10" class="text-center text-muted">No line items.</td></tr>');
+        $tableBody.append(`<tr class="mr-line-empty"><td colspan="${mrLineColspan}" class="text-center text-muted">No line items.</td></tr>`);
         return;
     }
 
@@ -571,6 +588,8 @@ function syncEmptyRow($tableBody) {
 }
 
 function createLineRowHtml(row) {
+    const advancedClass = mrShowAdvancedColumns ? '' : 'd-none';
+    const isChecked = (value) => ['1', 'true'].includes((value ?? '').toString().trim().toLowerCase());
     return `
         <tr class="mr-line-row">
             <td class="mr-line-select-cell text-center align-middle">
@@ -578,18 +597,18 @@ function createLineRowHtml(row) {
             </td>
             <td>
                 <input type="hidden" class="mr-line-id" value="${row.id ?? ''}" />
-                <span class="mr-readonly-cell-text">${escapeHtml(row.itemCode || '')}</span>
+                <span class="mr-readonly-cell-text" title="${escapeHtml(row.itemCode || '')}">${escapeHtml(row.itemCode || '')}</span>
                 <input type="hidden" class="mr-line-itemcode" value="${escapeHtml(row.itemCode || '')}" />
             </td>
             <td>
-                <span class="mr-readonly-cell-text tcvn3-font">${escapeHtml(row.itemName || '')}</span>
+                <span class="mr-readonly-cell-text tcvn3-font" title="${escapeHtml(row.itemName || '')}">${escapeHtml(row.itemName || '')}</span>
                 <input type="hidden" class="mr-line-itemname" value="${escapeHtml(row.itemName || '')}" />
             </td>
             <td>
                 <span class="mr-readonly-cell-text">${escapeHtml(row.unit || '')}</span>
                 <input type="hidden" class="mr-line-unit" value="${escapeHtml(row.unit || '')}" />
             </td>
-            <td><input type="number" min="1" step="1" class="form-control form-control-sm mr-line-order" value="${row.orderQty ?? 0}" /></td>
+            <td><input type="text" inputmode="decimal" class="form-control form-control-sm mr-line-order" value="${row.orderQty ?? 0}" /></td>
             <td>
                 <span class="mr-readonly-cell-text">${row.notReceipt ?? 0}</span>
                 <input type="hidden" class="mr-line-notrec" value="${row.notReceipt ?? 0}" />
@@ -607,9 +626,29 @@ function createLineRowHtml(row) {
             </td>
             <td>
                 <input type="text" class="form-control form-control-sm mr-line-note" value="${escapeHtml(row.note || '')}" />
+                <input type="hidden" class="mr-line-selected" value="${isChecked(row.selected) ? 'true' : 'false'}" />
                 <input type="hidden" class="mr-line-normmain" value="${row.normMain ?? 0}" />
                 <input type="hidden" class="mr-line-price" value="${row.price ?? 0}" />
-                <input type="hidden" class="mr-line-new-item" value="${row.newItem ? 'true' : 'false'}" />
+            </td>
+            <td class="${advancedClass}">
+                <span class="mr-readonly-cell-text">${row.normQty ?? 0}</span>
+                <input type="hidden" class="mr-line-normqty" value="${row.normQty ?? 0}" />
+            </td>
+            <td class="${advancedClass}">
+                <span class="mr-readonly-cell-text">${row.issued ?? 0}</span>
+                <input type="hidden" class="mr-line-issued" value="${row.issued ?? 0}" />
+            </td>
+            <td class="text-center align-middle ${advancedClass}">
+                <input type="checkbox" class="mr-line-flag-checkbox" disabled ${isChecked(row.newItem) ? 'checked' : ''} />
+                <input type="hidden" class="mr-line-new-item" value="${isChecked(row.newItem) ? 'true' : 'false'}" />
+            </td>
+            <td class="text-center align-middle ${advancedClass}">
+                <input type="checkbox" class="mr-line-flag-checkbox" disabled ${isChecked(row.manualCheck) ? 'checked' : ''} />
+                <input type="hidden" class="mr-line-manual-check" value="${isChecked(row.manualCheck) ? 'true' : 'false'}" />
+            </td>
+            <td class="${advancedClass}">
+                <span class="mr-readonly-cell-text">${row.tempStore ?? 0}</span>
+                <input type="hidden" class="mr-line-tempstore" value="${row.tempStore ?? 0}" />
             </td>
         </tr>`;
 }
@@ -649,6 +688,13 @@ function initializePurchaserEditableRowPrompt($form, $tableBody, enablePrompt) {
     });
 
     $tableBody.on('input.mrPurchaserEditPrompt', '.mr-line-buy', function () {
+        const normalized = normalizeEditableNumericInput($(this).val());
+        if ($(this).val() !== normalized) {
+            $(this).val(normalized);
+        }
+    });
+
+    $tableBody.on('input.mrLineOrder', '.mr-line-order', function () {
         const normalized = normalizeEditableNumericInput($(this).val());
         if ($(this).val() !== normalized) {
             $(this).val(normalized);
@@ -805,19 +851,6 @@ function savePurchaserEditableLines($form, $tableBody, $targetRow) {
 }
 
 function addItemToGrid($tableBody, item) {
-    const newItemCode = (item.itemCode || '').toString().trim().toLowerCase();
-    if (newItemCode) {
-        const $existed = $tableBody.find('.mr-line-row').filter(function () {
-            const rowCode = ($(this).find('.mr-line-itemcode').val() || '').toString().trim().toLowerCase();
-            return rowCode === newItemCode;
-        });
-
-        if ($existed.length > 0) {
-            focusErrorField($existed.first().find('.mr-line-order'));
-            return false;
-        }
-    }
-
     $tableBody.append(createLineRowHtml(item));
     const $newRow = $tableBody.find('.mr-line-row').last();
     const $form = $tableBody.closest('form');
@@ -855,10 +888,25 @@ function serializeLines($tableBody) {
             buy: toNumber($row.find('.mr-line-buy').val()),
             price: toNumber($row.find('.mr-line-price').val()),
             note: ($row.find('.mr-line-note').val() || '').toString().trim(),
+            normQty: toNumber($row.find('.mr-line-normqty').val()),
             normMain: toNumber($row.find('.mr-line-normmain').val()),
+            issued: toNumber($row.find('.mr-line-issued').val()),
             newItem: ['1', 'true'].includes((($row.find('.mr-line-new-item').val() || '').toString().trim().toLowerCase())),
-            selected: true
+            manualCheck: ['1', 'true'].includes((($row.find('.mr-line-manual-check').val() || '').toString().trim().toLowerCase())),
+            tempStore: toNumber($row.find('.mr-line-tempstore').val()),
+            selected: ['1', 'true'].includes((($row.find('.mr-line-selected').val() || '').toString().trim().toLowerCase()))
         });
+    });
+
+    $('#lookupResultBody').off('click.mrLookupRow').on('click.mrLookupRow', 'tr[data-item-code]', function (event) {
+        if ($(event.target).is('input, button, a, label, select, textarea')) {
+            return;
+        }
+
+        const addButton = this.querySelector('.mr-lookup-add-btn');
+        if (addButton) {
+            addButton.click();
+        }
     });
 
     return payload;
@@ -877,9 +925,14 @@ function syncLineInputNames($tableBody) {
         setLineInputName($row, '.mr-line-accin', index, 'AccIn');
         setLineInputName($row, '.mr-line-buy', index, 'Buy');
         setLineInputName($row, '.mr-line-note', index, 'Note');
+        setLineInputName($row, '.mr-line-selected', index, 'Selected');
+        setLineInputName($row, '.mr-line-normqty', index, 'NormQty');
         setLineInputName($row, '.mr-line-normmain', index, 'NormMain');
         setLineInputName($row, '.mr-line-price', index, 'Price');
+        setLineInputName($row, '.mr-line-issued', index, 'Issued');
         setLineInputName($row, '.mr-line-new-item', index, 'NewItem');
+        setLineInputName($row, '.mr-line-manual-check', index, 'ManualCheck');
+        setLineInputName($row, '.mr-line-tempstore', index, 'TempStore');
     });
 }
 
@@ -1017,7 +1070,7 @@ function renderLookupResults($resultBody, items) {
         $tr.append(`<td class="tcvn3-font">${escapeHtml(item.itemName || '')}</td>`);
         $tr.append(`<td>${escapeHtml(item.unit || '')}</td>`);
         $tr.append(`<td class="text-center">${formatLookupNumber(item.inStock)}</td>`);
-        $tr.append(`<td><input type="number" min="0.01" step="0.01" class="form-control form-control-sm mr-lookup-order-input" value="${item.orderQty && item.orderQty > 0 ? item.orderQty : 1}"></td>`);
+        $tr.append(`<td><input type="text" inputmode="decimal" class="form-control form-control-sm mr-lookup-order-input" value="${item.orderQty && item.orderQty > 0 ? item.orderQty : 1}"></td>`);
         $tr.append('<td class="text-center"><button type="button" class="btn btn-sm btn-primary mr-lookup-add-btn">Add Detail</button></td>');
 
         $tr.attr('data-item-code', item.itemCode || '');

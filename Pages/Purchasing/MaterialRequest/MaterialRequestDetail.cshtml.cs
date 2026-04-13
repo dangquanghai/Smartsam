@@ -163,7 +163,19 @@ public class MaterialRequestDetailModel : BasePageModel
     {
         get
         {
-            return _dataScope.IsCFO && CurrentStatusId >= StatusPurchaserChecked;
+            return (_dataScope.IsCFO || _dataScope.ApprovalLevel >= 3) && CurrentStatusId >= StatusPurchaserChecked;
+        }
+    }
+
+    public bool ShowAdvancedDetailColumns
+    {
+        get
+        {
+            return _isAdminRole
+                || _dataScope.IsPurchaser
+                || _dataScope.IsCFO
+                || _dataScope.IsBOD
+                || _dataScope.ApprovalLevel >= 2;
         }
     }
 
@@ -420,7 +432,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
         try
         {
-            var savedNo = await _materialRequestService.SaveAsync(Id, CloneHeader(existing), lines, cancellationToken);
+            var savedNo = await _materialRequestService.SaveDetailLinesAsync(Id.Value, lines, cancellationToken);
             return new JsonResult(new
             {
                 success = true,
@@ -520,44 +532,47 @@ public class MaterialRequestDetailModel : BasePageModel
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
         }
 
-        List<MaterialRequestLineDto> lines;
-        MaterialRequestDetailDto toSave;
-
-        lines = ResolvePostedLines();
-        if (lines.Count == 0)
-        {
-            lines = (await _materialRequestService.GetLinesAsync(Id!.Value, cancellationToken)).ToList();
-        }
-
-        await ApplyReadonlyLineRulesAsync(
-            lines,
-            Id,
-            cancellationToken,
-            preserveEditableBuy: ShouldPreserveEditableBuy(currentStatus),
-            preserveReadonlyOrder: isAuto,
-            preserveEditableNote: ShouldPreserveEditableNote(currentStatus));
-
-        if (action == MaterialRequestWorkflowAction.Submit)
-        {
-            toSave = MergeEditableInput(existing, Input);
-        }
-        else
-        {
-            toSave = CloneHeader(existing);
-        }
-
         try
         {
-            toSave.MaterialStatusId = transition.NextStatusId;
-            if (transition.Approval.HasValue) toSave.Approval = transition.Approval.Value;
-            if (transition.ApprovalEnd.HasValue) toSave.ApprovalEnd = transition.ApprovalEnd.Value;
-            if (transition.PostPr.HasValue) toSave.PostPr = transition.PostPr.Value;
+            if (action == MaterialRequestWorkflowAction.Submit)
+            {
+                await _materialRequestService.UpdateWorkflowHeaderAsync(
+                    Id!.Value,
+                    transition.NextStatusId,
+                    transition.Approval,
+                    transition.ApprovalEnd,
+                    transition.PostPr,
+                    cancellationToken);
 
-            var savedNo = await _materialRequestService.SaveAsync(Id, toSave, lines, cancellationToken);
-            await WriteWorkflowHistoryAsync(action, currentStatus, transition, savedNo, cancellationToken);
-            TryQueueWorkflowNotifyEmail(action, currentStatus, toSave, isAuto, lines);
+                await WriteWorkflowHistoryAsync(action, currentStatus, transition, Id.Value, cancellationToken);
+                TryQueueWorkflowNotifyEmail(action, currentStatus, existing, isAuto, Array.Empty<MaterialRequestLineDto>());
+                SuccessMessage = transition.SuccessMessage;
+                return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
+            }
+
+            IReadOnlyList<MaterialRequestLineDto> purchaserLines = Array.Empty<MaterialRequestLineDto>();
+            if (action == MaterialRequestWorkflowAction.Approve && currentStatus == StatusHeadDeptApproved)
+            {
+                purchaserLines = await _materialRequestService.GetLinesAsync(Id.Value, cancellationToken);
+                if (isAuto || !HasPositiveBuyLines(purchaserLines))
+                {
+                    transition.ApprovalEnd = true;
+                    transition.PostPr = false;
+                }
+            }
+
+            await _materialRequestService.UpdateWorkflowHeaderAsync(
+                Id!.Value,
+                transition.NextStatusId,
+                transition.Approval,
+                transition.ApprovalEnd,
+                transition.PostPr,
+                cancellationToken);
+
+            await WriteWorkflowHistoryAsync(action, currentStatus, transition, Id.Value, cancellationToken);
+            TryQueueWorkflowNotifyEmail(action, currentStatus, existing, isAuto, purchaserLines);
             SuccessMessage = transition.SuccessMessage;
-            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(savedNo));
+            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
         }
         catch (Exception ex)
         {
@@ -708,7 +723,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
         try
         {
-            var savedNo = await _materialRequestService.SaveAsync(Id, CloneHeader(existing), lines, cancellationToken);
+            var savedNo = await _materialRequestService.SaveDetailLinesAsync(Id.Value, lines, cancellationToken);
             SuccessMessage = "Calculate completed.";
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(savedNo));
         }
@@ -891,6 +906,10 @@ public class MaterialRequestDetailModel : BasePageModel
         }
     }
 
+    /// <summary>
+    /// Lay danh sach line da post tu form / hidden field.
+    /// Co the tra ve list rong neu client khong gui data line.
+    /// </summary>
     private List<MaterialRequestLineDto> ResolvePostedLines()
     {
         var linesFromJson = ParseLinesFromJson(LinesJson);
@@ -902,6 +921,9 @@ public class MaterialRequestDetailModel : BasePageModel
         return NormalizeLines(Lines);
     }
 
+    /// <summary>
+    /// Chuan hoa line va ap dung rule readonly tren server truoc khi luu.
+    /// </summary>
     private async Task ApplyReadonlyLineRulesAsync(
         List<MaterialRequestLineDto> lines,
         long? requestNo,
@@ -982,6 +1004,10 @@ public class MaterialRequestDetailModel : BasePageModel
         }
     }
 
+    /// <summary>
+    /// Lam sach danh sach line truoc khi luu reject-pool / auto flow.
+    /// Trim text, bo dong rong, va chuan hoa cac gia tri null ve 0.
+    /// </summary>
     private static List<MaterialRequestLineDto> NormalizeLines(IEnumerable<MaterialRequestLineDto> lines)
     {
         var result = new List<MaterialRequestLineDto>();
@@ -992,6 +1018,7 @@ public class MaterialRequestDetailModel : BasePageModel
             var unit = (line.Unit ?? string.Empty).Trim();
             var note = (line.Note ?? string.Empty).Trim();
 
+            // Bo qua dong rong thuc su: khong co text va toan so deu = 0/null.
             var isBlank = string.IsNullOrWhiteSpace(itemCode)
                 && string.IsNullOrWhiteSpace(itemName)
                 && string.IsNullOrWhiteSpace(unit)
@@ -1001,6 +1028,9 @@ public class MaterialRequestDetailModel : BasePageModel
                 && !(line.InStock.HasValue && line.InStock.Value != 0)
                 && !(line.AccIn.HasValue && line.AccIn.Value != 0)
                 && !(line.Buy.HasValue && line.Buy.Value != 0)
+                && !(line.NormQty.HasValue && line.NormQty.Value != 0)
+                && !(line.Issued.HasValue && line.Issued.Value != 0)
+                && !(line.TempStore.HasValue && line.TempStore.Value != 0)
                 && !(line.Price.HasValue && line.Price.Value != 0);
 
             if (isBlank)
@@ -1023,7 +1053,10 @@ public class MaterialRequestDetailModel : BasePageModel
                 Price = line.Price ?? 0,
                 Note = note,
                 NewItem = line.NewItem,
-                Selected = true
+                Selected = line.Selected,
+                ManualCheck = line.ManualCheck,
+                TempStore = line.TempStore ?? 0,
+                Issued = line.Issued ?? 0
             });
         }
 
@@ -1041,11 +1074,17 @@ public class MaterialRequestDetailModel : BasePageModel
         };
     }
 
+    /// <summary>
+    /// Xac dinh khi nao nguoi dung duoc giu/quyentao tac Buy o line.
+    /// </summary>
     private bool ShouldPreserveEditableBuy(int currentStatus)
     {
         return currentStatus == StatusHeadDeptApproved && (IsAdminUser() || _dataScope.IsPurchaser);
     }
 
+    /// <summary>
+    /// Xac dinh khi nao nguoi dung duoc giu/quyentao tac Note o line.
+    /// </summary>
     private bool ShouldPreserveEditableNote(int currentStatus)
     {
         if (currentStatus == StatusJustCreated)
@@ -1056,6 +1095,9 @@ public class MaterialRequestDetailModel : BasePageModel
         return ShouldPreserveEditableBuy(currentStatus);
     }
 
+    /// <summary>
+    /// Ghi 1 dong lich su workflow theo action va trang thai moi.
+    /// </summary>
     private async Task WriteWorkflowHistoryAsync(
         MaterialRequestWorkflowAction action,
         int currentStatus,
@@ -1078,6 +1120,9 @@ public class MaterialRequestDetailModel : BasePageModel
             cancellationToken);
     }
 
+    /// <summary>
+    /// Ghi lich su cho luong draft save / update MR.
+    /// </summary>
     private async Task WriteDraftSaveHistoryAsync(long requestNo, int currentStatus, CancellationToken cancellationToken)
     {
         await _materialRequestService.InsertSuperRequestAsync(
@@ -1088,6 +1133,9 @@ public class MaterialRequestDetailModel : BasePageModel
             cancellationToken);
     }
 
+    /// <summary>
+    /// Map action + trang thai hien tai sang noi dung note trong workflow history.
+    /// </summary>
     private static string? ResolveWorkflowHistoryNote(MaterialRequestWorkflowAction action, int currentStatus)
     {
         if (action == MaterialRequestWorkflowAction.Submit)
@@ -1115,11 +1163,17 @@ public class MaterialRequestDetailModel : BasePageModel
         return null;
     }
 
+    /// <summary>
+    /// Kiem tra request co phai Ajax hay khong.
+    /// </summary>
     private bool IsAjaxRequest()
     {
         return string.Equals(Request.Headers["X-Requested-With"].ToString(), "XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Nap scope/nghia vu cua user hien tai truoc khi check quyen MR.
+    /// </summary>
     private async Task LoadUserScopeAsync(CancellationToken cancellationToken)
     {
         _isAdminRole = IsAdminUser();
@@ -1132,6 +1186,9 @@ public class MaterialRequestDetailModel : BasePageModel
         _dataScope = await _materialRequestService.GetEmployeeScopeAsync(User.Identity?.Name, cancellationToken);
     }
 
+    /// <summary>
+    /// Lay danh sach quyen trang va record pham vi cua user hien tai.
+    /// </summary>
     private PagePermissions GetUserPermissions()
     {
         bool isAdmin = IsAdminUser();
@@ -1151,8 +1208,14 @@ public class MaterialRequestDetailModel : BasePageModel
         return permsObj;
     }
 
+    /// <summary>
+    /// Kiem tra user co la admin hay khong.
+    /// Duy tri o page nay vi BasePageModel chua co helper admin chung; Index/Detail
+    /// dang dung chung cung 1 rule nen tam thoi phai lap lai dung pattern nay.
+    /// </summary>
     private bool IsAdminUser()
     {
+        // Uu tien claim dang co san trong auth ticket neu he thong da set.
         var adminClaim = (User.FindFirst("IsAdminRole")?.Value ?? string.Empty).Trim();
         if (string.Equals(adminClaim, "True", StringComparison.OrdinalIgnoreCase)
             || string.Equals(adminClaim, "1", StringComparison.OrdinalIgnoreCase))
@@ -1160,6 +1223,9 @@ public class MaterialRequestDetailModel : BasePageModel
             return true;
         }
 
+        // Neu claim chua co thi fallback ve DB, theo thu tu:
+        // 1) MS_Employee.IsAdminUser
+        // 2) SYS_RoleMember/SYS_Role.IsAdminRole
         var employeeCode = User.Identity?.Name?.Trim();
         if (string.IsNullOrWhiteSpace(employeeCode))
         {
@@ -1302,28 +1368,24 @@ public class MaterialRequestDetailModel : BasePageModel
         };
     }
 
-    private static MaterialRequestDetailDto CloneHeader(MaterialRequestDetailDto source)
+    /// <summary>
+    /// Kiem tra MR da o trang thai ket thuc chua.
+    /// </summary>
+    private static bool IsTerminalWorkflowStatus(int statusId)
     {
-        return new MaterialRequestDetailDto
-        {
-            RequestNo = source.RequestNo,
-            StoreGroup = source.StoreGroup,
-            DateCreate = source.DateCreate,
-            AccordingTo = source.AccordingTo,
-            Approval = source.Approval,
-            ApprovalEnd = source.ApprovalEnd,
-            PostPr = source.PostPr,
-            IsAuto = source.IsAuto,
-            FromDate = source.FromDate,
-            ToDate = source.ToDate,
-            MaterialStatusId = source.MaterialStatusId,
-            PrNo = source.PrNo,
-            NoIssue = source.NoIssue
-        };
+        return statusId == StatusRejected || statusId == StatusIssued;
     }
 
+    /// <summary>
+    /// Xac dinh user hien tai co duoc approve MR o trang thai nay khong.
+    /// </summary>
     private bool CanApproveStatus(int statusId, bool isAuto)
     {
+        if (IsTerminalWorkflowStatus(statusId))
+        {
+            return false;
+        }
+
         if (_isAdminRole)
         {
             return true;
@@ -1340,6 +1402,11 @@ public class MaterialRequestDetailModel : BasePageModel
 
     private bool CanRejectStatus(int statusId, bool isAuto)
     {
+        if (IsTerminalWorkflowStatus(statusId))
+        {
+            return false;
+        }
+
         if (_isAdminRole)
         {
             return true;
@@ -1354,6 +1421,9 @@ public class MaterialRequestDetailModel : BasePageModel
         };
     }
 
+    /// <summary>
+    /// Xac dinh user hien tai co duoc calculate MR o trang thai nay khong.
+    /// </summary>
     private bool CanCalculateStatus(int statusId)
     {
         if (!_isAdminRole && !_dataScope.IsPurchaser)
@@ -1389,6 +1459,9 @@ public class MaterialRequestDetailModel : BasePageModel
         return false;
     }
 
+    /// <summary>
+    /// Tao va dua email workflow vao hang doi gui neu action hien tai can notify.
+    /// </summary>
     private void TryQueueWorkflowNotifyEmail(
         MaterialRequestWorkflowAction action,
         int currentStatus,
@@ -1414,6 +1487,9 @@ public class MaterialRequestDetailModel : BasePageModel
         _ = SendNotifyEmailAsync(notifyRequest, header.RequestNo);
     }
 
+    /// <summary>
+    /// Xay dung payload email workflow cho submit/approve/reject cua MR.
+    /// </summary>
     private MaterialRequestWorkflowNotifyRequestViewModel? BuildWorkflowNotifyRequest(
         MaterialRequestWorkflowAction action,
         int currentStatus,
@@ -1770,6 +1846,9 @@ public class MaterialRequestDetailModel : BasePageModel
     }
 
     
+    /// <summary>
+    /// Resolve buoc workflow tiep theo tu action + trang thai hien tai.
+    /// </summary>
     private static MaterialRequestWorkflowTransition? ResolveTransition(MaterialRequestWorkflowAction action, int currentStatus, bool isAuto)
     {
         if (action == MaterialRequestWorkflowAction.Submit && currentStatus == StatusJustCreated)
