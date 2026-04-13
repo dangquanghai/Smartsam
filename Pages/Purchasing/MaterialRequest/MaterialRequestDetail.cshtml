@@ -239,7 +239,9 @@
                         <button type="submit" asp-page-handler="Approve" id="mrApproveBtn" class="btn btn-success btn-sm mx-1 my-1 @(Model.CanApprove ? string.Empty : "d-none")"><i class="fas fa-check"></i> Approve</button>
                         <button type="submit" asp-page-handler="Issue" id="mrIssueBtn" class="btn btn-secondary btn-sm mx-1 my-1 @(Model.ShowIssueButton ? string.Empty : "d-none")" disabled="@(Model.CanIssue ? null : "disabled")"><i class="fas fa-check-double"></i> Issue</button>
                         <button type="button" asp-page-handler="Reject" id="mrRejectBtn" class="btn btn-danger btn-sm mx-1 my-1 @(Model.CanReject ? string.Empty : "d-none")"><i class="fas fa-times"></i> Reject</button>
-                        <a href="@Model.BackToListUrl" class="btn btn-default btn-sm mx-1 my-1">Back to List</a>
+                        <a href="@Model.BackToListUrl" class="btn btn-default btn-sm mx-1 my-1">
+                            <i class="fas fa-arrow-left"></i> Back to list
+                        </a>
                     </div>
                     <div class="float-right">
                         <span id="mrTotalItemText">Total Item @Model.Lines.Count</span>
