@@ -267,11 +267,11 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 return RedirectToCurrentList();
             }
 
-            LoadSupplierRows();
-            var shouldNotifyNextLevel = IsApproveSupplierNewMode
-                ? true
-                : IsLastSupplierInCurrentRows(supplierId);
             var currentLevel = _dataScope.LevelCheckSupplier.Value;
+            LoadSupplierRows();
+            var isLastSupplierInScope = IsApproveSupplierNewMode || IsLastSupplierInCurrentRows(supplierId);
+            var shouldNotifyNextLevel = currentLevel < 4 && isLastSupplierInScope;
+            var shouldNotifyCompletionToPurchaser = currentLevel == 4 && isLastSupplierInScope;
             var operatorCode = User.Identity?.Name?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(operatorCode))
             {
@@ -297,7 +297,11 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 MarkSupplierProcessedInCurrentLogin(supplierId);
             }
 
-            var notifyResult = shouldNotifyNextLevel ? TryQueueNotifyNextLevel(currentLevel, current, "approved") : null;
+            var notifyResult = shouldNotifyCompletionToPurchaser
+                ? TryQueueNotifyApprovalCompleted(currentLevel, current, "approved")
+                : shouldNotifyNextLevel
+                    ? TryQueueNotifyNextLevel(currentLevel, current, "approved")
+                    : null;
             CurrentSupplierId = IsSupplierLinkMode ? supplierId : GetNextActiveSupplierIdAfterProcessing(supplierId);
             var approveMessage = "Approved supplier successfully.";
             if (!string.IsNullOrWhiteSpace(notifyResult))
@@ -1275,6 +1279,106 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
             _ = SendNotifyEmailAsync(notifyRequest);
             return $"The notification email is being sent to the next level.";
+        }
+
+        // Tạo yêu cầu gửi mail thông báo đã hoàn tất duyệt supplier cho purchaser.
+        private string? TryQueueNotifyApprovalCompleted(int currentLevel, ApproveSupplierDetailViewModel supplier, string action)
+        {
+            if (currentLevel != 4)
+            {
+                return null;
+            }
+
+            var recipients = GetEmailsByLevelCheck(1, supplier.DeptID);
+            if (recipients.Count == 0)
+            {
+                return IsApproveSupplierNewMode
+                    ? "No PU email recipients were found for the same department."
+                    : "No PU email recipients were found.";
+            }
+
+            var senderEmail = _config.GetValue<string>("EmailSettings:SenderEmail");
+            var mailPass = _config.GetValue<string>("EmailSettings:Password");
+            var mailServer = _config.GetValue<string>("EmailSettings:MailServer");
+            var mailPort = _config.GetValue<int?>("EmailSettings:MailPort") ?? 0;
+            if (string.IsNullOrWhiteSpace(senderEmail) ||
+                string.IsNullOrWhiteSpace(mailPass) ||
+                string.IsNullOrWhiteSpace(mailServer) ||
+                mailPort <= 0)
+            {
+                return "Email settings are missing. Skip completion notification to PU.";
+            }
+
+            var operatorCode = User.Identity?.Name?.Trim() ?? "SYSTEM";
+            var supplierCode = string.IsNullOrWhiteSpace(supplier.SupplierCode) ? supplier.SupplierID.ToString() : supplier.SupplierCode;
+            var supplierName = string.IsNullOrWhiteSpace(supplier.SupplierName) ? "-" : supplier.SupplierName;
+            var recipientDisplayNames = string.Join(", ", recipients.Select(BuildRecipientDisplayName));
+
+            var detailUrl = IsApproveSupplierNewMode
+                ? Url.Page("/Purchasing/Supplier/SupplierDetail", values: new
+                {
+                    id = supplier.SupplierID,
+                    mode = "view"
+                })
+                : Url.Page("/Purchasing/Supplier/Index", values: new
+                {
+                    StatusIdsCsv = "4"
+                });
+
+            var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl)
+                ? string.Empty
+                : $"{Request.Scheme}://{Request.Host}{detailUrl}";
+
+            var subject = IsApproveSupplierNewMode
+                ? "[Approve Supplier New] Supplier approval completed by BOD"
+                : "[Supplier Approval] Supplier approval completed by BOD";
+            subject = ApplyMailSubjectPrefix(subject);
+
+            var body = IsApproveSupplierNewMode
+                ? $@"
+<p>Dear {{RECIPIENT_LABEL}},</p>
+<p>The supplier new approval workflow has been <b>{action}</b> completely by BOD.</p>
+<ul>
+  <li>Supplier Code: <b>{WebUtility.HtmlEncode(supplierCode)}</b></li>
+  <li>Supplier Name: <b>{WebUtility.HtmlEncode(supplierName)}</b></li>
+  <li>Department ID: <b>{WebUtility.HtmlEncode(supplier.DeptID?.ToString() ?? "-")}</b></li>
+  <li>Action by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
+  <li>Action time: <b>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</b></li>
+</ul>
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Review: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">{WebUtility.HtmlEncode(IsApproveSupplierNewMode ? "Supplier Detail" : "Supplier List")}</a></p>")}
+<p>SmartSam System</p>"
+                : $@"
+<p>Dear {{RECIPIENT_LABEL}},</p>
+<p>The current supplier approval list has been <b>{action}</b> completely by BOD.</p>
+<p>All suppliers in the current approval batch have finished the approval workflow.</p>
+<ul>
+  <li>Action by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
+  <li>Action time: <b>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</b></li>
+</ul>
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Review: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Supplier List</a></p>")}
+<p>SmartSam System</p>";
+
+            var htmlBody = IsApproveSupplierNewMode
+                ? EmailTemplateHelper.WrapInNotifyTemplate("APPROVE SUPPLIER NEW", "#17a2b8", DateTime.Now, body)
+                : EmailTemplateHelper.WrapInNotifyTemplate("APPROVE SUPPLIER", "#007bff", DateTime.Now, body);
+
+            var notifyRequest = new ApproveSupplierNotifyRequestViewModel
+            {
+                NextLevel = 1,
+                SenderEmail = senderEmail,
+                Password = mailPass,
+                MailServer = mailServer,
+                MailPort = mailPort,
+                Subject = subject,
+                HtmlBody = htmlBody,
+                Recipients = recipients.Select(x => x.Email).ToList(),
+                RecipientDetails = recipients,
+                DefaultRecipientLabel = recipientDisplayNames,
+                SendIndividually = true
+            };
+
+            _ = SendNotifyEmailAsync(notifyRequest);
+            return "The completion notification email is being sent to PU.";
         }
 
         // Áp tiền tố subject theo cấu hình EmailSettings khi FunctionID hiện tại thuộc danh sách test.

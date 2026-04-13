@@ -650,8 +650,11 @@ namespace SmartSam.Pages.Purchasing.Supplier
             var operatorCode = User.Identity?.Name ?? "SYSTEM";
             SubmitApproval(Id!.Value, operatorCode);
 
-            // Submit should always notify the next approval level in the workflow.
-            TryQueueNotifyNewSupplierAfterSubmit(Id.Value, current, operatorCode);
+            // Only new suppliers participate in the email approval flow after submit.
+            if (current.IsNew)
+            {
+                TryQueueNotifyNewSupplierAfterSubmit(Id.Value, current, operatorCode);
+            }
 
             SetFlashMessage("Supplier submitted successfully.", "success");
             return RedirectToPage("./SupplierDetail", BuildDetailRouteValues(Id.Value));
@@ -1204,7 +1207,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
   <li>Submitted by: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(operatorCode)}</span></b></li>
   <li>Submit time: <b>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</b></li>
 </ul>
-{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Approve Supplier New</a></p>")}
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Approve Supplier New</a></p>")}
 <p>SmartSam System</p>";
 
             var htmlBody = EmailTemplateHelper.WrapInNotifyTemplate("APPROVE SUPPLIER NEW", "#17a2b8", DateTime.Now, body);
