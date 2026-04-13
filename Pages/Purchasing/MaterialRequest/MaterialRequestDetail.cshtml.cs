@@ -234,6 +234,12 @@ public class MaterialRequestDetailModel : BasePageModel
 
         Input = detail;
         Lines = (await _materialRequestService.GetLinesAsync(Id.Value, cancellationToken)).ToList();
+        if (HideZeroBuyLines)
+        {
+            Lines = Lines
+                .Where(line => (line.Buy ?? 0m) > 0m)
+                .ToList();
+        }
         await LoadDraftCreatorAsync(Id.Value, cancellationToken);
         PagePerm = GetUserPermissions();
         return Page();

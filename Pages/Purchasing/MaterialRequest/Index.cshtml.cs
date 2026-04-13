@@ -651,7 +651,9 @@ public class IndexModel : BasePageModel
             StoreGroup = scopedStoreGroup,
             StatusIds = isStoremanMode ? new List<int>() : (Filter.StatusIds ?? new List<int>()),
             ItemCode = isStoremanMode && !string.IsNullOrWhiteSpace(Filter.ItemCode) ? Filter.ItemCode.Trim() : null,
-            NoIssue = isStoremanMode && Filter.IssueLessThanOrder ? 1 : null,
+            NoIssue = isStoremanMode && Filter.IssueLessThanOrder && string.IsNullOrWhiteSpace(Filter.ItemCode)
+                ? 1
+                : null,
             // Check = show Auto MR only. Uncheck = hide Auto MR and keep non-auto rows.
             IsAuto = isStoremanMode ? null : (Filter.AutoOnly ? true : false),
             BuyGreaterThanZero = isStoremanMode ? null : (Filter.BuyGreaterThanZero ? true : null),
@@ -2085,8 +2087,8 @@ public class MaterialRequestService
         await using var cmd = new SqlCommand(sql, conn);
         Helper.AddParameter(cmd, "@ItemID", itemId, SqlDbType.Int);
 
-        var value = await cmd.ExecuteScalarAsync(cancellationToken);
-        return value == null || value == DBNull.Value ? 0m : Convert.ToDecimal(value);
+        var output = await cmd.ExecuteScalarAsync(cancellationToken);
+        return output == null || output == DBNull.Value ? 0m : Convert.ToDecimal(output);
     }
 
     /// <summary>
