@@ -28,28 +28,10 @@
         UseDateRange = Model.Filter.UseDateRange,
         FromDate = Model.Filter.UseDateRange ? Model.Filter.FromDate?.ToString("yyyy-MM-dd") : null,
         ToDate = Model.Filter.UseDateRange ? Model.Filter.ToDate?.ToString("yyyy-MM-dd") : null,
-        SortBy = Model.Filter.SortBy,
-        SortDirection = Model.Filter.SortDirection,
         PageNumber = page,
         PageSize = Model.Filter.PageSize
     }) ?? "#";
 
-    Func<string, string> sortUrl = (column) => Url.Page("./Index", new
-    {
-        SupplierCode = Model.Filter.SupplierCode,
-        SupplierName = Model.Filter.SupplierName,
-        Business = Model.Filter.Business,
-        PONo = Model.Filter.PONo,
-        PRNo = Model.Filter.PRNo,
-        ItemCode = Model.Filter.ItemCode,
-        UseDateRange = Model.Filter.UseDateRange,
-        FromDate = Model.Filter.UseDateRange ? Model.Filter.FromDate?.ToString("yyyy-MM-dd") : null,
-        ToDate = Model.Filter.UseDateRange ? Model.Filter.ToDate?.ToString("yyyy-MM-dd") : null,
-        SortBy = column,
-        SortDirection = Model.GetNextSortDirection(column),
-        PageNumber = 1,
-        PageSize = Model.Filter.PageSize
-    }) ?? "#";
 }
 
 <section class="content">
@@ -64,9 +46,6 @@
                         <form method="get" id="supplierPoSearchForm">
                             <input type="hidden" name="PageNumber" value="1" />
                             <input type="hidden" name="PageSize" value="@Model.Filter.PageSize" />
-                            <input type="hidden" name="SortBy" value="@Model.Filter.SortBy" />
-                            <input type="hidden" name="SortDirection" value="@Model.Filter.SortDirection" />
-
                             <div class="form-group mb-2">
                                 <label>Supplier Code</label>
                                 <input name="SupplierCode" value="@Model.Filter.SupplierCode" class="form-control form-control-sm" />
@@ -177,24 +156,24 @@
 
                     <div class="card-body p-0">
                         <div class="table-responsive spr-table-wrap">
-                            <table class="table table-hover table-bordered mb-0 text-nowrap spr-table">
+                            <table class="table table-hover table-bordered mb-0 spr-table">
                                 <thead class="thead-light">
                                     <tr>
-                                        <th style="width: 56px;">No.</th>
-                                        <th><a class="spr-sort-link" href="@(sortUrl("SupplierCode"))">Code @Html.Raw(Model.GetSortIcon("SupplierCode"))</a></th>
-                                        <th class="spr-col-supplier"><a class="spr-sort-link" href="@(sortUrl("SupplierName"))">SupplierName @Html.Raw(Model.GetSortIcon("SupplierName"))</a></th>
-                                        <th><a class="spr-sort-link" href="@(sortUrl("PONo"))">PONo @Html.Raw(Model.GetSortIcon("PONo"))</a></th>
-                                        <th><a class="spr-sort-link" href="@(sortUrl("PODate"))">PODate @Html.Raw(Model.GetSortIcon("PODate"))</a></th>
-                                        <th class="spr-col-remark"><a class="spr-sort-link" href="@(sortUrl("Remark"))">Remark @Html.Raw(Model.GetSortIcon("Remark"))</a></th>
-                                        <th><a class="spr-sort-link" href="@(sortUrl("PRNo"))">PRNo @Html.Raw(Model.GetSortIcon("PRNo"))</a></th>
-                                        <th><a class="spr-sort-link" href="@(sortUrl("Dept"))">Dept @Html.Raw(Model.GetSortIcon("Dept"))</a></th>
-                                        <th><a class="spr-sort-link" href="@(sortUrl("ItemCode"))">ItemCode @Html.Raw(Model.GetSortIcon("ItemCode"))</a></th>
-                                        <th class="spr-col-item"><a class="spr-sort-link" href="@(sortUrl("ItemName"))">ItemName @Html.Raw(Model.GetSortIcon("ItemName"))</a></th>
-                                        <th class="text-right"><a class="spr-sort-link" href="@(sortUrl("Quantity"))">Quantity @Html.Raw(Model.GetSortIcon("Quantity"))</a></th>
-                                        <th class="text-right"><a class="spr-sort-link" href="@(sortUrl("UnitPrice"))">unitPrice @Html.Raw(Model.GetSortIcon("UnitPrice"))</a></th>
-                                        <th class="text-right"><a class="spr-sort-link" href="@(sortUrl("POAmount"))">Amount @Html.Raw(Model.GetSortIcon("POAmount"))</a></th>
-                                        <th class="text-right"><a class="spr-sort-link" href="@(sortUrl("PerVAT"))">PerVAT @Html.Raw(Model.GetSortIcon("PerVAT"))</a></th>
-                                        <th class="text-right"><a class="spr-sort-link" href="@(sortUrl("AfterVAT"))">AfterVAT @Html.Raw(Model.GetSortIcon("AfterVAT"))</a></th>
+                                        <th style="min-width: 56px;">No.</th>
+                                        <th style="min-width:100px;">Code</th>
+                                        <th class="spr-col-supplier">SupplierName</th>
+                                        <th style="min-width:110px;">PONo</th>
+                                        <th style="min-width:110px;">PODate</th>
+                                        <th class="spr-col-remark">Remark</th>
+                                        <th style="min-width:110px;">PRNo</th>
+                                        <th style="min-width:100px;">Dept</th>
+                                        <th style="min-width:110px;">ItemCode</th>
+                                        <th style="min-width:410px;" class="spr-col-item">ItemName</th>
+                                        <th style="min-width:110px;" class="text-right">Quantity</th>
+                                        <th style="min-width:110px;" class="text-right">unitPrice</th>
+                                        <th style="min-width:110px;" class="text-right">Amount</th>
+                                        <th style="min-width:110px;" class="text-right">PerVAT</th>
+                                        <th style="min-width:110px;" class="text-right">AfterVAT</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -251,9 +230,6 @@
 
                 <div class="card card-outline card-primary">
                     <div class="card-footer p-2 text-center module-action-bar spr-action-bar">
-                        <button type="button" id="btnSupplierPoClose" class="btn btn-sm btn-action-close border mx-1 my-1">
-                            <i class="fas fa-times"></i> Close
-                        </button>
                         <a href="@Url.Page("./Index", "ExportExcel", new {
                                SupplierCode = Model.Filter.SupplierCode,
                                SupplierName = Model.Filter.SupplierName,
@@ -263,9 +239,7 @@
                                ItemCode = Model.Filter.ItemCode,
                                UseDateRange = Model.Filter.UseDateRange,
                                FromDate = Model.Filter.UseDateRange ? Model.Filter.FromDate?.ToString("yyyy-MM-dd") : null,
-                               ToDate = Model.Filter.UseDateRange ? Model.Filter.ToDate?.ToString("yyyy-MM-dd") : null,
-                               SortBy = Model.Filter.SortBy,
-                               SortDirection = Model.Filter.SortDirection
+                               ToDate = Model.Filter.UseDateRange ? Model.Filter.ToDate?.ToString("yyyy-MM-dd") : null
                            })"
                            class="btn btn-sm btn-action-export border mx-1 my-1">
                             <i class="fas fa-file-excel"></i> Export Excel

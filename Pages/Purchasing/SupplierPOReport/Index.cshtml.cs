@@ -13,24 +13,6 @@ public class IndexModel : BasePageModel
     private const int PermissionViewList = 1;
     private readonly PermissionService _permissionService;
 
-    private static readonly IReadOnlyDictionary<string, string> SortColumns = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-    {
-        ["SupplierCode"] = "s.SupplierCode",
-        ["SupplierName"] = "s.SupplierName",
-        ["PONo"] = "p.PONo",
-        ["PODate"] = "p.PODate",
-        ["Remark"] = "p.Remark",
-        ["PRNo"] = "pr.RequestNo",
-        ["Dept"] = "LEFT(ISNULL(kg.KPGroupName, ''), 2)",
-        ["ItemCode"] = "i.ItemCode",
-        ["ItemName"] = "i.ItemName",
-        ["Quantity"] = "d.Quantity",
-        ["UnitPrice"] = "d.UnitPrice",
-        ["POAmount"] = "d.POAmount",
-        ["PerVAT"] = "p.PerVAT",
-        ["AfterVAT"] = "(ISNULL(d.POAmount, 0) + (ISNULL(d.POAmount, 0) * ISNULL(p.PerVAT, 0) / 100.0))"
-    };
-
     public IndexModel(IConfiguration config, PermissionService permissionService) : base(config)
     {
         _permissionService = permissionService;
@@ -149,28 +131,6 @@ public class IndexModel : BasePageModel
         return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"supplier_po_report_{DateTime.Now:yyyyMMddHHmmss}.xlsx");
     }
 
-    public string GetNextSortDirection(string column)
-    {
-        if (string.Equals(Filter.SortBy, column, StringComparison.OrdinalIgnoreCase))
-        {
-            return string.Equals(Filter.SortDirection, "ASC", StringComparison.OrdinalIgnoreCase) ? "DESC" : "ASC";
-        }
-
-        return "ASC";
-    }
-
-    public string GetSortIcon(string column)
-    {
-        if (!string.Equals(Filter.SortBy, column, StringComparison.OrdinalIgnoreCase))
-        {
-            return string.Empty;
-        }
-
-        return string.Equals(Filter.SortDirection, "ASC", StringComparison.OrdinalIgnoreCase)
-            ? "<i class=\"fas fa-sort-up\"></i>"
-            : "<i class=\"fas fa-sort-down\"></i>";
-    }
-
     private void LoadRows()
     {
         var (rows, totalRecords, totalBeforeVat, totalAfterVat) = SearchRows(Filter);
@@ -200,8 +160,6 @@ public class IndexModel : BasePageModel
         BuildWhereClause(filter, whereParts, cmd);
 
         var whereSql = whereParts.Count == 0 ? string.Empty : $"WHERE {string.Join(" AND ", whereParts)}";
-        var orderBySql = BuildOrderBySql(filter);
-
         cmd.CommandText = $@"
 SELECT COUNT(1) AS TotalRecords,
        ISNULL(SUM(ISNULL(d.POAmount, 0)), 0) AS TotalBeforeVat,
@@ -240,7 +198,7 @@ LEFT JOIN dbo.MATERIAL_REQUEST mr ON mr.REQUEST_NO = d.MRNo
 LEFT JOIN dbo.INV_KPGroup kg ON kg.KPGroupID = mr.STORE_GROUP
 INNER JOIN dbo.INV_ItemList i ON i.ItemID = d.ItemID
 {whereSql}
-ORDER BY {orderBySql}
+ORDER BY p.PODate DESC, p.POID DESC, d.RecordID DESC
 OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
 
         cmd.Parameters.Add("@Offset", SqlDbType.Int).Value = (filter.PageNumber - 1) * filter.PageSize;
@@ -346,17 +304,6 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
         }
     }
 
-    private string BuildOrderBySql(SupplierPOReportFilter filter)
-    {
-        if (!string.IsNullOrWhiteSpace(filter.SortBy) && SortColumns.TryGetValue(filter.SortBy, out var columnSql))
-        {
-            var direction = string.Equals(filter.SortDirection, "ASC", StringComparison.OrdinalIgnoreCase) ? "ASC" : "DESC";
-            return $"{columnSql} {direction}, p.POID DESC, d.RecordID DESC";
-        }
-
-        return "p.PODate DESC, p.POID DESC, d.RecordID DESC";
-    }
-
     private void NormalizeFilter()
     {
         Filter.SupplierCode = Filter.SupplierCode?.Trim();
@@ -367,13 +314,6 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
         Filter.ItemCode = Filter.ItemCode?.Trim();
         Filter.PageNumber = Filter.PageNumber <= 0 ? 1 : Filter.PageNumber;
         Filter.PageSize = NormalizePageSize(Filter.PageSize);
-
-        if (!SortColumns.ContainsKey(Filter.SortBy ?? string.Empty))
-        {
-            Filter.SortBy = "PODate";
-        }
-
-        Filter.SortDirection = string.Equals(Filter.SortDirection, "ASC", StringComparison.OrdinalIgnoreCase) ? "ASC" : "DESC";
 
         if (!Filter.UseDateRange)
         {
@@ -403,8 +343,6 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
             UseDateRange = Filter.UseDateRange,
             FromDate = Filter.FromDate,
             ToDate = Filter.ToDate,
-            SortBy = Filter.SortBy,
-            SortDirection = Filter.SortDirection,
             PageNumber = 1,
             PageSize = int.MaxValue
         };
@@ -481,8 +419,6 @@ public class SupplierPOReportFilter
     public bool UseDateRange { get; set; } = true;
     public DateTime? FromDate { get; set; }
     public DateTime? ToDate { get; set; }
-    public string? SortBy { get; set; } = "PODate";
-    public string? SortDirection { get; set; } = "DESC";
     public int PageNumber { get; set; } = 1;
     public int PageSize { get; set; } = 10;
 }

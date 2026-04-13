@@ -1,0 +1,222 @@
+@page
+@model SmartSam.Pages.Purchasing.AnalyzingSuppliers.IndexModel
+@{
+    ViewData["Title"] = "Analyzing Suppliers";
+    var currentPage = Model.Filter.PageNumber <= 0 ? 1 : Model.Filter.PageNumber;
+    var totalPages = Model.TotalPages <= 0 ? 1 : Model.TotalPages;
+    var pageItems = new List<int?>();
+    for (var p = 1; p <= totalPages; p++)
+    {
+        if (p == 1 || p == totalPages || (p >= currentPage - 2 && p <= currentPage + 2))
+        {
+            pageItems.Add(p);
+        }
+        else if (pageItems.Count == 0 || pageItems[^1].HasValue)
+        {
+            pageItems.Add(null);
+        }
+    }
+
+    var returnUrl = $"{Request.Path}{Request.QueryString}";
+
+    Func<int, string> pageUrl = (page) => Url.Page("./Index", new
+    {
+        SupplierId = Model.Filter.SupplierId,
+        SortBy = Model.Filter.SortBy,
+        SortDirection = Model.Filter.SortDirection,
+        PageNumber = page,
+        PageSize = Model.Filter.PageSize
+    }) ?? "#";
+
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-2">
+                <div class="card card-info asp-search-card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-search"></i> Search</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" id="analyzingSuppliersForm">
+                            <input type="hidden" name="PageNumber" value="1" />
+                            <input type="hidden" name="PageSize" value="@Model.Filter.PageSize" />
+                            <input type="hidden" name="SortBy" value="@Model.Filter.SortBy" />
+                            <input type="hidden" name="SortDirection" value="@Model.Filter.SortDirection" />
+
+                            <div class="form-group mb-2">
+                                <label>Supplier Code</label>
+                                <select id="Filter_SupplierCode" name="SupplierId" class="form-control form-control-sm">
+                                    @foreach (var option in Model.SupplierCodeOptions)
+                                    {
+                                        var isSelected = option.Value == (Model.Filter.SupplierId?.ToString() ?? string.Empty);
+                                        <option value="@option.Value" selected="@(isSelected ? "selected" : null)">@option.Text</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label>Supplier Name</label>
+                                <select id="Filter_SupplierName" name="SupplierIdMirror" class="form-control form-control-sm vni-font">
+                                    @foreach (var option in Model.SupplierNameOptions)
+                                    {
+                                        var isSelected = option.Value == (Model.Filter.SupplierId?.ToString() ?? string.Empty);
+                                        <option value="@option.Value" selected="@(isSelected ? "selected" : null)">@option.Text</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-block btn-sm border mb-2">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                            @* <button type="button" id="btnAnalyzingSuppliersCloseTop" class="btn btn-light btn-block btn-sm border">
+                                <i class="fas fa-times"></i> Close
+                            </button> *@
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-10">
+                <div class="card card-primary">
+                    <div class="card-header asp-table-header">
+                        <div class="asp-table-header-left">
+                            <h3 class="card-title">Analyzing Suppliers</h3>
+                            <span class="badge badge-light ml-2">@Model.TotalRecords records</span>
+                        </div>
+                        <div class="asp-table-header-right app-paging-white">
+                            <nav aria-label="Page navigation">
+                                <div class="d-inline-block mr-2 asp-pagination-info">
+                                    @if (Model.TotalRecords == 0)
+                                    {
+                                        <small>No records</small>
+                                    }
+                                    else
+                                    {
+                                        <small>Showing @Model.PageStart to @Model.PageEnd of @Model.TotalRecords entries</small>
+                                    }
+                                </div>
+                                <div class="asp-page-size-form d-inline-flex mr-2">
+                                    <label class="mb-0 asp-page-size-label" for="analyzingSuppliersPageSize">Show</label>
+                                    <select id="analyzingSuppliersPageSize" class="form-control form-control-sm asp-page-size-select">
+                                        @foreach (var pageSizeOption in Model.PageSizeOptions)
+                                        {
+                                            <option value="@pageSizeOption" selected="@(Model.Filter.PageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                        }
+                                    </select>
+                                </div>
+                                <ul class="pagination pagination-sm mb-0 d-inline-flex">
+                                    <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+                                        <a class="page-link asp-pager-link" href="@(Model.HasPreviousPage ? pageUrl(currentPage - 1) : "#")">Prev</a>
+                                    </li>
+                                    @foreach (var pageItem in pageItems)
+                                    {
+                                        if (pageItem.HasValue)
+                                        {
+                                            <li class="page-item @(pageItem.Value == currentPage ? "active" : "")">
+                                                <a class="page-link asp-pager-link" href="@pageUrl(pageItem.Value)">@pageItem.Value</a>
+                                            </li>
+                                        }
+                                        else
+                                        {
+                                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                                        }
+                                    }
+                                    <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+                                        <a class="page-link asp-pager-link" href="@(Model.HasNextPage ? pageUrl(currentPage + 1) : "#")">Next</a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-0">
+                        <div class="table-responsive asp-table-wrap">
+                            <table class="table table-hover table-bordered mb-0 asp-table">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="min-width: 60px;">No.</th>
+                                        <th style="min-width: 140px;">PO No.</th>
+                                        <th style="min-width: 120px;">PO Date</th>
+                                        <th style="min-width: 130px;">PR No.</th>
+                                        <th style="min-width: 330px;" class="asp-col-remark">Remark</th>
+                                        <th style="min-width: 330px;" class="asp-col-supplier">Supplier Code/Name</th>
+                                        <th style="min-width: 180px;">Status</th>
+                                        <th style="min-width: 180px;">Assess Level</th>
+                                        <th style="min-width: 330px;" class="asp-col-comment">Comment</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (Model.Rows.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="8" class="text-center text-muted">No data</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        for (var index = 0; index < Model.Rows.Count; index++)
+                                        {
+                                            var row = Model.Rows[index];
+                                            <tr>
+                                                <td>@(Model.PageStart + index)</td>
+                                                <td>
+                                                    <a href="@Url.Page("/Purchasing/PurchaseOrder/PurchaseOrderDetail", new { id = row.POID, mode = "view", returnUrl })" class="asp-po-link text-bold">@row.PONo</a>
+                                                </td>
+                                                <td>@row.PODateText</td>
+                                                <td>@row.PRNo</td>
+                                                <td class="asp-col-remark-cell">
+                                                    <span class="asp-ellipsis vni-font" title="@row.Remark">@row.Remark</span>
+                                                </td>
+                                                <td class="asp-col-supplier-cell">
+                                                    <span class="asp-ellipsis vni-font" title="@($"{row.SupplierCode} / {row.SupplierName}")">@row.SupplierCode / @row.SupplierName</span>
+                                                </td>
+                                                <td>
+                                                    <span class="asp-ellipsis" title="@row.StatusName">@row.StatusName</span>
+                                                </td>
+                                                <td>
+                                                    <span class="asp-ellipsis" title="@row.AssessLevelName">@row.AssessLevelName</span>
+                                                </td>
+                                                <td class="asp-col-comment-cell">
+                                                    <span class="asp-ellipsis vni-font" title="@row.Comment">@row.Comment</span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-outline card-primary">
+                    <div class="card-footer p-2 text-center module-action-bar asp-action-bar">
+                        <a href="@(Model.CanPrintReport ? Url.Page("./Index", "Report", new { SupplierId = Model.Filter.SupplierId, SortBy = Model.Filter.SortBy, SortDirection = Model.Filter.SortDirection, PageSize = Model.Filter.PageSize, PageNumber = Model.Filter.PageNumber }) : "#")"
+                           class="btn btn-sm btn-action-export border mx-1 my-1 @(Model.CanPrintReport ? string.Empty : "disabled")"
+                           target="_blank"
+                           rel="noopener"
+                           aria-disabled="@(!Model.CanPrintReport)">
+                            <i class="fas fa-file-pdf"></i> Report
+                        </a>
+                        <a href="@Url.Page("./Index", "ExportExcel", new { SupplierId = Model.Filter.SupplierId, SortBy = Model.Filter.SortBy, SortDirection = Model.Filter.SortDirection, PageSize = Model.Filter.PageSize, PageNumber = Model.Filter.PageNumber })"
+                           class="btn btn-sm btn-action-export border mx-1 my-1">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </a>
+                        @* <button type="button" id="btnAnalyzingSuppliersCloseBottom" class="btn btn-sm btn-action-close border mx-1 my-1">
+                            <i class="fas fa-times"></i> Close
+                        </button> *@
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Purchasing/AnalyzingSuppliers/index.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script src="~/js/Purchasing/AnalyzingSuppliers/index.js" asp-append-version="true"></script>
+}

@@ -208,23 +208,36 @@
 }
 
 .prq-add-detail-col-item-name {
-    max-width: 300px;
+    min-width: 300px;
+    white-space: normal !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 .prq-add-detail-col-specification {
-    max-width: 200px;
+    min-width: 220px;
+    white-space: normal !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 .prq-add-detail-col-note {
-    max-width: 400px;
+    min-width: 320px;
+    white-space: normal !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 .prq-add-detail-specification {
-    max-width: 200px;
+    white-space: normal !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 .prq-add-detail-note {
-    max-width: 400px;
+    white-space: normal !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 .prq-add-detail-ellipsis {
@@ -233,6 +246,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.prq-add-detail-wrap-text {
+    display: block;
+    width: 100%;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 .prq-view-detail-filter-row {
