@@ -151,7 +151,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
     public bool CanCalculate
     {
-        get { return IsEdit && CurrentStatusId == StatusHeadDeptApproved && (IsAdminUser() || _dataScope.IsPurchaser); }
+        get { return IsEdit && (IsAdminUser() || _dataScope.IsPurchaser) && CurrentStatusId <= StatusPurchaserChecked; }
     }
 
     public bool CanReject
@@ -163,7 +163,7 @@ public class MaterialRequestDetailModel : BasePageModel
     {
         get
         {
-            return (_dataScope.IsCFO || _dataScope.ApprovalLevel >= 3) && CurrentStatusId >= StatusPurchaserChecked;
+            return _dataScope.IsCFO || _dataScope.ApprovalLevel >= 3;
         }
     }
 
@@ -234,6 +234,12 @@ public class MaterialRequestDetailModel : BasePageModel
 
         Input = detail;
         Lines = (await _materialRequestService.GetLinesAsync(Id.Value, cancellationToken)).ToList();
+        if (HideZeroBuyLines)
+        {
+            Lines = Lines
+                .Where(line => (line.Buy ?? 0m) > 0m)
+                .ToList();
+        }
         await LoadDraftCreatorAsync(Id.Value, cancellationToken);
         PagePerm = GetUserPermissions();
         return Page();
@@ -1426,12 +1432,17 @@ public class MaterialRequestDetailModel : BasePageModel
     /// </summary>
     private bool CanCalculateStatus(int statusId)
     {
-        if (!_isAdminRole && !_dataScope.IsPurchaser)
+        if (_isAdminRole)
+        {
+            return true;
+        }
+
+        if (!_dataScope.IsPurchaser)
         {
             return false;
         }
 
-        return statusId == StatusHeadDeptApproved;
+        return statusId <= StatusPurchaserChecked;
     }
 
     private bool CanExecuteTransition(MaterialRequestWorkflowAction action, int currentStatus, bool isAuto)
