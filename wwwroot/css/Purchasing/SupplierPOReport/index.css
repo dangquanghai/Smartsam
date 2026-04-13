@@ -1,0 +1,126 @@
+.spr-table-wrap {
+    max-height: 62vh;
+    overflow: auto;
+    position: relative;
+}
+
+.spr-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #f8f9fa;
+    box-shadow: inset 0 -1px 0 #dee2e6;
+}
+
+.spr-table th,
+.spr-table td {
+    vertical-align: middle;
+}
+
+.spr-table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.spr-table-header-left {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.spr-table-header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.spr-page-size-form {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.spr-pagination-info {
+    padding-top: 0.3rem;
+}
+
+.spr-page-size-label {
+    margin-bottom: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.spr-page-size-select {
+    width: 74px;
+    min-width: 74px;
+}
+
+.spr-pager-link {
+    min-width: 34px;
+    text-align: center;
+}
+
+.spr-sort-link {
+    color: inherit;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.spr-sort-link:hover,
+.spr-sort-link:focus {
+    color: #007bff;
+}
+
+.spr-col-supplier,
+.spr-col-supplier-cell {
+    width: 250px;
+    min-width: 250px;
+    max-width: 250px;
+}
+
+.spr-col-remark,
+.spr-col-remark-cell {
+    width: 360px;
+    min-width: 360px;
+    max-width: 360px;
+}
+
+.spr-col-item,
+.spr-col-item-cell {
+    width: 320px;
+    min-width: 320px;
+    max-width: 320px;
+}
+
+.spr-ellipsis {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.spr-action-bar .btn {
+    min-width: 110px;
+}
+
+.spr-action-bar .btn-action-export {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: #fff;
+}
+
+.spr-action-bar .btn-action-close {
+    background-color: #f8f9fa;
+    border-color: #ced4da;
+    color: #495057;
+}
