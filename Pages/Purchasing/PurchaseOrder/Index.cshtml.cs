@@ -272,6 +272,20 @@ public class IndexModel : BasePageModel
         return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"purchase_order_detail_{DateTime.Now:yyyyMMddHHmmss}.xlsx");
     }
 
+    public IActionResult OnGetReportDetailQuestPdf([FromQuery] PurchaseOrderViewDetailSearchRequest request)
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionView) && !PagePerm.HasPermission(PermissionAdd))
+        {
+            return Redirect("/");
+        }
+
+        var filter = BuildViewDetailFilter(request);
+        var rows = SearchPurchaseOrderDetailsForReport(filter);
+        var pdf = PurchaseOrderViewDetailQuestPdfReport.BuildPdf(rows);
+        return File(pdf, "application/pdf", "PurchaseOrder_Report.pdf");
+    }
+
     private void NormalizeFilter()
     {
         Filter.Page = Filter.Page <= 0 ? 1 : Filter.Page;
@@ -503,6 +517,154 @@ public class IndexModel : BasePageModel
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         using var cmd = conn.CreateCommand();
 
+        ApplyViewDetailFilters(filter, whereParts, cmd);
+
+        var whereSql = whereParts.Count == 0 ? string.Empty : $"WHERE {string.Join(" AND ", whereParts)}";
+
+        cmd.CommandText = $@"
+        SELECT COUNT(1)
+        FROM dbo.PC_PO p
+        INNER JOIN dbo.PC_PODetail d ON d.POID = p.POID
+        LEFT JOIN dbo.PC_PR pr ON pr.PRID = p.PRID
+        LEFT JOIN dbo.PC_Suppliers s ON s.SupplierID = p.SupplierID
+        LEFT JOIN dbo.MS_CurrencyFL c ON c.CurrencyID = p.Currency
+        LEFT JOIN dbo.INV_ItemList i ON i.ItemID = d.ItemID
+        LEFT JOIN dbo.MS_Department dep ON dep.DeptID = d.RecDept
+        {whereSql};
+
+        SELECT
+            p.POID,
+            ISNULL(p.PONo, '') AS PONo,
+            p.PODate,
+            ISNULL(pr.RequestNo, '') AS RequestNo,
+            ISNULL(s.SupplierCode, '') + CASE WHEN ISNULL(s.SupplierName, '') = '' THEN '' ELSE ' / ' + ISNULL(s.SupplierName, '') END AS Supplier,
+            ISNULL(p.Currency, 0) AS CurrencyId,
+            ISNULL(c.CurrencyName, '') AS CurrencyName,
+            ISNULL(p.ExRate, 0) AS ExRate,
+            ISNULL(i.ItemCode, '') AS ItemCode,
+            ISNULL(i.ItemName, '') AS ItemName,
+            ISNULL(i.Unit, '') AS Unit,
+            ISNULL(d.Quantity, 0) AS Quantity,
+            ISNULL(d.UnitPrice, 0) AS UnitPrice,
+            ISNULL(d.POAmount, 0) AS POAmount,
+            ISNULL(dep.DeptName, '') AS ForDepartment,
+            ISNULL(d.Note, '') AS Note,
+            ISNULL(d.RecQty, 0) AS RecQty,
+            ISNULL(d.RecAmount, 0) AS RecAmount,
+            d.RecDate
+        FROM dbo.PC_PO p
+        INNER JOIN dbo.PC_PODetail d ON d.POID = p.POID
+        LEFT JOIN dbo.PC_PR pr ON pr.PRID = p.PRID
+        LEFT JOIN dbo.PC_Suppliers s ON s.SupplierID = p.SupplierID
+        LEFT JOIN dbo.MS_CurrencyFL c ON c.CurrencyID = p.Currency
+        LEFT JOIN dbo.INV_ItemList i ON i.ItemID = d.ItemID
+        LEFT JOIN dbo.MS_Department dep ON dep.DeptID = d.RecDept
+        {whereSql}
+        ORDER BY p.PODate DESC, p.POID DESC, d.ItemID, d.RecDate
+        OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
+
+        cmd.Parameters.Add("@Offset", SqlDbType.Int).Value = (filter.Page - 1) * filter.PageSize;
+        cmd.Parameters.Add("@PageSize", SqlDbType.Int).Value = filter.PageSize;
+
+        conn.Open();
+        using var reader = cmd.ExecuteReader();
+        var total = 0;
+        if (reader.Read() && !reader.IsDBNull(0))
+        {
+            total = reader.GetInt32(0);
+        }
+
+        if (reader.NextResult())
+        {
+            while (reader.Read())
+            {
+                rows.Add(MapViewDetailRow(reader));
+            }
+        }
+
+        return (rows, total);
+    }
+
+    private List<PurchaseOrderViewDetailRow> SearchPurchaseOrderDetailsForReport(PurchaseOrderViewDetailSearchRequest filter)
+    {
+        var rows = new List<PurchaseOrderViewDetailRow>();
+        var whereParts = new List<string>();
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = conn.CreateCommand();
+
+        ApplyViewDetailFilters(filter, whereParts, cmd);
+
+        var whereSql = whereParts.Count == 0 ? string.Empty : $"WHERE {string.Join(" AND ", whereParts)}";
+
+        cmd.CommandText = $@"
+        SELECT
+            p.POID,
+            ISNULL(p.PONo, '') AS PONo,
+            p.PODate,
+            ISNULL(pr.RequestNo, '') AS RequestNo,
+            ISNULL(s.SupplierCode, '') + CASE WHEN ISNULL(s.SupplierName, '') = '' THEN '' ELSE ' / ' + ISNULL(s.SupplierName, '') END AS Supplier,
+            ISNULL(p.Currency, 0) AS CurrencyId,
+            ISNULL(c.CurrencyName, '') AS CurrencyName,
+            ISNULL(p.ExRate, 0) AS ExRate,
+            ISNULL(i.ItemCode, '') AS ItemCode,
+            ISNULL(i.ItemName, '') AS ItemName,
+            ISNULL(i.Unit, '') AS Unit,
+            ISNULL(d.Quantity, 0) AS Quantity,
+            ISNULL(d.UnitPrice, 0) AS UnitPrice,
+            ISNULL(d.POAmount, 0) AS POAmount,
+            ISNULL(dep.DeptName, '') AS ForDepartment,
+            ISNULL(d.Note, '') AS Note,
+            ISNULL(d.RecQty, 0) AS RecQty,
+            ISNULL(d.RecAmount, 0) AS RecAmount,
+            d.RecDate
+        FROM dbo.PC_PO p
+        INNER JOIN dbo.PC_PODetail d ON d.POID = p.POID
+        LEFT JOIN dbo.PC_PR pr ON pr.PRID = p.PRID
+        LEFT JOIN dbo.PC_Suppliers s ON s.SupplierID = p.SupplierID
+        LEFT JOIN dbo.MS_CurrencyFL c ON c.CurrencyID = p.Currency
+        LEFT JOIN dbo.INV_ItemList i ON i.ItemID = d.ItemID
+        LEFT JOIN dbo.MS_Department dep ON dep.DeptID = d.RecDept
+        {whereSql}
+        ORDER BY p.PODate DESC, p.POID DESC, d.ItemID, d.RecDate;";
+
+        conn.Open();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            rows.Add(MapViewDetailRow(reader));
+        }
+
+        return rows;
+    }
+
+    private static PurchaseOrderViewDetailRow MapViewDetailRow(SqlDataReader reader)
+    {
+        return new PurchaseOrderViewDetailRow
+        {
+            POID = Convert.ToInt32(reader["POID"]),
+            PONo = Convert.ToString(reader["PONo"]) ?? string.Empty,
+            PODate = reader.IsDBNull(reader.GetOrdinal("PODate")) ? null : Convert.ToDateTime(reader["PODate"]),
+            RequestNo = Convert.ToString(reader["RequestNo"]) ?? string.Empty,
+            Supplier = Convert.ToString(reader["Supplier"]) ?? string.Empty,
+            CurrencyId = reader.IsDBNull(reader.GetOrdinal("CurrencyId")) ? 0 : Convert.ToInt32(reader["CurrencyId"]),
+            CurrencyName = Convert.ToString(reader["CurrencyName"]) ?? string.Empty,
+            ExRate = reader.IsDBNull(reader.GetOrdinal("ExRate")) ? 0 : Convert.ToDecimal(reader["ExRate"]),
+            ItemCode = Convert.ToString(reader["ItemCode"]) ?? string.Empty,
+            ItemName = Convert.ToString(reader["ItemName"]) ?? string.Empty,
+            Unit = Convert.ToString(reader["Unit"]) ?? string.Empty,
+            Quantity = reader.IsDBNull(reader.GetOrdinal("Quantity")) ? 0 : Convert.ToDecimal(reader["Quantity"]),
+            UnitPrice = reader.IsDBNull(reader.GetOrdinal("UnitPrice")) ? 0 : Convert.ToDecimal(reader["UnitPrice"]),
+            POAmount = reader.IsDBNull(reader.GetOrdinal("POAmount")) ? 0 : Convert.ToDecimal(reader["POAmount"]),
+            ForDepartment = Convert.ToString(reader["ForDepartment"]) ?? string.Empty,
+            Note = Convert.ToString(reader["Note"]) ?? string.Empty,
+            RecQty = reader.IsDBNull(reader.GetOrdinal("RecQty")) ? 0 : Convert.ToDecimal(reader["RecQty"]),
+            RecAmount = reader.IsDBNull(reader.GetOrdinal("RecAmount")) ? 0 : Convert.ToDecimal(reader["RecAmount"]),
+            RecDate = reader.IsDBNull(reader.GetOrdinal("RecDate")) ? null : Convert.ToDateTime(reader["RecDate"])
+        };
+    }
+
+    private void ApplyViewDetailFilters(PurchaseOrderViewDetailSearchRequest filter, List<string> whereParts, SqlCommand cmd)
+    {
         if (!string.IsNullOrWhiteSpace(filter.ItemCode))
         {
             whereParts.Add("(ISNULL(i.ItemCode, '') LIKE @ItemCode OR ISNULL(i.ItemName, '') LIKE @ItemCode)");
@@ -570,84 +732,6 @@ public class IndexModel : BasePageModel
             whereParts.Add("CAST(d.RecDate AS date) <= @RecToDate");
             cmd.Parameters.Add("@RecToDate", SqlDbType.Date).Value = filter.RecToDate.Value.Date;
         }
-
-        var whereSql = whereParts.Count == 0 ? string.Empty : $"WHERE {string.Join(" AND ", whereParts)}";
-
-        cmd.CommandText = $@"
-        SELECT COUNT(1)
-        FROM dbo.PC_PO p
-        INNER JOIN dbo.PC_PODetail d ON d.POID = p.POID
-        LEFT JOIN dbo.PC_PR pr ON pr.PRID = p.PRID
-        LEFT JOIN dbo.PC_Suppliers s ON s.SupplierID = p.SupplierID
-        LEFT JOIN dbo.INV_ItemList i ON i.ItemID = d.ItemID
-        LEFT JOIN dbo.MS_Department dep ON dep.DeptID = d.RecDept
-        {whereSql};
-
-        SELECT
-            p.POID,
-            ISNULL(p.PONo, '') AS PONo,
-            p.PODate,
-            ISNULL(pr.RequestNo, '') AS RequestNo,
-            ISNULL(s.SupplierCode, '') + CASE WHEN ISNULL(s.SupplierName, '') = '' THEN '' ELSE ' / ' + ISNULL(s.SupplierName, '') END AS Supplier,
-            ISNULL(i.ItemCode, '') AS ItemCode,
-            ISNULL(i.ItemName, '') AS ItemName,
-            ISNULL(i.Unit, '') AS Unit,
-            ISNULL(d.Quantity, 0) AS Quantity,
-            ISNULL(d.UnitPrice, 0) AS UnitPrice,
-            ISNULL(d.POAmount, 0) AS POAmount,
-            ISNULL(dep.DeptName, '') AS ForDepartment,
-            ISNULL(d.Note, '') AS Note,
-            ISNULL(d.RecQty, 0) AS RecQty,
-            ISNULL(d.RecAmount, 0) AS RecAmount,
-            d.RecDate
-        FROM dbo.PC_PO p
-        INNER JOIN dbo.PC_PODetail d ON d.POID = p.POID
-        LEFT JOIN dbo.PC_PR pr ON pr.PRID = p.PRID
-        LEFT JOIN dbo.PC_Suppliers s ON s.SupplierID = p.SupplierID
-        LEFT JOIN dbo.INV_ItemList i ON i.ItemID = d.ItemID
-        LEFT JOIN dbo.MS_Department dep ON dep.DeptID = d.RecDept
-        {whereSql}
-        ORDER BY p.PODate DESC, p.POID DESC, d.ItemID, d.RecDate
-        OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
-
-        cmd.Parameters.Add("@Offset", SqlDbType.Int).Value = (filter.Page - 1) * filter.PageSize;
-        cmd.Parameters.Add("@PageSize", SqlDbType.Int).Value = filter.PageSize;
-
-        conn.Open();
-        using var reader = cmd.ExecuteReader();
-        var total = 0;
-        if (reader.Read() && !reader.IsDBNull(0))
-        {
-            total = reader.GetInt32(0);
-        }
-
-        if (reader.NextResult())
-        {
-            while (reader.Read())
-            {
-                rows.Add(new PurchaseOrderViewDetailRow
-                {
-                    POID = Convert.ToInt32(reader["POID"]),
-                    PONo = Convert.ToString(reader["PONo"]) ?? string.Empty,
-                    PODate = reader.IsDBNull(reader.GetOrdinal("PODate")) ? null : Convert.ToDateTime(reader["PODate"]),
-                    RequestNo = Convert.ToString(reader["RequestNo"]) ?? string.Empty,
-                    Supplier = Convert.ToString(reader["Supplier"]) ?? string.Empty,
-                    ItemCode = Convert.ToString(reader["ItemCode"]) ?? string.Empty,
-                    ItemName = Convert.ToString(reader["ItemName"]) ?? string.Empty,
-                    Unit = Convert.ToString(reader["Unit"]) ?? string.Empty,
-                    Quantity = reader.IsDBNull(reader.GetOrdinal("Quantity")) ? 0 : Convert.ToDecimal(reader["Quantity"]),
-                    UnitPrice = reader.IsDBNull(reader.GetOrdinal("UnitPrice")) ? 0 : Convert.ToDecimal(reader["UnitPrice"]),
-                    POAmount = reader.IsDBNull(reader.GetOrdinal("POAmount")) ? 0 : Convert.ToDecimal(reader["POAmount"]),
-                    ForDepartment = Convert.ToString(reader["ForDepartment"]) ?? string.Empty,
-                    Note = Convert.ToString(reader["Note"]) ?? string.Empty,
-                    RecQty = reader.IsDBNull(reader.GetOrdinal("RecQty")) ? 0 : Convert.ToDecimal(reader["RecQty"]),
-                    RecAmount = reader.IsDBNull(reader.GetOrdinal("RecAmount")) ? 0 : Convert.ToDecimal(reader["RecAmount"]),
-                    RecDate = reader.IsDBNull(reader.GetOrdinal("RecDate")) ? null : Convert.ToDateTime(reader["RecDate"])
-                });
-            }
-        }
-
-        return (rows, total);
     }
 
     private string NormalizeComparisonOperator(string? comparisonOperator)
@@ -834,6 +918,9 @@ public class PurchaseOrderViewDetailRow
     public DateTime? PODate { get; set; }
     public string RequestNo { get; set; } = string.Empty;
     public string Supplier { get; set; } = string.Empty;
+    public int CurrencyId { get; set; }
+    public string CurrencyName { get; set; } = string.Empty;
+    public decimal ExRate { get; set; }
     public string ItemCode { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
     public string Unit { get; set; } = string.Empty;

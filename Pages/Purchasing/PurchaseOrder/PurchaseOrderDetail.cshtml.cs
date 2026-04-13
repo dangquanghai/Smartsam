@@ -275,8 +275,7 @@ public class PurchaseOrderDetailModel : BasePageModel
             return RedirectToPage("./Index");
         }
 
-        var html = PurchaseOrderPdfReport.BuildDetailHtml(report, _webHostEnvironment.ContentRootPath, autoPrint);
-        return Content(html, "text/html; charset=utf-8");
+        return Content("Purchase Order HTML report is temporarily disabled.", "text/plain; charset=utf-8");
     }
 
     public IActionResult OnGetReportQuestPdf(int id)

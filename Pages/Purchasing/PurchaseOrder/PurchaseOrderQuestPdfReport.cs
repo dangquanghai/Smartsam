@@ -16,7 +16,7 @@ internal static class PurchaseOrderQuestPdfReport
             {
                 page.Size(PageSizes.A4.Landscape());
                 page.Margin(15);
-                page.DefaultTextStyle(style => style.FontFamily("Times New Roman").FontSize(11));
+                page.DefaultTextStyle(style => style.FontFamily("Times New Roman").FontSize(10));
 
                 page.Content().Column(column =>
                 {
@@ -172,7 +172,7 @@ internal static class PurchaseOrderQuestPdfReport
                 columns.ConstantColumn(40);
                 columns.ConstantColumn(80);
                 columns.ConstantColumn(220);
-                columns.ConstantColumn(108);
+                columns.ConstantColumn(98);
                 columns.ConstantColumn(60);
                 columns.ConstantColumn(100);
                 columns.ConstantColumn(100);
@@ -256,7 +256,7 @@ internal static class PurchaseOrderQuestPdfReport
             .Where(line => !string.IsNullOrWhiteSpace(line));
     }
 
-    private static string NormalizeVniText(string? value)
+    internal static string NormalizeVniText(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -332,7 +332,7 @@ internal static class PurchaseOrderQuestPdfReport
         return result;
     }
 
-    private static string NormalizeTcvn3Text(string? value)
+    internal static string NormalizeTcvn3Text(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -371,4 +371,57 @@ internal static class PurchaseOrderQuestPdfReport
     {
         return value.ToString("0.##", CultureInfo.InvariantCulture);
     }
+}
+
+public sealed class PurchaseOrderDetailReportModel
+{
+    public string PONo { get; set; } = string.Empty;
+    public DateTime? PODate { get; set; }
+    public string RequestNo { get; set; } = string.Empty;
+    public string SupplierDisplay { get; set; } = string.Empty;
+    public string SupplierTel { get; set; } = string.Empty;
+    public string SupplierFax { get; set; } = string.Empty;
+    public string SupplierContact { get; set; } = string.Empty;
+    public string CurrencyText { get; set; } = string.Empty;
+    public string TermsAndConditions { get; set; } = string.Empty;
+    public decimal BeforeVAT { get; set; }
+    public decimal PerVAT { get; set; }
+    public decimal VAT { get; set; }
+    public decimal AfterVAT { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public List<PurchaseOrderDetailReportItem> Items { get; set; } = new();
+    public PurchaseOrderApprovalFooterModel? Footer { get; set; }
+}
+
+public sealed class PurchaseOrderDetailReportItem
+{
+    public int No { get; set; }
+    public string ItemCode { get; set; } = string.Empty;
+    public string ItemName { get; set; } = string.Empty;
+    public string Unit { get; set; } = string.Empty;
+    public decimal Quantity { get; set; }
+    public decimal UnitPrice { get; set; }
+    public decimal Amount { get; set; }
+    public string Remark { get; set; } = string.Empty;
+}
+
+public sealed class PurchaseOrderApprovalFooterModel
+{
+    public string PreparedDate { get; set; } = string.Empty;
+    public string CheckedDate { get; set; } = string.Empty;
+    public string ApprovedDate { get; set; } = string.Empty;
+    public string PreparedName { get; set; } = string.Empty;
+    public string CheckedName { get; set; } = string.Empty;
+    public string ApprovedName { get; set; } = string.Empty;
+    public string PreparedTitle { get; set; } = "Purchaser";
+    public string CheckedTitle { get; set; } = "Chief Accountant";
+    public string ApprovedTitle { get; set; } = "General Director";
+    public byte[]? PreparedSignature { get; set; }
+    public byte[]? CheckedSignature { get; set; }
+    public byte[]? ApprovedSignature { get; set; }
+    public string DeliveryDate { get; set; } = string.Empty;
+    public string DeliveryPlace { get; set; } = string.Empty;
+    public string Receiver { get; set; } = string.Empty;
+    public string PaymentTerm { get; set; } = string.Empty;
+    public string Notes { get; set; } = string.Empty;
 }
