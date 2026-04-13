@@ -1,0 +1,287 @@
+@page
+@model SmartSam.Pages.Purchasing.SupplierPOReport.IndexModel
+@{
+    ViewData["Title"] = "Supplier PO Report";
+    var currentPage = Model.Filter.PageNumber <= 0 ? 1 : Model.Filter.PageNumber;
+    var totalPages = Model.TotalPages <= 0 ? 1 : Model.TotalPages;
+    var pageItems = new List<int?>();
+    for (var p = 1; p <= totalPages; p++)
+    {
+        if (p == 1 || p == totalPages || (p >= currentPage - 2 && p <= currentPage + 2))
+        {
+            pageItems.Add(p);
+        }
+        else if (pageItems.Count == 0 || pageItems[^1].HasValue)
+        {
+            pageItems.Add(null);
+        }
+    }
+
+    Func<int, string> pageUrl = (page) => Url.Page("./Index", new
+    {
+        SupplierCode = Model.Filter.SupplierCode,
+        SupplierName = Model.Filter.SupplierName,
+        Business = Model.Filter.Business,
+        PONo = Model.Filter.PONo,
+        PRNo = Model.Filter.PRNo,
+        ItemCode = Model.Filter.ItemCode,
+        UseDateRange = Model.Filter.UseDateRange,
+        FromDate = Model.Filter.UseDateRange ? Model.Filter.FromDate?.ToString("yyyy-MM-dd") : null,
+        ToDate = Model.Filter.UseDateRange ? Model.Filter.ToDate?.ToString("yyyy-MM-dd") : null,
+        SortBy = Model.Filter.SortBy,
+        SortDirection = Model.Filter.SortDirection,
+        PageNumber = page,
+        PageSize = Model.Filter.PageSize
+    }) ?? "#";
+
+    Func<string, string> sortUrl = (column) => Url.Page("./Index", new
+    {
+        SupplierCode = Model.Filter.SupplierCode,
+        SupplierName = Model.Filter.SupplierName,
+        Business = Model.Filter.Business,
+        PONo = Model.Filter.PONo,
+        PRNo = Model.Filter.PRNo,
+        ItemCode = Model.Filter.ItemCode,
+        UseDateRange = Model.Filter.UseDateRange,
+        FromDate = Model.Filter.UseDateRange ? Model.Filter.FromDate?.ToString("yyyy-MM-dd") : null,
+        ToDate = Model.Filter.UseDateRange ? Model.Filter.ToDate?.ToString("yyyy-MM-dd") : null,
+        SortBy = column,
+        SortDirection = Model.GetNextSortDirection(column),
+        PageNumber = 1,
+        PageSize = Model.Filter.PageSize
+    }) ?? "#";
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-2">
+                <div class="card card-info">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-search"></i> Search</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" id="supplierPoSearchForm">
+                            <input type="hidden" name="PageNumber" value="1" />
+                            <input type="hidden" name="PageSize" value="@Model.Filter.PageSize" />
+                            <input type="hidden" name="SortBy" value="@Model.Filter.SortBy" />
+                            <input type="hidden" name="SortDirection" value="@Model.Filter.SortDirection" />
+
+                            <div class="form-group mb-2">
+                                <label>Supplier Code</label>
+                                <input name="SupplierCode" value="@Model.Filter.SupplierCode" class="form-control form-control-sm" />
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>Supplier Name</label>
+                                <input name="SupplierName" value="@Model.Filter.SupplierName" class="form-control form-control-sm vni-font" />
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>Po No</label>
+                                <input name="PONo" value="@Model.Filter.PONo" class="form-control form-control-sm" />
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>Business</label>
+                                <input name="Business" value="@Model.Filter.Business" class="form-control form-control-sm vni-font" />
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>Item Code</label>
+                                <input name="ItemCode" value="@Model.Filter.ItemCode" class="form-control form-control-sm" />
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>PR No</label>
+                                <input name="PRNo" value="@Model.Filter.PRNo" class="form-control form-control-sm" />
+                            </div>
+
+                            <div class="form-group mb-1">
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" id="Filter_UseDateRange" name="UseDateRange" value="true" class="custom-control-input" checked="@(Model.Filter.UseDateRange ? "checked" : null)" />
+                                    <label for="Filter_UseDateRange" class="custom-control-label">Use Date Range</label>
+                                </div>
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>From Date</label>
+                                <input id="Filter_FromDate" name="FromDate" value="@(Model.Filter.FromDate?.ToString("yyyy-MM-dd"))" type="date" class="form-control form-control-sm" />
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>To Date</label>
+                                <input id="Filter_ToDate" name="ToDate" value="@(Model.Filter.ToDate?.ToString("yyyy-MM-dd"))" type="date" class="form-control form-control-sm" />
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-block btn-sm border">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-10">
+                <div class="card card-primary">
+                    <div class="card-header spr-table-header">
+                        <div class="spr-table-header-left">
+                            <h3 class="card-title">Supplier PO Report</h3>
+                            <span class="badge badge-light ml-2">@Model.TotalRecords records</span>
+                        </div>
+                        <div class="spr-table-header-right app-paging-white">
+                            <nav aria-label="Page navigation">
+                                <div class="d-inline-block mr-2 spr-pagination-info">
+                                    @if (Model.TotalRecords == 0)
+                                    {
+                                        <small>No records</small>
+                                    }
+                                    else
+                                    {
+                                        <small>Showing @Model.PageStart to @Model.PageEnd of @Model.TotalRecords entries</small>
+                                    }
+                                </div>
+                                <div class="spr-page-size-form d-inline-flex mr-2">
+                                    <label class="mb-0 spr-page-size-label" for="supplierPoPageSize">Show</label>
+                                    <select id="supplierPoPageSize" class="form-control form-control-sm spr-page-size-select">
+                                        @foreach (var pageSizeOption in Model.PageSizeOptions)
+                                        {
+                                            <option value="@pageSizeOption" selected="@(Model.Filter.PageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                        }
+                                    </select>
+                                </div>
+                                <ul class="pagination pagination-sm mb-0 d-inline-flex">
+                                    <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+                                        <a class="page-link spr-pager-link" href="@(Model.HasPreviousPage ? pageUrl(currentPage - 1) : "#")">Prev</a>
+                                    </li>
+                                    @foreach (var pageItem in pageItems)
+                                    {
+                                        if (pageItem.HasValue)
+                                        {
+                                            <li class="page-item @(pageItem.Value == currentPage ? "active" : "")">
+                                                <a class="page-link spr-pager-link" href="@pageUrl(pageItem.Value)">@pageItem.Value</a>
+                                            </li>
+                                        }
+                                        else
+                                        {
+                                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                                        }
+                                    }
+                                    <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+                                        <a class="page-link spr-pager-link" href="@(Model.HasNextPage ? pageUrl(currentPage + 1) : "#")">Next</a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-0">
+                        <div class="table-responsive spr-table-wrap">
+                            <table class="table table-hover table-bordered mb-0 text-nowrap spr-table">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width: 56px;">No.</th>
+                                        <th><a class="spr-sort-link" href="@(sortUrl("SupplierCode"))">Code @Html.Raw(Model.GetSortIcon("SupplierCode"))</a></th>
+                                        <th class="spr-col-supplier"><a class="spr-sort-link" href="@(sortUrl("SupplierName"))">SupplierName @Html.Raw(Model.GetSortIcon("SupplierName"))</a></th>
+                                        <th><a class="spr-sort-link" href="@(sortUrl("PONo"))">PONo @Html.Raw(Model.GetSortIcon("PONo"))</a></th>
+                                        <th><a class="spr-sort-link" href="@(sortUrl("PODate"))">PODate @Html.Raw(Model.GetSortIcon("PODate"))</a></th>
+                                        <th class="spr-col-remark"><a class="spr-sort-link" href="@(sortUrl("Remark"))">Remark @Html.Raw(Model.GetSortIcon("Remark"))</a></th>
+                                        <th><a class="spr-sort-link" href="@(sortUrl("PRNo"))">PRNo @Html.Raw(Model.GetSortIcon("PRNo"))</a></th>
+                                        <th><a class="spr-sort-link" href="@(sortUrl("Dept"))">Dept @Html.Raw(Model.GetSortIcon("Dept"))</a></th>
+                                        <th><a class="spr-sort-link" href="@(sortUrl("ItemCode"))">ItemCode @Html.Raw(Model.GetSortIcon("ItemCode"))</a></th>
+                                        <th class="spr-col-item"><a class="spr-sort-link" href="@(sortUrl("ItemName"))">ItemName @Html.Raw(Model.GetSortIcon("ItemName"))</a></th>
+                                        <th class="text-right"><a class="spr-sort-link" href="@(sortUrl("Quantity"))">Quantity @Html.Raw(Model.GetSortIcon("Quantity"))</a></th>
+                                        <th class="text-right"><a class="spr-sort-link" href="@(sortUrl("UnitPrice"))">unitPrice @Html.Raw(Model.GetSortIcon("UnitPrice"))</a></th>
+                                        <th class="text-right"><a class="spr-sort-link" href="@(sortUrl("POAmount"))">Amount @Html.Raw(Model.GetSortIcon("POAmount"))</a></th>
+                                        <th class="text-right"><a class="spr-sort-link" href="@(sortUrl("PerVAT"))">PerVAT @Html.Raw(Model.GetSortIcon("PerVAT"))</a></th>
+                                        <th class="text-right"><a class="spr-sort-link" href="@(sortUrl("AfterVAT"))">AfterVAT @Html.Raw(Model.GetSortIcon("AfterVAT"))</a></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (Model.Rows.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="15" class="text-center text-muted">No data</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        for (var index = 0; index < Model.Rows.Count; index++)
+                                        {
+                                            var row = Model.Rows[index];
+                                            <tr>
+                                                <td>@(Model.PageStart + index)</td>
+                                                <td title="@row.SupplierCode">@row.SupplierCode</td>
+                                                <td class="spr-col-supplier-cell">
+                                                    <span class="spr-ellipsis vni-font" title="@row.SupplierName">@row.SupplierName</span>
+                                                </td>
+                                                <td title="@row.PONo">@row.PONo</td>
+                                                <td>@row.PODateText</td>
+                                                <td class="spr-col-remark-cell">
+                                                    <span class="spr-ellipsis vni-font" title="@row.Remark">@row.Remark</span>
+                                                </td>
+                                                <td title="@row.PRNo">@row.PRNo</td>
+                                                <td>@row.Dept</td>
+                                                <td title="@row.ItemCode">@row.ItemCode</td>
+                                                <td class="spr-col-item-cell">
+                                                    <span class="spr-ellipsis" title="@row.ItemName">@row.ItemName</span>
+                                                </td>
+                                                <td class="text-right">@row.QuantityText</td>
+                                                <td class="text-right">@row.UnitPriceText</td>
+                                                <td class="text-right">@row.POAmountText</td>
+                                                <td class="text-right">@row.PerVATText</td>
+                                                <td class="text-right">@row.AfterVATText</td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                                <tfoot>
+                                    <tr class="font-weight-bold">
+                                        <td colspan="11"></td>
+                                        <td class="text-right">Total:</td>
+                                        <td class="text-right">@Model.TotalBeforeVatText</td>
+                                        <td></td>
+                                        <td class="text-right">@Model.TotalAfterVatText</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-outline card-primary">
+                    <div class="card-footer p-2 text-center module-action-bar spr-action-bar">
+                        <button type="button" id="btnSupplierPoClose" class="btn btn-sm btn-action-close border mx-1 my-1">
+                            <i class="fas fa-times"></i> Close
+                        </button>
+                        <a href="@Url.Page("./Index", "ExportExcel", new {
+                               SupplierCode = Model.Filter.SupplierCode,
+                               SupplierName = Model.Filter.SupplierName,
+                               Business = Model.Filter.Business,
+                               PONo = Model.Filter.PONo,
+                               PRNo = Model.Filter.PRNo,
+                               ItemCode = Model.Filter.ItemCode,
+                               UseDateRange = Model.Filter.UseDateRange,
+                               FromDate = Model.Filter.UseDateRange ? Model.Filter.FromDate?.ToString("yyyy-MM-dd") : null,
+                               ToDate = Model.Filter.UseDateRange ? Model.Filter.ToDate?.ToString("yyyy-MM-dd") : null,
+                               SortBy = Model.Filter.SortBy,
+                               SortDirection = Model.Filter.SortDirection
+                           })"
+                           class="btn btn-sm btn-action-export border mx-1 my-1">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Purchasing/SupplierPOReport/index.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script src="~/js/Purchasing/SupplierPOReport/index.js" asp-append-version="true"></script>
+}
