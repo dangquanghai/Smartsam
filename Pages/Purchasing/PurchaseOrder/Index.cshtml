@@ -307,10 +307,10 @@
                         </div>
                         <div class="modal-footer py-2 d-flex align-items-center">
                             <button type="button" class="btn btn-sm btn-outline-primary" id="btnViewDetailReport">
-                                Report
+                                <i class="fas fa-file-pdf"></i> Report
                             </button>
-                            <button type="button" class="btn btn-sm btn-outline-success mx-auto" id="btnViewDetailExportExcel">
-                                Export Excel
+                            <button type="button" class="btn btn-sm btn-outline-success ml-2" id="btnViewDetailExportExcel">
+                                <i class="fas fa-file-excel"></i> Export Excel
                             </button>
                         </div>
                     </div>
@@ -332,10 +332,10 @@
         const defaultPageSize = @Model.DefaultPageSize;
         window.purchaseOrderPage = {
             detailUrlBase: '@Url.Page("./PurchaseOrderDetail")',
+            reportDetailQuestPdfUrl: '@Url.Page("./Index", "ReportDetailQuestPdf")',
             exportUrlBase: '@Url.Page("./Index", "ExportExcel")',
             canAdd: @(Model.PagePerm.HasPermission(3) ? "true" : "false")
         };
     </script>
-    <script src="~/js/Purchasing/html2pdf.bundle.min.js" asp-append-version="true"></script>
     <script src="~/js/Purchasing/PurchaseOrder/index.js" asp-append-version="true"></script>
 }
