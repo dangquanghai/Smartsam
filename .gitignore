@@ -40,3 +40,4 @@ Uploads/
 .config/
 .dotnet-cli/
 .dotnet/
+artifacts/
