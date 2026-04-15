@@ -16,7 +16,17 @@
     @RenderSection("Styles", required: false)
 </head>
 
-<body class="hold-transition sidebar-mini layout-fixed">
+<body id="mainBody"  class="hold-transition sidebar-mini layout-fixed">
+    <script>
+        // Check trạng thái ngay lập tức khi trình duyệt vừa chạm vào thẻ body
+        (function () {
+            var state = localStorage.getItem('sidebar-state');
+            if (state === 'collapsed') {
+                document.body.classList.add('sidebar-collapse');
+            }
+        })();
+    </script>
+
     <div class="wrapper">
 
         <nav class="main-header navbar navbar-expand navbar-white navbar-light">
