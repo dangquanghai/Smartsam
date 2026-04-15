@@ -586,6 +586,7 @@
                 const controls = this.querySelectorAll('input, select, textarea, button');
                 controls.forEach(function (ctrl) {
                     if (ctrl.name === 'Filter.ConditionMode') return;
+                    if (ctrl.name === 'Filter.ItemCode') return;
                     ctrl.disabled = !enabled;
                 });
             });
@@ -646,6 +647,8 @@
                 itemName: tr.dataset.itemName || '',
                 unit: tr.dataset.unit || '',
                 inStock: Number.parseFloat(tr.dataset.inStock || '0') || 0,
+                normQty: Number.parseFloat(tr.dataset.normQty || '0') || 0,
+                normMain: Number.parseFloat(tr.dataset.normMain || '0') || 0,
                 storeGroupId: Number.parseInt(tr.dataset.storeGroupId || '0', 10) || 0,
                 orderQty: readOrderQtyFromInput(tr.querySelector('.create-mr-order-input'))
             };
@@ -654,6 +657,37 @@
         function redrawSelected() {
             renderSelectedRows($selectedBody.get(0), Array.from(selectedMap.values()));
             syncConfirmState();
+        }
+
+        function getEffectiveCreateMrStoreGroup(item) {
+            const currentStoreGroup = getCurrentStoreGroupValue();
+            if (Number.isFinite(currentStoreGroup) && currentStoreGroup > 0) {
+                return currentStoreGroup;
+            }
+
+            const itemStoreGroup = Number.parseInt((item && item.storeGroupId ? item.storeGroupId : 0).toString(), 10);
+            return Number.isFinite(itemStoreGroup) && itemStoreGroup > 0 ? itemStoreGroup : null;
+        }
+
+        async function shouldAddCreateMrItem(rowItem) {
+            const effectiveStoreGroup = getEffectiveCreateMrStoreGroup(rowItem);
+            if (!rowItem || !rowItem.itemCode || !effectiveStoreGroup) {
+                return true;
+            }
+
+            try {
+                const warning = await checkPendingIssueWarning(rowItem.itemCode, effectiveStoreGroup);
+                if (!warning || warning.hasWarning !== true) {
+                    return true;
+                }
+
+                return window.confirm(
+                    `Warning! This item was ordered by Meterial request No:${warning.requestNos} . Sum Quantity: ${formatLookupNumber(warning.quantityNotIssued)} .Please check these Requests carefully before making the order. Do you want to order this item anyway`
+                );
+            } catch (error) {
+                console.error(error);
+                return true;
+            }
         }
 
         $modal.off('shown.bs.modal').on('shown.bs.modal', async function () {
@@ -709,10 +743,15 @@
             tr.dataset.orderQty = String(readOrderQtyFromInput(this));
         });
 
-        $searchBody.off('dblclick', 'tr').on('dblclick', 'tr', function (event) {
+        $searchBody.off('dblclick', 'tr').on('dblclick', 'tr', async function (event) {
             const tr = event.currentTarget;
             const rowItem = collectRowItem(tr);
             if (!rowItem) return;
+
+            const shouldAdd = await shouldAddCreateMrItem(rowItem);
+            if (!shouldAdd) {
+                return;
+            }
 
             selectedMap.set(rowItem.itemCode, rowItem);
 
@@ -720,7 +759,7 @@
             redrawSelected();
         });
 
-        $moveRightBtn.off('click').on('click', function () {
+        $moveRightBtn.off('click').on('click', async function () {
             const checkedRows = Array.from($searchBody.get(0).querySelectorAll('.create-mr-search-checkbox:checked'))
                 .map(function (x) { return x.closest('tr'); })
                 .filter(function (x) { return !!x; });
@@ -730,12 +769,17 @@
                 return;
             }
 
-            checkedRows.forEach(function (tr) {
+            for (const tr of checkedRows) {
                 const rowItem = collectRowItem(tr);
-                if (!rowItem) return;
+                if (!rowItem) continue;
+
+                const shouldAdd = await shouldAddCreateMrItem(rowItem);
+                if (!shouldAdd) {
+                    continue;
+                }
 
                 selectedMap.set(rowItem.itemCode, rowItem);
-            });
+            }
 
             showValidation('');
             redrawSelected();
@@ -887,12 +931,16 @@
         });
     }
 
-    function searchItems(keyword, checkBalanceInStore) {
+    function searchItems(keyword, checkBalanceInStore, storeGroupId) {
         return new Promise(function (resolve, reject) {
             const url = new URL(window.location.href);
             url.searchParams.set('handler', 'SearchItems');
             if (keyword) url.searchParams.set('keyword', keyword);
             if (checkBalanceInStore) url.searchParams.set('checkBalanceInStore', 'true');
+            const parsedStoreGroupId = Number.parseInt((storeGroupId || '').toString().trim(), 10);
+            if (Number.isFinite(parsedStoreGroupId) && parsedStoreGroupId > 0) {
+                url.searchParams.set('storeGroupId', String(parsedStoreGroupId));
+            }
 
             $.ajax({
                 url: url.toString(),
@@ -912,6 +960,31 @@
         });
     }
 
+    function checkPendingIssueWarning(itemCode, storeGroupId) {
+        return new Promise(function (resolve, reject) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('handler', 'PendingIssueWarning');
+            url.searchParams.set('itemCode', itemCode || '');
+            url.searchParams.set('storeGroup', storeGroupId || '');
+
+            $.ajax({
+                url: url.toString(),
+                type: 'GET',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                success: function (json) {
+                    if (json && json.success) {
+                        resolve(json.data || { hasWarning: false });
+                    } else {
+                        reject(new Error((json && json.message) ? json.message : 'Cannot check pending issue warning.'));
+                    }
+                },
+                error: function () {
+                    reject(new Error('Cannot check pending issue warning.'));
+                }
+            });
+        });
+    }
+
     function renderSearchRows(body, items, emptyMessage) {
         body.innerHTML = '';
         if (!items || items.length === 0) {
@@ -925,6 +998,8 @@
             tr.dataset.itemName = item.itemName || '';
             tr.dataset.unit = item.unit || '';
             tr.dataset.inStock = item.inStock || 0;
+            tr.dataset.normQty = item.normQty || 0;
+            tr.dataset.normMain = item.normMain || 0;
             tr.dataset.storeGroupId = item.storeGroupId || 0;
             tr.dataset.orderQty = item.orderQty || 1;
             tr.innerHTML = `

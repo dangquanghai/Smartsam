@@ -402,6 +402,7 @@
                 <div class="modal-body pt-2 pb-1">
                     <form id="createAutoMrForm" method="post" asp-page-handler="CreateAuto">
                         @Html.AntiForgeryToken()
+                        <input type="hidden" name="CreateAutoRequestNoPreview" value="@(Model.CreateAutoRequestNoPreview.HasValue ? Model.CreateAutoRequestNoPreview.Value.ToString() : string.Empty)" />
                         <div class="form-row">
                             <div class="form-group col-md-4 mb-2">
                                 <label class="mb-1">Request No:</label>
