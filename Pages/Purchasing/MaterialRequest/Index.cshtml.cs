@@ -99,6 +99,9 @@ public class IndexModel : BasePageModel
    public List<MaterialRequestListRowDto> Rows { get; set; } = new List<MaterialRequestListRowDto>();
     public bool CanCreateAutoMr => CanCreateAutoMrCore();
     public bool CanCreateMr => AllowCreate();
+    public bool ShowCreateMrButton => CanCreateDraftMaterialRequest();
+    public bool CreateMrRequiresFilterStoreGroup => !IsAdminUser() && _dataScope.StoreGroup == 1;
+    public bool CreateMrDisabledByMissingStoreScope => !IsAdminUser() && !_dataScope.StoreGroup.HasValue;
 
     public int TotalRecords { get; set; }
     public int TotalPages
@@ -346,10 +349,28 @@ public class IndexModel : BasePageModel
             return RedirectToPage("./Index");
         }
 
-        var scopedStoreGroup = IsStoreGroupLocked() ? _dataScope.StoreGroup : (CreateStoreGroup ?? Filter.StoreGroup);
+        int? scopedStoreGroup;
+        if (IsAdminUser())
+        {
+            scopedStoreGroup = CreateStoreGroup ?? Filter.StoreGroup;
+        }
+        else if (!_dataScope.StoreGroup.HasValue)
+        {
+            WarningMessage = "You do not have Store Group scope to create MR.";
+            return RedirectToPage("./Index");
+        }
+        else if (_dataScope.StoreGroup.Value == 1)
+        {
+            scopedStoreGroup = CreateStoreGroup ?? Filter.StoreGroup;
+        }
+        else
+        {
+            scopedStoreGroup = _dataScope.StoreGroup.Value;
+        }
+
         if (!scopedStoreGroup.HasValue || scopedStoreGroup.Value <= 0)
         {
-            WarningMessage = "Please choose Store Group before creating MR.";
+            WarningMessage = "Please choose Store Group in Filter before creating MR.";
             return RedirectToPage("./Index");
         }
 
@@ -893,7 +914,8 @@ public class IndexModel : BasePageModel
     /// <returns>True neu duoc tao MR thu cong.</returns>
     private bool AllowCreate()
     {
-        return CanCreateDraftMaterialRequest();
+        return CanCreateDraftMaterialRequest()
+            && (IsAdminUser() || _dataScope.StoreGroup.HasValue);
     }
 
     /// <summary>
@@ -3308,7 +3330,6 @@ public class MaterialRequestService
                     i.ItemName,
                     ISNULL(i.Unit, '') AS Unit,
                     ISNULL(dbo.GetItemBalance(i.ItemID, 1, YEAR(GETDATE())), 0) AS InStock,
-                    i.KPGroupItem,
                     CAST(1 AS decimal(18,2)) AS OrderQty,
                     CAST(ISNULL(kgi.ReOrderPoint, 0) AS decimal(18,2)) AS NormQty,
                     CAST(ISNULL(i.ReOrderPoint, 0) AS decimal(18,2)) AS NormMain
@@ -3330,7 +3351,6 @@ public class MaterialRequestService
                     i.ItemName,
                     ISNULL(i.Unit, '') AS Unit,
                     CAST(NULL AS decimal(18,2)) AS InStock,
-                    i.KPGroupItem,
                     CAST(1 AS decimal(18,2)) AS OrderQty,
                     CAST(ISNULL(kgi.ReOrderPoint, 0) AS decimal(18,2)) AS NormQty,
                     CAST(ISNULL(i.ReOrderPoint, 0) AS decimal(18,2)) AS NormMain
@@ -3356,10 +3376,9 @@ public class MaterialRequestService
                 ItemName = rd[1]?.ToString() ?? string.Empty,
                 Unit = rd[2]?.ToString() ?? string.Empty,
                 InStock = rd.IsDBNull(3) ? 0 : Convert.ToDecimal(rd[3]),
-                StoreGroupId = rd.IsDBNull(4) ? null : Convert.ToInt32(rd[4]),
-                OrderQty = rd.IsDBNull(5) ? 1m : Convert.ToDecimal(rd[5]),
-                NormQty = rd.IsDBNull(6) ? 0m : Convert.ToDecimal(rd[6]),
-                NormMain = rd.IsDBNull(7) ? 0m : Convert.ToDecimal(rd[7])
+                OrderQty = rd.IsDBNull(4) ? 1m : Convert.ToDecimal(rd[4]),
+                NormQty = rd.IsDBNull(5) ? 0m : Convert.ToDecimal(rd[5]),
+                NormMain = rd.IsDBNull(6) ? 0m : Convert.ToDecimal(rd[6])
             },
             cmd =>
             {

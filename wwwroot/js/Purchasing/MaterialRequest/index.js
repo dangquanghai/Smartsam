@@ -466,6 +466,18 @@
 
         // 2. Đăng ký sự kiện nút bấm
         $('#btnAdd').off('click').on('click', function () {
+            if (this.disabled) {
+                return;
+            }
+
+            const requireFilterStoreGroup = (((this.dataset || {}).requireFilterStoreGroupForCreateMr) || '').toString() === 'true';
+            const currentStoreGroup = ($('#Filter_StoreGroup').val() || '').toString().trim();
+            if (requireFilterStoreGroup && !currentStoreGroup) {
+                alert('Please choose Store Group in Filter before creating MR.');
+                $('#Filter_StoreGroup').trigger('focus');
+                return;
+            }
+
             $('#createMrModal').modal({ backdrop: 'static', keyboard: false, show: true });
         });
 
@@ -613,6 +625,8 @@
         const $linesJsonInput = $('#createMrLinesJsonInput');
         const $storeGroupPostInput = $('#createMrStoreGroupInput');
         const $validation = $('#createMrValidation');
+        const $createMrButton = $('#btnAdd');
+        const requireFilterStoreGroup = (($createMrButton.data('require-filter-store-group-for-create-mr') || false).toString() === 'true');
 
         const selectedMap = new Map();
 
@@ -649,7 +663,6 @@
                 inStock: Number.parseFloat(tr.dataset.inStock || '0') || 0,
                 normQty: Number.parseFloat(tr.dataset.normQty || '0') || 0,
                 normMain: Number.parseFloat(tr.dataset.normMain || '0') || 0,
-                storeGroupId: Number.parseInt(tr.dataset.storeGroupId || '0', 10) || 0,
                 orderQty: readOrderQtyFromInput(tr.querySelector('.create-mr-order-input'))
             };
         }
@@ -664,9 +677,7 @@
             if (Number.isFinite(currentStoreGroup) && currentStoreGroup > 0) {
                 return currentStoreGroup;
             }
-
-            const itemStoreGroup = Number.parseInt((item && item.storeGroupId ? item.storeGroupId : 0).toString(), 10);
-            return Number.isFinite(itemStoreGroup) && itemStoreGroup > 0 ? itemStoreGroup : null;
+            return null;
         }
 
         async function shouldAddCreateMrItem(rowItem) {
@@ -842,19 +853,12 @@
             if (storeGroupValue !== null) {
                 $storeGroupPostInput.val(String(storeGroupValue));
             } else {
-                const itemGroups = Array.from(new Set(
-                selectedItems
-                        .map(function (x) { return Number.parseInt(x.storeGroupId || 0, 10); })
-                        .filter(function (x) { return Number.isFinite(x) && x > 0; })
-                ));
-
-                if (itemGroups.length === 1) {
-                    $storeGroupPostInput.val(String(itemGroups[0]));
-                } else {
+                if (requireFilterStoreGroup) {
                     event.preventDefault();
-                    showValidation('Please choose Store Group before creating MR.');
+                    showValidation('Please choose Store Group in Filter before creating MR.');
                     return;
                 }
+                $storeGroupPostInput.val('');
             }
 
             showValidation('');
@@ -1000,7 +1004,6 @@
             tr.dataset.inStock = item.inStock || 0;
             tr.dataset.normQty = item.normQty || 0;
             tr.dataset.normMain = item.normMain || 0;
-            tr.dataset.storeGroupId = item.storeGroupId || 0;
             tr.dataset.orderQty = item.orderQty || 1;
             tr.innerHTML = `
                 <td><input type="checkbox" class="create-mr-search-checkbox"></td>

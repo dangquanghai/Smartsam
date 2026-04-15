@@ -265,9 +265,13 @@
                         {
                             <button type="button" id="btnCreateAuto" class="btn btn-danger btn-sm">CreateAT</button>
                         }
-                        @if (Model.CanCreateMr)
+                        @if (Model.ShowCreateMrButton)
                         {
-                            <button type="button" id="btnAdd" class="btn btn-success btn-sm">
+                            <button type="button"
+                                    id="btnAdd"
+                                    class="btn btn-success btn-sm"
+                                    data-require-filter-store-group-for-create-mr="@(Model.CreateMrRequiresFilterStoreGroup.ToString().ToLowerInvariant())"
+                                    @(Model.CreateMrDisabledByMissingStoreScope ? "disabled=\"disabled\"" : null)>
                                 <i class="fas fa-plus"></i> Create MR
                             </button>
                         }
