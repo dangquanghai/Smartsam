@@ -243,6 +243,7 @@ public class MaterialRequestDetailModel : BasePageModel
                     "Create request",
                     StatusJustCreated,
                     User.Identity?.Name ?? string.Empty,
+                    GetCurrentEmployeeId(),
                     cancellationToken);
             }
 
@@ -562,6 +563,9 @@ public class MaterialRequestDetailModel : BasePageModel
         await LoadDraftCreatorAsync(Id.Value, cancellationToken);
 
         var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
+        var autoHeadApproveOnSubmit = action == MaterialRequestWorkflowAction.Submit
+            && currentStatus == StatusJustCreated
+            && ShouldAutoHeadApproveOwnDraft(existing);
         PagePerm = GetUserPermissions();
         var isAuto = existing.IsAuto;
         if (action == MaterialRequestWorkflowAction.Submit && !CanUpdateDraftMaterialRequest())
@@ -569,7 +573,7 @@ public class MaterialRequestDetailModel : BasePageModel
             WarningMessage = "You do not have permission to submit this draft.";
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
         }
-        var transition = ResolveTransition(action, currentStatus, isAuto);
+        var transition = ResolveTransition(action, currentStatus, isAuto, autoHeadApproveOnSubmit);
         if (transition is null)
         {
             WarningMessage = "Invalid workflow action for current status.";
@@ -594,8 +598,8 @@ public class MaterialRequestDetailModel : BasePageModel
                     transition.PostPr,
                     cancellationToken);
 
-                await WriteWorkflowHistoryAsync(action, currentStatus, transition, Id.Value, cancellationToken);
-                TryQueueWorkflowNotifyEmail(action, currentStatus, existing, isAuto, Array.Empty<MaterialRequestLineDto>());
+                await WriteWorkflowHistoryAsync(action, currentStatus, transition, Id.Value, cancellationToken, autoHeadApproveOnSubmit);
+                TryQueueWorkflowNotifyEmail(action, currentStatus, existing, isAuto, Array.Empty<MaterialRequestLineDto>(), autoHeadApproveOnSubmit);
                 SuccessMessage = transition.SuccessMessage;
                 return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
             }
@@ -614,8 +618,8 @@ public class MaterialRequestDetailModel : BasePageModel
                 transition.PostPr,
                 cancellationToken);
 
-            await WriteWorkflowHistoryAsync(action, currentStatus, transition, Id.Value, cancellationToken);
-            TryQueueWorkflowNotifyEmail(action, currentStatus, existing, isAuto, purchaserLines);
+            await WriteWorkflowHistoryAsync(action, currentStatus, transition, Id.Value, cancellationToken, autoHeadApproveOnSubmit);
+            TryQueueWorkflowNotifyEmail(action, currentStatus, existing, isAuto, purchaserLines, autoHeadApproveOnSubmit);
             SuccessMessage = transition.SuccessMessage;
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
         }
@@ -1604,9 +1608,10 @@ public class MaterialRequestDetailModel : BasePageModel
         int currentStatus,
         MaterialRequestWorkflowTransition transition,
         long requestNo,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool autoHeadApproveOnSubmit = false)
     {
-        var note = ResolveWorkflowHistoryNote(action, currentStatus);
+        var note = ResolveWorkflowHistoryNote(action, currentStatus, autoHeadApproveOnSubmit);
         if (string.IsNullOrWhiteSpace(note))
         {
             return;
@@ -1618,16 +1623,22 @@ public class MaterialRequestDetailModel : BasePageModel
             note,
             typeEffective,
             User.Identity?.Name ?? string.Empty,
+            GetCurrentEmployeeId(),
             cancellationToken);
     }
 
     /// <summary>
     /// Map action + trang thai hien tai sang noi dung note trong workflow history.
     /// </summary>
-    private static string? ResolveWorkflowHistoryNote(MaterialRequestWorkflowAction action, int currentStatus)
+    private static string? ResolveWorkflowHistoryNote(MaterialRequestWorkflowAction action, int currentStatus, bool autoHeadApproveOnSubmit = false)
     {
         if (action == MaterialRequestWorkflowAction.Submit)
         {
+            if (autoHeadApproveOnSubmit)
+            {
+                return "Head approve";
+            }
+
             return "Submit";
         }
 
@@ -1671,6 +1682,12 @@ public class MaterialRequestDetailModel : BasePageModel
         }
 
         _dataScope = await _materialRequestService.GetEmployeeScopeAsync(User.Identity?.Name, cancellationToken);
+    }
+
+    private int? GetCurrentEmployeeId()
+    {
+        var raw = User.FindFirst("EmployeeID")?.Value;
+        return int.TryParse(raw, out var employeeId) && employeeId > 0 ? employeeId : null;
     }
 
     /// <summary>
@@ -1951,6 +1968,21 @@ public class MaterialRequestDetailModel : BasePageModel
         return false;
     }
 
+    private bool ShouldAutoHeadApproveOwnDraft(MaterialRequestDetailDto header)
+    {
+        if (!_dataScope.IsHeadDept)
+        {
+            return false;
+        }
+
+        if (!_dataScope.StoreGroup.HasValue || !header.StoreGroup.HasValue)
+        {
+            return false;
+        }
+
+        return _dataScope.StoreGroup.Value == header.StoreGroup.Value;
+    }
+
     /// <summary>
     /// Tao va dua email workflow vao hang doi gui neu action hien tai can notify.
     /// </summary>
@@ -1959,9 +1991,10 @@ public class MaterialRequestDetailModel : BasePageModel
         int currentStatus,
         MaterialRequestDetailDto header,
         bool isAuto,
-        IReadOnlyList<MaterialRequestLineDto> lines)
+        IReadOnlyList<MaterialRequestLineDto> lines,
+        bool autoHeadApproveOnSubmit = false)
     {
-        var notifyRequest = BuildWorkflowNotifyRequest(action, currentStatus, header, isAuto, lines);
+        var notifyRequest = BuildWorkflowNotifyRequest(action, currentStatus, header, isAuto, lines, autoHeadApproveOnSubmit);
         if (notifyRequest is null)
         {
             return;
@@ -1987,8 +2020,27 @@ public class MaterialRequestDetailModel : BasePageModel
         int currentStatus,
         MaterialRequestDetailDto header,
         bool isAuto,
-        IReadOnlyList<MaterialRequestLineDto> lines)
+        IReadOnlyList<MaterialRequestLineDto> lines,
+        bool autoHeadApproveOnSubmit = false)
     {
+        if (action == MaterialRequestWorkflowAction.Submit && currentStatus == StatusJustCreated && autoHeadApproveOnSubmit)
+        {
+            var recipients = GetRecipientsByEmployeeFlag("IsPurchaser");
+            if (recipients.Count == 0)
+            {
+                return null;
+            }
+
+            return CreateWorkflowNotifyRequest(
+                header,
+                recipients,
+                "[Material Request] Waiting for Purchaser check",
+                "MATERIAL REQUEST",
+                "#007bff",
+                "has been approved by Head Dept and is waiting for your check.",
+                "Head approval");
+        }
+
         if (action == MaterialRequestWorkflowAction.Submit && currentStatus == StatusJustCreated)
         {
             var recipients = GetHeadDeptRecipientsByStoreGroup(header.StoreGroup);
@@ -2344,10 +2396,21 @@ public class MaterialRequestDetailModel : BasePageModel
     private static MaterialRequestWorkflowTransition? ResolveTransition(
         MaterialRequestWorkflowAction action,
         int currentStatus,
-        bool isAuto)
+        bool isAuto,
+        bool autoHeadApproveOnSubmit = false)
     {
         if (action == MaterialRequestWorkflowAction.Submit && currentStatus == StatusJustCreated)
         {
+            if (autoHeadApproveOnSubmit)
+            {
+                return new MaterialRequestWorkflowTransition(
+                        StatusHeadDeptApproved,
+                        "Approved by Head Dept.",
+                        null,
+                        null,
+                        null);
+            }
+
             return new MaterialRequestWorkflowTransition(
                     StatusSubmittedToHead,
                     "Submitted successfully. Waiting for Head Dept approval.",

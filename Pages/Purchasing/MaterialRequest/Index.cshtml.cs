@@ -316,6 +316,7 @@ public class IndexModel : BasePageModel
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
         var operatorCode = User.Identity?.Name ?? string.Empty;
+        var operatorEmployeeId = GetCurrentEmployeeId();
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
         PagePerm = new PagePermissions();
@@ -359,6 +360,7 @@ public class IndexModel : BasePageModel
                 CreateDescription.Trim(),
                 selectedItems,
                 operatorCode,
+                operatorEmployeeId,
                 cancellationToken);
             SuccessMessage = "Material Request created successfully.";
             return RedirectToPage("./MaterialRequestDetail", new { id = requestNo, mode = "edit" });
@@ -381,6 +383,7 @@ public class IndexModel : BasePageModel
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
         var operatorCode = User.Identity?.Name ?? string.Empty;
+        var operatorEmployeeId = GetCurrentEmployeeId();
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
         PagePerm = new PagePermissions();
@@ -435,6 +438,7 @@ public class IndexModel : BasePageModel
                 "CreateAT MR",
                 StatusJustCreated,
                 operatorCode,
+                operatorEmployeeId,
                 cancellationToken).GetAwaiter().GetResult();
             SuccessMessage = "Auto Material Request created successfully.";
             return RedirectToPage("./MaterialRequestDetail", new { id = requestNo, mode = "edit" });
@@ -631,6 +635,12 @@ public class IndexModel : BasePageModel
             PageIndex = includePaging ? Filter.PageIndex : null,
             PageSize = includePaging ? Filter.PageSize : null
         };
+    }
+
+    private int? GetCurrentEmployeeId()
+    {
+        var raw = User.FindFirst("EmployeeID")?.Value;
+        return int.TryParse(raw, out var employeeId) && employeeId > 0 ? employeeId : null;
     }
 
     public async Task<IActionResult> OnGetPendingIssueWarning(string? itemCode, int? storeGroup, CancellationToken cancellationToken = default)
@@ -2296,6 +2306,7 @@ public class MaterialRequestService
         string description,
         IReadOnlyList<MaterialRequestItemLookupDto> items,
         string operatorCode,
+        int? operatorEmployeeId = null,
         CancellationToken cancellationToken = default)
     {
         if (storeGroup <= 0)
@@ -2331,7 +2342,11 @@ public class MaterialRequestService
 
         try
         {
-            var employeeId = await ResolveEmployeeIdAsync(conn, (SqlTransaction)tx, operatorCode, cancellationToken);
+            var employeeId = operatorEmployeeId.GetValueOrDefault();
+            if (employeeId <= 0)
+            {
+                employeeId = await ResolveEmployeeIdAsync(conn, (SqlTransaction)tx, operatorCode, cancellationToken);
+            }
             if (employeeId <= 0)
             {
                 throw new InvalidOperationException("Cannot resolve current employee.");
@@ -2535,7 +2550,7 @@ public class MaterialRequestService
     /// <summary>
     /// Ghi 1 dong lich su workflow vao SUPER_REQUEST.
     /// </summary>
-    public async Task InsertSuperRequestAsync(long requestNo, string note, int typeEffective, string operatorCode, CancellationToken cancellationToken = default)
+    public async Task InsertSuperRequestAsync(long requestNo, string note, int typeEffective, string operatorCode, int? operatorEmployeeId = null, CancellationToken cancellationToken = default)
     {
         await using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync(cancellationToken);
@@ -2543,7 +2558,15 @@ public class MaterialRequestService
 
         try
         {
-            var employeeId = await ResolveEmployeeIdAsync(conn, (SqlTransaction)tx, operatorCode, cancellationToken);
+            var employeeId = operatorEmployeeId.GetValueOrDefault();
+            if (employeeId <= 0)
+            {
+                employeeId = await ResolveEmployeeIdAsync(conn, (SqlTransaction)tx, operatorCode, cancellationToken);
+            }
+            if (employeeId <= 0)
+            {
+                throw new InvalidOperationException("Cannot resolve current employee.");
+            }
             var legacyNow = await GetLegacyServerDateAsync(conn, (SqlTransaction)tx, cancellationToken);
             await InsertSuperRequestAsync(
                 conn,

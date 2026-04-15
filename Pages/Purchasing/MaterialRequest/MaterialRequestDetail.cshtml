@@ -272,7 +272,8 @@
                             <button type="button"
                                     class="btn btn-primary btn-sm mx-1 my-1"
                                     id="mrReportBtn"
-                                    data-report-url="@Url.Page("./MaterialRequestDetail", "Report", new { id = Model.Id })">
+                                    data-report-url="@Url.Page("./MaterialRequestDetail", "Report", new { id = Model.Id })"
+                                    disabled="@(Model.CurrentStatusId >= 1 ? null : "disabled")">
                                 <i class="fas fa-file-alt"></i> Report
                             </button>
                         }

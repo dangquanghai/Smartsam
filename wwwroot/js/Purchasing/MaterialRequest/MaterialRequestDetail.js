@@ -251,6 +251,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
     $('#mrIssueBtn')
         .toggle(isCollectedToPr)
         .prop('disabled', !isCollectedToPr || !canIssue);
+    $('#mrReportBtn').prop('disabled', currentStatusId < 1);
 
     $('#NoIssueCheck').prop('disabled', !canSave);
     $tableBody.find('.mr-line-order').prop('disabled', !enableOrderFields);
