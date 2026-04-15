@@ -2159,6 +2159,9 @@ public class MaterialRequestService
 
             reservedQty = await GetReservedQtyAsync(conn, itemCode, cancellationToken);
 
+            // Intentional business deviation from VB: persist the same group norm
+            // value that Calculate already uses for BUY so the visible NORM_Q matches.
+            line.NormQty = normDept;
             line.AccIn = rawInventory;
             line.InStock = rawInventory - reservedQty;
             line.Buy = (line.OrderQty ?? 0m) + normMain + normDept - (line.InStock ?? 0m);
@@ -2978,7 +2981,8 @@ public class MaterialRequestService
     }
 
     /// <summary>
-    /// Chi cap nhat 3 cot ma VB calculate thuc su thay doi tren detail row.
+    /// Chi cap nhat cac cot tinh toan cua Calculate.
+    /// Intentional business deviation: luu them NORM_Q de dong bo so hien thi va BUY.
     /// </summary>
     private static async Task SaveCalculatedLineValuesCoreAsync(
         SqlConnection conn,
@@ -2989,7 +2993,8 @@ public class MaterialRequestService
     {
         const string updateSql = @"
             UPDATE dbo.MATERIAL_REQUEST_DETAIL
-            SET INSTOCK = @InStock,
+            SET NORM_Q = @NormQty,
+                INSTOCK = @InStock,
                 acctualyInventory = @AccIn,
                 BUY = @Buy
             WHERE REQUEST_NO = @RequestNo
@@ -3005,6 +3010,7 @@ public class MaterialRequestService
             await using var cmd = new SqlCommand(updateSql, conn, tx);
             AddNumeric18_0Param(cmd, "@RequestNo", requestNo);
             AddNumeric18_0Param(cmd, "@LineId", line.Id.Value);
+            AddDecimal18_2Param(cmd, "@NormQty", line.NormQty ?? 0m);
             AddDecimal18_2Param(cmd, "@InStock", line.InStock ?? 0m);
             AddDecimal18_2Param(cmd, "@AccIn", line.AccIn ?? 0m);
             AddDecimal18_2Param(cmd, "@Buy", line.Buy ?? 0m);
