@@ -22,7 +22,7 @@ namespace SmartSam.Pages.Admin.Employee
         private readonly ISecurityService _securityService;
         private readonly PermissionService _permissionService;
 
-        public EmployeeDetailModel(ISecurityService securityService, PermissionService permissionService, IConfiguration config) : base(config)
+        public EmployeeDetailModel(ISecurityService securityService, PermissionService permissionService, IConfiguration config, IWebHostEnvironment env) : base(config)
         {
             _securityService = securityService;
             _permissionService = permissionService;
@@ -124,7 +124,18 @@ namespace SmartSam.Pages.Admin.Employee
 
             // Trước đoạn string sql;
             // Xử lý lưu file vật lý nếu có dữ liệu Base64 gửi lên
-            string folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "Admin", "Employee");
+            //string folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "Admin", "Employee");
+
+
+            // 1. Lấy thông số từ appsettings.json
+            string basePath = _config.GetValue<string>("FileUploads:BasePath") ?? "Uploads";
+            string subPath = _config.GetValue<string>($"FileUploads:Funtions:{FUNCTION_ID}") ?? "/Admin/Employee";
+
+            string folderPath = Path.Combine(Path.Combine(Directory.GetCurrentDirectory()), basePath, subPath.TrimStart('/'));
+
+            if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
+
+
             if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
 
             // Xử lý hình Normal
