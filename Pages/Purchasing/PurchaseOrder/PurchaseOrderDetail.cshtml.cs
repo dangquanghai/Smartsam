@@ -247,7 +247,7 @@ public class PurchaseOrderDetailModel : BasePageModel
     {
         try
         {
-            return new JsonResult(new { success = true, data = LoadPrDetailRows(prId) });
+            return new JsonResult(new { success = true, data = LoadPrDetailRows(prId, Header.Id) });
         }
         catch (Exception ex)
         {
@@ -1255,7 +1255,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         }
     }
 
-    private List<PurchaseOrderPrLineLookup> LoadPrDetailRows(int prId)
+    private List<PurchaseOrderPrLineLookup> LoadPrDetailRows(int prId, int currentPoId)
     {
         var rows = new List<PurchaseOrderPrLineLookup>();
         if (prId <= 0)
@@ -1265,13 +1265,27 @@ public class PurchaseOrderDetailModel : BasePageModel
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         using var cmd = new SqlCommand(@"
+        ;WITH UsedQuantity AS (
+            SELECT
+                poDetail.MRDetailID,
+                SUM(ISNULL(poDetail.Quantity, 0)) AS UsedQuantity
+            FROM dbo.PC_PODetail poDetail
+            INNER JOIN dbo.PC_PO po ON po.POID = poDetail.POID
+            WHERE po.PRID = @PRID
+              AND poDetail.MRDetailID IS NOT NULL
+              AND po.POID <> @CurrentPOID
+            GROUP BY poDetail.MRDetailID
+        )
         SELECT
             d.RecordID,
             d.ItemID,
             ISNULL(i.ItemCode, '') AS ItemCode,
             ISNULL(i.ItemName, '') AS ItemName,
             ISNULL(i.Unit, '') AS Unit,
-            ISNULL(d.Quantity, 0) AS Quantity,
+            CASE
+                WHEN ISNULL(d.Quantity, 0) - ISNULL(u.UsedQuantity, 0) < 0 THEN 0
+                ELSE ISNULL(d.Quantity, 0) - ISNULL(u.UsedQuantity, 0)
+            END AS Quantity,
             ISNULL(d.UnitPrice, 0) AS UnitPrice,
             ISNULL(d.Remark, '') AS Remark,
             d.SupplierID,
@@ -1279,9 +1293,11 @@ public class PurchaseOrderDetailModel : BasePageModel
         FROM dbo.PC_PRDetail d
         LEFT JOIN dbo.INV_ItemList i ON i.ItemID = d.ItemID
         LEFT JOIN dbo.PC_Suppliers s ON s.SupplierID = d.SupplierID
+        LEFT JOIN UsedQuantity u ON u.MRDetailID = d.RecordID
         WHERE d.PRID = @PRID
         ORDER BY d.RecordID", conn);
         cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = prId;
+        cmd.Parameters.Add("@CurrentPOID", SqlDbType.Int).Value = currentPoId > 0 ? currentPoId : 0;
         conn.Open();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
