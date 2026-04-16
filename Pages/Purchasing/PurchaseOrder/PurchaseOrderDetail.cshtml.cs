@@ -3,8 +3,10 @@ using System.Data;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Data.SqlClient;
 using SmartSam.Pages;
 using SmartSam.Services;
@@ -19,7 +21,6 @@ public class PurchaseOrderDetailModel : BasePageModel
     private const int PermissionAdd = 3;
     private const int PermissionEdit = 4;
     private const int PermissionBackToProcessing = 6;
-    private const int PermissionEvaluate = 7;
     private readonly PermissionService _permissionService;
     private readonly ISecurityService _securityService;
     private readonly ILogger<PurchaseOrderDetailModel> _logger;
@@ -41,12 +42,15 @@ public class PurchaseOrderDetailModel : BasePageModel
     public bool CanEvaluate { get; private set; }
     public bool CanApprove { get; private set; }
     public bool CanBackToProcessing { get; private set; }
+    public bool CanManageAttachments { get; private set; }
     public bool OpenConvertModal { get; private set; }
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
     public string BackToListUrl => string.IsNullOrWhiteSpace(ReturnUrl) ? Url.Page("./Index") ?? "./Index" : ReturnUrl;
     public string DepartmentOptionsJson => JsonSerializer.Serialize(DepartmentOptions.Select(x => new { value = x.Value, text = x.Text }));
     public string CurrentSupplierText { get; private set; } = string.Empty;
     public string CurrentPrText { get; private set; } = string.Empty;
+    public string AllowedAttachmentExtensionsText => _config.GetValue<string>("FileUploads:AllowedExtensions") ?? ".doc,.docx,.xls,.xlsx,.pdf,.jpg,.jpeg,.png";
+    public int MaxAttachmentSizeMb => _config.GetValue<int?>("FileUploads:MaxFileSizeMb") ?? 10;
 
     [BindProperty(SupportsGet = true)]
     public string Mode { get; set; } = "add";
@@ -71,6 +75,7 @@ public class PurchaseOrderDetailModel : BasePageModel
     public List<SelectListItem> CurrencyOptions { get; set; } = new List<SelectListItem>();
     public List<SelectListItem> AssessLevelOptions { get; set; } = new List<SelectListItem>();
     public List<SelectListItem> DepartmentOptions { get; set; } = new List<SelectListItem>();
+    public List<PurchaseOrderAttachmentViewModel> AttachmentList { get; set; } = new List<PurchaseOrderAttachmentViewModel>();
 
     public IActionResult OnGet(int? id, string mode = "view", string? returnUrl = null, bool openConvertModal = false)
     {
@@ -96,6 +101,10 @@ public class PurchaseOrderDetailModel : BasePageModel
                 return RedirectToPage("./Index");
             }
 
+            if (Header.StatusId != 1)
+            {
+                Mode = "view";
+            }
             if (Mode == "edit" && !effectivePermissions.Contains(PermissionEdit))
             {
                 Mode = "view";
@@ -118,10 +127,12 @@ public class PurchaseOrderDetailModel : BasePageModel
                 StatusId = 1,
                 Currency = 1,
                 ExRate = GetDefaultExchangeRate(),
-                PerVAT = 10
+                PerVAT = 10,
+                POTerms = BuildDefaultPurchaseOrderTerms(DateTime.Today)
             };
             Details = new List<PurchaseOrderDetailInput>();
             DetailsJson = "[]";
+            AttachmentList = new List<PurchaseOrderAttachmentViewModel>();
         }
 
         LoadSelectedLookupTexts();
@@ -145,7 +156,9 @@ public class PurchaseOrderDetailModel : BasePageModel
         LoadSelectedLookupTexts();
 
         var effectivePermissions = GetEffectivePermissionsByStatus(isNew ? 1 : Header.StatusId);
-        var canSaveCurrent = isNew ? effectivePermissions.Contains(PermissionAdd) : effectivePermissions.Contains(PermissionEdit);
+        var canSaveCurrent = isNew
+            ? effectivePermissions.Contains(PermissionAdd)
+            : Header.StatusId == 1 && effectivePermissions.Contains(PermissionEdit);
         if (!canSaveCurrent)
         {
             ModelState.AddModelError(string.Empty, "You have no permission to save purchase order.");
@@ -250,6 +263,163 @@ public class PurchaseOrderDetailModel : BasePageModel
     public IActionResult OnGetPrLookup(string? term)
     {
         return new JsonResult(LoadPrLookup(term));
+    }
+
+    public IActionResult OnPostUploadAttachment()
+    {
+        var prepare = PrepareExistingRecordForWorkflow();
+        if (prepare != null)
+        {
+            return prepare;
+        }
+
+        if (!CanManageAttachments)
+        {
+            TempData["SuccessMessage"] = "You have no permission to upload attachment.";
+            return RedirectToCurrentDetail("edit");
+        }
+
+        var attachmentUploads = Request.Form.Files;
+        if (attachmentUploads == null || attachmentUploads.Count == 0)
+        {
+            TempData["SuccessMessage"] = "Please select at least one file to upload.";
+            return RedirectToCurrentDetail("edit");
+        }
+
+        var validationMessages = attachmentUploads
+            .Where(file => file != null && file.Length > 0)
+            .Select(ValidateAttachment)
+            .Where(message => !string.IsNullOrWhiteSpace(message))
+            .ToList();
+        if (validationMessages.Count > 0)
+        {
+            TempData["SuccessMessage"] = string.Join(" ", validationMessages);
+            return RedirectToCurrentDetail("edit");
+        }
+
+        var savedFilePaths = new List<string>();
+
+        try
+        {
+            foreach (var attachment in attachmentUploads.Where(file => file != null && file.Length > 0))
+            {
+                SaveAttachment(attachment!, savedFilePaths);
+            }
+
+            TempData["SuccessMessage"] = "Attachments uploaded successfully.";
+        }
+        catch (Exception ex)
+        {
+            RemoveSavedFiles(savedFilePaths);
+            TempData["SuccessMessage"] = ex.Message;
+        }
+
+        return RedirectToCurrentDetail("edit");
+    }
+
+    public IActionResult OnPostDeleteAttachments()
+    {
+        var prepare = PrepareExistingRecordForWorkflow();
+        if (prepare != null)
+        {
+            return prepare;
+        }
+
+        if (!CanManageAttachments)
+        {
+            TempData["SuccessMessage"] = "You have no permission to delete attachment.";
+            return RedirectToCurrentDetail("edit");
+        }
+
+        var selectedAttachmentFileNames = Request.Form["SelectedAttachmentFileNames"].ToArray();
+        if (selectedAttachmentFileNames == null || selectedAttachmentFileNames.Length == 0)
+        {
+            TempData["SuccessMessage"] = "Please select at least one attachment to delete.";
+            return RedirectToCurrentDetail("edit");
+        }
+
+        try
+        {
+            var folderPath = ResolveAttachmentFolder();
+            if (!Directory.Exists(folderPath))
+            {
+                throw new InvalidOperationException("Attachment folder is not found.");
+            }
+
+            var fileNames = selectedAttachmentFileNames
+                .Select(fileName => Path.GetFileName(fileName?.Trim() ?? string.Empty))
+                .Where(fileName => !string.IsNullOrWhiteSpace(fileName))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (fileNames.Count == 0)
+            {
+                throw new InvalidOperationException("Please select at least one attachment to delete.");
+            }
+
+            foreach (var fileName in fileNames)
+            {
+                var fullPath = Path.Combine(folderPath, fileName);
+                if (!System.IO.File.Exists(fullPath))
+                {
+                    throw new InvalidOperationException($"Attachment file '{fileName}' is not found.");
+                }
+            }
+
+            foreach (var fileName in fileNames)
+            {
+                var fullPath = Path.Combine(folderPath, fileName);
+                System.IO.File.Delete(fullPath);
+            }
+
+            TempData["SuccessMessage"] = "Selected attachments deleted successfully.";
+        }
+        catch (Exception ex)
+        {
+            TempData["SuccessMessage"] = ex.Message;
+        }
+
+        return RedirectToCurrentDetail("edit");
+    }
+
+    public IActionResult OnGetDownloadAttachment(int id, string fileName)
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionView))
+        {
+            return RedirectToPage("./Index");
+        }
+
+        if (id <= 0)
+        {
+            return RedirectToPage("./Index");
+        }
+
+        LoadPurchaseOrder(id);
+        if (Header.Id <= 0)
+        {
+            return RedirectToPage("./Index");
+        }
+
+        var safeFileName = Path.GetFileName(fileName?.Trim() ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(safeFileName))
+        {
+            return NotFound();
+        }
+
+        var fullPath = Path.Combine(ResolveAttachmentFolder(), safeFileName);
+        if (!System.IO.File.Exists(fullPath))
+        {
+            return NotFound();
+        }
+
+        var provider = new FileExtensionContentTypeProvider();
+        if (!provider.TryGetContentType(fullPath, out var contentType))
+        {
+            contentType = "application/octet-stream";
+        }
+
+        return File(System.IO.File.ReadAllBytes(fullPath), contentType, safeFileName);
     }
 
     public IActionResult OnGetReport(int id, bool autoPrint = false)
@@ -531,7 +701,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         StatusOptions = LoadListFromSql("SELECT POStatusID, POStatusName FROM dbo.PC_POStatus ORDER BY POStatusID", "POStatusID", "POStatusName");
         CurrencyOptions = LoadListFromSql("SELECT CurrencyID, CurrencyName FROM dbo.MS_CurrencyFL ORDER BY CurrencyID", "CurrencyID", "CurrencyName");
         AssessLevelOptions = LoadListFromSql("SELECT AssessLevelID, AssessLevelName FROM dbo.PC_AssessLevel ORDER BY AssessLevelID", "AssessLevelID", "AssessLevelName");
-        DepartmentOptions = LoadListFromSql("SELECT DeptID, DeptCode + ' (' + DeptName + ')' AS DeptText FROM dbo.MS_Department ORDER BY DeptCode", "DeptID", "DeptText");
+        DepartmentOptions = LoadListFromSql("SELECT DeptID, DeptCode AS DeptText FROM dbo.MS_Department ORDER BY DeptCode", "DeptID", "DeptText");
     }
 
     private void LoadSelectedLookupTexts()
@@ -596,11 +766,11 @@ public class PurchaseOrderDetailModel : BasePageModel
             ISNULL(s.SupplierCode, '') AS SupplierCode,
             ISNULL(s.SupplierName, '') AS SupplierName,
             ISNULL(s.Phone, '') AS SupplierTel,
-            ISNULL(s.Fax, '') AS SupplierFax,
+            ISNULL(s.Email, '') AS SupplierEmail,
             ISNULL(s.Contact, '') AS SupplierContact,
             ISNULL(c.CurrencyName, '') AS CurrencyName,
             ISNULL(p.POTerms, '') AS POTerms,
-            ISNULL(p.Comment, '') AS Comment,
+            ISNULL(p.Comment, '') AS Note,
             ISNULL(p.Remark, '') AS Remark,
             ISNULL(p.BeforeVAT, 0) AS BeforeVAT,
             ISNULL(p.PerVAT, 0) AS PerVAT,
@@ -638,7 +808,7 @@ public class PurchaseOrderDetailModel : BasePageModel
             report.RequestNo = Convert.ToString(rd["RequestNo"]) ?? string.Empty;
             report.SupplierDisplay = supplierDisplay;
             report.SupplierTel = Convert.ToString(rd["SupplierTel"]) ?? string.Empty;
-            report.SupplierFax = Convert.ToString(rd["SupplierFax"]) ?? string.Empty;
+            report.SupplierEmail = Convert.ToString(rd["SupplierEmail"]) ?? string.Empty;
             report.SupplierContact = Convert.ToString(rd["SupplierContact"]) ?? string.Empty;
             report.CurrencyText = Convert.ToString(rd["CurrencyName"]) ?? string.Empty;
             report.TermsAndConditions = Convert.ToString(rd["POTerms"]) ?? string.Empty;
@@ -654,8 +824,7 @@ public class PurchaseOrderDetailModel : BasePageModel
             checkedDateText = NormalizeReportDateText(Convert.ToString(rd["CAApproDate"]));
             approvedDateText = NormalizeReportDateText(Convert.ToString(rd["GDApproDate"]));
             notesText = BuildNotesText(
-                Convert.ToString(rd["POTerms"]) ?? string.Empty,
-                Convert.ToString(rd["Comment"]) ?? string.Empty,
+                Convert.ToString(rd["Note"]) ?? string.Empty,
                 Convert.ToString(rd["Remark"]) ?? string.Empty);
             rd.Close();
         }
@@ -827,17 +996,12 @@ public class PurchaseOrderDetailModel : BasePageModel
             : trimmed;
     }
 
-    private static string BuildNotesText(string terms, string comment, string remark)
+    private static string BuildNotesText(string note, string remark)
     {
         var parts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(terms))
+        if (!string.IsNullOrWhiteSpace(note))
         {
-            parts.Add(terms.Trim());
-        }
-
-        if (!string.IsNullOrWhiteSpace(comment))
-        {
-            parts.Add(comment.Trim());
+            parts.Add(note.Trim());
         }
 
         if (!string.IsNullOrWhiteSpace(remark))
@@ -864,14 +1028,34 @@ public class PurchaseOrderDetailModel : BasePageModel
         return string.Join(" - ", parts);
     }
 
+    private static string BuildDefaultPurchaseOrderTerms(DateTime poDate)
+    {
+        var deliveryDate = poDate.ToString("MMMM yyyy", CultureInfo.InvariantCulture);
+
+        return string.Join(Environment.NewLine, new[]
+        {
+            $"Thời gian giao nhận (Delivery date): {deliveryDate}",
+            "Địa điểm giao nhận (Deliver place): 20 Le Thanh Ton st, Sai Gon Ward, HCMC, VN",
+            "Người nhận hàng (Receiver): ",
+            "Phương thức thanh toán (Payment term): "
+        });
+    }
+
     private List<object> LoadSupplierLookup(string? term)
     {
         var rows = new List<object>();
+        var searchTerm = term?.Trim();
+        if (string.IsNullOrWhiteSpace(searchTerm) || searchTerm.Length < 3)
+        {
+            return rows;
+        }
+
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         using var cmd = new SqlCommand(@"
-        SELECT TOP 50
+        SELECT TOP 20
             SupplierID,
-            ISNULL(SupplierCode, '') AS SupplierCode
+            ISNULL(SupplierCode, '') AS SupplierCode,
+            ISNULL(SupplierName, '') AS SupplierName
         FROM dbo.PC_Suppliers
         WHERE Status >= 0
           AND Status < 5
@@ -881,15 +1065,17 @@ public class PurchaseOrderDetailModel : BasePageModel
                 OR SupplierName LIKE '%' + @term + '%'
           )
         ORDER BY SupplierCode", conn);
-        cmd.Parameters.Add("@term", SqlDbType.NVarChar, 100).Value = string.IsNullOrWhiteSpace(term) ? DBNull.Value : term.Trim();
+        cmd.Parameters.Add("@term", SqlDbType.NVarChar, 100).Value = searchTerm;
         conn.Open();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
+            var code = Convert.ToString(reader["SupplierCode"]) ?? string.Empty;
+            var name = Convert.ToString(reader["SupplierName"]) ?? string.Empty;
             rows.Add(new
             {
                 id = Convert.ToString(reader["SupplierID"]) ?? string.Empty,
-                text = Convert.ToString(reader["SupplierCode"]) ?? string.Empty
+                text = string.IsNullOrWhiteSpace(name) ? code : $"{code} ({name})"
             });
         }
 
@@ -929,6 +1115,7 @@ public class PurchaseOrderDetailModel : BasePageModel
     private void LoadPurchaseOrder(int id)
     {
         Details = new List<PurchaseOrderDetailInput>();
+        AttachmentList = new List<PurchaseOrderAttachmentViewModel>();
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
 
@@ -944,7 +1131,7 @@ public class PurchaseOrderDetailModel : BasePageModel
             AssessLevel,
             Currency,
             ISNULL(ExRate, 0) AS ExRate,
-            ISNULL(Comment, '') AS Comment,
+            ISNULL(Comment, '') AS Note,
             ISNULL(BeforeVAT, 0) AS BeforeVAT,
             ISNULL(PerVAT, 0) AS PerVAT,
             ISNULL(VAT, 0) AS VAT,
@@ -976,7 +1163,7 @@ public class PurchaseOrderDetailModel : BasePageModel
                         AssessLevel = rd.IsDBNull(rd.GetOrdinal("AssessLevel")) ? null : Convert.ToInt32(rd["AssessLevel"]),
                         Currency = rd.IsDBNull(rd.GetOrdinal("Currency")) ? 1 : Convert.ToInt32(rd["Currency"]),
                         ExRate = rd.IsDBNull(rd.GetOrdinal("ExRate")) ? 0 : Convert.ToDecimal(rd["ExRate"]),
-                        Comment = Convert.ToString(rd["Comment"]) ?? string.Empty,
+                        Note = Convert.ToString(rd["Note"]) ?? string.Empty,
                         BeforeVAT = rd.IsDBNull(rd.GetOrdinal("BeforeVAT")) ? 0 : Convert.ToDecimal(rd["BeforeVAT"]),
                         PerVAT = rd.IsDBNull(rd.GetOrdinal("PerVAT")) ? 0 : Convert.ToDecimal(rd["PerVAT"]),
                         VAT = rd.IsDBNull(rd.GetOrdinal("VAT")) ? 0 : Convert.ToDecimal(rd["VAT"]),
@@ -991,7 +1178,9 @@ public class PurchaseOrderDetailModel : BasePageModel
 
                 using var detailCmd = new SqlCommand(@"
         SELECT
+            d.RecordID AS DetailID,
             d.ItemID,
+            ISNULL(d.MRDetailID, 0) AS PrDetailId,
             ISNULL(i.ItemCode, '') AS ItemCode,
             ISNULL(i.ItemName, '') AS ItemName,
             ISNULL(i.Unit, '') AS Unit,
@@ -999,7 +1188,7 @@ public class PurchaseOrderDetailModel : BasePageModel
             ISNULL(d.UnitPrice, 0) AS UnitPrice,
             ISNULL(d.POAmount, 0) AS POAmount,
             d.RecDept,
-            ISNULL(dep.DeptName, '') AS RecDeptName,
+            ISNULL(dep.DeptCode, '') AS RecDeptName,
             ISNULL(d.Note, '') AS Note,
             ISNULL(d.RecQty, 0) AS RecQty,
             ISNULL(d.RecAmount, 0) AS RecAmount,
@@ -1010,7 +1199,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         LEFT JOIN dbo.MS_Department dep ON dep.DeptID = d.RecDept
         WHERE d.POID = @POID
         ORDER BY ISNULL(i.ItemCode, '')", conn);
-                detailCmd.Parameters.Add("@POID", SqlDbType.Int).Value = id;
+        detailCmd.Parameters.Add("@POID", SqlDbType.Int).Value = id;
 
         using var detailReader = detailCmd.ExecuteReader();
         while (detailReader.Read())
@@ -1018,7 +1207,10 @@ public class PurchaseOrderDetailModel : BasePageModel
             Details.Add(new PurchaseOrderDetailInput
             {
                 TempKey = Guid.NewGuid().ToString("N"),
+                IsPersisted = true,
+                DetailID = detailReader.IsDBNull(detailReader.GetOrdinal("DetailID")) ? 0 : Convert.ToInt32(detailReader["DetailID"]),
                 ItemID = Convert.ToInt32(detailReader["ItemID"]),
+                PrDetailId = detailReader.IsDBNull(detailReader.GetOrdinal("PrDetailId")) ? 0 : Convert.ToInt64(detailReader["PrDetailId"]),
                 ItemCode = Convert.ToString(detailReader["ItemCode"]) ?? string.Empty,
                 ItemName = Convert.ToString(detailReader["ItemName"]) ?? string.Empty,
                 Unit = Convert.ToString(detailReader["Unit"]) ?? string.Empty,
@@ -1034,6 +1226,8 @@ public class PurchaseOrderDetailModel : BasePageModel
                 MRRequestNo = Convert.ToString(detailReader["MRRequestNo"]) ?? string.Empty
             });
         }
+
+        AttachmentList = Header.Id > 0 ? LoadAttachmentRows() : new List<PurchaseOrderAttachmentViewModel>();
     }
 
     private void LoadExistingWorkflowData(int id)
@@ -1049,7 +1243,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         Header.AssessLevel = currentInput.AssessLevel;
         Header.Currency = currentInput.Currency;
         Header.ExRate = currentInput.ExRate;
-        Header.Comment = currentInput.Comment;
+        Header.Note = currentInput.Note;
         Header.Remark = currentInput.Remark;
         Header.PerVAT = currentInput.PerVAT;
         Header.BeforeVAT = currentInput.BeforeVAT;
@@ -1162,11 +1356,12 @@ public class PurchaseOrderDetailModel : BasePageModel
             {
                 using var insertDetailCmd = new SqlCommand(@"
                 INSERT INTO dbo.PC_PODetail
-                (POID, ItemID, Quantity, UnitPrice, POAmount, RecDept, Note, RecQty, RecAmount, RecDate, MRRequestNO)
+                (POID, ItemID, MRDetailID, Quantity, UnitPrice, POAmount, RecDept, Note, RecQty, RecAmount, RecDate, MRRequestNO)
                 VALUES
-                (@POID, @ItemID, @Quantity, @UnitPrice, @POAmount, @RecDept, @Note, @RecQty, @RecAmount, @RecDate, @MRRequestNO)", conn, trans);
+                (@POID, @ItemID, @MRDetailID, @Quantity, @UnitPrice, @POAmount, @RecDept, @Note, @RecQty, @RecAmount, @RecDate, @MRRequestNO)", conn, trans);
                 insertDetailCmd.Parameters.Add("@POID", SqlDbType.Int).Value = Header.Id;
                 insertDetailCmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = detail.ItemID;
+                insertDetailCmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = detail.PrDetailId > 0 ? detail.PrDetailId : DBNull.Value;
                 insertDetailCmd.Parameters.Add("@Quantity", SqlDbType.Decimal).Value = detail.Quantity;
                 insertDetailCmd.Parameters.Add("@UnitPrice", SqlDbType.Decimal).Value = detail.UnitPrice;
                 insertDetailCmd.Parameters.Add("@POAmount", SqlDbType.Decimal).Value = detail.POAmount;
@@ -1198,7 +1393,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         cmd.Parameters.Add("@POTerms", SqlDbType.NVarChar, 2000).Value = string.IsNullOrWhiteSpace(Header.POTerms) ? DBNull.Value : Header.POTerms;
         cmd.Parameters.Add("@StatusID", SqlDbType.Int).Value = Header.StatusId <= 0 ? 1 : Header.StatusId;
         cmd.Parameters.Add("@AssessLevel", SqlDbType.Int).Value = Header.AssessLevel.HasValue ? Header.AssessLevel.Value : DBNull.Value;
-        cmd.Parameters.Add("@Comment", SqlDbType.NVarChar, 2000).Value = string.IsNullOrWhiteSpace(Header.Comment) ? DBNull.Value : Header.Comment;
+        cmd.Parameters.Add("@Comment", SqlDbType.NVarChar, 2000).Value = string.IsNullOrWhiteSpace(Header.Note) ? DBNull.Value : Header.Note;
         cmd.Parameters.Add("@Currency", SqlDbType.Int).Value = Header.Currency <= 0 ? 1 : Header.Currency;
         cmd.Parameters.Add("@ExRate", SqlDbType.Decimal).Value = Header.ExRate;
         cmd.Parameters.Add("@BeforeVAT", SqlDbType.Decimal).Value = Header.BeforeVAT;
@@ -1224,9 +1419,9 @@ public class PurchaseOrderDetailModel : BasePageModel
             ModelState.AddModelError("Header.SupplierID", "Supplier is required.");
         }
 
-        if (!string.IsNullOrWhiteSpace(Header.Comment) && Header.Comment.Length > 100)
+        if (!string.IsNullOrWhiteSpace(Header.Note) && Header.Note.Length > 100)
         {
-            ModelState.AddModelError("Header.Comment", "Comment must not exceed 100 characters.");
+            ModelState.AddModelError("Header.Note", "Note must not exceed 100 characters.");
         }
 
         if (!string.IsNullOrWhiteSpace(Header.Remark) && Header.Remark.Length > 100)
@@ -1388,13 +1583,15 @@ public class PurchaseOrderDetailModel : BasePageModel
             && Header.StatusId == 2
             && Header.CAId.HasValue
             && Header.GDId.HasValue
-            && effectivePermissions.Contains(PermissionEvaluate)
             && (_workflowUser.IsPurchaser || IsAdminRole());
         CanApprove = Header.Id > 0 && Header.StatusId == 2 && (CanApproveAsCfo() || CanApproveAsBod());
         CanBackToProcessing = Header.Id > 0
             && Header.StatusId == 2
             && effectivePermissions.Contains(PermissionBackToProcessing)
             && (_workflowUser.IsPurchaser || _workflowUser.IsCFO || _workflowUser.IsBOD || IsAdminRole());
+        CanManageAttachments = Header.Id > 0
+            && Header.StatusId == 1
+            && effectivePermissions.Contains(PermissionEdit);
     }
 
     private bool CanApproveAsCfo()
@@ -1430,6 +1627,159 @@ public class PurchaseOrderDetailModel : BasePageModel
         }
 
         return null;
+    }
+
+    private List<PurchaseOrderAttachmentViewModel> LoadAttachmentRows()
+    {
+        var rows = new List<PurchaseOrderAttachmentViewModel>();
+        var folderPath = ResolveAttachmentFolder();
+        if (!Directory.Exists(folderPath))
+        {
+            return rows;
+        }
+
+        foreach (var filePath in Directory.GetFiles(folderPath).OrderByDescending(System.IO.File.GetLastWriteTimeUtc))
+        {
+            var fileInfo = new FileInfo(filePath);
+            rows.Add(new PurchaseOrderAttachmentViewModel
+            {
+                FileName = fileInfo.Name,
+                ModifiedDate = fileInfo.LastWriteTime,
+                SizeBytes = fileInfo.Length,
+                SizeText = FormatFileSize(fileInfo.Length)
+            });
+        }
+
+        return rows;
+    }
+
+    private string? ValidateAttachment(IFormFile file)
+    {
+        var fileName = Path.GetFileName(file.FileName?.Trim() ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return "Attached file name is invalid.";
+        }
+
+        var allowedExtensions = AllowedAttachmentExtensionsText
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => x.StartsWith('.') ? x.ToLowerInvariant() : $".{x.ToLowerInvariant()}")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var extension = Path.GetExtension(fileName) ?? string.Empty;
+        if (!allowedExtensions.Contains(extension))
+        {
+            return $"Attached file extension is invalid. Allowed: {AllowedAttachmentExtensionsText}";
+        }
+
+        var maxBytes = MaxAttachmentSizeMb * 1024L * 1024L;
+        if (file.Length > maxBytes)
+        {
+            return $"Attached file size must not exceed {MaxAttachmentSizeMb} MB.";
+        }
+
+        return null;
+    }
+
+    private void SaveAttachment(IFormFile file, List<string> savedFilePaths)
+    {
+        var uploadFolder = ResolveAttachmentFolder();
+        Directory.CreateDirectory(uploadFolder);
+
+        var savedFileName = Path.GetFileName(file.FileName?.Trim() ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(savedFileName))
+        {
+            throw new InvalidOperationException("Attached file name is invalid.");
+        }
+
+        var fullPath = Path.Combine(uploadFolder, savedFileName);
+        if (System.IO.File.Exists(fullPath))
+        {
+            throw new InvalidOperationException($"Attachment file '{savedFileName}' already exists.");
+        }
+
+        using (var stream = new FileStream(fullPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+            file.CopyTo(stream);
+        }
+
+        savedFilePaths.Add(fullPath);
+    }
+
+    private string ResolveAttachmentFolder()
+    {
+        var basePath = _config.GetValue<string>("FileUploads:BasePath");
+        if (string.IsNullOrWhiteSpace(basePath))
+        {
+            throw new InvalidOperationException("FileUploads:BasePath is missing in appsettings.json.");
+        }
+
+        var rootPath = Path.IsPathRooted(basePath)
+            ? basePath
+            : Path.Combine(Directory.GetCurrentDirectory(), basePath);
+
+        var configuredFunctionPath = _config.GetValue<string>($"FileUploads:Funtions:{FUNCTION_ID}");
+        if (string.IsNullOrWhiteSpace(configuredFunctionPath))
+        {
+            throw new InvalidOperationException($"FileUploads:Funtions:{FUNCTION_ID} is missing in appsettings.json.");
+        }
+
+        var functionSegments = configuredFunctionPath
+            .Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var folderSegments = new List<string> { rootPath };
+        folderSegments.AddRange(functionSegments);
+        folderSegments.Add(Header.PODate.Year.ToString(CultureInfo.InvariantCulture));
+        folderSegments.Add(BuildAttachmentFolderName());
+
+        return Path.Combine(folderSegments.ToArray());
+    }
+
+    private string BuildAttachmentFolderName()
+    {
+        var poNo = Header.PONo?.Trim() ?? string.Empty;
+        return poNo.Replace("/", string.Empty, StringComparison.Ordinal);
+    }
+
+    private static string FormatFileSize(long sizeBytes)
+    {
+        if (sizeBytes <= 0)
+        {
+            return "0 B";
+        }
+
+        var units = new[] { "B", "KB", "MB", "GB", "TB" };
+        var value = (double)sizeBytes;
+        var unitIndex = 0;
+
+        while (value >= 1024 && unitIndex < units.Length - 1)
+        {
+            value /= 1024;
+            unitIndex++;
+        }
+
+        return unitIndex == 0
+            ? $"{sizeBytes} {units[unitIndex]}"
+            : $"{value:0.##} {units[unitIndex]}";
+    }
+
+    private static void RemoveSavedFiles(IEnumerable<string> savedFilePaths)
+    {
+        foreach (var path in savedFilePaths)
+        {
+            try
+            {
+                if (System.IO.File.Exists(path))
+                {
+                    System.IO.File.Delete(path);
+                }
+            }
+            catch
+            {
+                // No-op for cleanup.
+            }
+        }
     }
 
     private IActionResult RedirectToCurrentDetail(string mode = "view")
@@ -1484,6 +1834,8 @@ public class PurchaseOrderHeader
     public decimal ExRate { get; set; }
     [StringLength(100)]
     public string? Comment { get; set; }
+    [StringLength(100)]
+    public string? Note { get; set; }
     public decimal BeforeVAT { get; set; }
     public decimal PerVAT { get; set; }
     public decimal VAT { get; set; }
@@ -1499,7 +1851,10 @@ public class PurchaseOrderHeader
 public class PurchaseOrderDetailInput
 {
     public string TempKey { get; set; } = Guid.NewGuid().ToString("N");
+    public int DetailID { get; set; }
+    public bool IsPersisted { get; set; }
     public int ItemID { get; set; }
+    public long PrDetailId { get; set; }
     public string ItemCode { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
     public string Unit { get; set; } = string.Empty;
@@ -1527,4 +1882,12 @@ public class PurchaseOrderPrLineLookup
     public string Remark { get; set; } = string.Empty;
     public int? SupplierID { get; set; }
     public string SupplierText { get; set; } = string.Empty;
+}
+
+public class PurchaseOrderAttachmentViewModel
+{
+    public string FileName { get; set; } = string.Empty;
+    public DateTime? ModifiedDate { get; set; }
+    public long SizeBytes { get; set; }
+    public string SizeText { get; set; } = string.Empty;
 }

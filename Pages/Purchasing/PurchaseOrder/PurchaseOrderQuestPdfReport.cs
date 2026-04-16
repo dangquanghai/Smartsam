@@ -23,6 +23,10 @@ internal static class PurchaseOrderQuestPdfReport
                     column.Item().Element(content => ComposeHeader(content, model));
                     column.Item().PaddingTop(4).Element(content => ComposeMeta(content, model));
                     column.Item().PaddingTop(4).Element(content => ComposeInfo(content, model));
+                    column.Item().PaddingTop(8).AlignLeft().Text(text =>
+                    {
+                        text.Span("Chúng tôi xin đặt các mặt hàng sau với các điều kiện dưới đây:We hereby order the following item(s) by under mentioned conditions:");
+                    });
                     column.Item().PaddingTop(4).Text("1. Mặt hàng/Items").Bold();
                     column.Item().PaddingTop(2).Element(content => ComposeItems(content, model));
                     column.Item().PaddingTop(4).Element(content => ComposeTotals(content, model));
@@ -36,9 +40,10 @@ internal static class PurchaseOrderQuestPdfReport
     {
         container.Column(column =>
         {
-            column.Item().AlignCenter().Text("SAIGON SKY GARDEN CO., LTD").Bold().FontSize(14);
+            column.Item().AlignCenter().Text("Saigon Sky Garden Co., LTD").Bold().FontSize(14);
             column.Item().AlignCenter().Text("20 Lê Thánh Tôn, Phường Bến Nghé, Quận 1, Tp. Hồ Chí Minh").FontSize(8);
-            column.Item().AlignCenter().Text("Tel: 84.8.38220002 Fax: 84.28.38220573 Email: sales@saigonskygarden.com.vn VAT Code: 0300713227").FontSize(8);
+            column.Item().AlignCenter().Text("Tel: 84.8.38220002 Email: sales@saigonskygarden.com.vn VAT Code: 0300713227").FontSize(8);
+            column.Item().AlignCenter().Text("-").FontSize(10);
             column.Item().PaddingTop(4).AlignCenter().Text(text =>
             {
                 text.Span("ĐƠN ĐẶT HÀNG ").Bold().FontSize(18);
@@ -73,41 +78,80 @@ internal static class PurchaseOrderQuestPdfReport
 
     private static void ComposeInfo(IContainer container, PurchaseOrderDetailReportModel model)
     {
-        container.Row(row =>
+        container.Column(column =>
         {
-            row.RelativeItem(1.1f).Column(left =>
+            column.Item().Row(row =>
             {
-                left.Item().Row(info => ComposeInfoRow(info, "Nhà cung cấp/Supplier:     ", NormalizeVniText(model.SupplierDisplay)));
-                left.Item().Row(info => ComposeTwoColumnRow(info, "Tel:  ", NormalizeVniText(model.SupplierTel), "Fax:    ", NormalizeVniText(model.SupplierFax)));
-                left.Item().Row(info => ComposeInfoRow(info, "Người liên hệ/Contact:     ", NormalizeVniText(model.SupplierContact)));
-                left.Item().Row(info => ComposeInfoRow(info, "Đơn vị tiền tệ/Currency:   ", NormalizeVniText(model.CurrencyText)));
+                row.RelativeItem().Column(left =>
+                {
+                    left.Spacing(4);
+                    left.Item().Row(info => ComposeInfoRow(info, "Nhà cung cấp/Supplier", NormalizeVniText(model.SupplierDisplay)));
+                    left.Item().Row(info => ComposeThreeValueRow(info, "Tel", NormalizeVniText(model.SupplierTel), "Fax", string.Empty, "Email", NormalizeVniText(model.SupplierEmail)));
+                    left.Item().Row(info => ComposeTwoValueRow(info, "Người liên hệ/Contact", NormalizeVniText(model.SupplierContact), "Đơn vị tiền tệ/Currency", NormalizeVniText(model.CurrencyText)));
+                });
             });
 
-            row.RelativeItem().Column(right =>
+            column.Item().PaddingTop(4).Text("Term & Condition:").Bold();
+            column.Item().PaddingLeft(10).Text(text =>
             {
-                right.Item().PaddingTop(20).AlignRight().Text("Chúng tôi xin đặt các mặt hàng sau với các điều kiện dưới đây:");
-                right.Item().AlignRight().Text("We hereby order the following item(s) by under mentioned conditions:");
+                var terms = SplitNotes(NormalizeLegacyText(model.TermsAndConditions)).ToList();
+                if (terms.Count == 0)
+                {
+                    text.Span(string.Empty);
+                    return;
+                }
+
+                for (var i = 0; i < terms.Count; i++)
+                {
+                    if (i > 0)
+                    {
+                        text.Line(string.Empty);
+                    }
+
+                    text.Span(terms[i]);
+                }
             });
         });
     }
 
     private static void ComposeInfoRow(RowDescriptor row, string label, string value)
     {
-        row.ConstantItem(160).Text(label).Bold();
+        row.ConstantItem(160).Text(label + ":").Bold();
         row.RelativeItem().Text($"{value}");
     }
 
-    private static void ComposeTwoColumnRow(RowDescriptor row, string leftLabel, string leftValue, string rightLabel, string rightValue)
+    private static void ComposeTwoValueRow(RowDescriptor row, string leftLabel, string leftValue, string rightLabel, string rightValue)
     {
         row.RelativeItem(1).Row(left =>
         {
-            left.ConstantItem(32).Text(leftLabel).Bold();
+            left.ConstantItem(160).Text(leftLabel + ":").Bold();
             left.RelativeItem().Text($" {leftValue}");
         });
 
         row.RelativeItem(1).Row(right =>
         {
-            right.ConstantItem(42).Text(rightLabel).Bold();
+            right.ConstantItem(160).Text(rightLabel + ":").Bold();
+            right.RelativeItem().Text($" {rightValue}");
+        });
+    }
+
+    private static void ComposeThreeValueRow(RowDescriptor row, string leftLabel, string leftValue, string middleLabel, string middleValue, string rightLabel, string rightValue)
+    {
+        row.RelativeItem(1).Row(left =>
+        {
+            left.ConstantItem(50).Text(leftLabel + ":").Bold();
+            left.RelativeItem().Text($" {leftValue}");
+        });
+
+        row.RelativeItem(1).Row(middle =>
+        {
+            middle.ConstantItem(45).Text(middleLabel + ":").Bold();
+            middle.RelativeItem().Text($" {middleValue}");
+        });
+
+        row.RelativeItem(1).Row(right =>
+        {
+            right.ConstantItem(55).Text(rightLabel + ":").Bold();
             right.RelativeItem().Text($" {rightValue}");
         });
     }
@@ -203,47 +247,63 @@ internal static class PurchaseOrderQuestPdfReport
     {
         const string DefaultDirectorName = "TATSUYA FUKUZAWA";
         const string DefaultDirectorTitle = "Tổng Giám Đốc";
+        var signer = ResolveSigner(model.Footer);
 
         container.Row(row =>
         {
             row.RelativeItem(1f).Column(left =>
             {
                 left.Item().AlignCenter().Text("Công ty TNHH Vườn Thiên Đàng Sài Gòn").Bold().FontSize(9);
-                left.Item().PaddingTop(42).Height(80).Width(220).AlignCenter().AlignMiddle().Element(cell =>
+                var signatureWidth = signer.IsFinal ? 220 : 150;
+                var signatureHeight = signer.IsFinal ? 80 : 50;
+
+                left.Item().PaddingTop(34).Width(signatureWidth).Height(signatureHeight).AlignCenter().AlignMiddle().Element(cell =>
                 {
-                    if (model.Footer?.ApprovedSignature != null && model.Footer.ApprovedSignature.Length > 0)
+                    if (signer.Signature != null && signer.Signature.Length > 0)
                     {
-                        cell.Image(model.Footer.ApprovedSignature).FitArea();
+                        cell.Image(signer.Signature).FitArea();
                     }
                 });
 
                 left.Item().PaddingTop(2).AlignCenter().Column(box =>
                 {
-                    box.Item().Width(160).AlignCenter().BorderTop(1).PaddingTop(4).Column(nameBox =>
+                    box.Item().Width(signer.IsFinal ? 190 : 150).AlignCenter().BorderTop(1).PaddingTop(4).Column(nameBox =>
                     {
-                        nameBox.Item().AlignCenter().Text(string.IsNullOrWhiteSpace(model.Footer?.ApprovedName) ? DefaultDirectorName : model.Footer.ApprovedName).Bold();
-                        nameBox.Item().AlignCenter().Text(string.IsNullOrWhiteSpace(model.Footer?.ApprovedTitle) ? DefaultDirectorTitle : model.Footer.ApprovedTitle).Italic();
+                        nameBox.Item().AlignCenter().Text(string.IsNullOrWhiteSpace(signer.Name) ? DefaultDirectorName : signer.Name).Bold();
+                        nameBox.Item().AlignCenter().Text(string.IsNullOrWhiteSpace(signer.Title) ? DefaultDirectorTitle : signer.Title).Italic();
                     });
                 });
             });
 
             row.RelativeItem(1.3f).PaddingLeft(12).Column(right =>
             {
-                right.Item().Text($"Thời gian giao nhận (Delivery date): {model.Footer?.DeliveryDate ?? string.Empty}");
-                right.Item().Text($"Địa điểm giao nhận (Deliver place): {model.Footer?.DeliveryPlace ?? string.Empty}");
-                right.Item().Text($"Người nhận hàng (Receiver): {model.Footer?.Receiver ?? string.Empty}");
-                right.Item().Text($"Phương thức thanh toán (Pay term): {model.Footer?.PaymentTerm ?? string.Empty}");
-
-                right.Item().PaddingTop(4).BorderTop(1).BorderColor(Colors.Grey.Lighten2).Column(notes =>
+                right.Item().Text("NOTED:").Bold();
+                foreach (var line in SplitNotes(model.Footer?.Notes ?? model.Notes ?? string.Empty))
                 {
-                    notes.Item().Text("NOTED:").Bold();
-                    foreach (var note in SplitNotes(model.Footer?.Notes ?? model.Notes ?? string.Empty))
-                    {
-                        notes.Item().Text($"+ {note}");
-                    }
-                });
+                    right.Item().Text($"+ {NormalizeLegacyText(line)}");
+                }
             });
         });
+    }
+
+    private static (byte[]? Signature, string Name, string Title, bool IsFinal) ResolveSigner(PurchaseOrderApprovalFooterModel? footer)
+    {
+        if (footer?.ApprovedSignature is { Length: > 0 })
+        {
+            return (footer.ApprovedSignature, footer.ApprovedName, footer.ApprovedTitle, true);
+        }
+
+        if (footer?.CheckedSignature is { Length: > 0 })
+        {
+            return (footer.CheckedSignature, footer.CheckedName, footer.CheckedTitle, false);
+        }
+
+        if (footer?.PreparedSignature is { Length: > 0 })
+        {
+            return (footer.PreparedSignature, footer.PreparedName, footer.PreparedTitle, false);
+        }
+
+        return (null, string.Empty, string.Empty, false);
     }
 
     private static IEnumerable<string> SplitNotes(string notes)
@@ -254,6 +314,18 @@ internal static class PurchaseOrderQuestPdfReport
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(line => line.Trim())
             .Where(line => !string.IsNullOrWhiteSpace(line));
+    }
+
+    private static string NormalizeLegacyText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var text = NormalizeTcvn3Text(value);
+        text = NormalizeVniText(text);
+        return text;
     }
 
     internal static string NormalizeVniText(string? value)
@@ -380,7 +452,7 @@ public sealed class PurchaseOrderDetailReportModel
     public string RequestNo { get; set; } = string.Empty;
     public string SupplierDisplay { get; set; } = string.Empty;
     public string SupplierTel { get; set; } = string.Empty;
-    public string SupplierFax { get; set; } = string.Empty;
+    public string SupplierEmail { get; set; } = string.Empty;
     public string SupplierContact { get; set; } = string.Empty;
     public string CurrencyText { get; set; } = string.Empty;
     public string TermsAndConditions { get; set; } = string.Empty;

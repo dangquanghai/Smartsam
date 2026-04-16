@@ -35,21 +35,147 @@
         return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     }
 
+    function getSelectedStatusIds() {
+        return $('.po-status-checkbox:checked')
+            .map(function () {
+                const value = Number.parseInt(this.value, 10);
+                return Number.isFinite(value) ? value : null;
+            })
+            .get()
+            .filter((value) => Number.isFinite(value));
+    }
+
+    function getSelectedStatusLabels() {
+        return $('.po-status-checkbox:checked')
+            .map(function () {
+                return ($(this).data('label') || '').toString().trim();
+            })
+            .get()
+            .filter((value) => value.length > 0);
+    }
+
+    function updateStatusDropdownButton() {
+        const labels = getSelectedStatusLabels();
+        const text = labels.length > 0 ? labels.join(', ') : 'All statuses';
+        const $button = $('#poStatusDropdownBtn');
+        $button.text(text);
+        $button.attr('title', text);
+    }
+
+    function initializeStatusDropdown() {
+        updateStatusDropdownButton();
+
+        $(document).off('click.poStatusMenu').on('click.poStatusMenu', '.po-status-menu', function (e) {
+            e.stopPropagation();
+        });
+
+        $(document).off('change.poStatusCheckbox').on('change.poStatusCheckbox', '.po-status-checkbox', function () {
+            updateStatusDropdownButton();
+        });
+
+        $(document).off('click.poStatusSelectAll').on('click.poStatusSelectAll', '#poStatusSelectAllBtn', function () {
+            $('.po-status-checkbox').prop('checked', true);
+            updateStatusDropdownButton();
+        });
+
+        $(document).off('click.poStatusClear').on('click.poStatusClear', '#poStatusClearBtn', function () {
+            $('.po-status-checkbox').prop('checked', false);
+            updateStatusDropdownButton();
+        });
+    }
+
+    function initializeAjaxSelect2(selector, url, options) {
+        const $element = $(selector);
+        if (!$element.length || !url || typeof $element.select2 !== 'function') {
+            return;
+        }
+
+        if ($element.hasClass('select2-hidden-accessible')) {
+            $element.select2('destroy');
+        }
+
+        const config = Object.assign({
+            width: '100%',
+            allowClear: true,
+            placeholder: $element.data('placeholder') || $element.find('option:first').text() || '-- Select --',
+            minimumInputLength: 3,
+            ajax: {
+                url: url,
+                dataType: 'json',
+                delay: 250,
+                data: function (params) {
+                    return {
+                        term: (params.term || '').trim()
+                    };
+                },
+                processResults: function (data) {
+                    return {
+                        results: Array.isArray(data) ? data : []
+                    };
+                },
+                cache: true
+            }
+        }, options || {});
+
+        $element.select2(config);
+
+        $element.off('select2:open.poSelect2').on('select2:open.poSelect2', function () {
+            const searchField = document.querySelector('.select2-container--open .select2-search__field');
+            if (searchField) {
+                const selectedText = getSelect2SearchSeed($element);
+                if (!searchField.value.trim() && selectedText) {
+                    searchField.value = selectedText;
+                    searchField.dispatchEvent(new Event('input', { bubbles: true }));
+                    searchField.dispatchEvent(new Event('keyup', { bubbles: true }));
+                }
+
+                searchField.focus();
+                if (typeof searchField.select === 'function') {
+                    searchField.select();
+                }
+            }
+        });
+    }
+
+    function getSelect2SearchSeed($element) {
+        const selectedText = ($element.find('option:selected').text() || '').trim();
+        if (!selectedText || selectedText.startsWith('--')) {
+            return '';
+        }
+
+        let seed = selectedText;
+        const parenIndex = seed.indexOf(' (');
+        if (parenIndex > -1) {
+            seed = seed.substring(0, parenIndex).trim();
+        }
+
+        const slashIndex = seed.indexOf(' / ');
+        if (slashIndex > -1) {
+            seed = seed.substring(0, slashIndex).trim();
+        }
+
+        return seed;
+    }
+
     function syncBrowserUrlToSearchState(page, filter) {
         const query = new URLSearchParams();
         const currentFilter = filter || {};
 
-        if (currentFilter.poNo) query.set('PONo', currentFilter.poNo);
-        if (currentFilter.requestNo) query.set('RequestNo', currentFilter.requestNo);
-        if (currentFilter.statusId) query.set('StatusId', currentFilter.statusId);
-        if (currentFilter.supplierKeyword) query.set('SupplierKeyword', currentFilter.supplierKeyword);
-        if (currentFilter.assessLevelId) query.set('AssessLevelId', currentFilter.assessLevelId);
-        if (currentFilter.remark) query.set('Remark', currentFilter.remark);
-        query.set('UseDateRange', currentFilter.useDateRange ? 'true' : 'false');
-        if (currentFilter.useDateRange && currentFilter.fromDate) query.set('FromDate', currentFilter.fromDate);
-        if (currentFilter.useDateRange && currentFilter.toDate) query.set('ToDate', currentFilter.toDate);
-        query.set('Page', String(page || 1));
-        query.set('PageSize', String(pageSize || defaultPageSize || 10));
+        if (currentFilter.poNo) query.set('Filter.PONo', currentFilter.poNo);
+        if (currentFilter.requestNo) query.set('Filter.RequestNo', currentFilter.requestNo);
+        (Array.isArray(currentFilter.statusIds) ? currentFilter.statusIds : []).forEach((statusId) => {
+            if (Number.isFinite(statusId)) {
+                query.append('Filter.StatusIds', String(statusId));
+            }
+        });
+        if (currentFilter.supplierKeyword) query.set('Filter.SupplierKeyword', currentFilter.supplierKeyword);
+        if (currentFilter.assessLevelId) query.set('Filter.AssessLevelId', currentFilter.assessLevelId);
+        if (currentFilter.remark) query.set('Filter.Remark', currentFilter.remark);
+        query.set('Filter.UseDateRange', currentFilter.useDateRange ? 'true' : 'false');
+        if (currentFilter.useDateRange && currentFilter.fromDate) query.set('Filter.FromDate', currentFilter.fromDate);
+        if (currentFilter.useDateRange && currentFilter.toDate) query.set('Filter.ToDate', currentFilter.toDate);
+        query.set('Filter.Page', String(page || 1));
+        query.set('Filter.PageSize', String(pageSize || defaultPageSize || 10));
 
         const nextUrl = `${window.location.pathname}${query.toString() ? `?${query.toString()}` : ''}`;
         window.history.replaceState({}, document.title, nextUrl);
@@ -88,7 +214,7 @@
         const filter = {
             poNo: $('#Filter_PONo').val() || null,
             requestNo: $('#Filter_RequestNo').val() || null,
-            statusId: $('#Filter_StatusId').val() ? parseInt($('#Filter_StatusId').val(), 10) : null,
+            statusIds: getSelectedStatusIds(),
             supplierKeyword: $('#Filter_SupplierKeyword').val() || null,
             assessLevelId: $('#Filter_AssessLevelId').val() ? parseInt($('#Filter_AssessLevelId').val(), 10) : null,
             remark: $('#Filter_Remark').val() || null,
@@ -196,6 +322,7 @@
         state.selectedRow = item;
         $('#btnEdit').toggleClass('d-none', !item.actions.canEdit);
         $('#btnBackToProcessing').toggleClass('d-none', !item.actions.canBackToProcessing);
+        $('#btnEstimateView').prop('disabled', !(item.actions && item.actions.canAccess));
     });
 
     $(document).off('click', '#pagination a.page-link').on('click', '#pagination a.page-link', function (e) {
@@ -233,7 +360,7 @@
         const params = new URLSearchParams();
         const poNo = $('#Filter_PONo').val();
         const requestNo = $('#Filter_RequestNo').val();
-        const statusId = $('#Filter_StatusId').val();
+        const statusIds = getSelectedStatusIds();
         const supplierKeyword = $('#Filter_SupplierKeyword').val();
         const assessLevelId = $('#Filter_AssessLevelId').val();
         const remark = $('#Filter_Remark').val();
@@ -243,7 +370,11 @@
 
         if (poNo) params.set('PONo', poNo);
         if (requestNo) params.set('RequestNo', requestNo);
-        if (statusId) params.set('StatusId', statusId);
+        statusIds.forEach((statusId) => {
+            if (Number.isFinite(statusId)) {
+                params.append('StatusIds', String(statusId));
+            }
+        });
         if (supplierKeyword) params.set('SupplierKeyword', supplierKeyword);
         if (assessLevelId) params.set('AssessLevelId', assessLevelId);
         if (remark) params.set('Remark', remark);
@@ -261,6 +392,7 @@
         state.selectedRow = null;
         $(CONFIG.selectors.actionBtns).addClass('d-none');
         $('input[name="selectedPurchaseOrder"]').prop('checked', false);
+        $('#btnEstimateView').prop('disabled', true);
     }
 
     // Tao pager va dong tong so record ben duoi bang.
@@ -296,6 +428,8 @@
     function initializePage() {
         initializeSearchDateRange();
         initializeViewDetailDateRange();
+        initializeStatusDropdown();
+        initializeAjaxSelect2('#Filter_SupplierKeyword', window.purchaseOrderPage?.supplierLookupUrl || '');
         syncDateRangeState();
         syncViewDetailDateRangeState();
 
@@ -367,6 +501,20 @@
             resetViewDetailCriteria();
             $('#purchaseOrderViewDetailModal').modal('show');
             performViewDetailSearch(1);
+        });
+
+        $('#btnEstimateView').off('click').on('click', function () {
+            if (!state.selectedRow || !state.selectedRow.data || !state.selectedRow.actions || !state.selectedRow.actions.canAccess) {
+                alert('Please select one purchase order first.');
+                return;
+            }
+
+            const po = state.selectedRow.data || {};
+            const poNo = (po.poNo || '').toString().trim();
+            $('#purchaseOrderEstimateViewTitle').text(poNo ? `Estimate View - ${poNo}` : 'Estimate View');
+            showEstimateViewLoading(true);
+            $('#purchaseOrderEstimateViewModal').modal('show');
+            loadEstimateView(po.id);
         });
 
         $('#ViewDetail_UsePoDateRange').off('change').on('change', function () {
@@ -664,8 +812,8 @@ async function downloadPurchaseOrderPdf(reportUrl, fileName) {
             const row = item || {};
             return `
                 <tr>
-                    <td>${escapeHtml(row.itemCode || '')}</td>
-                    <td class="tcvn3-font">${escapeHtml(row.itemName || '')}</td>
+                    <td>${buildEllipsisCell(row.itemCode || '')}</td>
+                    <td class="tcvn3-font">${buildEllipsisCell(row.itemName || '', 'tcvn3-font')}</td>
                     <td class="text-right">${formatNumber(row.quantity || 0)}</td>
                     <td class="text-right">${formatNumber(row.unitPrice || 0)}</td>
                     <td class="text-right">${formatNumber(row.poAmount || 0)}</td>
@@ -678,6 +826,61 @@ async function downloadPurchaseOrderPdf(reportUrl, fileName) {
         });
 
         $tbody.html(html.join(''));
+    }
+
+    function showEstimateViewLoading(show) {
+        if (show) {
+            $('#purchaseOrderEstimateViewRows').html('<tr><td colspan="5" class="text-center text-muted py-4">Loading...</td></tr>');
+        }
+    }
+
+    function showEstimateViewError(message) {
+        $('#purchaseOrderEstimateViewRows').html(`<tr><td colspan="5" class="text-center text-danger py-4">${escapeHtml(message)}</td></tr>`);
+    }
+
+    function renderEstimateViewRows(items) {
+        const $tbody = $('#purchaseOrderEstimateViewRows');
+        if (!items || items.length === 0) {
+            $tbody.html('<tr><td colspan="5" class="text-center text-muted py-4">No estimate data</td></tr>');
+            return;
+        }
+
+        const html = items.map(function (item, index) {
+            const row = item || {};
+            return `
+                <tr>
+                    <td class="text-center">${index + 1}</td>
+                    <td class="vni-font">${buildEllipsisCell(row.poIndexDetailName || '', 'vni-font')}</td>
+                    <td class="text-center">${formatNumber(row.point || 0)}</td>
+                    <td>${escapeHtml(row.theDate || '')}</td>
+                    <td>${buildEllipsisCell(row.employeeName || '')}</td>
+                </tr>`;
+        });
+
+        $tbody.html(html.join(''));
+    }
+
+    function loadEstimateView(poId) {
+        if (!poId || poId <= 0) {
+            showEstimateViewError('Please select purchase order first.');
+            return;
+        }
+
+        $.ajax({
+            url: '?handler=EstimateView',
+            type: 'GET',
+            data: { poId: poId },
+            success: function (response) {
+                if (response && response.success) {
+                    renderEstimateViewRows(response.data || []);
+                } else {
+                    showEstimateViewError((response && response.message) || 'Load estimate view failed.');
+                }
+            },
+            error: function (xhr, status, error) {
+                showEstimateViewError('System connection error: ' + error);
+            }
+        });
     }
 
     function updateViewDetailPagination(total, page, pageSize, totalPages) {
@@ -717,9 +920,10 @@ async function downloadPurchaseOrderPdf(reportUrl, fileName) {
             .replace(/'/g, '&#39;');
     }
 
-    function buildEllipsisCell(input) {
+    function buildEllipsisCell(input, extraClass) {
         const raw = (input || '').toString();
-        return `<span class="app-table-ellipsis" title="${escapeHtml(raw)}">${escapeHtml(raw)}</span>`;
+        const className = extraClass ? `app-table-ellipsis ${extraClass}` : 'app-table-ellipsis';
+        return `<span class="${className}" title="${escapeHtml(raw)}">${escapeHtml(raw)}</span>`;
     }
 
     function formatNumber(value) {
@@ -812,7 +1016,7 @@ async function downloadPurchaseOrderPdf(reportUrl, fileName) {
         const params = new URLSearchParams();
         const poNo = $('#Filter_PONo').val();
         const requestNo = $('#Filter_RequestNo').val();
-        const statusId = $('#Filter_StatusId').val();
+        const statusIds = getSelectedStatusIds();
         const supplierKeyword = $('#Filter_SupplierKeyword').val();
         const assessLevelId = $('#Filter_AssessLevelId').val();
         const remark = $('#Filter_Remark').val();
@@ -820,17 +1024,21 @@ async function downloadPurchaseOrderPdf(reportUrl, fileName) {
         const fromDate = $('#Filter_FromDate').val();
         const toDate = $('#Filter_ToDate').val();
 
-        if (poNo) params.set('PONo', poNo);
-        if (requestNo) params.set('RequestNo', requestNo);
-        if (statusId) params.set('StatusId', statusId);
-        if (supplierKeyword) params.set('SupplierKeyword', supplierKeyword);
-        if (assessLevelId) params.set('AssessLevelId', assessLevelId);
-        if (remark) params.set('Remark', remark);
-        params.set('UseDateRange', useDateRange ? 'true' : 'false');
-        if (useDateRange && fromDate) params.set('FromDate', fromDate);
-        if (useDateRange && toDate) params.set('ToDate', toDate);
-        params.set('Page', String(state.currentPage || 1));
-        params.set('PageSize', String(pageSize || defaultPageSize || 10));
+        if (poNo) params.set('Filter.PONo', poNo);
+        if (requestNo) params.set('Filter.RequestNo', requestNo);
+        statusIds.forEach((statusId) => {
+            if (Number.isFinite(statusId)) {
+                params.append('Filter.StatusIds', String(statusId));
+            }
+        });
+        if (supplierKeyword) params.set('Filter.SupplierKeyword', supplierKeyword);
+        if (assessLevelId) params.set('Filter.AssessLevelId', assessLevelId);
+        if (remark) params.set('Filter.Remark', remark);
+        params.set('Filter.UseDateRange', useDateRange ? 'true' : 'false');
+        if (useDateRange && fromDate) params.set('Filter.FromDate', fromDate);
+        if (useDateRange && toDate) params.set('Filter.ToDate', toDate);
+        params.set('Filter.Page', String(state.currentPage || 1));
+        params.set('Filter.PageSize', String(pageSize || defaultPageSize || 10));
 
         return window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
     }

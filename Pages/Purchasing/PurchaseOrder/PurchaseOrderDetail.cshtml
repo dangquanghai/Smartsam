@@ -69,7 +69,7 @@
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Supplier</label></div>
                                 <div class="col-4">
                                     <select asp-for="Header.SupplierID" id="SupplierID" class="form-control form-control-sm" disabled="@Model.IsViewMode" style="width: 100%;">
-                                        <option value="">-- Select Supplier --</option>
+                                        <option value="">-- Type supplier code or name --</option>
                                         @if (Model.Header.SupplierID.HasValue && !string.IsNullOrWhiteSpace(Model.CurrentSupplierText))
                                         {
                                             <option value="@Model.Header.SupplierID" selected>@Model.CurrentSupplierText</option>
@@ -97,16 +97,22 @@
                             </div>
 
                             <div class="row no-gutters align-items-start mb-2">
-                                <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">Comment</label></div>
+                                <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">Note</label></div>
                                 <div class="col-10">
-                                    <textarea asp-for="Header.Comment" id="Comment" rows="2" maxlength="100" class="form-control form-control-sm vni-font" readonly="@Model.IsViewMode"></textarea>
+                                    <textarea asp-for="Header.Note"
+                                              id="Note"
+                                              rows="2"
+                                              maxlength="100"
+                                              oninput="if (this.value.length > this.maxLength) this.value = this.value.slice(0, this.maxLength);"
+                                              class="form-control form-control-sm tcvn3-font"
+                                              readonly="@Model.IsViewMode"></textarea>
                                 </div>
                             </div>
 
                             <div class="row no-gutters align-items-start mb-0">
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mt-1">Remark</label></div>
                                 <div class="col-10">
-                                    <input asp-for="Header.Remark" id="Remark" maxlength="100" class="form-control form-control-sm vni-font" readonly="@Model.IsViewMode" />
+                                    <input asp-for="Header.Remark" id="Remark" maxlength="100" class="form-control form-control-sm tcvn3-font" readonly="@Model.IsViewMode" />
                                 </div>
                             </div>
                         </div>
@@ -115,7 +121,7 @@
                             <div class="purchase-order-header-field mb-2">
                                 <label class="col-form-label-sm mt-1 mb-0">Terms &amp; Condition</label>
                                 <div>
-                                    <textarea asp-for="Header.POTerms" id="POTerms" rows="6" class="form-control form-control-sm vni-font" readonly="@Model.IsViewMode"></textarea>
+                                    <textarea asp-for="Header.POTerms" id="POTerms" rows="6" class="form-control form-control-sm tcvn3-font" readonly="@Model.IsViewMode"></textarea>
                                 </div>
                             </div>
 
@@ -194,6 +200,12 @@
                                 <i class="fas fa-file-pdf"></i> Report
                             </button>
                         }
+                        @if (Model.Header.Id > 0)
+                        {
+                            <button type="button" class="btn btn-sm btn-secondary mr-2" id="btnOpenPurchaseOrderAttachments">
+                                <i class="fas fa-paperclip"></i> Attached Files
+                            </button>
+                        }
                         <a href="@Model.BackToListUrl" class="btn btn-sm btn-default">
                             <i class="fas fa-arrow-left"></i> Back to list
                         </a>
@@ -204,46 +216,38 @@
                     <div class="table-responsive">
                         <table class="table table-sm table-bordered table-hover mb-0 po-wide-table" id="purchaseOrderDetailTable">
                             <colgroup>
-                                <col style="width: 40px;" />
+                                <col style="width: 28px;" />
                                 <col style="width: 110px;" />
                                 <col style="min-width: 260px;" />
                                 <col style="width: 80px;" />
                                 <col style="width: 90px;" />
                                 <col style="width: 100px;" />
                                 <col style="width: 120px;" />
-                                <col style="width: 180px;" />
-                                <col style="width: 180px;" />
+                                <col style="width: 70px;" />
+                                <col style="width: 240px;" />
                                 <col style="width: 90px;" />
-                                <col style="width: 120px;" />
+                                <col style="width: 100px;" />
                                 <col style="width: 110px;" />
-                                @if (Model.CanSave)
-                                {
-                                    <col style="width: 55px;" />
-                                }
                             </colgroup>
                             <thead class="thead-light">
                                 <tr>
-                                    <th style="width: 40px;"></th>
+                                    <th style="width: 50px;" class="text-center"></th>
                                     <th style="width: 110px;">Item Code</th>
                                     <th style="min-width: 260px;">Item Name</th>
                                     <th style="width: 80px;">Unit</th>
-                                    <th style="width: 90px;" class="text-center">Qty</th>
+                                    <th style="width: 100px;" class="text-center">Qty</th>
                                     <th style="width: 100px;" class="text-center">U.Price</th>
-                                    <th style="width: 120px;" class="text-center">PO Amount</th>
-                                    <th style="width: 180px;">For Department</th>
-                                    <th style="width: 180px;">Note</th>
-                                    <th style="width: 90px;" class="text-center">Rec Qty</th>
-                                    <th style="width: 120px;" class="text-center">Rec Amount</th>
+                                    <th style="width: 100px;" class="text-center">PO Amount</th>
+                                    <th style="width: 100px;">Dept</th>
+                                    <th style="width: 240px;">Note</th>
+                                    <th style="width: 100px;" class="text-center">Rec Qty</th>
+                                    <th style="width: 100px;" class="text-center">Rec Amount</th>
                                     <th style="width: 110px;" class="text-center">Rec Date</th>
-                                    @if (Model.CanSave)
-                                    {
-                                        <th style="width: 55px;"></th>
-                                    }
                                 </tr>
                             </thead>
                             <tbody id="purchaseOrderDetailRows">
                                 <tr id="purchaseOrderDetailEmptyRow">
-                                    <td colspan="@(Model.CanSave ? 13 : 12)" class="text-center text-muted">No detail rows</td>
+                                    <td colspan="12" class="text-center text-muted">No detail rows</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -291,7 +295,7 @@
         @if (Model.CanSave)
         {
             <div class="modal fade" id="purchaseOrderAddDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
-                <div class="modal-dialog modal-xl" role="document">
+                <div class="modal-dialog modal-xl purchase-order-adddetail-modal-dialog" role="document">
                     <div class="modal-content">
                         <div class="modal-header py-2">
                             <h5 class="modal-title">Select Items From PR</h5>
@@ -306,7 +310,7 @@
                             <colgroup>
                                 <col style="width: 50px;" />
                                 <col style="width: 110px;" />
-                                <col style="min-width: 260px;" />
+                                <col style="min-width: 190px;" />
                                 <col style="width: 80px;" />
                                 <col style="width: 90px;" />
                                 <col style="width: 100px;" />
@@ -319,7 +323,7 @@
                                         <input type="checkbox" id="purchaseOrderPrCheckAll" />
                                     </th>
                                             <th style="width: 110px;">Item Code</th>
-                                            <th style="min-width: 260px;">Item Name</th>
+                                            <th style="min-width: 190px;">Item Name</th>
                                             <th style="width: 80px;">Unit</th>
                                             <th style="width: 90px;" class="text-center">Qty</th>
                                             <th style="width: 100px;" class="text-center">U.Price</th>
@@ -336,11 +340,8 @@
                             </div>
                         </div>
                         <div class="modal-footer py-2">
-                            <button type="button" class="btn btn-sm btn-primary" id="btnConfirmAddDetail">
-                                <i class="fas fa-plus"></i> Add
-                            </button>
-                            <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">
-                                <i class="fas fa-times"></i> Close
+                            <button type="button" class="btn btn-sm btn-primary" id="btnConfirmAddDetail" disabled>
+                                Add
                             </button>
                         </div>
                     </div>
@@ -400,7 +401,7 @@
                         </button>
                     </div>
                     <div class="modal-body">
-                        <textarea class="form-control form-control-sm vni-font" id="ConvertReasonText" rows="5"></textarea>
+                        <textarea class="form-control form-control-sm tcvn3-font" id="ConvertReasonText" rows="5"></textarea>
                     </div>
                     <div class="modal-footer py-2">
                         <button type="button" class="btn btn-sm btn-warning" id="btnConfirmBackToProcessing">Convert</button>
@@ -409,6 +410,99 @@
                 </div>
             </div>
         </div>
+
+        @if (Model.Header.Id > 0)
+        {
+            <div class="modal fade" id="purchaseOrderAttachmentModal" tabindex="-1" role="dialog" aria-hidden="true">
+                <div class="modal-dialog modal-lg" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header py-2">
+                            <h5 class="modal-title">Attached Files</h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body pb-2">
+                            @if (Model.AttachmentList.Count == 0)
+                            {
+                                <div class="text-muted small mb-3">No attached files.</div>
+                            }
+                            else
+                            {
+                                <form method="post" action="@Url.Page("./PurchaseOrderDetail", "DeleteAttachments", new { id = Model.Header.Id, mode = Model.Mode, returnUrl = Model.ReturnUrl })" id="poDeleteAttachmentsForm" class="purchase-order-attachment-delete-form">
+                                    @Html.AntiForgeryToken()
+                                    <input asp-for="Header.Id" type="hidden" />
+                                    <input asp-for="Mode" type="hidden" />
+                                    <input asp-for="ReturnUrl" type="hidden" />
+                                    <div class="table-responsive mb-3 purchase-order-attachment-table-wrap">
+                                        <table class="table table-sm table-bordered mb-0">
+                                            <thead class="thead-light">
+                                                <tr>
+                                                    @if (Model.CanManageAttachments)
+                                                    {
+                                                        <th style="width:50px;" class="text-center"></th>
+                                                    }
+                                                    <th>File</th>
+                                                    <th style="width:160px;">Modified Date</th>
+                                                    <th style="width:120px;">Size</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var attachment in Model.AttachmentList)
+                                                {
+                                                    <tr>
+                                                        @if (Model.CanManageAttachments)
+                                                        {
+                                                            <td class="text-center">
+                                                                <input type="checkbox" name="SelectedAttachmentFileNames" value="@attachment.FileName" class="po-attachment-selector" />
+                                                            </td>
+                                                        }
+                                                        <td>
+                                                            <a asp-page="./PurchaseOrderDetail"
+                                                               asp-page-handler="DownloadAttachment"
+                                                               asp-route-id="@Model.Header.Id"
+                                                               asp-route-fileName="@attachment.FileName">@attachment.FileName</a>
+                                                        </td>
+                                                        <td>@attachment.ModifiedDate?.ToString("dd/MM/yyyy HH:mm")</td>
+                                                        <td>@attachment.SizeText</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </form>
+                            }
+
+                            @if (Model.CanManageAttachments)
+                            {
+                                <form method="post" enctype="multipart/form-data" action="@Url.Page("./PurchaseOrderDetail", "UploadAttachment", new { id = Model.Header.Id, mode = Model.Mode, returnUrl = Model.ReturnUrl })" id="poUploadAttachmentsForm">
+                                    @Html.AntiForgeryToken()
+                                    <input asp-for="Header.Id" type="hidden" />
+                                    <input asp-for="Mode" type="hidden" />
+                                    <input asp-for="ReturnUrl" type="hidden" />
+                                    <div class="form-group mb-0">
+                                        <label class="mb-1">Attached Files <span class="purchase-order-attachment-note">Allowed: @Model.AllowedAttachmentExtensionsText | Max size: @Model.MaxAttachmentSizeMb MB</span></label>
+                                        <input type="file" name="AttachmentUploads" class="form-control-file" id="purchaseOrderAttachmentUpload" accept="@Model.AllowedAttachmentExtensionsText" multiple />
+                                        <div id="purchaseOrderAttachmentError" class="text-danger small mt-1" style="display:none;"></div>
+                                        <div class="mt-2">
+                                            <button type="submit" class="btn btn-sm btn-action-add border" id="btnPurchaseOrderAttachmentUpload">
+                                                <i class="fas fa-upload"></i> Upload
+                                            </button>
+                                            @if (Model.AttachmentList.Count > 0)
+                                            {
+                                                <button type="submit" class="btn btn-sm btn-action-disapprove border ml-2" id="btnPurchaseOrderAttachmentDelete" form="poDeleteAttachmentsForm" formnovalidate disabled>
+                                                    <i class="fas fa-trash"></i> Delete Files
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+                                </form>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
     </div>
 </section>
 
@@ -425,6 +519,9 @@
             canEvaluate: @(Model.CanEvaluate ? "true" : "false"),
             canApprove: @(Model.CanApprove ? "true" : "false"),
             canBackToProcessing: @(Model.CanBackToProcessing ? "true" : "false"),
+            canManageAttachments: @(Model.CanManageAttachments ? "true" : "false"),
+            allowedAttachmentExtensions: '@Model.AllowedAttachmentExtensionsText',
+            maxAttachmentSizeMb: @Model.MaxAttachmentSizeMb,
             supplierLookupUrl: '@Url.Page("./PurchaseOrderDetail", "SupplierLookup")',
             prLookupUrl: '@Url.Page("./PurchaseOrderDetail", "PrLookup")',
             prLinesUrl: '@Url.Page("./PurchaseOrderDetail", "PrLines")',

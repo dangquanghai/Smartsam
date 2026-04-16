@@ -50,8 +50,8 @@ public class IndexModel : BasePageModel
             return Redirect("/");
         }
 
-        Filter.PageSize = NormalizePageSize(DefaultPageSize);
-        NormalizeFilter();
+        Filter.PageSize = NormalizePageSize(Filter.PageSize);
+        NormalizeFilter(GetDefaultStatusIdsForCurrentUser());
         LoadStatuses();
         LoadAssessLevels();
         LoadDepartments();
@@ -82,8 +82,8 @@ public class IndexModel : BasePageModel
                     actions = new
                     {
                         canAccess = effectivePermissions.Contains(PermissionView),
-                        accessMode = effectivePermissions.Contains(PermissionEdit) ? "edit" : "view",
-                        canEdit = effectivePermissions.Contains(PermissionEdit),
+                        accessMode = row.StatusId == 1 && effectivePermissions.Contains(PermissionEdit) ? "edit" : "view",
+                        canEdit = row.StatusId == 1 && effectivePermissions.Contains(PermissionEdit),
                         canView = effectivePermissions.Contains(PermissionView),
                         canBackToProcessing = effectivePermissions.Contains(PermissionBackToProcessing)
                             && row.StatusId == 2
@@ -146,12 +146,13 @@ public class IndexModel : BasePageModel
             return Redirect("/");
         }
 
-        NormalizeFilter();
+        NormalizeFilter(GetDefaultStatusIdsForCurrentUser());
         var exportFilter = new PurchaseOrderSearchRequest
         {
             PONo = Filter.PONo,
             RequestNo = Filter.RequestNo,
             StatusId = Filter.StatusId,
+            StatusIds = Filter.StatusIds,
             SupplierKeyword = Filter.SupplierKeyword,
             AssessLevelId = Filter.AssessLevelId,
             Remark = Filter.Remark,
@@ -272,6 +273,42 @@ public class IndexModel : BasePageModel
         return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"purchase_order_detail_{DateTime.Now:yyyyMMddHHmmss}.xlsx");
     }
 
+    public IActionResult OnGetSupplierLookup(string? term)
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionView) && !PagePerm.HasPermission(PermissionAdd))
+        {
+            return new JsonResult(Array.Empty<object>());
+        }
+
+        return new JsonResult(LoadSupplierLookup(term));
+    }
+
+    public IActionResult OnGetEstimateView(int poId)
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionView))
+        {
+            return new JsonResult(new { success = false, message = "You have no permission to view purchase order estimate." });
+        }
+
+        if (poId <= 0)
+        {
+            return new JsonResult(new { success = false, message = "Purchase order is not selected." });
+        }
+
+        try
+        {
+            var rows = LoadPurchaseOrderEstimates(poId);
+            return new JsonResult(new { success = true, data = rows });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while loading purchase order estimate view.");
+            return new JsonResult(new { success = false, message = ex.Message });
+        }
+    }
+
     public IActionResult OnGetReportDetailQuestPdf([FromQuery] PurchaseOrderViewDetailSearchRequest request)
     {
         PagePerm = GetUserPermissions();
@@ -288,12 +325,112 @@ public class IndexModel : BasePageModel
 
     private void NormalizeFilter()
     {
+        NormalizeFilter(GetDefaultStatusIdsForCurrentUser());
+    }
+
+    private List<object> LoadSupplierLookup(string? term)
+    {
+        var rows = new List<object>();
+        var searchTerm = term?.Trim();
+        if (string.IsNullOrWhiteSpace(searchTerm) || searchTerm.Length < 3)
+        {
+            return rows;
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand(@"
+        SELECT TOP 20
+            SupplierID,
+            ISNULL(SupplierCode, '') AS SupplierCode,
+            ISNULL(SupplierName, '') AS SupplierName
+        FROM dbo.PC_Suppliers
+        WHERE Status >= 0
+          AND Status < 5
+          AND (
+                SupplierCode LIKE '%' + @term + '%'
+                OR SupplierName LIKE '%' + @term + '%'
+          )
+        ORDER BY SupplierCode", conn);
+        cmd.Parameters.Add("@term", SqlDbType.NVarChar, 100).Value = searchTerm;
+        conn.Open();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var code = Convert.ToString(reader["SupplierCode"]) ?? string.Empty;
+            var name = Convert.ToString(reader["SupplierName"]) ?? string.Empty;
+            rows.Add(new
+            {
+                id = Convert.ToString(reader["SupplierID"]) ?? string.Empty,
+                text = string.IsNullOrWhiteSpace(name) ? code : $"{code} ({name})"
+            });
+        }
+
+        return rows.Cast<object>().ToList();
+    }
+
+    private List<object> LoadPurchaseOrderEstimates(int poId)
+    {
+        var rows = new List<object>();
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand(@"
+        SELECT
+            d.PO_IndexDetailID,
+            ISNULL(i.PO_IndexDetailName, '') AS PO_IndexDetailName,
+            ISNULL(d.Point, 0) AS Point,
+            d.TheDate,
+            ISNULL(e.EmployeeName, '') AS EmployeeName
+        FROM dbo.PO_Estimate d
+        LEFT JOIN dbo.PO_IndexDetail i ON i.PO_IndexDetailID = d.PO_IndexDetailID
+        LEFT JOIN dbo.MS_Employee e ON e.EmployeeCode = d.UserCode
+        LEFT JOIN dbo.PC_PO po ON po.POID = d.POID
+        WHERE d.POID = @POID
+        ORDER BY d.TheDate DESC, d.PO_IndexDetailID", conn);
+        cmd.Parameters.Add("@POID", SqlDbType.Int).Value = poId;
+        conn.Open();
+
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            rows.Add(new
+            {
+                poIndexDetailId = reader.IsDBNull(reader.GetOrdinal("PO_IndexDetailID")) ? 0 : Convert.ToInt32(reader["PO_IndexDetailID"]),
+                poIndexDetailName = Convert.ToString(reader["PO_IndexDetailName"]) ?? string.Empty,
+                point = reader.IsDBNull(reader.GetOrdinal("Point")) ? 0 : Convert.ToInt32(reader["Point"]),
+                theDate = reader.IsDBNull(reader.GetOrdinal("TheDate")) ? string.Empty : Convert.ToDateTime(reader["TheDate"]).ToString("dd/MM/yyyy HH:mm"),
+                employeeName = Convert.ToString(reader["EmployeeName"]) ?? string.Empty
+            });
+        }
+
+        return rows;
+    }
+
+    private void NormalizeFilter(IReadOnlyCollection<int> defaultStatusIds)
+    {
         Filter.Page = Filter.Page <= 0 ? 1 : Filter.Page;
         Filter.PageSize = NormalizePageSize(Filter.PageSize);
 
-        if (!Filter.StatusId.HasValue)
+        Filter.StatusIds ??= new List<int>();
+        if (Filter.StatusIds.Count == 0 && Filter.StatusId.HasValue)
         {
-            Filter.StatusId = 2;
+            Filter.StatusIds = new List<int> { Filter.StatusId.Value };
+        }
+
+        if (Filter.StatusIds.Count == 0)
+        {
+            Filter.StatusIds = defaultStatusIds.Where(id => id > 0).Distinct().ToList();
+        }
+        else
+        {
+            Filter.StatusIds = Filter.StatusIds.Where(id => id > 0).Distinct().ToList();
+        }
+
+        if (Filter.StatusIds.Count > 0)
+        {
+            Filter.StatusId = Filter.StatusIds[0];
+        }
+        else
+        {
+            Filter.StatusId = null;
         }
 
         if (!Filter.UseDateRange)
@@ -311,6 +448,12 @@ public class IndexModel : BasePageModel
         }
     }
 
+    private IReadOnlyList<int> GetDefaultStatusIdsForCurrentUser()
+    {
+        var workflowUser = LoadWorkflowUser();
+        return workflowUser.IsPurchaser ? new[] { 1, 2 } : new[] { 2 };
+    }
+
     private PurchaseOrderSearchRequest BuildSearchFilter(PurchaseOrderSearchRequest request)
     {
         return new PurchaseOrderSearchRequest
@@ -318,6 +461,7 @@ public class IndexModel : BasePageModel
             PONo = request.PONo?.Trim(),
             RequestNo = request.RequestNo?.Trim(),
             StatusId = request.StatusId,
+            StatusIds = request.StatusIds?.Distinct().ToList(),
             SupplierKeyword = request.SupplierKeyword?.Trim(),
             AssessLevelId = request.AssessLevelId,
             Remark = request.Remark?.Trim(),
@@ -360,10 +504,18 @@ public class IndexModel : BasePageModel
             cmd.Parameters.Add("@SupplierKeyword", SqlDbType.NVarChar, 150).Value = $"%{filter.SupplierKeyword}%";
         }
 
-        if (filter.StatusId.HasValue)
+        var effectiveStatusIds = GetEffectiveStatusIds(filter);
+        if (effectiveStatusIds.Count > 0)
         {
-            whereParts.Add("p.StatusID = @StatusId");
-            cmd.Parameters.Add("@StatusId", SqlDbType.Int).Value = filter.StatusId.Value;
+            var statusParams = new List<string>();
+            for (var i = 0; i < effectiveStatusIds.Count; i++)
+            {
+                var parameterName = $"@StatusId{i}";
+                statusParams.Add(parameterName);
+                cmd.Parameters.Add(parameterName, SqlDbType.Int).Value = effectiveStatusIds[i];
+            }
+
+            whereParts.Add($"p.StatusID IN ({string.Join(", ", statusParams)})");
         }
 
         if (filter.AssessLevelId.HasValue)
@@ -455,6 +607,22 @@ public class IndexModel : BasePageModel
         }
 
         return (rows, total);
+    }
+
+    private static List<int> GetEffectiveStatusIds(PurchaseOrderSearchRequest filter)
+    {
+        var statusIds = new List<int>();
+
+        if (filter.StatusIds is { Count: > 0 })
+        {
+            statusIds.AddRange(filter.StatusIds);
+        }
+        else if (filter.StatusId.HasValue)
+        {
+            statusIds.Add(filter.StatusId.Value);
+        }
+
+        return statusIds.Where(id => id > 0).Distinct().ToList();
     }
 
     private PurchaseOrderViewDetailSearchRequest BuildViewDetailFilter(PurchaseOrderViewDetailSearchRequest? request)
@@ -847,6 +1015,7 @@ public class PurchaseOrderFilter
     public string? PONo { get; set; }
     public string? RequestNo { get; set; }
     public int? StatusId { get; set; }
+    public List<int> StatusIds { get; set; } = new List<int>();
     public string? SupplierKeyword { get; set; }
     public int? AssessLevelId { get; set; }
     public string? Remark { get; set; }
@@ -862,6 +1031,7 @@ public class PurchaseOrderSearchRequest
     public string? PONo { get; set; }
     public string? RequestNo { get; set; }
     public int? StatusId { get; set; }
+    public List<int>? StatusIds { get; set; }
     public string? SupplierKeyword { get; set; }
     public int? AssessLevelId { get; set; }
     public string? Remark { get; set; }

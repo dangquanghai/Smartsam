@@ -79,6 +79,91 @@
     min-width: 1240px;
 }
 
+#purchaseOrderDetailTable tbody > tr > td:first-of-type,
+#purchaseOrderDetailTable tbody > tr > th:first-of-type,
+#purchaseOrderDetailTable tfoot > tr > td:first-of-type,
+#purchaseOrderDetailTable tfoot > tr > th:first-of-type,
+#purchaseOrderDetailTable thead > tr > td:first-of-type,
+#purchaseOrderDetailTable thead > tr > th:first-of-type {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+.purchase-order-adddetail-modal-dialog,
+.po-viewdetail-modal-dialog {
+    max-width: 80vw;
+    width: 80vw;
+    margin: 1rem auto;
+}
+
+.purchase-order-attachment-note {
+    font-size: 0.8rem;
+    color: #6c757d;
+    font-weight: 400;
+}
+
+.purchase-order-attachment-delete-form {
+    margin: 0;
+}
+
+.purchase-order-attachment-table-wrap {
+    max-height: 48vh;
+    overflow: auto;
+}
+
+.btn-action-add {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: #fff;
+}
+
+.btn-action-disapprove {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: #fff;
+}
+
+.po-detail-action-cell {
+    width: 50px;
+    padding: 0;
+    vertical-align: middle;
+}
+
+.po-detail-action-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.po-detail-action-wrap .po-remove-row {
+    margin: 0;
+}
+
+#purchaseOrderAttachmentModal .modal-dialog {
+    max-width: min(92vw, 920px);
+}
+
+#purchaseOrderAttachmentModal table th,
+#purchaseOrderAttachmentModal table td {
+    vertical-align: middle;
+}
+
+.po-pr-row-disabled {
+    background-color: #f8f9fa;
+    color: #6c757d;
+    opacity: 0.55;
+}
+
+.po-pr-row-disabled td {
+    color: #6c757d;
+}
+
+.po-pr-row-disabled .po-pr-check {
+    cursor: not-allowed;
+}
+
 /* PO page only: keep Select2 dropdowns below Bootstrap modals. */
 .purchase-order-header-layout .select2-container,
 .purchase-order-header-layout .select2-container--open,
@@ -104,6 +189,12 @@
 
     .purchase-order-vat-value-sm {
         max-width: none;
+    }
+
+    .purchase-order-adddetail-modal-dialog,
+    .po-viewdetail-modal-dialog {
+        max-width: 96vw;
+        width: 96vw;
     }
 }
 

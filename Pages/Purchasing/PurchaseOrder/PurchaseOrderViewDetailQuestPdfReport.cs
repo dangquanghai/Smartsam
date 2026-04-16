@@ -15,7 +15,7 @@ internal static class PurchaseOrderViewDetailQuestPdfReport
             {
                 page.Size(PageSizes.A4.Landscape());
                 page.Margin(8);
-                page.DefaultTextStyle(style => style.FontFamily("Times New Roman").FontSize(10));
+                page.DefaultTextStyle(style => style.FontFamily("Times New Roman").FontSize(9));
 
                 page.Content().Column(column =>
                 {
@@ -107,9 +107,33 @@ internal static class PurchaseOrderViewDetailQuestPdfReport
                 return;
             }
 
+            var totalUnitPriceVnd = 0m;
+            var totalUnitPriceUsd = 0m;
+            var totalQuantity = 0m;
+            var totalPoAmountVnd = 0m;
+            var totalPoAmountUsd = 0m;
+            var totalRecQty = 0m;
+            var totalRecAmountVnd = 0m;
+            var totalRecAmountUsd = 0m;
+
             foreach (var row in rows)
             {
                 var isUsd = IsUsdCurrency(row);
+                if (isUsd)
+                {
+                    totalUnitPriceUsd += row.UnitPrice;
+                    totalPoAmountUsd += row.POAmount;
+                    totalRecAmountUsd += row.RecAmount;
+                }
+                else
+                {
+                    totalUnitPriceVnd += row.UnitPrice;
+                    totalPoAmountVnd += row.POAmount;
+                    totalRecAmountVnd += row.RecAmount;
+                }
+
+                totalQuantity += row.Quantity;
+                totalRecQty += row.RecQty;
 
                 table.Cell().Element(BodyCell).Text(Encode(row.ItemCode));
                 table.Cell().Element(BodyCell).Text(NormalizeLegacyText(row.ItemName));
@@ -128,6 +152,22 @@ internal static class PurchaseOrderViewDetailQuestPdfReport
                 table.Cell().Element(BodyCell).Text(NormalizeLegacyText(row.ForDepartment));
                 table.Cell().Element(BodyCell).Text(NormalizeLegacyText(row.Note));
             }
+
+            static IContainer TotalLabelCell(IContainer cell) => cell.Border(1).PaddingVertical(3).PaddingHorizontal(2).AlignRight().AlignMiddle();
+            static IContainer TotalValueCell(IContainer cell) => cell.Border(1).PaddingVertical(3).PaddingHorizontal(2).AlignRight().AlignMiddle();
+
+            table.Cell().ColumnSpan(4).Element(TotalLabelCell).Text("Total:").Bold();
+            table.Cell().Element(TotalValueCell).Text(FormatMoney(totalUnitPriceVnd, true)).Bold();
+            table.Cell().Element(TotalValueCell).Text(FormatMoney(totalUnitPriceUsd, true)).Bold();
+            table.Cell().Element(TotalValueCell).Text(FormatQuantityTotal(totalQuantity)).Bold();
+            table.Cell().Element(TotalValueCell).Text(FormatMoney(totalPoAmountVnd, true)).Bold();
+            table.Cell().Element(TotalValueCell).Text(FormatMoney(totalPoAmountUsd, true)).Bold();
+            table.Cell().Element(TotalValueCell).Text(FormatQuantityTotal(totalRecQty)).Bold();
+            table.Cell().Element(TotalValueCell).Text(FormatMoney(totalRecAmountVnd, true)).Bold();
+            table.Cell().Element(TotalValueCell).Text(FormatMoney(totalRecAmountUsd, true)).Bold();
+            table.Cell().Element(TotalValueCell).Text(string.Empty);
+            table.Cell().Element(TotalValueCell).Text(string.Empty);
+            table.Cell().Element(TotalValueCell).Text(string.Empty);
         });
     }
 
@@ -166,6 +206,11 @@ internal static class PurchaseOrderViewDetailQuestPdfReport
     private static string FormatQuantity(decimal value)
     {
         return value == 0 ? string.Empty : value.ToString("#,##0.##", CultureInfo.InvariantCulture);
+    }
+
+    private static string FormatQuantityTotal(decimal value)
+    {
+        return value.ToString("#,##0.##", CultureInfo.InvariantCulture);
     }
 
     private static string FormatMoney(decimal value, bool withDecimals)
