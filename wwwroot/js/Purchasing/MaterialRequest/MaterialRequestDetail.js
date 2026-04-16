@@ -12,7 +12,8 @@
         canCalculate: toBoolData($form.data('can-calculate')),
         canApprove: toBoolData($form.data('can-approve')),
         canIssue: toBoolData($form.data('can-issue')),
-        canReject: toBoolData($form.data('can-reject'))
+        canReject: toBoolData($form.data('can-reject')),
+        canReplace: toBoolData($form.data('can-replace'))
     };
     mrShowAdvancedColumns = toBoolData($form.data('show-advanced-columns'));
     mrLineColspan = mrShowAdvancedColumns ? 15 : 10;
@@ -196,6 +197,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
     const canApprove = !!actionPerm.canApprove;
     const canIssue = !!actionPerm.canIssue;
     const canReject = !!actionPerm.canReject;
+    const canReplace = !!actionPerm.canReplace;
     const hideZeroBuyLines = toBoolData($form.data('hide-zero-buy-lines'));
     const isAutoRequest = toBoolData($form.data('is-auto'));
 
@@ -204,7 +206,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
 
     // Stop browser submit
     $form.find('input, textarea, select')
-        .not('[type="hidden"], .mr-line-select, .mr-line-buy, .mr-line-note, .mr-line-flag-checkbox, #Input_IsAuto, #mrSubmitBtn, #mrApproveBtn, #mrRejectBtn, #addMrLineBtn, #removeMrLineBtn, #createNewItemBtn, #calculateBtn')
+        .not('[type="hidden"], .mr-line-select, .mr-line-buy, .mr-line-note, .mr-line-flag-checkbox, #Input_IsAuto, #mrSubmitBtn, #mrApproveBtn, #mrRejectBtn, #addMrLineBtn, #replaceMrLineBtn, #removeMrLineBtn, #createNewItemBtn, #calculateBtn')
         .prop('disabled', disableEditFields);
 
     $('#Input_IsAuto').prop('disabled', true);
@@ -223,6 +225,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
     const showEditActions = isDraft && !isViewMode && canSave;
     const showSubmitAction = isDraft && !isViewMode && canSubmit;
     const showCalculateAction = isHeadApproved && canCalculate;
+    const showReplaceAction = canReplace;
     const showWorkflowActions = !isDraft && (canApprove || canReject);
     const enableOrderFields = showEditActions && !isAutoRequest;
     const enableBuyFields = showCalculateAction;
@@ -236,6 +239,9 @@ function initializePage(mode, currentStatusId, actionPerm) {
     $('#addMrLineBtn, #removeMrLineBtn, #createNewItemBtn')
         .toggle(showEditActions)
         .prop('disabled', !showEditActions);
+    $('#replaceMrLineBtn')
+        .toggle(showReplaceAction)
+        .prop('disabled', !showReplaceAction);
     $('#calculateBtn')
         .toggle(showCalculateAction)
         .prop('disabled', !showCalculateAction);
@@ -283,6 +289,26 @@ function initializePage(mode, currentStatusId, actionPerm) {
 
     // Lock action buttons by workflow status
     $('#addMrLineBtn').off('click').on('click', function () {
+        configureLookupModalMode('add');
+        $('#mrItemLookupModal').modal('show');
+        renderLookupResults($('#lookupResultBody'), []);
+        $('#lookupKeyword').trigger('focus');
+    });
+
+    $('#replaceMrLineBtn').off('click').on('click', function () {
+        const $selectedRow = $tableBody.find('.mr-line-row.is-selected').first();
+        if ($selectedRow.length === 0) {
+            alert('Please select one item row to replace.');
+            return;
+        }
+
+        const lineId = toNullableInt($selectedRow.find('.mr-line-id').val());
+        if (lineId === null || lineId <= 0) {
+            alert('Please select a saved item row to replace.');
+            return;
+        }
+
+        configureLookupModalMode('replace', $selectedRow);
         $('#mrItemLookupModal').modal('show');
         renderLookupResults($('#lookupResultBody'), []);
         $('#lookupKeyword').trigger('focus');
@@ -319,41 +345,27 @@ function initializePage(mode, currentStatusId, actionPerm) {
         }
     });
 
-    $('#lookupResultBody').off('click.mrLookupAdd').on('click.mrLookupAdd', '.mr-lookup-add-btn', function () {
+    $('#lookupResultBody').off('click.mrLookupRow').on('click.mrLookupRow', 'tr[data-item-code]', function (event) {
+        if ($(event.target).closest('.mr-lookup-add-btn').length > 0) {
+            return;
+        }
+
+        $(this).addClass('table-active').siblings('tr[data-item-code]').removeClass('table-active');
+    });
+
+    $('#lookupResultBody').off('dblclick.mrLookupRow').on('dblclick.mrLookupRow', 'tr[data-item-code]', function (event) {
+        if ($(event.target).closest('.mr-lookup-add-btn').length > 0) {
+            return;
+        }
+
+        executeLookupRowAction($form, $tableBody, this);
+    });
+
+    $('#lookupResultBody').off('click.mrLookupAdd').on('click.mrLookupAdd', '.mr-lookup-add-btn', function (event) {
+        event.stopPropagation();
         const tr = this.closest('tr');
         if (!tr || !tr.dataset.itemCode) return;
-
-        const orderInput = tr.querySelector('.mr-lookup-order-input');
-        const rawOrder = orderInput ? Number.parseFloat((orderInput.value || '').toString().trim()) : 1;
-        const orderQty = Number.isFinite(rawOrder) && rawOrder > 0 ? rawOrder : 1;
-
-        const added = addItemToGrid($tableBody, {
-            itemCode: tr.dataset.itemCode || '',
-            itemName: tr.dataset.itemName || '',
-            unit: tr.dataset.unit || '',
-            beginQty: 0,
-            receiptQty: 0,
-            usingQty: 0,
-            endQty: 0,
-            orderQty: orderQty,
-            notReceipt: 0,
-            inStock: 0,
-            accIn: 0,
-            buy: 0,
-            normQty: 0,
-            price: 0,
-            note: '',
-            normMain: 0,
-            manualCheck: false,
-            tempStore: 0,
-            issued: 0,
-            newItem: false,
-            selected: true
-        });
-
-        if (added) {
-            autoSaveDraftAfterGridChange('add-detail');
-        }
+        executeLookupRowAction($form, $tableBody, tr);
     });
 
     // Create New Item opens the legacy temp-item modal.
@@ -983,17 +995,6 @@ function serializeLines($tableBody) {
         });
     });
 
-    $('#lookupResultBody').off('click.mrLookupRow').on('click.mrLookupRow', 'tr[data-item-code]', function (event) {
-        if ($(event.target).is('input, button, a, label, select, textarea')) {
-            return;
-        }
-
-        const addButton = this.querySelector('.mr-lookup-add-btn');
-        if (addButton) {
-            addButton.click();
-        }
-    });
-
     return payload;
 }
 
@@ -1155,6 +1156,9 @@ function renderLookupResults($resultBody, items) {
         return;
     }
 
+    const lookupMode = (($('#mrItemLookupModal').data('lookup-mode') || 'add').toString().trim().toLowerCase());
+    const actionText = lookupMode === 'replace' ? 'Replace' : 'Add Detail';
+
     items.forEach(function (item) {
         const $tr = $('<tr></tr>');
         $tr.append(`<td>${escapeHtml(item.itemCode || '')}</td>`);
@@ -1162,7 +1166,7 @@ function renderLookupResults($resultBody, items) {
         $tr.append(`<td>${escapeHtml(item.unit || '')}</td>`);
         $tr.append(`<td class="text-center">${formatLookupNumber(item.inStock)}</td>`);
         $tr.append(`<td><input type="text" inputmode="decimal" class="form-control form-control-sm mr-lookup-order-input" value="${item.orderQty && item.orderQty > 0 ? item.orderQty : 1}"></td>`);
-        $tr.append('<td class="text-center"><button type="button" class="btn btn-sm btn-primary mr-lookup-add-btn">Add Detail</button></td>');
+        $tr.append(`<td class="text-center"><button type="button" class="btn btn-sm btn-primary mr-lookup-add-btn">${escapeHtml(actionText)}</button></td>`);
 
         $tr.attr('data-item-code', item.itemCode || '');
         $tr.attr('data-item-name', item.itemName || '');
@@ -1172,6 +1176,48 @@ function renderLookupResults($resultBody, items) {
         $tr.attr('data-norm-main', item.normMain || 0);
         $resultBody.append($tr);
     });
+}
+
+function executeLookupRowAction($form, $tableBody, tr) {
+    if (!tr || !tr.dataset.itemCode) return;
+
+    const lookupMode = (($('#mrItemLookupModal').data('lookup-mode') || 'add').toString().trim().toLowerCase());
+    if (lookupMode === 'replace') {
+        replaceSelectedLineFromLookup($form, $tableBody, tr);
+        return;
+    }
+
+    const orderInput = tr.querySelector('.mr-lookup-order-input');
+    const rawOrder = orderInput ? Number.parseFloat((orderInput.value || '').toString().trim()) : 1;
+    const orderQty = Number.isFinite(rawOrder) && rawOrder > 0 ? rawOrder : 1;
+
+    const added = addItemToGrid($tableBody, {
+        itemCode: tr.dataset.itemCode || '',
+        itemName: tr.dataset.itemName || '',
+        unit: tr.dataset.unit || '',
+        beginQty: 0,
+        receiptQty: 0,
+        usingQty: 0,
+        endQty: 0,
+        orderQty: orderQty,
+        notReceipt: 0,
+        inStock: 0,
+        accIn: 0,
+        buy: 0,
+        normQty: 0,
+        price: 0,
+        note: '',
+        normMain: 0,
+        manualCheck: false,
+        tempStore: 0,
+        issued: 0,
+        newItem: false,
+        selected: true
+    });
+
+    if (added) {
+        autoSaveDraftAfterGridChange('add-detail');
+    }
 }
 
 function toggleLookupValidation(forceShow) {
@@ -1216,6 +1262,121 @@ function searchItems(keyword, checkBalanceInStore) {
     });
 }
 
+function configureLookupModalMode(mode, $selectedRow) {
+    const normalizedMode = (mode || 'add').toString().trim().toLowerCase();
+    const $modal = $('#mrItemLookupModal');
+    const $title = $('#mrItemLookupModalLabel');
+
+    if (normalizedMode === 'replace' && $selectedRow && $selectedRow.length > 0) {
+        $modal.data('lookup-mode', 'replace');
+        $modal.data('replace-line-id', toNullableInt($selectedRow.find('.mr-line-id').val()) || 0);
+        $title.text('Replace Item');
+        return;
+    }
+
+    $modal.data('lookup-mode', 'add');
+    $modal.removeData('replace-line-id');
+    $title.text('Add / Edit Item');
+}
+
+function replaceSelectedLineFromLookup($form, $tableBody, tr) {
+    const $selectedRow = $tableBody.find('.mr-line-row.is-selected').first();
+    if ($selectedRow.length === 0) {
+        alert('Please select one item row to replace.');
+        return;
+    }
+
+    const lineId = toNullableInt($selectedRow.find('.mr-line-id').val());
+    if (lineId === null || lineId <= 0) {
+        alert('Please select a saved item row to replace.');
+        return;
+    }
+
+    const newItemCode = (tr.dataset.itemCode || '').toString().trim();
+    const currentItemCode = ($selectedRow.find('.mr-line-itemcode').val() || '').toString().trim();
+    if (!newItemCode) {
+        alert('Replacement item is required.');
+        return;
+    }
+
+    if (currentItemCode.toLowerCase() === newItemCode.toLowerCase()) {
+        alert('Replacement item must be different from current item.');
+        return;
+    }
+
+    const newItemName = (tr.dataset.itemName || '').toString().trim();
+    const currentItemName = ($selectedRow.find('.mr-line-itemname').val() || '').toString().trim();
+    const confirmMessage = `Replace item "${currentItemCode}${currentItemName ? ' - ' + currentItemName : ''}" with "${newItemCode}${newItemName ? ' - ' + newItemName : ''}"?`;
+    if (!window.confirm(confirmMessage)) {
+        return;
+    }
+
+    const requestNo = getCurrentRequestNo();
+    if (!requestNo || requestNo <= 0) {
+        alert('Please save Material Request first.');
+        return;
+    }
+
+    replaceSelectedItem(requestNo, {
+        lineId: lineId,
+        itemCode: newItemCode,
+        orderQty: toNumber($selectedRow.find('.mr-line-order').val()),
+        note: ($selectedRow.find('.mr-line-note').val() || '').toString().trim()
+    }).then(function (row) {
+        const enableOrderFields = !$form.data('mr-is-auto') && toBoolData($form.data('can-save'));
+        const enableBuyFields = toBoolData($form.data('mr-enable-buy-fields'));
+        const enableNoteFields = enableBuyFields || toBoolData($form.data('can-save'));
+        const $newRow = $(createLineRowHtml(row));
+        $newRow.find('.mr-line-order').prop('disabled', !enableOrderFields);
+        $newRow.find('.mr-line-buy').prop('disabled', !enableBuyFields);
+        $newRow.find('.mr-line-note').prop('disabled', !enableNoteFields);
+        $selectedRow.replaceWith($newRow);
+        syncEmptyRow($tableBody);
+        syncLineInputNames($tableBody);
+        refreshLineIndexes($tableBody);
+        setSelectedMrLineRow($tableBody, $newRow);
+        if (toBoolData($form.data('mr-enable-buy-fields'))) {
+            storePurchaserEditableSnapshot($newRow);
+        }
+        $('#mrItemLookupModal').modal('hide');
+        showDetailSuccessMessage('Item replaced successfully.');
+    }).catch(function (error) {
+        alert(error.message || 'Cannot replace item.');
+    });
+}
+
+function replaceSelectedItem(requestNo, payload) {
+    return new Promise(function (resolve, reject) {
+        const token = $('input[name="__RequestVerificationToken"]').first().val() || '';
+
+        $.ajax({
+            url: '?handler=ReplaceItem',
+            type: 'POST',
+            headers: { 'RequestVerificationToken': token },
+            data: {
+                requestNo: requestNo || 0,
+                lineId: payload.lineId || 0,
+                itemCode: payload.itemCode || '',
+                orderQty: payload.orderQty || 0,
+                note: payload.note || ''
+            },
+            success: function (res) {
+                if (res && res.success) {
+                    resolve(res.data || {});
+                } else {
+                    reject(new Error((res && res.message) ? res.message : 'Cannot replace item.'));
+                }
+            },
+            error: function (xhr) {
+                const responseMessage = xhr && xhr.responseJSON && xhr.responseJSON.message
+                    ? xhr.responseJSON.message
+                    : (xhr && xhr.responseText ? xhr.responseText : '');
+                reject(new Error(responseMessage || 'Cannot replace item.'));
+            }
+        });
+    });
+}
+
 function getCurrentRequestNo() {
     const pageId = toNullableInt($('#Id').val());
     if (pageId !== null && pageId > 0) {
@@ -1225,6 +1386,16 @@ function getCurrentRequestNo() {
     const editRequestNo = toNullableInt($('#Input_RequestNo').val());
     if (editRequestNo !== null && editRequestNo > 0) {
         return editRequestNo;
+    }
+
+    try {
+        const url = new URL(window.location.href);
+        const urlRequestNo = toNullableInt(url.searchParams.get('id'));
+        if (urlRequestNo !== null && urlRequestNo > 0) {
+            return urlRequestNo;
+        }
+    } catch (error) {
+        // Ignore invalid URL parsing and continue with the remaining sources.
     }
 
     const previewRequestNo = toNullableInt($('#CreateRequestNoPreview').val());

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Data.SqlClient;
 using SmartSam.Pages;
 using SmartSam.Services;
@@ -46,7 +47,11 @@ public class PurchaseOrderDetailModel : BasePageModel
     public bool OpenConvertModal { get; private set; }
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
     public string BackToListUrl => string.IsNullOrWhiteSpace(ReturnUrl) ? Url.Page("./Index") ?? "./Index" : ReturnUrl;
-    public string DepartmentOptionsJson => JsonSerializer.Serialize(DepartmentOptions.Select(x => new { value = x.Value, text = x.Text }));
+    public string DepartmentOptionsJson => JsonSerializer.Serialize(DepartmentOptions.Select(x => new LookupOptionDto
+    {
+        Value = x.Value,
+        Text = x.Text
+    }));
     public string CurrentSupplierText { get; private set; } = string.Empty;
     public string CurrentPrText { get; private set; } = string.Empty;
     public string AllowedAttachmentExtensionsText => _config.GetValue<string>("FileUploads:AllowedExtensions") ?? ".doc,.docx,.xls,.xlsx,.pdf,.jpg,.jpeg,.png";
@@ -182,7 +187,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         {
             SavePurchaseOrder(Details);
             TempData["SuccessMessage"] = "Purchase order saved successfully.";
-            return RedirectToPage("./PurchaseOrderDetail", new { id = Header.Id, mode = "edit", returnUrl = ReturnUrl });
+            return RedirectToPage("./PurchaseOrderDetail", BuildDetailRouteValues("edit"));
         }
         catch (Exception ex)
         {
@@ -243,15 +248,23 @@ public class PurchaseOrderDetailModel : BasePageModel
         return RedirectToCurrentDetail("view");
     }
 
-    public IActionResult OnGetPrLines(int prId)
+    public IActionResult OnGetPrLines(int prId, int? currentPoId)
     {
         try
         {
-            return new JsonResult(new { success = true, data = LoadPrDetailRows(prId, Header.Id) });
+            return new JsonResult(new PrLinesResponse
+            {
+                Success = true,
+                Data = LoadPrDetailRows(prId, currentPoId ?? Header.Id)
+            });
         }
         catch (Exception ex)
         {
-            return new JsonResult(new { success = false, message = ex.Message });
+            return new JsonResult(new ApiResponse
+            {
+                Success = false,
+                Message = ex.Message
+            });
         }
     }
 
@@ -648,7 +661,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         if (string.IsNullOrWhiteSpace(ConvertReason))
         {
             TempData["SuccessMessage"] = "Please enter reason to convert PO.";
-            return RedirectToPage("./PurchaseOrderDetail", new { id = Header.Id, mode = "edit", returnUrl = ReturnUrl, openConvertModal = true });
+            return RedirectToPage("./PurchaseOrderDetail", BuildDetailRouteValues("edit", true));
         }
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -1800,7 +1813,18 @@ public class PurchaseOrderDetailModel : BasePageModel
 
     private IActionResult RedirectToCurrentDetail(string mode = "view")
     {
-        return RedirectToPage("./PurchaseOrderDetail", new { id = Header.Id, mode, returnUrl = ReturnUrl });
+        return RedirectToPage("./PurchaseOrderDetail", BuildDetailRouteValues(mode));
+    }
+
+    private RouteValueDictionary BuildDetailRouteValues(string mode, bool openConvertModal = false)
+    {
+        return new RouteValueDictionary
+        {
+            { "id", Header.Id },
+            { "mode", mode },
+            { "returnUrl", ReturnUrl },
+            { "openConvertModal", openConvertModal }
+        };
     }
 
     private int GetCurrentRoleId()
@@ -1906,4 +1930,21 @@ public class PurchaseOrderAttachmentViewModel
     public DateTime? ModifiedDate { get; set; }
     public long SizeBytes { get; set; }
     public string SizeText { get; set; } = string.Empty;
+}
+
+public class LookupOptionDto
+{
+    public string? Value { get; set; }
+    public string? Text { get; set; }
+}
+
+public class ApiResponse
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+}
+
+public class PrLinesResponse : ApiResponse
+{
+    public List<PurchaseOrderPrLineLookup> Data { get; set; } = new List<PurchaseOrderPrLineLookup>();
 }

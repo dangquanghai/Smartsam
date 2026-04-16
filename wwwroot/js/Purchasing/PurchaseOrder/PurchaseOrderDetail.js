@@ -496,7 +496,10 @@ function loadPrLines() {
 
     // PO detail lay theo PR dang chon.
     // PRID la key goc cua modal nay.
-    $.get(window.purchaseOrderDetailPage?.prLinesUrl || '', { prId: prId }, function (response) {
+    $.get(window.purchaseOrderDetailPage?.prLinesUrl || '', {
+        prId: prId,
+        currentPoId: window.purchaseOrderDetailPage?.reportId || 0
+    }, function (response) {
         if (!response.success) {
             alert(response.message || 'Cannot load PR lines.');
             return;

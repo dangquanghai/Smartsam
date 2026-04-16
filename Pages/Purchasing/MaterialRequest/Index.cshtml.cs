@@ -2545,6 +2545,109 @@ public class MaterialRequestService
     }
 
     /// <summary>
+    /// Thay mot item hien co bang item khac va ghi lich su thay the vao SUPER_REQUEST.
+    /// </summary>
+    public async Task<MaterialRequestLineDto> ReplaceLineItemAsync(
+        long requestNo,
+        int lineId,
+        string? replacementItemCode,
+        decimal? orderQty,
+        string? note,
+        string operatorCode,
+        int? operatorEmployeeId,
+        int currentStatus,
+        CancellationToken cancellationToken = default)
+    {
+        if (requestNo <= 0)
+        {
+            throw new InvalidOperationException("Material Request not found.");
+        }
+
+        var normalizedItemCode = (replacementItemCode ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(normalizedItemCode))
+        {
+            throw new InvalidOperationException("Replacement item is required.");
+        }
+
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync(cancellationToken);
+        await using var tx = await conn.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            var sourceLine = await GetMaterialRequestLineForReplaceAsync(conn, (SqlTransaction)tx, requestNo, lineId, cancellationToken);
+            if (sourceLine is null)
+            {
+                throw new InvalidOperationException("Material Request detail row not found.");
+            }
+
+            var oldItemCode = (sourceLine.ItemCode ?? string.Empty).Trim();
+            if (string.Equals(oldItemCode, normalizedItemCode, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Replacement item must be different from current item.");
+            }
+
+            var replacementItem = await GetActiveItemForReplaceAsync(conn, (SqlTransaction)tx, normalizedItemCode, cancellationToken);
+            if (replacementItem is null)
+            {
+                throw new InvalidOperationException("Replacement item not found.");
+            }
+
+            if (await ExistsDuplicateMaterialRequestItemAsync(conn, (SqlTransaction)tx, requestNo, lineId, normalizedItemCode, cancellationToken))
+            {
+                throw new InvalidOperationException("This item already exists in the Material Request.");
+            }
+
+            var employeeId = operatorEmployeeId.GetValueOrDefault();
+            if (employeeId <= 0)
+            {
+                employeeId = await ResolveEmployeeIdAsync(conn, (SqlTransaction)tx, operatorCode, cancellationToken);
+            }
+
+            if (employeeId <= 0)
+            {
+                throw new InvalidOperationException("Cannot resolve current employee.");
+            }
+
+            var legacyNow = await GetLegacyServerDateAsync(conn, (SqlTransaction)tx, cancellationToken);
+            await UpdateMaterialRequestLineItemAsync(
+                conn,
+                (SqlTransaction)tx,
+                requestNo,
+                lineId,
+                replacementItem.ItemCode,
+                replacementItem.Unit,
+                orderQty ?? sourceLine.OrderQty ?? 0m,
+                string.IsNullOrWhiteSpace(note) ? sourceLine.Note : note,
+                cancellationToken);
+
+            await InsertSuperRequestAsync(
+                conn,
+                (SqlTransaction)tx,
+                requestNo,
+                employeeId,
+                legacyNow,
+                BuildReplaceHistoryNote(oldItemCode, replacementItem.ItemCode),
+                currentStatus,
+                cancellationToken);
+
+            var replacedLine = await GetMaterialRequestLineForReplaceAsync(conn, (SqlTransaction)tx, requestNo, lineId, cancellationToken);
+            if (replacedLine is null)
+            {
+                throw new InvalidOperationException("Cannot reload replaced Material Request detail row.");
+            }
+
+            await tx.CommitAsync(cancellationToken);
+            return replacedLine;
+        }
+        catch
+        {
+            await tx.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Cap nhat chi header MR cho luong workflow.
     /// </summary>
     public async Task<long> UpdateWorkflowHeaderAsync(
@@ -3021,6 +3124,185 @@ public class MaterialRequestService
                 throw new InvalidOperationException("Material Request detail row not found.");
             }
         }
+    }
+
+    private static async Task<MaterialRequestLineDto?> GetMaterialRequestLineForReplaceAsync(
+        SqlConnection conn,
+        SqlTransaction tx,
+        long requestNo,
+        int lineId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            SELECT TOP 1
+                d.ID,
+                d.ITEMCODE,
+                ISNULL(i.ItemName, '') AS ITEMNAME,
+                ISNULL(d.UNIT, '') AS UNIT,
+                ISNULL(d.BEGIN_Q, 0) AS BEGIN_Q,
+                ISNULL(d.RECEIPT_Q, 0) AS RECEIPT_Q,
+                ISNULL(d.USING_Q, 0) AS USING_Q,
+                ISNULL(d.END_Q, 0) AS END_Q,
+                ISNULL(d.NEW_ORDER, 0) AS NEW_ORDER,
+                ISNULL(d.NOT_RECEIPT, 0) AS NOT_RECEIPT,
+                ISNULL(d.INSTOCK, 0) AS INSTOCK,
+                ISNULL(d.acctualyInventory, 0) AS acctualyInventory,
+                ISNULL(d.BUY, 0) AS BUY,
+                ISNULL(d.NORM_Q, 0) AS NORM_Q,
+                ISNULL(d.NORM_Q_MAIN, 0) AS NORM_Q_MAIN,
+                ISNULL(d.NOTE, '') AS NOTE,
+                ISNULL(d.NEW_ITEM, 0) AS NEW_ITEM,
+                ISNULL(d.ManualCheck, 0) AS ManualCheck,
+                ISNULL(d.TempStore, 0) AS TempStore,
+                ISNULL(d.ISSUED, 0) AS ISSUED
+            FROM dbo.MATERIAL_REQUEST_DETAIL d
+            LEFT JOIN dbo.INV_ItemList i ON i.ItemCode = d.ITEMCODE
+            WHERE d.REQUEST_NO = @RequestNo
+              AND d.ID = @LineId";
+
+        await using var cmd = new SqlCommand(sql, conn, tx);
+        AddNumeric18_0Param(cmd, "@RequestNo", requestNo);
+        AddNumeric18_0Param(cmd, "@LineId", lineId);
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new MaterialRequestLineDto
+        {
+            Id = reader.IsDBNull(0) ? null : Convert.ToInt32(reader[0]),
+            ItemCode = reader[1]?.ToString(),
+            ItemName = reader[2]?.ToString(),
+            Unit = reader[3]?.ToString(),
+            BeginQty = reader.IsDBNull(4) ? null : Convert.ToDecimal(reader[4]),
+            ReceiptQty = reader.IsDBNull(5) ? null : Convert.ToDecimal(reader[5]),
+            UsingQty = reader.IsDBNull(6) ? null : Convert.ToDecimal(reader[6]),
+            EndQty = reader.IsDBNull(7) ? null : Convert.ToDecimal(reader[7]),
+            OrderQty = reader.IsDBNull(8) ? null : Convert.ToDecimal(reader[8]),
+            NotReceipt = reader.IsDBNull(9) ? null : Convert.ToDecimal(reader[9]),
+            InStock = reader.IsDBNull(10) ? null : Convert.ToDecimal(reader[10]),
+            AccIn = reader.IsDBNull(11) ? null : Convert.ToDecimal(reader[11]),
+            Buy = reader.IsDBNull(12) ? null : Convert.ToDecimal(reader[12]),
+            NormQty = reader.IsDBNull(13) ? null : Convert.ToDecimal(reader[13]),
+            NormMain = reader.IsDBNull(14) ? null : Convert.ToDecimal(reader[14]),
+            Note = reader[15]?.ToString(),
+            NewItem = !reader.IsDBNull(16) && Convert.ToBoolean(reader[16]),
+            ManualCheck = !reader.IsDBNull(17) && Convert.ToBoolean(reader[17]),
+            TempStore = reader.IsDBNull(18) ? null : Convert.ToDecimal(reader[18]),
+            Issued = reader.IsDBNull(19) ? null : Convert.ToDecimal(reader[19]),
+            Selected = true,
+            Price = 0m
+        };
+    }
+
+    private static async Task<MaterialRequestItemLookupDto?> GetActiveItemForReplaceAsync(
+        SqlConnection conn,
+        SqlTransaction tx,
+        string itemCode,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            SELECT TOP 1
+                LTRIM(RTRIM(ItemCode)) AS ItemCode,
+                ISNULL(ItemName, '') AS ItemName,
+                ISNULL(Unit, '') AS Unit
+            FROM dbo.INV_ItemList
+            WHERE ItemCode = @ItemCode
+              AND ISNULL(IsActive, 0) = 1";
+
+        await using var cmd = new SqlCommand(sql, conn, tx);
+        Helper.AddParameter(cmd, "@ItemCode", itemCode, SqlDbType.VarChar, 20);
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new MaterialRequestItemLookupDto
+        {
+            ItemCode = reader[0]?.ToString() ?? string.Empty,
+            ItemName = reader[1]?.ToString() ?? string.Empty,
+            Unit = reader[2]?.ToString() ?? string.Empty
+        };
+    }
+
+    private static async Task<bool> ExistsDuplicateMaterialRequestItemAsync(
+        SqlConnection conn,
+        SqlTransaction tx,
+        long requestNo,
+        int lineId,
+        string itemCode,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            SELECT TOP 1 1
+            FROM dbo.MATERIAL_REQUEST_DETAIL
+            WHERE REQUEST_NO = @RequestNo
+              AND ID <> @LineId
+              AND ITEMCODE = @ItemCode";
+
+        await using var cmd = new SqlCommand(sql, conn, tx);
+        AddNumeric18_0Param(cmd, "@RequestNo", requestNo);
+        AddNumeric18_0Param(cmd, "@LineId", lineId);
+        Helper.AddParameter(cmd, "@ItemCode", itemCode, SqlDbType.VarChar, 20);
+        var value = await cmd.ExecuteScalarAsync(cancellationToken);
+        return value != null && value != DBNull.Value;
+    }
+
+    private static async Task UpdateMaterialRequestLineItemAsync(
+        SqlConnection conn,
+        SqlTransaction tx,
+        long requestNo,
+        int lineId,
+        string itemCode,
+        string unit,
+        decimal orderQty,
+        string? note,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            UPDATE dbo.MATERIAL_REQUEST_DETAIL
+            SET ITEMCODE = @ItemCode,
+                UNIT = @Unit,
+                NEW_ORDER = @OrderQty,
+                NOTE = @Note,
+                BEGIN_Q = 0,
+                RECEIPT_Q = 0,
+                USING_Q = 0,
+                END_Q = 0,
+                NORM_Q = 0,
+                NOT_RECEIPT = 0,
+                INSTOCK = 0,
+                acctualyInventory = 0,
+                BUY = 0,
+                ISSUED = 0,
+                NEW_ITEM = 0,
+                NORM_Q_MAIN = 0,
+                ManualCheck = 0,
+                TempStore = 0
+            WHERE REQUEST_NO = @RequestNo
+              AND ID = @LineId";
+
+        await using var cmd = new SqlCommand(sql, conn, tx);
+        AddNumeric18_0Param(cmd, "@RequestNo", requestNo);
+        AddNumeric18_0Param(cmd, "@LineId", lineId);
+        Helper.AddParameter(cmd, "@ItemCode", itemCode.Trim(), SqlDbType.VarChar, 20);
+        Helper.AddParameter(cmd, "@Unit", (unit ?? string.Empty).Trim(), SqlDbType.VarChar, 50);
+        AddDecimal18_2Param(cmd, "@OrderQty", orderQty);
+        Helper.AddParameter(cmd, "@Note", (note ?? string.Empty).Trim(), SqlDbType.VarChar, 255);
+
+        var affected = await cmd.ExecuteNonQueryAsync(cancellationToken);
+        if (affected == 0)
+        {
+            throw new InvalidOperationException("Material Request detail row not found.");
+        }
+    }
+
+    private static string BuildReplaceHistoryNote(string oldItemCode, string newItemCode)
+    {
+        var note = $"Replace {oldItemCode}->{newItemCode}";
+        return note.Length <= 50 ? note : note[..50];
     }
 
     /// <summary>

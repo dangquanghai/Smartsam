@@ -176,6 +176,11 @@ public class MaterialRequestDetailModel : BasePageModel
         get { return IsEdit && CanRejectStatus(CurrentStatusId, Input.IsAuto); }
     }
 
+    public bool CanReplaceItem
+    {
+        get { return IsEdit && CanReplaceItemStatus(CurrentStatusId); }
+    }
+
     public bool HideZeroBuyLines
     {
         get
@@ -439,6 +444,96 @@ public class MaterialRequestDetailModel : BasePageModel
     public async Task<IActionResult> OnPostCalculate(CancellationToken cancellationToken)
     {
         return await HandleCalculateAsync(cancellationToken);
+    }
+
+    public async Task<IActionResult> OnPostReplaceItem(
+        [FromForm] long? requestNo,
+        [FromForm] int? lineId,
+        [FromForm] string? itemCode,
+        [FromForm] decimal? orderQty,
+        [FromForm] string? note,
+        CancellationToken cancellationToken)
+    {
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
+        PagePerm = new PagePermissions();
+        PagePerm = GetUserPermissions();
+        await LoadUserScopeAsync(cancellationToken);
+        if (!CanAccessPage())
+        {
+            return new JsonResult(new { success = false, message = "Access denied." })
+            {
+                StatusCode = StatusCodes.Status403Forbidden
+            };
+        }
+
+        var resolvedRequestNo = requestNo.HasValue && requestNo.Value > 0
+            ? requestNo
+            : Id;
+        if (!resolvedRequestNo.HasValue || resolvedRequestNo.Value <= 0)
+        {
+            return new JsonResult(new { success = false, message = "Please save Material Request first." });
+        }
+
+        var existing = await _materialRequestService.GetDetailAsync(resolvedRequestNo.Value, cancellationToken);
+        if (existing is null)
+        {
+            return new JsonResult(new { success = false, message = "Material Request not found." })
+            {
+                StatusCode = StatusCodes.Status404NotFound
+            };
+        }
+
+        var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
+        if (!CanReplaceItemStatus(currentStatus))
+        {
+            return new JsonResult(new { success = false, message = "You do not have permission to replace item at current status." })
+            {
+                StatusCode = StatusCodes.Status403Forbidden
+            };
+        }
+
+        if (!lineId.HasValue || lineId.Value <= 0)
+        {
+            return new JsonResult(new { success = false, message = "Please select one item row to replace." });
+        }
+
+        if (string.IsNullOrWhiteSpace(itemCode))
+        {
+            return new JsonResult(new { success = false, message = "Replacement item is required." });
+        }
+
+        try
+        {
+            var replacedLine = await _materialRequestService.ReplaceLineItemAsync(
+                resolvedRequestNo.Value,
+                lineId.Value,
+                itemCode,
+                orderQty,
+                note,
+                User.Identity?.Name ?? string.Empty,
+                GetCurrentEmployeeId(),
+                currentStatus,
+                cancellationToken);
+
+            return new JsonResult(new
+            {
+                success = true,
+                message = "Item replaced successfully.",
+                data = replacedLine
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[MaterialRequest][ReplaceItem] {ex}");
+            return new JsonResult(new
+            {
+                success = false,
+                message = ex is InvalidOperationException ? ex.Message : $"Cannot replace item. {ex.Message}"
+            })
+            {
+                StatusCode = StatusCodes.Status500InternalServerError
+            };
+        }
     }
 
     public async Task<IActionResult> OnPostSavePurchaserLines(CancellationToken cancellationToken)
@@ -1941,6 +2036,21 @@ public class MaterialRequestDetailModel : BasePageModel
         }
 
         return statusId <= StatusPurchaserChecked;
+    }
+
+    private bool CanReplaceItemStatus(int statusId)
+    {
+        if (statusId > StatusHeadDeptApproved)
+        {
+            return false;
+        }
+
+        if (_isAdminRole)
+        {
+            return true;
+        }
+
+        return _dataScope.IsPurchaser;
     }
 
     private bool CanExecuteTransition(MaterialRequestWorkflowAction action, int currentStatus, bool isAuto)

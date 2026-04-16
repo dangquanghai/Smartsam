@@ -2,6 +2,42 @@
 padding: 5px;
 }
 
+.po-search-panel .card-body {
+    padding: 10px;
+}
+
+.po-search-panel .form-group {
+    margin-bottom: 0.75rem;
+}
+
+.po-search-panel .form-group > label {
+    margin-bottom: 0.25rem;
+    font-weight: 600;
+}
+
+.po-result-column {
+    min-width: 0;
+}
+
+@media (min-width: 768px) {
+    .po-layout-row {
+        flex-wrap: nowrap;
+    }
+
+    .po-layout-row > .po-search-column {
+        flex: 0 0 clamp(190px, 18vw, 239px);
+        width: clamp(190px, 18vw, 320px);
+        max-width: clamp(190px, 18vw, 320px);
+        min-width: 190px;
+    }
+
+    .po-layout-row > .po-result-column {
+        flex: 1 1 0;
+        max-width: none;
+        min-width: 0;
+    }
+}
+
 #purchaseOrderResultPanelContainer {
     display: flex;
     flex-direction: column;
@@ -96,6 +132,15 @@ padding: 5px;
 #purchaseOrderTable {
     table-layout: fixed;
     width: 100%;
+}
+
+#purchaseOrderTable thead th {
+    padding-top: 0.65rem;
+    padding-bottom: 0.65rem;
+}
+
+#purchaseOrderTable tbody td {
+    vertical-align: middle;
 }
 
 .app-table-ellipsis {

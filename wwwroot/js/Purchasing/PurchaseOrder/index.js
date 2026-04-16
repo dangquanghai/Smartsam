@@ -5,7 +5,7 @@
         selectors: {
             tbody: '#purchaseOrderTable tbody',
             pagination: '#pagination',
-            actionBtns: '#btnEdit, #btnBackToProcessing'
+            actionBtns: '#btnBackToProcessing'
         }
     };
 
@@ -275,12 +275,12 @@
                     </td>
                     <td>${row.poDateDisplay || ''}</td>
                     <td>${row.requestNo || ''}</td>
-                    <td class="vni-font">${buildEllipsisCell(row.supplier || '')}</td>
+                    <td class="vni-font">${row.supplier || ''}</td>
                     <td>${row.statusName || ''}</td>
                     <td>${row.purchaserCode || ''}</td>
                     <td>${row.chiefACode || ''}</td>
                     <td>${row.gDirectorCode || ''}</td>
-                    <td class="vni-font">${buildEllipsisCell(row.remark || '')}</td>
+                    <td class="vni-font">${row.remark || ''}</td>
                 </tr>`;
         });
 
@@ -320,7 +320,6 @@
         }
 
         state.selectedRow = item;
-        $('#btnEdit').toggleClass('d-none', !item.actions.canEdit);
         $('#btnBackToProcessing').toggleClass('d-none', !item.actions.canBackToProcessing);
         $('#btnEstimateView').prop('disabled', !(item.actions && item.actions.canAccess));
     });
@@ -335,15 +334,6 @@
 
     $(document).off('click', '#btnAdd').on('click', '#btnAdd', function () {
         window.location.href = buildDetailUrl(null, 'add');
-    });
-
-    $(document).off('click', '#btnEdit').on('click', '#btnEdit', function () {
-        if (!state.selectedRow || !state.selectedRow.actions.canEdit) {
-            alert('Please select one editable purchase order.');
-            return;
-        }
-
-        window.location.href = buildDetailUrl(state.selectedRow.data.id, 'edit');
     });
 
     $(document).off('click', '#btnBackToProcessing').on('click', '#btnBackToProcessing', function () {
