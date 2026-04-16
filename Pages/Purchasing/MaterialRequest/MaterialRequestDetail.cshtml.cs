@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Mail;
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -58,6 +59,9 @@ public class MaterialRequestDetailModel : BasePageModel
 
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }
+
+    [BindProperty]
+    public long? CreateRequestNoPreview { get; set; }
 
     [BindProperty]
     public MaterialRequestDetailDto Input { get; set; } = new MaterialRequestDetailDto();
@@ -141,12 +145,25 @@ public class MaterialRequestDetailModel : BasePageModel
 
     public bool CanIssue
     {
-        get { return false; }
+        get
+        {
+            if (!IsEdit)
+            {
+                return false;
+            }
+
+            if (CurrentStatusId != StatusPurchaserChecked && CurrentStatusId != StatusCfoApproved)
+            {
+                return false;
+            }
+
+            return IsAdminUser() || _dataScope.IsInventoryControlInDep || HasPermission(6);
+        }
     }
 
     public bool ShowIssueButton
     {
-        get { return IsEdit && CurrentStatusId == StatusCollectedToPr; }
+        get { return IsEdit && (CurrentStatusId == StatusPurchaserChecked || CurrentStatusId == StatusCfoApproved); }
     }
 
     public bool CanCalculate
@@ -213,10 +230,23 @@ public class MaterialRequestDetailModel : BasePageModel
                 Input.StoreGroup = _dataScope.StoreGroup ?? NoScopeStoreGroup;
             }
 
-            Input.DateCreate = DateTime.Today;
+            Input.DateCreate = await GetLegacyServerDateAsync(cancellationToken);
             Input.FromDate = DateTime.Today.AddMonths(-3);
             Input.ToDate = DateTime.Today;
             Input.MaterialStatusId ??= StatusJustCreated;
+
+            if (!CreateRequestNoPreview.HasValue || CreateRequestNoPreview.Value <= 0)
+            {
+                CreateRequestNoPreview = await ReserveManualRequestNoAsync(cancellationToken);
+                await _materialRequestService.InsertSuperRequestAsync(
+                    CreateRequestNoPreview.Value,
+                    "Create request",
+                    StatusJustCreated,
+                    User.Identity?.Name ?? string.Empty,
+                    GetCurrentEmployeeId(),
+                    cancellationToken);
+            }
+
             return Page();
         }
 
@@ -333,12 +363,8 @@ public class MaterialRequestDetailModel : BasePageModel
                 Input.IsAuto = false;
             }
 
-            var savedNo = await _materialRequestService.SaveAsync(IsEdit ? Id : null, Input, lines, cancellationToken);
-            if (string.Equals(actionMode, "draft-save", StringComparison.OrdinalIgnoreCase))
-            {
-                var draftStatus = existing?.MaterialStatusId ?? Input.MaterialStatusId ?? StatusJustCreated;
-                await WriteDraftSaveHistoryAsync(savedNo, draftStatus, cancellationToken);
-            }
+            var requestNo = IsEdit ? Id : CreateRequestNoPreview;
+            var savedNo = await _materialRequestService.SaveAsync(requestNo, Input, lines, cancellationToken);
             var isDraftSave = string.Equals(actionMode, "draft-save", StringComparison.OrdinalIgnoreCase);
             var successMessage = isDraftSave
                 ? GetDraftSaveSuccessMessage(draftSaveAction)
@@ -372,6 +398,26 @@ public class MaterialRequestDetailModel : BasePageModel
             ModelState.AddModelError(string.Empty, ex is InvalidOperationException ? ex.Message : $"Cannot save Material Request. {ex.Message}");
             return Page();
         }
+    }
+
+    private async Task<long> ReserveManualRequestNoAsync(CancellationToken cancellationToken)
+    {
+        const string sql = "EXEC dbo.AutoRequestNo";
+        await using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        await conn.OpenAsync(cancellationToken);
+        await using var cmd = new SqlCommand(sql, conn);
+        var value = await cmd.ExecuteScalarAsync(cancellationToken);
+        return Convert.ToInt64(value ?? 0L);
+    }
+
+    private async Task<DateTime> GetLegacyServerDateAsync(CancellationToken cancellationToken)
+    {
+        const string sql = "EXEC dbo.HaigetDate";
+        await using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        await conn.OpenAsync(cancellationToken);
+        await using var cmd = new SqlCommand(sql, conn);
+        var value = await cmd.ExecuteScalarAsync(cancellationToken);
+        return value == null || value == DBNull.Value ? DateTime.Now : Convert.ToDateTime(value);
     }
 
 
@@ -438,7 +484,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
         try
         {
-            var savedNo = await _materialRequestService.SaveDetailLinesAsync(Id.Value, lines, cancellationToken);
+            var savedNo = await _materialRequestService.SavePurchaserEditableLinesAsync(Id.Value, lines, cancellationToken);
             return new JsonResult(new
             {
                 success = true,
@@ -460,10 +506,9 @@ public class MaterialRequestDetailModel : BasePageModel
         }
     }
 
-    public Task<IActionResult> OnPostIssue(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostIssue(CancellationToken cancellationToken)
     {
-        WarningMessage = "Issue is handled in another business flow and is not available in Material Request.";
-        return Task.FromResult<IActionResult>(RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id)));
+        return await HandleWorkflowActionAsync(MaterialRequestWorkflowAction.Issue, cancellationToken);
     }
 
     public async Task<IActionResult> OnPostReject(CancellationToken cancellationToken)
@@ -518,6 +563,9 @@ public class MaterialRequestDetailModel : BasePageModel
         await LoadDraftCreatorAsync(Id.Value, cancellationToken);
 
         var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
+        var autoHeadApproveOnSubmit = action == MaterialRequestWorkflowAction.Submit
+            && currentStatus == StatusJustCreated
+            && ShouldAutoHeadApproveOwnDraft(existing);
         PagePerm = GetUserPermissions();
         var isAuto = existing.IsAuto;
         if (action == MaterialRequestWorkflowAction.Submit && !CanUpdateDraftMaterialRequest())
@@ -525,7 +573,7 @@ public class MaterialRequestDetailModel : BasePageModel
             WarningMessage = "You do not have permission to submit this draft.";
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
         }
-        var transition = ResolveTransition(action, currentStatus, isAuto, _dataScope.IsHeadDept);
+        var transition = ResolveTransition(action, currentStatus, isAuto, autoHeadApproveOnSubmit);
         if (transition is null)
         {
             WarningMessage = "Invalid workflow action for current status.";
@@ -550,8 +598,8 @@ public class MaterialRequestDetailModel : BasePageModel
                     transition.PostPr,
                     cancellationToken);
 
-                await WriteWorkflowHistoryAsync(action, currentStatus, transition, Id.Value, cancellationToken);
-                TryQueueWorkflowNotifyEmail(action, currentStatus, existing, isAuto, Array.Empty<MaterialRequestLineDto>(), _dataScope.IsHeadDept);
+                await WriteWorkflowHistoryAsync(action, currentStatus, transition, Id.Value, cancellationToken, autoHeadApproveOnSubmit);
+                TryQueueWorkflowNotifyEmail(action, currentStatus, existing, isAuto, Array.Empty<MaterialRequestLineDto>(), autoHeadApproveOnSubmit);
                 SuccessMessage = transition.SuccessMessage;
                 return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
             }
@@ -560,11 +608,6 @@ public class MaterialRequestDetailModel : BasePageModel
             if (action == MaterialRequestWorkflowAction.Approve && currentStatus == StatusHeadDeptApproved)
             {
                 purchaserLines = await _materialRequestService.GetLinesAsync(Id.Value, cancellationToken);
-                if (isAuto || !HasPositiveBuyLines(purchaserLines))
-                {
-                    transition.ApprovalEnd = true;
-                    transition.PostPr = false;
-                }
             }
 
             await _materialRequestService.UpdateWorkflowHeaderAsync(
@@ -575,8 +618,8 @@ public class MaterialRequestDetailModel : BasePageModel
                 transition.PostPr,
                 cancellationToken);
 
-            await WriteWorkflowHistoryAsync(action, currentStatus, transition, Id.Value, cancellationToken);
-            TryQueueWorkflowNotifyEmail(action, currentStatus, existing, isAuto, purchaserLines, false);
+            await WriteWorkflowHistoryAsync(action, currentStatus, transition, Id.Value, cancellationToken, autoHeadApproveOnSubmit);
+            TryQueueWorkflowNotifyEmail(action, currentStatus, existing, isAuto, purchaserLines, autoHeadApproveOnSubmit);
             SuccessMessage = transition.SuccessMessage;
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
         }
@@ -729,7 +772,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
         try
         {
-            var savedNo = await _materialRequestService.SaveDetailLinesAsync(Id.Value, lines, cancellationToken);
+            var savedNo = await _materialRequestService.SaveCalculatedLinesAsync(Id.Value, lines, cancellationToken);
             SuccessMessage = "Calculate completed.";
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(savedNo));
         }
@@ -770,7 +813,11 @@ public class MaterialRequestDetailModel : BasePageModel
         }
     }
 
-    public async Task<IActionResult> OnGetSearchItems(string? keyword, bool checkBalanceInStore = false, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> OnGetSearchItems(
+        string? keyword,
+        bool checkBalanceInStore = false,
+        int? storeGroupId = null,
+        CancellationToken cancellationToken = default)
     {
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
         PagePerm = new PagePermissions();
@@ -781,11 +828,11 @@ public class MaterialRequestDetailModel : BasePageModel
             return new JsonResult(new { success = false, message = "Access denied." });
         }
 
-        var rows = await _materialRequestService.SearchItemsAsync(keyword, checkBalanceInStore, cancellationToken);
+        var rows = await _materialRequestService.SearchItemsAsync(keyword, checkBalanceInStore, storeGroupId, cancellationToken);
         return new JsonResult(new { success = true, data = rows });
     }
 
-    public async Task<IActionResult> OnPostCreateItem([FromForm] string? itemName, [FromForm] string? unit, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostCreateItem([FromForm] long? requestNo, [FromForm] string? itemName, [FromForm] string? unit, [FromForm] decimal? orderQty, CancellationToken cancellationToken)
     {
         int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
         PagePerm = new PagePermissions();
@@ -815,15 +862,454 @@ public class MaterialRequestDetailModel : BasePageModel
             return new JsonResult(new { success = false, message = "Access denied." });
         }
 
+        if (string.IsNullOrWhiteSpace(itemName))
+        {
+            return new JsonResult(new { success = false, message = "Item Name is required." });
+        }
+
         try
         {
-            var created = await _materialRequestService.CreateQuickItemAsync(itemName ?? string.Empty, unit, cancellationToken);
+            var resolvedRequestNo = requestNo
+                ?? (IsEdit ? Id : CreateRequestNoPreview);
+            if (!resolvedRequestNo.HasValue || resolvedRequestNo.Value <= 0)
+            {
+                return new JsonResult(new { success = false, message = "Material Request number is required." });
+            }
+
+            var created = await CreateNewItemViaTempRequestAsync(
+                resolvedRequestNo.Value,
+                itemName ?? string.Empty,
+                unit,
+                orderQty.HasValue && orderQty.Value > 0 ? orderQty.Value : 1m,
+                cancellationToken);
             return new JsonResult(new { success = true, data = created });
         }
         catch (Exception ex)
         {
             return new JsonResult(new { success = false, message = ex.Message });
         }
+    }
+
+    public async Task<IActionResult> OnGetReport(long id, bool modal = false, CancellationToken cancellationToken = default)
+    {
+        PagePerm = GetUserPermissions();
+        await LoadUserScopeAsync(cancellationToken);
+        if (!CanAccessPage())
+        {
+            return Forbid();
+        }
+
+        if (id <= 0)
+        {
+            return RedirectToPage("./Index");
+        }
+
+        var detail = await _materialRequestService.GetDetailAsync(id, cancellationToken);
+        if (detail is null)
+        {
+            TempData["ErrorMessage"] = "Material Request not found.";
+            return RedirectToPage("./Index");
+        }
+
+        if (StoreGroupLocked && _dataScope.StoreGroup.HasValue && detail.StoreGroup != _dataScope.StoreGroup)
+        {
+            return Forbid();
+        }
+
+        if ((detail.MaterialStatusId ?? StatusJustCreated) < StatusHeadDeptApproved)
+        {
+            return Content("This request have to check by Head Dept first. Ok!", "text/plain; charset=utf-8");
+        }
+
+        var html = await BuildMaterialRequestReportHtmlAsync(detail, cancellationToken, includeDocumentWrapper: !modal);
+        return Content(html, "text/html; charset=utf-8");
+    }
+
+    private async Task<MaterialRequestItemLookupDto> CreateNewItemViaTempRequestAsync(
+        long requestNo,
+        string itemName,
+        string? unit,
+        decimal orderQty,
+        CancellationToken cancellationToken)
+    {
+        var connectionString = _config.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException("Missing connection string: DefaultConnection");
+
+        await using var conn = new SqlConnection(connectionString);
+        await conn.OpenAsync(cancellationToken);
+
+        try
+        {
+            await ClearTempRequestItemsAsync(conn, requestNo, cancellationToken);
+
+            var itemCode = await GenerateLegacyTempItemCodeAsync(conn, cancellationToken);
+
+            const string insertTempSql = @"
+                INSERT INTO dbo.TMP_REQUEST_MR
+                (
+                    REQUEST_NO, ITEMCODE, ITEMNAME, UNIT, S_ORDER
+                )
+                VALUES
+                (
+                    @RequestNo, @ItemCode, @ItemName, @Unit, @OrderQty
+                )";
+
+            await using (var insertCmd = new SqlCommand(insertTempSql, conn))
+            {
+                AddDecimal18_0Param(insertCmd, "@RequestNo", requestNo);
+                Helper.AddParameter(insertCmd, "@ItemCode", itemCode, SqlDbType.VarChar, 20);
+                Helper.AddParameter(insertCmd, "@ItemName", itemName.Trim(), SqlDbType.VarChar, 150);
+                Helper.AddParameter(insertCmd, "@Unit", string.IsNullOrWhiteSpace(unit) ? null : unit.Trim(), SqlDbType.VarChar, 10);
+                AddDecimal18_2Param(insertCmd, "@OrderQty", orderQty);
+                await insertCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            const string execSql = "EXEC dbo.HaiUpdateNewItem @RequestNo";
+            await using (var execCmd = new SqlCommand(execSql, conn))
+            {
+                AddDecimal18_0Param(execCmd, "@RequestNo", requestNo);
+                await execCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            var savedItem = await LoadCreatedTempRequestItemAsync(conn, requestNo, itemCode, cancellationToken);
+            if (savedItem is null)
+            {
+                throw new InvalidOperationException("New item row was not saved.");
+            }
+
+            savedItem.ItemName = itemName.Trim();
+            return new MaterialRequestItemLookupDto
+            {
+                Id = savedItem.Id,
+                ItemCode = savedItem.ItemCode,
+                ItemName = savedItem.ItemName,
+                Unit = savedItem.Unit,
+                OrderQty = savedItem.OrderQty,
+                NotReceipt = savedItem.NotReceipt,
+                InStock = savedItem.InStock,
+                AccIn = savedItem.AccIn,
+                Buy = savedItem.Buy,
+                NormQty = savedItem.NormQty,
+                NormMain = savedItem.NormMain,
+                Issued = savedItem.Issued,
+                NewItem = savedItem.NewItem,
+                ManualCheck = savedItem.ManualCheck,
+                TempStore = savedItem.TempStore
+            };
+        }
+        catch
+        {
+            try
+            {
+                await ClearTempRequestItemsAsync(conn, requestNo, CancellationToken.None);
+            }
+            catch
+            {
+                // Best effort cleanup only.
+            }
+
+            throw;
+        }
+    }
+
+    private static async Task<MaterialRequestItemLookupDto?> LoadCreatedTempRequestItemAsync(
+        SqlConnection conn,
+        long requestNo,
+        string itemCode,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            SELECT TOP 1
+                d.ID,
+                d.ITEMCODE,
+                ISNULL(d.UNIT, '') AS UNIT,
+                CAST(ISNULL(d.NEW_ORDER, 0) AS decimal(18,2)) AS NEW_ORDER,
+                CAST(ISNULL(d.NOT_RECEIPT, 0) AS decimal(18,2)) AS NOT_RECEIPT,
+                CAST(ISNULL(d.INSTOCK, 0) AS decimal(18,2)) AS INSTOCK,
+                CAST(ISNULL(d.acctualyInventory, 0) AS decimal(18,2)) AS acctualyInventory,
+                CAST(ISNULL(d.BUY, 0) AS decimal(18,2)) AS BUY,
+                CAST(ISNULL(d.NORM_Q, 0) AS decimal(18,2)) AS NORM_Q,
+                CAST(ISNULL(d.NORM_Q_MAIN, 0) AS decimal(18,2)) AS NORM_Q_MAIN,
+                CAST(ISNULL(d.ISSUED, 0) AS decimal(18,2)) AS ISSUED,
+                ISNULL(d.NEW_ITEM, 0) AS NEW_ITEM,
+                ISNULL(d.ManualCheck, 0) AS ManualCheck,
+                CAST(ISNULL(d.TempStore, 0) AS decimal(18,2)) AS TempStore
+            FROM dbo.MATERIAL_REQUEST_DETAIL d
+            WHERE d.REQUEST_NO = @RequestNo
+              AND d.ITEMCODE = @ItemCode
+            ORDER BY d.ID DESC";
+
+        await using var cmd = new SqlCommand(sql, conn);
+        AddDecimal18_0Param(cmd, "@RequestNo", requestNo);
+        Helper.AddParameter(cmd, "@ItemCode", itemCode, SqlDbType.VarChar, 20);
+
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new MaterialRequestItemLookupDto
+        {
+            Id = reader.IsDBNull(0) ? null : Convert.ToInt32(reader[0]),
+            ItemCode = reader.IsDBNull(1) ? string.Empty : reader.GetString(1).Trim(),
+            Unit = reader.IsDBNull(2) ? string.Empty : reader.GetString(2).Trim(),
+            OrderQty = reader.IsDBNull(3) ? 0m : reader.GetDecimal(3),
+            NotReceipt = reader.IsDBNull(4) ? 0m : reader.GetDecimal(4),
+            InStock = reader.IsDBNull(5) ? 0m : reader.GetDecimal(5),
+            AccIn = reader.IsDBNull(6) ? 0m : reader.GetDecimal(6),
+            Buy = reader.IsDBNull(7) ? 0m : reader.GetDecimal(7),
+            NormQty = reader.IsDBNull(8) ? 0m : reader.GetDecimal(8),
+            NormMain = reader.IsDBNull(9) ? 0m : reader.GetDecimal(9),
+            Issued = reader.IsDBNull(10) ? 0m : reader.GetDecimal(10),
+            NewItem = !reader.IsDBNull(11) && Convert.ToBoolean(reader[11]),
+            ManualCheck = !reader.IsDBNull(12) && Convert.ToBoolean(reader[12]),
+            TempStore = reader.IsDBNull(13) ? 0m : reader.GetDecimal(13)
+        };
+    }
+
+    private static async Task<string> GenerateLegacyTempItemCodeAsync(SqlConnection conn, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            SELECT
+                CONVERT(varchar(4), DATEPART(year, GETDATE()))
+                + '/' + CONVERT(varchar(2), DATEPART(month, GETDATE()))
+                + '/' + CONVERT(varchar(2), DATEPART(day, GETDATE()))
+                + '/' + CONVERT(varchar(2), DATEPART(hour, GETDATE()))
+                + '/' + CONVERT(varchar(2), DATEPART(minute, GETDATE()))
+                + '/' + CONVERT(varchar(2), DATEPART(second, GETDATE()))";
+
+        await using var cmd = new SqlCommand(sql, conn);
+        var value = await cmd.ExecuteScalarAsync(cancellationToken);
+        return (value?.ToString() ?? string.Empty).Trim();
+    }
+
+    private static async Task ClearTempRequestItemsAsync(SqlConnection conn, long requestNo, CancellationToken cancellationToken)
+    {
+        const string sql = "DELETE FROM dbo.TMP_REQUEST_MR WHERE REQUEST_NO = @RequestNo";
+        await using var cmd = new SqlCommand(sql, conn);
+        AddDecimal18_0Param(cmd, "@RequestNo", requestNo);
+        await cmd.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private async Task<string> BuildMaterialRequestReportHtmlAsync(
+        MaterialRequestDetailDto detail,
+        CancellationToken cancellationToken,
+        bool includeDocumentWrapper = true)
+    {
+        var title = detail.IsAuto ? "Material Request Auto Report" : "Material Request Report";
+        var builder = new StringBuilder();
+        if (includeDocumentWrapper)
+        {
+            builder.AppendLine("<!DOCTYPE html>");
+            builder.AppendLine("<html><head><meta charset=\"utf-8\" />");
+            builder.AppendLine($"<title>{WebUtility.HtmlEncode(title)}</title>");
+        }
+
+        builder.AppendLine("<style>");
+        builder.AppendLine("body,.mr-report-host{font-family:Arial,sans-serif;color:#222;}");
+        builder.AppendLine("body{margin:20px;}");
+        builder.AppendLine(".mr-report-host{padding:20px;}");
+        builder.AppendLine(".mr-report-title{text-align:center;font-size:22px;font-weight:700;margin-bottom:16px;}");
+        builder.AppendLine(".mr-report-meta{display:grid;grid-template-columns:160px 1fr;gap:6px 12px;margin-bottom:18px;}");
+        builder.AppendLine(".mr-report-meta div{padding:2px 0;}");
+        builder.AppendLine(".mr-report-host table{width:100%;border-collapse:collapse;font-size:12px;}");
+        builder.AppendLine(".mr-report-host th,.mr-report-host td{border:1px solid #444;padding:6px;vertical-align:top;}");
+        builder.AppendLine(".mr-report-host th{text-align:center;background:#f2f2f2;}");
+        builder.AppendLine(".mr-report-host .text-right{text-align:right;}");
+        builder.AppendLine("@media print{body *{visibility:hidden !important;} #mrReportModal, #mrReportModal *{visibility:visible !important;} #mrReportModal{position:absolute;left:0;top:0;width:100%;margin:0;padding:0;background:#fff !important;} #mrReportModal .modal-dialog{max-width:none !important;width:100% !important;margin:0 !important;} #mrReportModal .modal-header, #mrReportModal .modal-footer{display:none !important;} #mrReportModal .modal-content{border:0 !important;box-shadow:none !important;} #mrReportModal .modal-body{padding:0 !important;overflow:visible !important;} #mrReportContent{padding:0 !important;min-height:auto !important;}}");
+        builder.AppendLine("</style>");
+
+        if (includeDocumentWrapper)
+        {
+            builder.AppendLine("</head><body>");
+        }
+
+        builder.AppendLine("<div class=\"mr-report-host\">");
+        builder.AppendLine($"<div class=\"mr-report-title\">{WebUtility.HtmlEncode(title)}</div>");
+        builder.AppendLine("<div class=\"mr-report-meta\">");
+        builder.AppendLine($"<div><strong>Request No</strong></div><div>{detail.RequestNo}</div>");
+        builder.AppendLine($"<div><strong>Date Create</strong></div><div>{FormatDate(detail.DateCreate)}</div>");
+        builder.AppendLine($"<div><strong>Store Group</strong></div><div>{WebUtility.HtmlEncode(ResolveStoreGroupText(detail.StoreGroup))}</div>");
+        builder.AppendLine($"<div><strong>Description</strong></div><div>{WebUtility.HtmlEncode(detail.AccordingTo ?? string.Empty)}</div>");
+        if (detail.IsAuto)
+        {
+            builder.AppendLine($"<div><strong>From Date</strong></div><div>{FormatDate(detail.FromDate)}</div>");
+            builder.AppendLine($"<div><strong>To Date</strong></div><div>{FormatDate(detail.ToDate)}</div>");
+        }
+
+        builder.AppendLine("</div>");
+
+        if (detail.IsAuto)
+        {
+            var rows = await LoadAutoReportRowsAsync(detail.RequestNo, cancellationToken);
+            builder.AppendLine("<table><thead><tr>");
+            builder.AppendLine("<th>ITEMCODE</th><th>ITEMNAME</th><th>Unit</th><th>Begin.Q</th><th>Receive.Q</th><th>Using.Q</th><th>End.Q</th><th>Norm</th><th>Order</th><th>NotReceive</th><th>In Stock</th><th>Buy</th>");
+            builder.AppendLine("</tr></thead><tbody>");
+
+            foreach (var row in rows)
+            {
+                builder.AppendLine("<tr>");
+                builder.AppendLine($"<td>{WebUtility.HtmlEncode(row.ItemCode)}</td>");
+                builder.AppendLine($"<td>{WebUtility.HtmlEncode(row.ItemName)}</td>");
+                builder.AppendLine($"<td>{WebUtility.HtmlEncode(row.Unit)}</td>");
+                builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.BeginQty)}</td>");
+                builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.ReceiptQty)}</td>");
+                builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.UsingQty)}</td>");
+                builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.EndQty)}</td>");
+                builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.NormQty)}</td>");
+                builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.NewOrder)}</td>");
+                builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.NotReceipt)}</td>");
+                builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.InStock)}</td>");
+                builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.Buy)}</td>");
+                builder.AppendLine("</tr>");
+            }
+        }
+        else
+        {
+            var rows = await LoadNormalReportRowsAsync(detail.RequestNo, cancellationToken);
+            builder.AppendLine("<table><thead><tr>");
+            builder.AppendLine("<th>ITEMCODE</th><th>ITEMNAME</th><th>Unit</th><th>Order</th><th>Issued</th><th>In Stock</th><th>Buy</th><th>Note</th>");
+            builder.AppendLine("</tr></thead><tbody>");
+
+            foreach (var row in rows)
+            {
+                builder.AppendLine("<tr>");
+                builder.AppendLine($"<td>{WebUtility.HtmlEncode(row.ItemCode)}</td>");
+                builder.AppendLine($"<td>{WebUtility.HtmlEncode(row.ItemName)}</td>");
+                builder.AppendLine($"<td>{WebUtility.HtmlEncode(row.Unit)}</td>");
+                builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.NewOrder)}</td>");
+                builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.Issued)}</td>");
+                builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.InStock)}</td>");
+                builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.Buy)}</td>");
+                builder.AppendLine($"<td>{WebUtility.HtmlEncode(row.Note)}</td>");
+                builder.AppendLine("</tr>");
+            }
+        }
+
+        builder.AppendLine("</tbody></table>");
+        builder.AppendLine("</div>");
+
+        if (includeDocumentWrapper)
+        {
+            builder.AppendLine("</body></html>");
+        }
+
+        return builder.ToString();
+    }
+
+    private async Task<List<MaterialRequestAutoReportRow>> LoadAutoReportRowsAsync(long requestNo, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            SELECT
+                ISNULL(ITEMCODE, '') AS ITEMCODE,
+                ISNULL(ItemName, '') AS ItemName,
+                ISNULL(UNIT, '') AS UNIT,
+                CAST(ISNULL(BEGIN_Q, 0) AS decimal(18,2)) AS BEGIN_Q,
+                CAST(ISNULL(RECEIPT_Q, 0) AS decimal(18,2)) AS RECEIPT_Q,
+                CAST(ISNULL(USING_Q, 0) AS decimal(18,2)) AS USING_Q,
+                CAST(ISNULL(END_Q, 0) AS decimal(18,2)) AS END_Q,
+                CAST(ISNULL(NORM_Q, 0) AS decimal(18,2)) AS NORM_Q,
+                CAST(ISNULL(NEW_ORDER, 0) AS decimal(18,2)) AS NEW_ORDER,
+                CAST(ISNULL(NOT_RECEIPT, 0) AS decimal(18,2)) AS NOT_RECEIPT,
+                CAST(ISNULL(INSTOCK, 0) AS decimal(18,2)) AS INSTOCK,
+                CAST(ISNULL(BUY, 0) AS decimal(18,2)) AS BUY
+            FROM dbo.ViewHaiRequestMR
+            WHERE REQUEST_NO = @RequestNo
+            ORDER BY ITEMCODE";
+
+        var rows = new List<MaterialRequestAutoReportRow>();
+        await using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        await conn.OpenAsync(cancellationToken);
+        await using var cmd = new SqlCommand(sql, conn);
+        Helper.AddParameter(cmd, "@RequestNo", requestNo, SqlDbType.Decimal);
+        await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await rd.ReadAsync(cancellationToken))
+        {
+            rows.Add(new MaterialRequestAutoReportRow
+            {
+                ItemCode = rd.IsDBNull(0) ? string.Empty : Convert.ToString(rd[0]) ?? string.Empty,
+                ItemName = rd.IsDBNull(1) ? string.Empty : Convert.ToString(rd[1]) ?? string.Empty,
+                Unit = rd.IsDBNull(2) ? string.Empty : Convert.ToString(rd[2]) ?? string.Empty,
+                BeginQty = rd.IsDBNull(3) ? 0m : Convert.ToDecimal(rd[3]),
+                ReceiptQty = rd.IsDBNull(4) ? 0m : Convert.ToDecimal(rd[4]),
+                UsingQty = rd.IsDBNull(5) ? 0m : Convert.ToDecimal(rd[5]),
+                EndQty = rd.IsDBNull(6) ? 0m : Convert.ToDecimal(rd[6]),
+                NormQty = rd.IsDBNull(7) ? 0m : Convert.ToDecimal(rd[7]),
+                NewOrder = rd.IsDBNull(8) ? 0m : Convert.ToDecimal(rd[8]),
+                NotReceipt = rd.IsDBNull(9) ? 0m : Convert.ToDecimal(rd[9]),
+                InStock = rd.IsDBNull(10) ? 0m : Convert.ToDecimal(rd[10]),
+                Buy = rd.IsDBNull(11) ? 0m : Convert.ToDecimal(rd[11])
+            });
+        }
+
+        return rows;
+    }
+
+    private async Task<List<MaterialRequestNormalReportRow>> LoadNormalReportRowsAsync(long requestNo, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+            SELECT
+                ISNULL(ITEMCODE, '') AS ITEMCODE,
+                ISNULL(ItemName, '') AS ItemName,
+                ISNULL(UNIT, '') AS UNIT,
+                CAST(ISNULL(NEW_ORDER, 0) AS decimal(18,2)) AS NEW_ORDER,
+                CAST(ISNULL(ISSUED, 0) AS decimal(18,2)) AS ISSUED,
+                CAST(ISNULL(INSTOCK, 0) AS decimal(18,2)) AS INSTOCK,
+                CAST(ISNULL(BUY, 0) AS decimal(18,2)) AS BUY,
+                ISNULL(NOTE, '') AS NOTE
+            FROM dbo.VIEWOrder
+            WHERE REQUEST_NO = @RequestNo
+            ORDER BY ITEMCODE";
+
+        var rows = new List<MaterialRequestNormalReportRow>();
+        await using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        await conn.OpenAsync(cancellationToken);
+        await using var cmd = new SqlCommand(sql, conn);
+        Helper.AddParameter(cmd, "@RequestNo", requestNo, SqlDbType.Decimal);
+        await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await rd.ReadAsync(cancellationToken))
+        {
+            rows.Add(new MaterialRequestNormalReportRow
+            {
+                ItemCode = rd.IsDBNull(0) ? string.Empty : Convert.ToString(rd[0]) ?? string.Empty,
+                ItemName = rd.IsDBNull(1) ? string.Empty : Convert.ToString(rd[1]) ?? string.Empty,
+                Unit = rd.IsDBNull(2) ? string.Empty : Convert.ToString(rd[2]) ?? string.Empty,
+                NewOrder = rd.IsDBNull(3) ? 0m : Convert.ToDecimal(rd[3]),
+                Issued = rd.IsDBNull(4) ? 0m : Convert.ToDecimal(rd[4]),
+                InStock = rd.IsDBNull(5) ? 0m : Convert.ToDecimal(rd[5]),
+                Buy = rd.IsDBNull(6) ? 0m : Convert.ToDecimal(rd[6]),
+                Note = rd.IsDBNull(7) ? string.Empty : Convert.ToString(rd[7]) ?? string.Empty
+            });
+        }
+
+        return rows;
+    }
+
+    private static string FormatDate(DateTime? value)
+    {
+        return value.HasValue ? value.Value.ToString("dd/MM/yyyy") : string.Empty;
+    }
+
+    private static string FormatNumber(decimal value)
+    {
+        return value.ToString("0.##");
+    }
+
+    private static void AddDecimal18_0Param(SqlCommand cmd, string name, decimal value)
+    {
+        var param = cmd.Parameters.Add(name, SqlDbType.Decimal);
+        param.Precision = 18;
+        param.Scale = 0;
+        param.Value = value;
+    }
+
+    private static void AddDecimal18_2Param(SqlCommand cmd, string name, decimal value)
+    {
+        var param = cmd.Parameters.Add(name, SqlDbType.Decimal);
+        param.Precision = 18;
+        param.Scale = 2;
+        param.Value = value;
     }
 
     // ==========================================
@@ -976,6 +1462,12 @@ public class MaterialRequestDetailModel : BasePageModel
                 line.NotReceipt = snapshot.NotReceipt;
                 line.InStock = snapshot.InStock;
                 line.AccIn = snapshot.AccIn;
+                line.NormQty = snapshot.NormQty;
+                line.NormMain = snapshot.NormMain;
+                line.Issued = snapshot.Issued;
+                line.NewItem = snapshot.NewItem;
+                line.ManualCheck = snapshot.ManualCheck;
+                line.TempStore = snapshot.TempStore;
                 if (!preserveEditableBuy)
                 {
                     line.Buy = snapshot.Buy;
@@ -991,6 +1483,12 @@ public class MaterialRequestDetailModel : BasePageModel
                 line.NotReceipt = 0m;
                 line.InStock = 0m;
                 line.AccIn = 0m;
+                line.NormQty = line.NormQty ?? 0m;
+                line.NormMain = line.NormMain ?? 0m;
+                line.Issued = line.Issued ?? 0m;
+                line.NewItem = line.NewItem;
+                line.ManualCheck = line.ManualCheck;
+                line.TempStore = line.TempStore ?? 0m;
                 if (!preserveEditableBuy)
                 {
                     line.Buy = 0m;
@@ -1055,6 +1553,7 @@ public class MaterialRequestDetailModel : BasePageModel
                 InStock = line.InStock ?? 0,
                 AccIn = line.AccIn ?? 0,
                 Buy = line.Buy ?? 0,
+                NormQty = line.NormQty ?? 0,
                 NormMain = line.NormMain ?? 0,
                 Price = line.Price ?? 0,
                 Note = note,
@@ -1109,9 +1608,10 @@ public class MaterialRequestDetailModel : BasePageModel
         int currentStatus,
         MaterialRequestWorkflowTransition transition,
         long requestNo,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool autoHeadApproveOnSubmit = false)
     {
-        var note = ResolveWorkflowHistoryNote(action, currentStatus);
+        var note = ResolveWorkflowHistoryNote(action, currentStatus, autoHeadApproveOnSubmit);
         if (string.IsNullOrWhiteSpace(note))
         {
             return;
@@ -1123,29 +1623,22 @@ public class MaterialRequestDetailModel : BasePageModel
             note,
             typeEffective,
             User.Identity?.Name ?? string.Empty,
-            cancellationToken);
-    }
-
-    /// <summary>
-    /// Ghi lich su cho luong draft save / update MR.
-    /// </summary>
-    private async Task WriteDraftSaveHistoryAsync(long requestNo, int currentStatus, CancellationToken cancellationToken)
-    {
-        await _materialRequestService.InsertSuperRequestAsync(
-            requestNo,
-            "Update MR",
-            currentStatus,
-            User.Identity?.Name ?? string.Empty,
+            GetCurrentEmployeeId(),
             cancellationToken);
     }
 
     /// <summary>
     /// Map action + trang thai hien tai sang noi dung note trong workflow history.
     /// </summary>
-    private static string? ResolveWorkflowHistoryNote(MaterialRequestWorkflowAction action, int currentStatus)
+    private static string? ResolveWorkflowHistoryNote(MaterialRequestWorkflowAction action, int currentStatus, bool autoHeadApproveOnSubmit = false)
     {
         if (action == MaterialRequestWorkflowAction.Submit)
         {
+            if (autoHeadApproveOnSubmit)
+            {
+                return "Head approve";
+            }
+
             return "Submit";
         }
 
@@ -1154,16 +1647,15 @@ public class MaterialRequestDetailModel : BasePageModel
             return currentStatus switch
             {
                 StatusSubmittedToHead => "Head approve",
-                StatusHeadDeptApproved => "Purchaser approve",
+                StatusHeadDeptApproved => "Purcahser check",
                 StatusPurchaserChecked => "CFO approve",
-                StatusCfoApproved => "Collected to PR",
                 _ => null
             };
         }
 
         if (action == MaterialRequestWorkflowAction.Reject)
         {
-            return "Reject request";
+            return "Reject";
         }
 
         return null;
@@ -1190,6 +1682,12 @@ public class MaterialRequestDetailModel : BasePageModel
         }
 
         _dataScope = await _materialRequestService.GetEmployeeScopeAsync(User.Identity?.Name, cancellationToken);
+    }
+
+    private int? GetCurrentEmployeeId()
+    {
+        var raw = User.FindFirst("EmployeeID")?.Value;
+        return int.TryParse(raw, out var employeeId) && employeeId > 0 ? employeeId : null;
     }
 
     /// <summary>
@@ -1401,7 +1899,7 @@ public class MaterialRequestDetailModel : BasePageModel
         {
             StatusSubmittedToHead => _dataScope.IsHeadDept,
             StatusHeadDeptApproved => _dataScope.IsPurchaser,
-            StatusPurchaserChecked => !isAuto && _dataScope.IsCFO,
+            StatusPurchaserChecked => _dataScope.IsCFO,
             _ => false
         };
     }
@@ -1422,7 +1920,7 @@ public class MaterialRequestDetailModel : BasePageModel
         {
             StatusSubmittedToHead => _dataScope.IsHeadDept,
             StatusHeadDeptApproved => _dataScope.IsPurchaser,
-            StatusPurchaserChecked => !isAuto && _dataScope.IsCFO,
+            StatusPurchaserChecked => _dataScope.IsCFO,
             _ => false
         };
     }
@@ -1459,7 +1957,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
         if (action == MaterialRequestWorkflowAction.Issue)
         {
-            return currentStatus == StatusCollectedToPr;
+            return CanIssue;
         }
 
         if (action == MaterialRequestWorkflowAction.Reject)
@@ -1468,6 +1966,21 @@ public class MaterialRequestDetailModel : BasePageModel
         }
 
         return false;
+    }
+
+    private bool ShouldAutoHeadApproveOwnDraft(MaterialRequestDetailDto header)
+    {
+        if (!_dataScope.IsHeadDept)
+        {
+            return false;
+        }
+
+        if (!_dataScope.StoreGroup.HasValue || !header.StoreGroup.HasValue)
+        {
+            return false;
+        }
+
+        return _dataScope.StoreGroup.Value == header.StoreGroup.Value;
     }
 
     /// <summary>
@@ -1479,9 +1992,9 @@ public class MaterialRequestDetailModel : BasePageModel
         MaterialRequestDetailDto header,
         bool isAuto,
         IReadOnlyList<MaterialRequestLineDto> lines,
-        bool submitAsHeadDept)
+        bool autoHeadApproveOnSubmit = false)
     {
-        var notifyRequest = BuildWorkflowNotifyRequest(action, currentStatus, header, isAuto, lines, submitAsHeadDept);
+        var notifyRequest = BuildWorkflowNotifyRequest(action, currentStatus, header, isAuto, lines, autoHeadApproveOnSubmit);
         if (notifyRequest is null)
         {
             return;
@@ -1508,13 +2021,11 @@ public class MaterialRequestDetailModel : BasePageModel
         MaterialRequestDetailDto header,
         bool isAuto,
         IReadOnlyList<MaterialRequestLineDto> lines,
-        bool submitAsHeadDept)
+        bool autoHeadApproveOnSubmit = false)
     {
-        if (action == MaterialRequestWorkflowAction.Submit && currentStatus == StatusJustCreated)
+        if (action == MaterialRequestWorkflowAction.Submit && currentStatus == StatusJustCreated && autoHeadApproveOnSubmit)
         {
-            var recipients = submitAsHeadDept
-                ? GetRecipientsByEmployeeFlag("IsPurchaser")
-                : GetHeadDeptRecipientsByStoreGroup(header.StoreGroup);
+            var recipients = GetRecipientsByEmployeeFlag("IsPurchaser");
             if (recipients.Count == 0)
             {
                 return null;
@@ -1523,15 +2034,29 @@ public class MaterialRequestDetailModel : BasePageModel
             return CreateWorkflowNotifyRequest(
                 header,
                 recipients,
-                submitAsHeadDept
-                    ? "[Material Request] Waiting for Purchaser check"
-                    : "[Material Request] Waiting for Head Dept approval",
+                "[Material Request] Waiting for Purchaser check",
+                "MATERIAL REQUEST",
+                "#007bff",
+                "has been approved by Head Dept and is waiting for your check.",
+                "Head approval");
+        }
+
+        if (action == MaterialRequestWorkflowAction.Submit && currentStatus == StatusJustCreated)
+        {
+            var recipients = GetHeadDeptRecipientsByStoreGroup(header.StoreGroup);
+            if (recipients.Count == 0)
+            {
+                return null;
+            }
+
+            return CreateWorkflowNotifyRequest(
+                header,
+                recipients,
+                "[Material Request] Waiting for Head Dept approval",
                 "MATERIAL REQUEST",
                 "#17a2b8",
-                submitAsHeadDept
-                    ? "has been submitted and approved by Head Dept and is waiting for your check."
-                    : "has been submitted and is waiting for your approval.",
-                submitAsHeadDept ? "Head approval" : "Submit");
+                "has been submitted and is waiting for your approval.",
+                "Submit");
         }
 
         if (action == MaterialRequestWorkflowAction.Approve && currentStatus == StatusSubmittedToHead)
@@ -1872,17 +2397,16 @@ public class MaterialRequestDetailModel : BasePageModel
         MaterialRequestWorkflowAction action,
         int currentStatus,
         bool isAuto,
-        bool submitAsHeadDept)
+        bool autoHeadApproveOnSubmit = false)
     {
         if (action == MaterialRequestWorkflowAction.Submit && currentStatus == StatusJustCreated)
         {
-            // Head Dept submit is treated as an immediate head approval and skips status 0.
-            if (submitAsHeadDept)
+            if (autoHeadApproveOnSubmit)
             {
                 return new MaterialRequestWorkflowTransition(
                         StatusHeadDeptApproved,
-                        "Submitted successfully. Head Dept approval completed.",
-                        true,
+                        "Approved by Head Dept.",
+                        null,
                         null,
                         null);
             }
@@ -1890,9 +2414,9 @@ public class MaterialRequestDetailModel : BasePageModel
             return new MaterialRequestWorkflowTransition(
                     StatusSubmittedToHead,
                     "Submitted successfully. Waiting for Head Dept approval.",
-                    false,
-                    false,
-                    false);
+                    null,
+                    null,
+                    null);
         }
 
         if (action == MaterialRequestWorkflowAction.Approve && currentStatus == StatusSubmittedToHead)
@@ -1900,7 +2424,7 @@ public class MaterialRequestDetailModel : BasePageModel
             return new MaterialRequestWorkflowTransition(
                     StatusHeadDeptApproved,
                     "Approved by Head Dept.",
-                    true,
+                    null,
                     null,
                     null);
         }
@@ -1917,11 +2441,6 @@ public class MaterialRequestDetailModel : BasePageModel
 
         if (action == MaterialRequestWorkflowAction.Approve && currentStatus == StatusPurchaserChecked)
         {
-            if (isAuto)
-            {
-                return null;
-            }
-
             return new MaterialRequestWorkflowTransition(
                     StatusCfoApproved,
                     "Approved by CFO.",
@@ -1930,17 +2449,8 @@ public class MaterialRequestDetailModel : BasePageModel
                     null);
         }
 
-        if (action == MaterialRequestWorkflowAction.Approve && currentStatus == StatusCfoApproved)
-        {
-            return new MaterialRequestWorkflowTransition(
-                    StatusCollectedToPr,
-                    "Collected to PR.",
-                    null,
-                    true,
-                    true);
-        }
-
-        if (action == MaterialRequestWorkflowAction.Issue && currentStatus == StatusCollectedToPr)
+        if (action == MaterialRequestWorkflowAction.Issue &&
+            (currentStatus == StatusPurchaserChecked || currentStatus == StatusCfoApproved))
         {
             return new MaterialRequestWorkflowTransition(
                     StatusIssued,
@@ -1953,15 +2463,14 @@ public class MaterialRequestDetailModel : BasePageModel
         if (action == MaterialRequestWorkflowAction.Reject &&
             (currentStatus == StatusSubmittedToHead ||
              currentStatus == StatusHeadDeptApproved ||
-             (currentStatus == StatusPurchaserChecked && !isAuto) ||
-             currentStatus == StatusCfoApproved))
+             currentStatus == StatusPurchaserChecked))
         {
             return new MaterialRequestWorkflowTransition(
                     StatusRejected,
                     "Material Request rejected.",
                     null,
-                    true,
-                    false);
+                    null,
+                    null);
         }
 
         return null;
@@ -2078,4 +2587,32 @@ internal sealed class MaterialRequestWorkflowRecipientViewModel
 {
     public string Email { get; set; } = string.Empty;
     public string GreetingLabel { get; set; } = string.Empty;
+}
+
+internal sealed class MaterialRequestAutoReportRow
+{
+    public string ItemCode { get; set; } = string.Empty;
+    public string ItemName { get; set; } = string.Empty;
+    public string Unit { get; set; } = string.Empty;
+    public decimal BeginQty { get; set; }
+    public decimal ReceiptQty { get; set; }
+    public decimal UsingQty { get; set; }
+    public decimal EndQty { get; set; }
+    public decimal NormQty { get; set; }
+    public decimal NewOrder { get; set; }
+    public decimal NotReceipt { get; set; }
+    public decimal InStock { get; set; }
+    public decimal Buy { get; set; }
+}
+
+internal sealed class MaterialRequestNormalReportRow
+{
+    public string ItemCode { get; set; } = string.Empty;
+    public string ItemName { get; set; } = string.Empty;
+    public string Unit { get; set; } = string.Empty;
+    public decimal NewOrder { get; set; }
+    public decimal Issued { get; set; }
+    public decimal InStock { get; set; }
+    public decimal Buy { get; set; }
+    public string Note { get; set; } = string.Empty;
 }

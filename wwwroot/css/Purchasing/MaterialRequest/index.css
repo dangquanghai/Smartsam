@@ -834,7 +834,6 @@
 #mrLineTable {
     table-layout: fixed;
     width: 100%;
-    min-width: 1400px;
     max-width: none;
 }
 
@@ -873,8 +872,8 @@
 }
 
 #mrLineTable .mr-col-itemname {
-    width: 360px;
-    min-width: 360px;
+    width: 305px;
+    min-width: 305px;
 }
 
 #mrLineTable .mr-col-unit {

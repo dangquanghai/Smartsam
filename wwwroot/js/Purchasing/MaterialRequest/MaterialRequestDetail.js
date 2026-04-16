@@ -19,6 +19,8 @@
 
     // Start page
     initializePage(mode, currentStatusId, actionPerm);
+    syncNoIssueInput();
+    $('#NoIssueCheck').on('change', syncNoIssueInput);
 
     // Handle main form submit
     $('#materialRequestDetailForm').on('submit', function (e) {
@@ -135,6 +137,52 @@
             form.submit();
         }
     });
+
+    $('#mrReportBtn').off('click.mrReport').on('click.mrReport', function () {
+        const reportUrl = ($(this).data('report-url') || '').toString().trim();
+        if (!reportUrl) {
+            alert('Report is not available.');
+            return;
+        }
+
+        if (currentStatusId < 1) {
+            alert('This request have to check by Head Dept first. Ok!');
+            return;
+        }
+
+        const $reportContent = $('#mrReportContent');
+        if ($reportContent.length === 0) {
+            alert('Report popup is not available.');
+            return;
+        }
+
+        $reportContent.html('<div class="text-center text-muted py-5">Loading report...</div>');
+        $('#mrReportModal').modal('show');
+
+        const modalReportUrl = new URL(reportUrl, window.location.origin);
+        modalReportUrl.searchParams.set('modal', '1');
+
+        $.ajax({
+            url: modalReportUrl.toString(),
+            type: 'GET',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            success: function (html) {
+                $reportContent.html(html || '<div class="text-center text-muted py-5">No report data.</div>');
+            },
+            error: function (xhr) {
+                const responseText = xhr && xhr.responseText ? xhr.responseText : '';
+                $reportContent.html(`<div class="alert alert-danger m-3 mb-0">${escapeHtml(responseText || 'Cannot load report.')}</div>`);
+            }
+        });
+    });
+
+    $('#mrReportModal').off('hidden.bs.modal.mrReport').on('hidden.bs.modal.mrReport', function () {
+        $('#mrReportContent').html('<div class="text-center text-muted py-5">Report is not loaded.</div>');
+    });
+
+    $('#mrPrintReportBtn').off('click.mrReport').on('click.mrReport', function () {
+        window.print();
+    });
 });
 
 // Validation helpers
@@ -161,7 +209,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
 
     $('#Input_IsAuto').prop('disabled', true);
 
-    if (toBoolData($form.data('store-group-locked'))) {
+    if (toBoolData($form.data('store-group-locked')) || toBoolData($form.data('lock-existing-header-fields'))) {
         $('#Input_StoreGroup').prop('disabled', true);
     }
 
@@ -203,9 +251,9 @@ function initializePage(mode, currentStatusId, actionPerm) {
     $('#mrIssueBtn')
         .toggle(isCollectedToPr)
         .prop('disabled', !isCollectedToPr || !canIssue);
+    $('#mrReportBtn').prop('disabled', currentStatusId < 1);
 
-    // Display only.
-    $('#NoIssueCheck').prop('disabled', true);
+    $('#NoIssueCheck').prop('disabled', !canSave);
     $tableBody.find('.mr-line-order').prop('disabled', !enableOrderFields);
     $tableBody.find('.mr-line-buy').prop('disabled', !enableBuyFields);
     $tableBody.find('.mr-line-note').prop('disabled', !enableNoteFields);
@@ -289,7 +337,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
             endQty: 0,
             orderQty: orderQty,
             notReceipt: 0,
-            inStock: Number.parseFloat(tr.dataset.inStock || '0') || 0,
+            inStock: 0,
             accIn: 0,
             buy: 0,
             normQty: 0,
@@ -308,18 +356,21 @@ function initializePage(mode, currentStatusId, actionPerm) {
         }
     });
 
-    // Add Detail opens item lookup
+    // Create New Item opens the legacy temp-item modal.
     $('#createNewItemBtn').off('click').on('click', function () {
         $('#newItemName').val('');
         $('#newItemUnit').val('');
+        $('#newItemOrderQty').val('1');
         $('#newItemError').text('').addClass('d-none');
         $('#mrNewItemModal').modal('show');
     });
 
-    // Remove Item deletes the selected rows
+    // Create New Item follows the VB temp-table flow.
     $('#createNewItemConfirmBtn').off('click').on('click', async function () {
         const itemName = ($('#newItemName').val() || '').toString().trim();
         const unit = ($('#newItemUnit').val() || '').toString().trim();
+        const orderQty = Math.max(1, toNumber($('#newItemOrderQty').val()) || 0);
+        const requestNo = getCurrentRequestNo();
 
         if (!itemName) {
             $('#newItemError').text('Item Name is required.').removeClass('d-none');
@@ -327,9 +378,15 @@ function initializePage(mode, currentStatusId, actionPerm) {
             return;
         }
 
+        if (!requestNo || requestNo <= 0) {
+            $('#newItemError').text('Material Request number is required.').removeClass('d-none');
+            return;
+        }
+
         try {
-            const createdItem = await createQuickItem(itemName, unit);
+            const createdItem = await createTempNewItem(requestNo, itemName, unit, orderQty);
             const added = addItemToGrid($tableBody, {
+                id: createdItem.id ?? '',
                 itemCode: createdItem.itemCode || '',
                 itemName: createdItem.itemName || '',
                 unit: createdItem.unit || '',
@@ -337,18 +394,20 @@ function initializePage(mode, currentStatusId, actionPerm) {
                 receiptQty: 0,
                 usingQty: 0,
                 endQty: 0,
-                orderQty: 1,
-                notReceipt: 0,
-                inStock: 0,
-                accIn: 0,
-                buy: 0,
+                orderQty: createdItem.orderQty || orderQty,
+                notReceipt: createdItem.notReceipt || 0,
+                inStock: createdItem.inStock || 0,
+                accIn: createdItem.accIn || 0,
+                buy: createdItem.buy || 0,
                 price: 0,
                 note: '',
-                normMain: 0,
-                manualCheck: false,
-                tempStore: 0,
+                normQty: createdItem.normQty || 0,
+                normMain: createdItem.normMain || 0,
+                manualCheck: !!createdItem.manualCheck,
+                tempStore: createdItem.tempStore || 0,
+                issued: createdItem.issued || 0,
                 selected: true,
-                newItem: true
+                newItem: createdItem.newItem !== false
         });
             if (added) {
                 autoSaveDraftAfterGridChange('create-new-item');
@@ -663,6 +722,16 @@ function createLineRowHtml(row) {
                 <input type="hidden" class="mr-line-tempstore" value="${row.tempStore ?? 0}" />
             </td>
         </tr>`;
+}
+
+function syncNoIssueInput() {
+    const $checkbox = $('#NoIssueCheck');
+    const $hidden = $('#Input_NoIssue');
+    if ($checkbox.length === 0 || $hidden.length === 0) {
+        return;
+    }
+
+    $hidden.val($checkbox.is(':checked') ? '1' : '0');
 }
 
 function initializePurchaserEditableRowPrompt($form, $tableBody, enablePrompt) {
@@ -1027,6 +1096,8 @@ function updateDraftSavedRequestNo(requestNo) {
     if (!normalized) return;
 
     $('#Id').val(normalized);
+    $('#Input_RequestNo').val(normalized);
+    $('#CreateRequestNoPreview').val(normalized);
 
     const url = new URL(window.location.href);
     url.searchParams.set('id', normalized);
@@ -1097,6 +1168,8 @@ function renderLookupResults($resultBody, items) {
         $tr.attr('data-item-name', item.itemName || '');
         $tr.attr('data-unit', item.unit || '');
         $tr.attr('data-inStock', item.inStock || 0);
+        $tr.attr('data-norm-qty', item.normQty || 0);
+        $tr.attr('data-norm-main', item.normMain || 0);
         $resultBody.append($tr);
     });
 }
@@ -1143,7 +1216,22 @@ function searchItems(keyword, checkBalanceInStore) {
     });
 }
 
-function createQuickItem(itemName, unit) {
+function getCurrentRequestNo() {
+    const pageId = toNullableInt($('#Id').val());
+    if (pageId !== null && pageId > 0) {
+        return pageId;
+    }
+
+    const editRequestNo = toNullableInt($('#Input_RequestNo').val());
+    if (editRequestNo !== null && editRequestNo > 0) {
+        return editRequestNo;
+    }
+
+    const previewRequestNo = toNullableInt($('#CreateRequestNoPreview').val());
+    return previewRequestNo !== null ? previewRequestNo : 0;
+}
+
+function createTempNewItem(requestNo, itemName, unit, orderQty) {
     return new Promise(function (resolve, reject) {
         const token = $('input[name="__RequestVerificationToken"]').first().val() || '';
 
@@ -1151,7 +1239,12 @@ function createQuickItem(itemName, unit) {
             url: '?handler=CreateItem',
             type: 'POST',
             headers: { 'RequestVerificationToken': token },
-            data: { itemName: itemName || '', unit: unit || '' },
+            data: {
+                requestNo: requestNo || 0,
+                itemName: itemName || '',
+                unit: unit || '',
+                orderQty: orderQty || 1
+            },
             success: function (res) {
                 if (res && res.success) {
                     resolve(res.data || {});
