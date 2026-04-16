@@ -19,7 +19,7 @@ namespace SmartSam.Pages.Purchasing.PurchaseRequisition;
 public class PurchaseRequisitionDetailModel : BasePageModel
 {
     private static readonly HashSet<int> AllowedPageSizes = [10, 20, 50, 100, 200];
-    // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
+    // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com"; 
     private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
     private const int FUNCTION_ID = 72;
     private const int PermissionViewDetail = 2;
