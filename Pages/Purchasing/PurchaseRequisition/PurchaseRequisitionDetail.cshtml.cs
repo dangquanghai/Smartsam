@@ -2088,8 +2088,8 @@ WHERE PRID = @PRID", conn, trans);
                         ? recipientName
                         : $"{recipientName} ({recipient.EmployeeCode})")
                     : (string.IsNullOrWhiteSpace(recipient.EmployeeCode)
-                        ? $"{recipientTitle}. {recipientName}"
-                        : $"{recipientTitle}. {recipientName}({recipient.EmployeeCode})");
+                        ? $"{recipientTitle} {recipientName}"
+                        : $"{recipientTitle} {recipientName}({recipient.EmployeeCode})");
 
                 using var mail = new MailMessage
                 {

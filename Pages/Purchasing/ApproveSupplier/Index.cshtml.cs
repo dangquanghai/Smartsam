@@ -1483,8 +1483,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             {
                 var titledEmployeeName = string.IsNullOrWhiteSpace(recipient.EmployeeName) ? recipient.Email : recipient.EmployeeName;
                 return string.IsNullOrWhiteSpace(recipient.EmployeeCode)
-                    ? $"{title}. {titledEmployeeName}"
-                    : $"{title}. {titledEmployeeName}({recipient.EmployeeCode})";
+                    ? $"{title} {titledEmployeeName}"
+                    : $"{title} {titledEmployeeName}({recipient.EmployeeCode})";
             }
 
             var employeeName = string.IsNullOrWhiteSpace(recipient.EmployeeName) ? recipient.Email : recipient.EmployeeName;

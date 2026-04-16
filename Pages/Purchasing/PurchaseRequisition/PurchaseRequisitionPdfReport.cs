@@ -10,6 +10,7 @@ internal static class PurchaseRequisitionPdfReport
     private const string DetailNoIso = "QF6-2";
     private const string DetailRev = "1";
     private const string SummaryNoIso = "QF6-2";
+    private const string DefaultPdfFontFamily = "VNI-Times";
 
     public static byte[] BuildDetailPdf(PurchaseRequisitionDetailReportModel model)
     {
@@ -19,7 +20,7 @@ internal static class PurchaseRequisitionPdfReport
             {
                 page.Size(PageSizes.A4.Landscape());
                 page.Margin(18);
-                page.DefaultTextStyle(x => x.FontFamily("Times New Roman").FontSize(9));
+                page.DefaultTextStyle(x => x.FontFamily(DefaultPdfFontFamily).FontSize(9));
 
                 page.Header().Element(header => ComposeDetailHeader(header, model));
                 page.Content().PaddingTop(8).Element(content => ComposeDetailContent(content, model));
@@ -42,7 +43,7 @@ internal static class PurchaseRequisitionPdfReport
             {
                 page.Size(PageSizes.A4.Landscape());
                 page.Margin(18);
-                page.DefaultTextStyle(x => x.FontFamily("Times New Roman").FontSize(9));
+                page.DefaultTextStyle(x => x.FontFamily(DefaultPdfFontFamily).FontSize(9));
 
                 page.Header().Element(header => ComposeSummaryHeader(header, model));
                 page.Content().PaddingTop(8).Element(content => ComposeSummaryContent(content, model));
