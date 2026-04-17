@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Mail;
 using System.Text;
 using System.Text.Json;
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -145,20 +146,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
     public bool CanIssue
     {
-        get
-        {
-            if (!IsEdit)
-            {
-                return false;
-            }
-
-            if (CurrentStatusId != StatusPurchaserChecked && CurrentStatusId != StatusCfoApproved)
-            {
-                return false;
-            }
-
-            return IsAdminUser() || _dataScope.IsInventoryControlInDep || HasPermission(6);
-        }
+        get { return IsEdit && CanIssueStatus(CurrentStatusId); }
     }
 
     public bool ShowIssueButton
@@ -168,7 +156,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
     public bool CanCalculate
     {
-        get { return IsEdit && (IsAdminUser() || _dataScope.IsPurchaser) && CurrentStatusId <= StatusPurchaserChecked; }
+        get { return IsEdit && CanCalculateStatus(CurrentStatusId); }
     }
 
     public bool CanReject
@@ -1679,7 +1667,7 @@ public class MaterialRequestDetailModel : BasePageModel
     /// </summary>
     private bool ShouldPreserveEditableBuy(int currentStatus)
     {
-        return currentStatus == StatusHeadDeptApproved && (IsAdminUser() || _dataScope.IsPurchaser);
+        return CanCalculateStatus(currentStatus);
     }
 
     /// <summary>
@@ -2038,6 +2026,16 @@ public class MaterialRequestDetailModel : BasePageModel
         return statusId <= StatusPurchaserChecked;
     }
 
+    private bool CanIssueStatus(int statusId)
+    {
+        if (statusId != StatusPurchaserChecked && statusId != StatusCfoApproved)
+        {
+            return false;
+        }
+
+        return IsAdminUser() || _dataScope.IsInventoryControlInDep || HasPermission(6);
+    }
+
     private bool CanReplaceItemStatus(int statusId)
     {
         if (statusId > StatusHeadDeptApproved)
@@ -2067,7 +2065,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
         if (action == MaterialRequestWorkflowAction.Issue)
         {
-            return CanIssue;
+            return CanIssueStatus(currentStatus);
         }
 
         if (action == MaterialRequestWorkflowAction.Reject)
@@ -2238,7 +2236,7 @@ public class MaterialRequestDetailModel : BasePageModel
         <p>Material Request <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(requestNo)}</span></b> <span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(actionText)}</span></p>
         <ul>
         <li>Request No: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(requestNo)}</span></b></li>
-        <li>Date: <b>{header.DateCreate:dd/MM/yyyy}</b></li>
+        <li>Date: <b>{FormatWorkflowEmailDate(header.DateCreate)}</b></li>
         <li>Store Group: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(storeGroupText)}</span></b></li>
         <li>According To: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(header.AccordingTo ?? string.Empty)}</span></b></li>
         <li>Step: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(stepLabel)}</span></b></li>
@@ -2417,6 +2415,16 @@ public class MaterialRequestDetailModel : BasePageModel
 
         var selected = StoreGroups.FirstOrDefault(x => string.Equals(x.Value, storeGroup.Value.ToString(), StringComparison.OrdinalIgnoreCase));
         return selected?.Text ?? storeGroup.Value.ToString();
+    }
+
+    private static string FormatWorkflowEmailDate(DateTime? value)
+    {
+        if (!value.HasValue)
+        {
+            return string.Empty;
+        }
+
+        return value.Value.ToString("MMM dd, yyyy", CultureInfo.InvariantCulture);
     }
 
     private async Task SendNotifyEmailAsync(MaterialRequestWorkflowNotifyRequestViewModel notifyRequest, long requestNo)

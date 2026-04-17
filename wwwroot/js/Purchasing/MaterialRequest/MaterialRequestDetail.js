@@ -198,6 +198,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
     const canIssue = !!actionPerm.canIssue;
     const canReject = !!actionPerm.canReject;
     const canReplace = !!actionPerm.canReplace;
+    const showIssueButton = toBoolData($form.data('show-issue-button'));
     const hideZeroBuyLines = toBoolData($form.data('hide-zero-buy-lines'));
     const isAutoRequest = toBoolData($form.data('is-auto'));
 
@@ -217,16 +218,12 @@ function initializePage(mode, currentStatusId, actionPerm) {
 
     const isDraft = currentStatusId === -1;
     const isSubmittedToHead = currentStatusId === 0;
-    const isHeadApproved = currentStatusId === 1;
-    const isPurchaserChecked = currentStatusId === 2;
-    const isCfoApproved = currentStatusId === 3;
-    const isCollectedToPr = currentStatusId === 4;
-
     const showEditActions = isDraft && !isViewMode && canSave;
     const showSubmitAction = isDraft && !isViewMode && canSubmit;
-    const showCalculateAction = isHeadApproved && canCalculate;
+    const showCalculateAction = canCalculate;
     const showReplaceAction = canReplace;
-    const showWorkflowActions = !isDraft && (canApprove || canReject);
+    const showApproveAction = !isDraft && canApprove;
+    const showRejectAction = !isDraft && canReject;
     const enableOrderFields = showEditActions && !isAutoRequest;
     const enableBuyFields = showCalculateAction;
     const enableNoteFields = showEditActions || showCalculateAction;
@@ -249,14 +246,14 @@ function initializePage(mode, currentStatusId, actionPerm) {
         .toggle(showSubmitAction)
         .prop('disabled', !showSubmitAction);
     $('#mrApproveBtn')
-        .toggle(showWorkflowActions)
-        .prop('disabled', !showWorkflowActions || (!canApprove && !canReject));
+        .toggle(showApproveAction)
+        .prop('disabled', !showApproveAction);
     $('#mrRejectBtn')
-        .toggle(showWorkflowActions)
-        .prop('disabled', !showWorkflowActions || (!canApprove && !canReject));
+        .toggle(showRejectAction)
+        .prop('disabled', !showRejectAction);
     $('#mrIssueBtn')
-        .toggle(isCollectedToPr)
-        .prop('disabled', !isCollectedToPr || !canIssue);
+        .toggle(showIssueButton)
+        .prop('disabled', !showIssueButton || !canIssue);
     $('#mrReportBtn').prop('disabled', currentStatusId < 1);
 
     $('#NoIssueCheck').prop('disabled', !canSave);
@@ -1323,9 +1320,9 @@ function replaceSelectedLineFromLookup($form, $tableBody, tr) {
         orderQty: toNumber($selectedRow.find('.mr-line-order').val()),
         note: ($selectedRow.find('.mr-line-note').val() || '').toString().trim()
     }).then(function (row) {
-        const enableOrderFields = !$form.data('mr-is-auto') && toBoolData($form.data('can-save'));
+        const enableOrderFields = toBoolData($form.data('mr-enable-order-fields'));
         const enableBuyFields = toBoolData($form.data('mr-enable-buy-fields'));
-        const enableNoteFields = enableBuyFields || toBoolData($form.data('can-save'));
+        const enableNoteFields = toBoolData($form.data('mr-enable-note-fields'));
         const $newRow = $(createLineRowHtml(row));
         $newRow.find('.mr-line-order').prop('disabled', !enableOrderFields);
         $newRow.find('.mr-line-buy').prop('disabled', !enableBuyFields);
