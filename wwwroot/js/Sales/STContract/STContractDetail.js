@@ -594,15 +594,24 @@ function openTenantModal(mode) {
                 var info = res.info;
                 if (!info) return;
 
+                // Hàm phụ để gán ngày an toàn
+                const fillDate = (selector, dateVal) => {
+                    if (dateVal && typeof dateVal === 'string' && dateVal.includes('T')) {
+                        $(selector).val(dateVal.split('T')[0]);
+                    } else {
+                        $(selector).val('');
+                    }
+                };
+
                 // Đổ dữ liệu vào Input
                 $('#txtContractTenantID').val(info.ContractTenantID || 0);
                 $('#txtCustomerID').val(info.TenantID || 0);
                 $('#txtTitle').val(info.Title || "");
                 $('#txtCustomerName').val(info.CustomerName || "");
 
-                if (info.Birthday) $('#txtBirthday').val(info.Birthday.split('T')[0]);
-                if (info.PassportUntilDate) $('#txtPassportUntilDate').val(info.PassportUntilDate.split('T')[0]);
-
+                fillDate('#txtBirthday', info.Birthday);
+                fillDate('#txtPassportUntilDate', info.PassportUntilDate);
+                
                 $('#ddlNationality').val(info.Nationality || "").trigger('change');
                 $('#txtIDPassportNo').val(info.IDPassportNo || "");
                 $('#txtCompany').val(info.Company || "");
@@ -614,25 +623,27 @@ function openTenantModal(mode) {
                 $('#chkIsMoveOut').prop('checked', info.IsMoveOut === true);
                 $('#txtVisaNo').val(info.VisaNo || "");
 
-                if (info.VisaDate) $('#txtVisaDate').val(info.VisaDate.split('T')[0]);
-                if (info.VisaExpDate) $('#txtVisaExpDate').val(info.VisaExpDate.split('T')[0]);
-                if (info.EntryDate) $('#txtEntryDate').val(info.EntryDate.split('T')[0]);
-                if (info.LastRegDate) $('#txtLastRegDate').val(info.LastRegDate.split('T')[0]);
+                
+                fillDate('#txtVisaDate', info.VisaDate);
+                fillDate('#txtVisaExpDate', info.VisaExpDate);
+
+                fillDate('#txtEntryDate', info.EntryDate);
+                fillDate('#txtLastRegDate', info.LastRegDate);
+                
+                fillDate('#txtPermitExpDate', info.PermitExpDate); // Đã sửa lại đúng biến
+                fillDate('#txtProposeExpDate', info.ProposeExpDate); // Đã sửa lại đúng biến
 
                 $('#ddlArrivalPort').val(info.ArrivalPort || 0);
-                if (info.PermitExpDate) $('#txtPermitExpDate').val(info.EntryDate.split('T')[0]);
-                if (info.ProposeExpDate) $('#txtProposeExpDate').val(info.LastRegDate.split('T')[0]);
-
                 
 
-                $('#txtADCardNo').val(info.A_DCardNo || "");
+                $('#txtADCardNo').val(info.ADCardNo || "");
                 $('#txtSponsor').val(info.Sponsor || "");
                 $('#txtNotes').val(info.Notes || "");
 
                 // Xử lý hình ảnh
                 renderGalleries(res.passports, res.police);
 
-                // Chế độ View (Khóa toàn bộ)
+                // Xử lý hiển thị theo Mode
                 if (mode === 'view') {
                     $('#modalTenantDetailTitle').text("View Tenant Detail");
                     $('#btnSaveTenantDetail').hide();
@@ -640,6 +651,9 @@ function openTenantModal(mode) {
                     $('.upload-zone').hide();
                 } else {
                     $('#modalTenantDetailTitle').text("Edit Tenant Detail");
+                    $('#btnSaveTenantDetail').show();
+                    $('#modalTenantDetail input, #modalTenantDetail select, #modalTenantDetail textarea').prop('disabled', false);
+                    $('.upload-zone').show();
                 }
 
                 $('#modalTenantDetail').modal('show');
@@ -737,7 +751,7 @@ $('#btnSaveTenantDetail').click(function () {
         PermitExpDate: cleanDate($('#txtPermitExpDate').val()), 
         ProposeExpDate: cleanDate($('#txtProposeExpDate').val()), 
         
-        A_DCardNo: $('#txtADCardNo').val(),
+        ADCardNo: $('#txtADCardNo').val(),
         LastRegDate: cleanDate($('#txtLastRegDate').val()),
         Sponsor: $('#txtSponsor').val(),
         Notes: $('#txtNotes').val(),

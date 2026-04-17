@@ -901,8 +901,8 @@ namespace SmartSam.Pages.Sales.STContract
             await conn.OpenAsync();
             using var trans = conn.BeginTransaction();
 
-            using var reader = new StreamReader(Request.Body);
-            string json = await reader.ReadToEndAsync();
+           // using var reader = new StreamReader(Request.Body);
+           // string json = await reader.ReadToEndAsync();
 
             try
             {
@@ -913,9 +913,9 @@ namespace SmartSam.Pages.Sales.STContract
                 {
                     // Thêm mới khách hàng
                     string sqlInsertCust = @"
-                    INSERT INTO CM_Customer (CustomerName, Title, Male, Birthday, Nationality, IDPassportNo, IsTenant, Address, Company, VATCode) 
+                    INSERT INTO CM_Customer (CustomerName, Title, Male, Birthday, Nationality, IDPassportNo,PassportUntilDate, IsTenant, Address, Company, VATCode) 
                     OUTPUT INSERTED.CustomerID
-                    VALUES (@CustomerName, @Title, @Male, @Birthday, @Nationality, @IDPassportNo, 1, @Address, @Company, @VATCode)";
+                    VALUES (@CustomerName, @Title, @Male, @Birthday, @Nationality, @IDPassportNo,@PassportUntilDate, 1, @Address, @Company, @VATCode)";
 
                     finalCustomerId = await conn.QuerySingleAsync<int>(sqlInsertCust, dto, trans);
                     dto.TenantID = finalCustomerId; // Gán lại ID mới sinh ra cho model
@@ -927,7 +927,7 @@ namespace SmartSam.Pages.Sales.STContract
                     UPDATE CM_Customer SET 
                     CustomerName = @CustomerName, Title = @Title, Male = @Male, 
                     Birthday = @Birthday, Nationality = @Nationality, 
-                    IDPassportNo = @IDPassportNo, Address = @Address, 
+                    IDPassportNo = @IDPassportNo,PassportUntilDate=@PassportUntilDate, Address = @Address, 
                     Company = @Company, VATCode = @VATCode
                     WHERE CustomerID = @TenantID";
 
@@ -953,7 +953,8 @@ namespace SmartSam.Pages.Sales.STContract
                     ProposeExpDate = @ProposeExpDate,
                     Notes = @Notes, 
                     Sponsor = @Sponsor,
-                    TenantType = @TenantType
+                    TenantType = @TenantType,
+                    A_DCardNo = @ADCardNo
                     WHERE ContractTenantID = @ContractTenantID";
 
                     await conn.ExecuteAsync(sqlUpdateContract, dto, trans);
@@ -963,8 +964,8 @@ namespace SmartSam.Pages.Sales.STContract
                     // TRƯỜNG HỢP INSERT: Lần đầu add khách này vào hợp đồng
                     string sqlInsertContract = @"
                     INSERT INTO CM_ContractTenant 
-                    (ContractID, TenantID, FamilyPos, IsMoveOut, VisaNo, VisaDate, VisaExpDate, EntryDate, ArrivalPort, PermitExpDate,ProposeExpDate,Notes, Sponsor,TenantType)
-                    VALUES (@ContractID, @TenantID, @FamilyPos, @IsMoveOut, @VisaNo, @VisaDate, @VisaExpDate, @EntryDate, @ArrivalPort,@PermitExpDate,@ProposeExpDate, @Notes, @Sponsor,@TenantType)";
+                    (ContractID, TenantID, FamilyPos, IsMoveOut, VisaNo, VisaDate, VisaExpDate, EntryDate, ArrivalPort, PermitExpDate,ProposeExpDate,Notes, Sponsor,TenantType,A_DCardNo)
+                    VALUES (@ContractID, @TenantID, @FamilyPos, @IsMoveOut, @VisaNo, @VisaDate, @VisaExpDate, @EntryDate, @ArrivalPort,@PermitExpDate,@ProposeExpDate, @Notes, @Sponsor,@TenantType,@ADCardNo)";
 
                     await conn.ExecuteAsync(sqlInsertContract, dto, trans);
                 }
@@ -1158,7 +1159,7 @@ namespace SmartSam.Pages.Sales.STContract
             public DateTime? PermitExpDate { get; set; }// 
             
 
-            public string? A_DCardNo { get; set; } // Phải có gạch dưới y hệt JSON
+            public string? ADCardNo { get; set; } // Phải có gạch dưới y hệt JSON
             public DateTime? LastRegDate { get; set; }
             
             public string? Notes { get; set; }
