@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Mail;
 using System.Text;
 using System.Text.Json;
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -145,20 +146,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
     public bool CanIssue
     {
-        get
-        {
-            if (!IsEdit)
-            {
-                return false;
-            }
-
-            if (CurrentStatusId != StatusPurchaserChecked && CurrentStatusId != StatusCfoApproved)
-            {
-                return false;
-            }
-
-            return IsAdminUser() || _dataScope.IsInventoryControlInDep || HasPermission(6);
-        }
+        get { return IsEdit && CanIssueStatus(CurrentStatusId); }
     }
 
     public bool ShowIssueButton
@@ -168,12 +156,17 @@ public class MaterialRequestDetailModel : BasePageModel
 
     public bool CanCalculate
     {
-        get { return IsEdit && (IsAdminUser() || _dataScope.IsPurchaser) && CurrentStatusId <= StatusPurchaserChecked; }
+        get { return IsEdit && CanCalculateStatus(CurrentStatusId); }
     }
 
     public bool CanReject
     {
         get { return IsEdit && CanRejectStatus(CurrentStatusId, Input.IsAuto); }
+    }
+
+    public bool CanReplaceItem
+    {
+        get { return IsEdit && CanReplaceItemStatus(CurrentStatusId); }
     }
 
     public bool HideZeroBuyLines
@@ -439,6 +432,96 @@ public class MaterialRequestDetailModel : BasePageModel
     public async Task<IActionResult> OnPostCalculate(CancellationToken cancellationToken)
     {
         return await HandleCalculateAsync(cancellationToken);
+    }
+
+    public async Task<IActionResult> OnPostReplaceItem(
+        [FromForm] long? requestNo,
+        [FromForm] int? lineId,
+        [FromForm] string? itemCode,
+        [FromForm] decimal? orderQty,
+        [FromForm] string? note,
+        CancellationToken cancellationToken)
+    {
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
+        PagePerm = new PagePermissions();
+        PagePerm = GetUserPermissions();
+        await LoadUserScopeAsync(cancellationToken);
+        if (!CanAccessPage())
+        {
+            return new JsonResult(new { success = false, message = "Access denied." })
+            {
+                StatusCode = StatusCodes.Status403Forbidden
+            };
+        }
+
+        var resolvedRequestNo = requestNo.HasValue && requestNo.Value > 0
+            ? requestNo
+            : Id;
+        if (!resolvedRequestNo.HasValue || resolvedRequestNo.Value <= 0)
+        {
+            return new JsonResult(new { success = false, message = "Please save Material Request first." });
+        }
+
+        var existing = await _materialRequestService.GetDetailAsync(resolvedRequestNo.Value, cancellationToken);
+        if (existing is null)
+        {
+            return new JsonResult(new { success = false, message = "Material Request not found." })
+            {
+                StatusCode = StatusCodes.Status404NotFound
+            };
+        }
+
+        var currentStatus = existing.MaterialStatusId ?? StatusJustCreated;
+        if (!CanReplaceItemStatus(currentStatus))
+        {
+            return new JsonResult(new { success = false, message = "You do not have permission to replace item at current status." })
+            {
+                StatusCode = StatusCodes.Status403Forbidden
+            };
+        }
+
+        if (!lineId.HasValue || lineId.Value <= 0)
+        {
+            return new JsonResult(new { success = false, message = "Please select one item row to replace." });
+        }
+
+        if (string.IsNullOrWhiteSpace(itemCode))
+        {
+            return new JsonResult(new { success = false, message = "Replacement item is required." });
+        }
+
+        try
+        {
+            var replacedLine = await _materialRequestService.ReplaceLineItemAsync(
+                resolvedRequestNo.Value,
+                lineId.Value,
+                itemCode,
+                orderQty,
+                note,
+                User.Identity?.Name ?? string.Empty,
+                GetCurrentEmployeeId(),
+                currentStatus,
+                cancellationToken);
+
+            return new JsonResult(new
+            {
+                success = true,
+                message = "Item replaced successfully.",
+                data = replacedLine
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[MaterialRequest][ReplaceItem] {ex}");
+            return new JsonResult(new
+            {
+                success = false,
+                message = ex is InvalidOperationException ? ex.Message : $"Cannot replace item. {ex.Message}"
+            })
+            {
+                StatusCode = StatusCodes.Status500InternalServerError
+            };
+        }
     }
 
     public async Task<IActionResult> OnPostSavePurchaserLines(CancellationToken cancellationToken)
@@ -1584,7 +1667,7 @@ public class MaterialRequestDetailModel : BasePageModel
     /// </summary>
     private bool ShouldPreserveEditableBuy(int currentStatus)
     {
-        return currentStatus == StatusHeadDeptApproved && (IsAdminUser() || _dataScope.IsPurchaser);
+        return CanCalculateStatus(currentStatus);
     }
 
     /// <summary>
@@ -1943,6 +2026,31 @@ public class MaterialRequestDetailModel : BasePageModel
         return statusId <= StatusPurchaserChecked;
     }
 
+    private bool CanIssueStatus(int statusId)
+    {
+        if (statusId != StatusPurchaserChecked && statusId != StatusCfoApproved)
+        {
+            return false;
+        }
+
+        return IsAdminUser() || _dataScope.IsInventoryControlInDep || HasPermission(6);
+    }
+
+    private bool CanReplaceItemStatus(int statusId)
+    {
+        if (statusId > StatusHeadDeptApproved)
+        {
+            return false;
+        }
+
+        if (_isAdminRole)
+        {
+            return true;
+        }
+
+        return _dataScope.IsPurchaser;
+    }
+
     private bool CanExecuteTransition(MaterialRequestWorkflowAction action, int currentStatus, bool isAuto)
     {
         if (action == MaterialRequestWorkflowAction.Submit)
@@ -1957,7 +2065,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
         if (action == MaterialRequestWorkflowAction.Issue)
         {
-            return CanIssue;
+            return CanIssueStatus(currentStatus);
         }
 
         if (action == MaterialRequestWorkflowAction.Reject)
@@ -2128,7 +2236,7 @@ public class MaterialRequestDetailModel : BasePageModel
         <p>Material Request <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(requestNo)}</span></b> <span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(actionText)}</span></p>
         <ul>
         <li>Request No: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(requestNo)}</span></b></li>
-        <li>Date: <b>{header.DateCreate:dd/MM/yyyy}</b></li>
+        <li>Date: <b>{FormatWorkflowEmailDate(header.DateCreate)}</b></li>
         <li>Store Group: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(storeGroupText)}</span></b></li>
         <li>According To: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(header.AccordingTo ?? string.Empty)}</span></b></li>
         <li>Step: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(stepLabel)}</span></b></li>
@@ -2307,6 +2415,16 @@ public class MaterialRequestDetailModel : BasePageModel
 
         var selected = StoreGroups.FirstOrDefault(x => string.Equals(x.Value, storeGroup.Value.ToString(), StringComparison.OrdinalIgnoreCase));
         return selected?.Text ?? storeGroup.Value.ToString();
+    }
+
+    private static string FormatWorkflowEmailDate(DateTime? value)
+    {
+        if (!value.HasValue)
+        {
+            return string.Empty;
+        }
+
+        return value.Value.ToString("MMM dd, yyyy", CultureInfo.InvariantCulture);
     }
 
     private async Task SendNotifyEmailAsync(MaterialRequestWorkflowNotifyRequestViewModel notifyRequest, long requestNo)

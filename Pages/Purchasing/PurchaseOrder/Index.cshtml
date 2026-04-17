@@ -2,14 +2,26 @@
 @model SmartSam.Pages.Purchasing.PurchaseOrder.IndexModel
 @{
     ViewData["Title"] = "Purchase Order";
+    var selectedStatusTexts = new List<string>();
+    foreach (var status in Model.Statuses)
+    {
+        if (int.TryParse(status.Value, out var statusValue) && Model.Filter.StatusIds.Contains(statusValue))
+        {
+            selectedStatusTexts.Add(status.Text);
+        }
+    }
+
+    var statusButtonText = selectedStatusTexts.Count > 0
+        ? string.Join(", ", selectedStatusTexts)
+        : "All statuses";
 }
 
 <section class="content">
     <div class="container-fluid">
-        <div class="row">
+        <div class="row po-layout-row">
 
-            <div class="col-md-2">
-                <div class="card card-info">
+            <div class="col-md-2 po-search-column">
+                <div class="card card-info po-search-panel">
                     <div class="card-header">
                         <h3 class="card-title">
                             <i class="fas fa-search"></i> Search
@@ -32,16 +44,56 @@
 
                             <div class="form-group">
                                 <label>Status</label>
-                                <select class="form-control form-control-sm"
-                                        asp-for="Filter.StatusId"
-                                        asp-items="Model.Statuses"
-                                        id="Filter_StatusId">
-                                </select>
+                                <div class="dropdown po-status-dropdown">
+                                    <button class="btn btn-outline-secondary dropdown-toggle text-left w-100 po-status-dropdown-button"
+                                            type="button"
+                                            id="poStatusDropdownBtn"
+                                            data-toggle="dropdown"
+                                            aria-haspopup="true"
+                                            aria-expanded="false">
+                                        @statusButtonText
+                                    </button>
+                                    <div class="dropdown-menu p-2 po-status-menu" aria-labelledby="poStatusDropdownBtn">
+                                        <div class="po-status-menu-actions mb-2">
+                                            <button type="button" class="btn btn-sm btn-outline-primary" id="poStatusSelectAllBtn">Select all</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" id="poStatusClearBtn">Clear</button>
+                                        </div>
+                                        @foreach (var status in Model.Statuses)
+                                        {
+                                            if (!int.TryParse(status.Value, out var statusValue))
+                                            {
+                                                continue;
+                                            }
+
+                                            var statusCheckboxId = $"poStatus_{statusValue}";
+                                            var checkedAttr = Model.Filter.StatusIds.Contains(statusValue) ? "checked" : null;
+                                            <div class="custom-control custom-checkbox po-status-option">
+                                                <input class="custom-control-input po-status-checkbox"
+                                                       type="checkbox"
+                                                       id="@statusCheckboxId"
+                                                       name="Filter.StatusIds"
+                                                       value="@statusValue"
+                                                       data-label="@status.Text"
+                                                       @checkedAttr />
+                                                <label class="custom-control-label" for="@statusCheckboxId">@status.Text</label>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="form-group">
                                 <label>Supplier</label>
-                                <input class="form-control form-control-sm vni-font" asp-for="Filter.SupplierKeyword" id="Filter_SupplierKeyword" />
+                                <select class="form-control form-control-sm vni-font"
+                                        asp-for="Filter.SupplierKeyword"
+                                        id="Filter_SupplierKeyword"
+                                        data-placeholder="-- Type supplier code or name --">
+                                    <option value="">-- Type supplier code or name --</option>
+                                    @if (!string.IsNullOrWhiteSpace(Model.Filter.SupplierKeyword))
+                                    {
+                                        <option value="@Model.Filter.SupplierKeyword" selected>@Model.Filter.SupplierKeyword</option>
+                                    }
+                                </select>
                             </div>
 
                             <div class="form-group">
@@ -85,7 +137,7 @@
                 </div>
             </div>
 
-            <div class="col-md-10" id="purchaseOrderResultPanelContainer">
+            <div class="col-md-10 po-result-column" id="purchaseOrderResultPanelContainer">
                 <div class="card card-primary">
                     <div class="card-header po-table-header">
                         <div class="po-table-header-left">
@@ -115,6 +167,18 @@
                     <div class="card-body p-0">
                         <div class="table-responsive">
                             <table class="table table-hover table-bordered mb-0 text-nowrap" id="purchaseOrderTable">
+                                <colgroup>
+                                    <col style="width: 32px;" />
+                                    <col style="width: 110px;" />
+                                    <col style="width: 110px;" />
+                                    <col style="width: 130px;" />
+                                    <col style="width: 190px;" />
+                                    <col style="width: 120px;" />
+                                    <col style="width: 120px;" />
+                                    <col style="width: 100px;" />
+                                    <col style="width: 100px;" />
+                                    <col style="width: 220px;" />
+                                </colgroup>
                                 <thead class="thead-light">
                                     <tr>
                                         <th style="width: 32px;"></th>
@@ -147,19 +211,19 @@
                                 <i class="fas fa-plus"></i> Add New
                             </button>
                         }
-                        <button class="btn btn-primary btn-sm d-none" id="btnEdit" type="button">
-                            <i class="fas fa-edit"></i> Edit
-                        </button>
                         @if (Model.PagePerm.HasPermission(2))
                         {
                             <button class="btn btn-info btn-sm" id="btnViewDetail" type="button">
                                 <i class="fas fa-list-alt"></i> View Detail
                             </button>
+                            <button class="btn btn-primary btn-sm" id="btnEstimateView" type="button" disabled>
+                                <i class="fas fa-star"></i> Estimate View
+                            </button>
                         }
                         <button class="btn btn-warning btn-sm d-none" id="btnBackToProcessing" type="button">
                             <i class="fas fa-undo"></i> Back to Processing
                         </button>
-                        <button class="btn btn-secondary btn-sm" id="btnExportExcel" type="button">
+                        <button class="btn btn-outline-success btn-sm" id="btnExportExcel" type="button">
                             <i class="fas fa-file-excel"></i> Export Excel
                         </button>
                     </div>
@@ -169,7 +233,7 @@
         @if (Model.PagePerm.HasPermission(2))
         {
             <div class="modal fade" id="purchaseOrderViewDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
-                <div class="modal-dialog modal-xl" role="document">
+                <div class="modal-dialog modal-xl po-viewdetail-modal-dialog" role="document">
                     <div class="modal-content">
                         <div class="modal-header py-2">
                             <h5 class="modal-title">View Purchase Order Detail</h5>
@@ -281,6 +345,18 @@
                                 <div class="card-body p-0 po-viewdetail-table-wrap">
                                     <div class="table-responsive">
                                         <table class="table table-sm table-bordered table-hover mb-0 text-nowrap" id="purchaseOrderViewDetailTable">
+                                            <colgroup>
+                                                <col style="width: 110px;" />
+                                                <col style="width: 220px;" />
+                                                <col style="width: 90px;" />
+                                                <col style="width: 90px;" />
+                                                <col style="width: 100px;" />
+                                                <col style="width: 150px;" />
+                                                <col style="width: 190px;" />
+                                                <col style="width: 90px;" />
+                                                <col style="width: 110px;" />
+                                                <col style="width: 90px;" />
+                                            </colgroup>
                                             <thead class="thead-light">
                                                 <tr>
                                                     <th>Item Code</th>
@@ -316,6 +392,39 @@
                     </div>
                 </div>
             </div>
+
+            <div class="modal fade" id="purchaseOrderEstimateViewModal" tabindex="-1" role="dialog" aria-hidden="true">
+                <div class="modal-dialog modal-xl po-viewdetail-modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header py-2">
+                            <h5 class="modal-title" id="purchaseOrderEstimateViewTitle">Estimate View</h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered table-hover mb-0 text-nowrap">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th style="width: 50px;">No.</th>
+                                            <th>Criteria</th>
+                                            <th style="width: 90px;" class="text-center">Point</th>
+                                            <th style="width: 140px;">Date</th>
+                                            <th style="width: 180px;">Employee</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="purchaseOrderEstimateViewRows">
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted">Please select purchase order first.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         }
 
         </div>
@@ -332,6 +441,7 @@
         const defaultPageSize = @Model.DefaultPageSize;
         window.purchaseOrderPage = {
             detailUrlBase: '@Url.Page("./PurchaseOrderDetail")',
+            supplierLookupUrl: '@Url.Page("./Index", "SupplierLookup")',
             reportDetailQuestPdfUrl: '@Url.Page("./Index", "ReportDetailQuestPdf")',
             exportUrlBase: '@Url.Page("./Index", "ExportExcel")',
             canAdd: @(Model.PagePerm.HasPermission(3) ? "true" : "false")

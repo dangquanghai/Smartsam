@@ -58,14 +58,14 @@ function initializeAjaxSelect2(selector, url) {
         width: '100%',
         allowClear: true,
         placeholder: $element.find('option:first').text() || '-- Select --',
-        minimumInputLength: 0,
+        minimumInputLength: 3,
         ajax: {
             url: url,
             dataType: 'json',
             delay: 250,
             data: function (params) {
                 return {
-                    term: params.term || ''
+                    term: (params.term || '').trim()
                 };
             },
             processResults: function (data) {
@@ -80,9 +80,39 @@ function initializeAjaxSelect2(selector, url) {
     $element.on('select2:open', function () {
         const searchField = document.querySelector('.select2-container--open .select2-search__field');
         if (searchField) {
+            const selectedText = getSelect2SearchSeed($element);
+            if (!searchField.value.trim() && selectedText) {
+                searchField.value = selectedText;
+                searchField.dispatchEvent(new Event('input', { bubbles: true }));
+                searchField.dispatchEvent(new Event('keyup', { bubbles: true }));
+            }
+
             searchField.focus();
+            if (typeof searchField.select === 'function') {
+                searchField.select();
+            }
         }
     });
+}
+
+function getSelect2SearchSeed($element) {
+    const selectedText = ($element.find('option:selected').text() || '').trim();
+    if (!selectedText || selectedText.startsWith('--')) {
+        return '';
+    }
+
+    let seed = selectedText;
+    const parenIndex = seed.indexOf(' (');
+    if (parenIndex > -1) {
+        seed = seed.substring(0, parenIndex).trim();
+    }
+
+    const slashIndex = seed.indexOf(' / ');
+    if (slashIndex > -1) {
+        seed = seed.substring(0, slashIndex).trim();
+    }
+
+    return seed;
 }
 
 // Dong tat cac select2 dang mo truoc khi mo modal.
@@ -147,6 +177,73 @@ async function downloadPurchaseOrderQuestPdf() {
     }
 }
 
+function getAllowedAttachmentExtensions() {
+    return String(window.purchaseOrderDetailPage?.allowedAttachmentExtensions || '')
+        .split(',')
+        .map(function (item) {
+            return item.trim().toLowerCase();
+        })
+        .filter(Boolean);
+}
+
+function getMaxAttachmentSizeBytes() {
+    const maxMb = Number.parseInt(window.purchaseOrderDetailPage?.maxAttachmentSizeMb, 10);
+    return Number.isFinite(maxMb) && maxMb > 0 ? maxMb * 1024 * 1024 : 0;
+}
+
+function normalizeAttachmentName(fileName) {
+    return String(fileName || '').trim();
+}
+
+function updateAttachmentDeleteButton() {
+    const $button = $('#btnPurchaseOrderAttachmentDelete');
+    if (!$button.length) {
+        return;
+    }
+
+    $button.prop('disabled', $('#purchaseOrderAttachmentModal .po-attachment-selector:checked').length === 0);
+}
+
+function validateAttachmentUpload() {
+    const input = document.getElementById('purchaseOrderAttachmentUpload');
+    const errorEl = document.getElementById('purchaseOrderAttachmentError');
+
+    if (!input || !errorEl || !input.files || input.files.length === 0) {
+        if (errorEl) {
+            errorEl.textContent = '';
+            errorEl.style.display = 'none';
+        }
+        return true;
+    }
+
+    const allowedExtensions = getAllowedAttachmentExtensions();
+    const maxSizeBytes = getMaxAttachmentSizeBytes();
+    const files = Array.from(input.files);
+
+    for (const file of files) {
+        const fileName = normalizeAttachmentName(file.name);
+        const extension = `.${String(fileName.split('.').pop() || '').toLowerCase()}`;
+
+        if (allowedExtensions.length > 0 && !allowedExtensions.includes(extension)) {
+            errorEl.textContent = `Attached file extension is invalid for '${fileName}'. Allowed: ${window.purchaseOrderDetailPage?.allowedAttachmentExtensions || ''}`;
+            errorEl.style.display = 'block';
+            input.value = '';
+            return false;
+        }
+
+        if (maxSizeBytes > 0 && file.size > maxSizeBytes) {
+            errorEl.textContent = `Attached file '${fileName}' size must not exceed ${window.purchaseOrderDetailPage?.maxAttachmentSizeMb || 0} MB.`;
+            errorEl.style.display = 'block';
+            input.value = '';
+            return false;
+        }
+    }
+
+    errorEl.textContent = '';
+    errorEl.style.display = 'none';
+    return true;
+}
+
 // Kiem tra form truoc khi post PO header.
 function validateMainForm() {
     const fields = [
@@ -191,7 +288,9 @@ function focusErrorField($el) {
 function normalizeDetail(detail) {
     return {
         tempKey: detail.tempKey || detail.TempKey || ('tmp-' + Date.now() + '-' + Math.random().toString(16).slice(2)),
+        isPersisted: detail.isPersisted === true || detail.IsPersisted === true,
         itemID: detail.itemID || detail.ItemID || 0,
+        prDetailId: detail.prDetailId || detail.PrDetailId || detail.mrDetailId || detail.MRDetailID || 0,
         itemCode: detail.itemCode || detail.ItemCode || '',
         itemName: detail.itemName || detail.ItemName || '',
         unit: detail.unit || detail.Unit || '',
@@ -210,6 +309,9 @@ function normalizeDetail(detail) {
 
 // Gan su kien cho nut va dong detail cua PO.
 function bindMainEvents(mode) {
+    const attachmentModal = $('#purchaseOrderAttachmentModal');
+    const attachmentInput = document.getElementById('purchaseOrderAttachmentUpload');
+    const attachmentError = document.getElementById('purchaseOrderAttachmentError');
     $('#PerVAT').on('input', updateTotals);
     $('#btnCalculateTotal').on('click', updateTotals);
 
@@ -220,8 +322,20 @@ function bindMainEvents(mode) {
         });
     });
 
+    $('#btnOpenPurchaseOrderAttachments').on('click', function () {
+        closeOpenSelect2();
+        if (attachmentError) {
+            attachmentError.textContent = '';
+            attachmentError.style.display = 'none';
+        }
+        if (window.jQuery && attachmentModal.length) {
+            attachmentModal.modal('show');
+        }
+    });
+
     $('#btnAddDetail').on('click', function () {
         closeOpenSelect2();
+        syncPurchaseOrderDetailsFromGrid();
         loadPrLines();
     });
 
@@ -231,8 +345,9 @@ function bindMainEvents(mode) {
 
     $('#purchaseOrderPrCheckAll').on('change', function () {
         const isChecked = $(this).is(':checked');
-        $('#purchaseOrderPrLineRows .po-pr-check').prop('checked', isChecked);
+        $('#purchaseOrderPrLineRows .po-pr-check:not(:disabled)').prop('checked', isChecked);
         syncPrLineCheckAllState();
+        syncPrLineActionState();
     });
 
     $('#btnEvaluate').on('click', function () {
@@ -271,6 +386,27 @@ function bindMainEvents(mode) {
     $('#btnBackToProcessingDetail').on('click', function () {
         closeOpenSelect2();
         $('#purchaseOrderConvertModal').modal('show');
+    });
+
+    $('#btnPurchaseOrderAttachmentUpload').on('click', function (event) {
+        if (!validateAttachmentUpload()) {
+            event.preventDefault();
+        }
+    });
+
+    $('#purchaseOrderAttachmentUpload').on('change', function () {
+        validateAttachmentUpload();
+    });
+
+    $('#purchaseOrderAttachmentModal').on('change', '.po-attachment-selector', function () {
+        updateAttachmentDeleteButton();
+    });
+
+    $('#purchaseOrderAttachmentModal').on('shown.bs.modal', function () {
+        updateAttachmentDeleteButton();
+        if (attachmentInput && attachmentInput.files && attachmentInput.files.length > 0) {
+            validateAttachmentUpload();
+        }
     });
 
     $('#btnConfirmBackToProcessing').on('click', function () {
@@ -344,6 +480,7 @@ function bindMainEvents(mode) {
 
     $(document).on('change', '#purchaseOrderPrLineRows .po-pr-check', function () {
         syncPrLineCheckAllState();
+        syncPrLineActionState();
     });
 
 }
@@ -359,7 +496,10 @@ function loadPrLines() {
 
     // PO detail lay theo PR dang chon.
     // PRID la key goc cua modal nay.
-    $.get(window.purchaseOrderDetailPage?.prLinesUrl || '', { prId: prId }, function (response) {
+    $.get(window.purchaseOrderDetailPage?.prLinesUrl || '', {
+        prId: prId,
+        currentPoId: window.purchaseOrderDetailPage?.reportId || 0
+    }, function (response) {
         if (!response.success) {
             alert(response.message || 'Cannot load PR lines.');
             return;
@@ -368,6 +508,7 @@ function loadPrLines() {
         purchaseOrderPrLines = response.data || [];
         renderPrLineRows();
         syncPrLineCheckAllState();
+        syncPrLineActionState();
         closeOpenSelect2();
         $('#purchaseOrderAddDetailModal').modal('show');
     });
@@ -380,7 +521,7 @@ function renderDetailRows() {
     $tbody.empty();
 
     if (!purchaseOrderDetails.length) {
-        $tbody.html(`<tr id="purchaseOrderDetailEmptyRow"><td colspan="${canSave ? 13 : 12}" class="text-center text-muted">No detail rows</td></tr>`);
+        $tbody.html('<tr id="purchaseOrderDetailEmptyRow"><td colspan="12" class="text-center text-muted">No detail rows</td></tr>');
         $('#purchaseOrderDetailCount').text('0');
         return;
     }
@@ -389,7 +530,7 @@ function renderDetailRows() {
     const html = purchaseOrderDetails.map(function (row) {
         return `
             <tr data-key="${escapeHtml(row.tempKey)}">
-                <td></td>
+                ${canSave ? `<td class="po-detail-action-cell"><div class="po-detail-action-wrap"><button type="button" class="btn btn-xs btn-outline-danger border po-remove-row" data-remove-temp-key="${escapeHtml(row.tempKey)}" title="Remove"><i class="fas fa-trash"></i></button></div></td>` : '<td></td>'}
                 <td class="po-detail-itemcode">${escapeHtml(row.itemCode)}</td>
                 <td class="tcvn3-font">${escapeHtml(row.itemName)}</td>
                 <td>${escapeHtml(row.unit)}</td>
@@ -401,7 +542,6 @@ function renderDetailRows() {
                 <td><input type="text" class="form-control form-control-sm text-right po-detail-recqty" value="${formatNumber(row.recQty)}" ${canSave ? '' : 'readonly'} /></td>
                 <td><input type="text" class="form-control form-control-sm text-right po-detail-recamount" value="${formatNumber(row.recAmount)}" readonly /></td>
                 <td>${canSave ? `<input type="date" class="form-control form-control-sm po-detail-recdate" value="${formatDate(row.recDate)}" />` : escapeHtml(formatDate(row.recDate))}</td>
-                ${canSave ? '<td class="text-center"><button type="button" class="btn btn-xs btn-outline-danger po-remove-row" title="Remove detail"><i class="fas fa-trash-alt"></i></button></td>' : ''}
             </tr>`;
     });
 
@@ -418,13 +558,15 @@ function renderPrLineRows() {
     }
 
     const html = purchaseOrderPrLines.map(function (row, index) {
+        const remainingQty = getAvailablePrLineQuantity(row);
+        const isDisabled = remainingQty <= 0;
         return `
-            <tr data-index="${index}">
-                <td class="text-center"><input type="checkbox" class="po-pr-check" /></td>
+            <tr data-index="${index}" class="${isDisabled ? 'po-pr-row-disabled' : ''}">
+                <td class="text-center"><input type="checkbox" class="po-pr-check" ${isDisabled ? 'disabled' : ''} /></td>
                 <td>${escapeHtml(row.itemCode || row.ItemCode || '')}</td>
                 <td class="tcvn3-font po-pr-itemname">${escapeHtml(row.itemName || row.ItemName || '')}</td>
                 <td>${escapeHtml(row.unit || row.Unit || '')}</td>
-                <td class="text-right">${formatNumber(row.quantity || row.Quantity || 0)}</td>
+                <td class="text-right">${formatNumber(remainingQty)}</td>
                 <td class="text-right">${formatNumber(row.unitPrice || row.UnitPrice || 0)}</td>
                 <td class="vni-font">${escapeHtml(row.remark || row.Remark || '')}</td>
                 <td class="vni-font">${escapeHtml(row.supplierText || row.SupplierText || '')}</td>
@@ -433,6 +575,57 @@ function renderPrLineRows() {
 
     $tbody.html(html.join(''));
     syncPrLineCheckAllState();
+    syncPrLineActionState();
+}
+
+function getAvailablePrLineQuantity(row) {
+    const totalQuantity = toNumber(row.quantity || row.Quantity || 0);
+    const prDetailId = toNumber(row.prDetailId || row.PrDetailId || 0);
+    const alreadySelectedQuantity = purchaseOrderDetails.reduce(function (sum, detail) {
+        const detailPrDetailId = toNumber(detail.prDetailId || detail.PrDetailId || 0);
+        if (detailPrDetailId !== prDetailId) {
+            return sum;
+        }
+
+        return sum + toNumber(detail.quantity || detail.Quantity || 0);
+    }, 0);
+
+    return Math.max(totalQuantity - alreadySelectedQuantity, 0);
+}
+
+// Dong bo lai state detail tu bang hien tai truoc khi mo popup PR.
+function syncPurchaseOrderDetailsFromGrid() {
+    const refreshedDetails = [];
+
+    $('#purchaseOrderDetailRows tr[data-key]').each(function () {
+        const $row = $(this);
+        const rowKey = $row.data('key');
+        const existing = purchaseOrderDetails.find(function (item) {
+            return item.tempKey === rowKey;
+        }) || {};
+
+        refreshedDetails.push(normalizeDetail({
+            tempKey: rowKey,
+            isPersisted: existing.isPersisted === true || existing.IsPersisted === true,
+            itemID: existing.itemID || existing.ItemID || 0,
+            prDetailId: existing.prDetailId || existing.PrDetailId || 0,
+            itemCode: existing.itemCode || existing.ItemCode || '',
+            itemName: existing.itemName || existing.ItemName || '',
+            unit: existing.unit || existing.Unit || '',
+            quantity: $row.find('.po-detail-qty').length ? toNumber($row.find('.po-detail-qty').val()) : toNumber(existing.quantity || existing.Quantity || 0),
+            unitPrice: $row.find('.po-detail-price').length ? toNumber($row.find('.po-detail-price').val()) : toNumber(existing.unitPrice || existing.UnitPrice || 0),
+            poAmount: $row.find('.po-detail-amount').length ? toNumber($row.find('.po-detail-amount').val()) : toNumber(existing.poAmount || existing.POAmount || 0),
+            recDept: $row.find('.po-detail-dept').length ? ($row.find('.po-detail-dept').val() || '') : (existing.recDept || existing.RecDept || ''),
+            recDeptName: existing.recDeptName || existing.RecDeptName || '',
+            note: $row.find('.po-detail-note').length ? ($row.find('.po-detail-note').val() || '') : (existing.note || existing.Note || ''),
+            recQty: $row.find('.po-detail-recqty').length ? toNumber($row.find('.po-detail-recqty').val()) : toNumber(existing.recQty || existing.RecQty || 0),
+            recAmount: $row.find('.po-detail-recamount').length ? toNumber($row.find('.po-detail-recamount').val()) : toNumber(existing.recAmount || existing.RecAmount || 0),
+            recDate: $row.find('.po-detail-recdate').length ? ($row.find('.po-detail-recdate').val() || null) : (existing.recDate || existing.RecDate || null),
+            mrRequestNo: existing.mrRequestNo || existing.MRRequestNo || ''
+        }));
+    });
+
+    purchaseOrderDetails = refreshedDetails;
 }
 
 // Copy dong PR da chon sang danh sach PO.
@@ -457,16 +650,23 @@ function addSelectedPrLines() {
             return;
         }
 
+        const availableQuantity = getAvailablePrLineQuantity(source);
+        if (availableQuantity <= 0) {
+            return;
+        }
+
         purchaseOrderDetails.push(normalizeDetail({
             ItemID: source.itemID || source.ItemID || 0,
             ItemCode: source.itemCode || source.ItemCode || '',
             ItemName: source.itemName || source.ItemName || '',
             Unit: source.unit || source.Unit || '',
-            Quantity: source.quantity || source.Quantity || 0,
+            Quantity: availableQuantity,
             UnitPrice: source.unitPrice || source.UnitPrice || 0,
-            POAmount: toNumber(source.quantity || source.Quantity || 0) * toNumber(source.unitPrice || source.UnitPrice || 0),
+            POAmount: availableQuantity * toNumber(source.unitPrice || source.UnitPrice || 0),
             Note: source.remark || source.Remark || '',
             MRRequestNo: $('#PRID option:selected').text() || '',
+            PrDetailId: source.prDetailId || source.PrDetailId || 0,
+            IsPersisted: false,
             SupplierID: expectedSupplierId || null,
             SupplierText: supplierText
         }));
@@ -475,6 +675,7 @@ function addSelectedPrLines() {
     renderDetailRows();
     updateTotals();
     $('#purchaseOrderAddDetailModal').modal('hide');
+    syncPrLineActionState();
 }
 
 // Dong bo checkbox Check All theo tung dong PR.
@@ -486,17 +687,23 @@ function syncPrLineCheckAllState() {
         return;
     }
 
-    if (!$checks.length) {
+    const $enabledChecks = $checks.not(':disabled');
+    if (!$enabledChecks.length) {
         $checkAll.prop('checked', false);
         $checkAll.prop('indeterminate', false);
         $checkAll.prop('disabled', true);
         return;
     }
 
-    const checkedCount = $checks.filter(':checked').length;
+    const checkedCount = $enabledChecks.filter(':checked').length;
     $checkAll.prop('disabled', false);
-    $checkAll.prop('checked', checkedCount > 0 && checkedCount === $checks.length);
-    $checkAll.prop('indeterminate', checkedCount > 0 && checkedCount < $checks.length);
+    $checkAll.prop('checked', checkedCount > 0 && checkedCount === $enabledChecks.length);
+    $checkAll.prop('indeterminate', checkedCount > 0 && checkedCount < $enabledChecks.length);
+}
+
+function syncPrLineActionState() {
+    const hasSelectedRows = $('#purchaseOrderPrLineRows .po-pr-check:checked').not(':disabled').length > 0;
+    $('#btnConfirmAddDetail').prop('disabled', !hasSelectedRows);
 }
 
 // Tinh lai VAT va tong tien sau khi sua dong detail.
@@ -525,7 +732,9 @@ function syncDetailsJson() {
         const recDate = (row.recDate || '').toString().trim();
         return {
             tempKey: row.tempKey,
+            isPersisted: row.isPersisted === true || row.IsPersisted === true,
             itemID: row.itemID,
+            prDetailId: row.prDetailId,
             itemCode: row.itemCode,
             itemName: row.itemName,
             unit: row.unit,

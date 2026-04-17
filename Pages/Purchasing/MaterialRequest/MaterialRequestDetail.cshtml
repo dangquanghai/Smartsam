@@ -36,7 +36,9 @@
               data-can-calculate="@Model.CanCalculate.ToString().ToLowerInvariant()"
               data-can-approve="@Model.CanApprove.ToString().ToLowerInvariant()"
               data-can-issue="@Model.CanIssue.ToString().ToLowerInvariant()"
+              data-show-issue-button="@Model.ShowIssueButton.ToString().ToLowerInvariant()"
               data-can-reject="@Model.CanReject.ToString().ToLowerInvariant()"
+              data-can-replace="@Model.CanReplaceItem.ToString().ToLowerInvariant()"
               data-store-group-locked="@Model.StoreGroupLocked.ToString().ToLowerInvariant()"
               data-lock-existing-header-fields="@lockExistingHeaderFields.ToString().ToLowerInvariant()"
               data-show-advanced-columns="@Model.ShowAdvancedDetailColumns.ToString().ToLowerInvariant()"
@@ -260,6 +262,7 @@
                     <div class="float-left">
                         <button type="submit" asp-page-handler="Save" class="btn btn-warning btn-sm mx-1 my-1 @(Model.CurrentStatusId == -1 && Model.CanSave ? string.Empty : "d-none")" id="mrSaveBtn"><i class="fas fa-save"></i> Save</button>
                         <button type="button" class="btn btn-success btn-sm mx-1 my-1 @(Model.CurrentStatusId == -1 && Model.CanSave ? string.Empty : "d-none")" id="addMrLineBtn"><i class="fas fa-plus"></i> Add Detail</button>
+                        <button type="button" class="btn btn-primary btn-sm mx-1 my-1 @(Model.CanReplaceItem ? string.Empty : "d-none")" id="replaceMrLineBtn"><i class="fas fa-exchange-alt"></i> Replace Item</button>
                         <button type="button" class="btn btn-danger btn-sm mx-1 my-1 @(Model.CurrentStatusId == -1 && Model.CanSave ? string.Empty : "d-none")" id="removeMrLineBtn"><i class="fas fa-trash-alt"></i> Remove Item</button>
                         <button type="button" class="btn btn-primary btn-sm mx-1 my-1 @(Model.CurrentStatusId == -1 && Model.CanSave ? string.Empty : "d-none")" id="createNewItemBtn"><i class="fas fa-box-open"></i> Create new item</button>
                         <button type="submit" asp-page-handler="Calculate" class="btn btn-info btn-sm mx-1 my-1 @(Model.CanCalculate ? string.Empty : "d-none")" id="calculateBtn"><i class="fas fa-calculator"></i> Calculate</button>
