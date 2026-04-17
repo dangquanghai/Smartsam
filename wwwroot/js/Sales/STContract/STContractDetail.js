@@ -767,3 +767,70 @@ $('#btnSaveTenantDetail').click(function () {
         }
     });
 });
+
+let allDocs = []; // Chứa danh sách { FilePath, DocTypeID, ... }
+let currentIndex = 0;
+
+function renderGalleries(docs) {
+    allDocs = docs || [];
+    currentIndex = 0;
+    showImage();
+}
+
+function showImage() {
+    if (allDocs.length > 0) {
+        let doc = allDocs[currentIndex];
+        $('#current_img_display').attr('src', doc.FilePath).show();
+        $('#no_img_overlay').hide();
+        $('#ddlDocTypeID').val(doc.DocTypeID); // Tự động cập nhật Select Box theo loại hình
+        $('#img_index_label').text(`${currentIndex + 1} / ${allDocs.length}`);
+    } else {
+        $('#current_img_display').hide();
+        $('#no_img_overlay').show();
+        $('#img_index_label').text("0 / 0");
+    }
+}
+
+function moveImg(step) {
+    if (allDocs.length === 0) return;
+    currentIndex += step;
+    if (currentIndex < 0) currentIndex = allDocs.length - 1;
+    if (currentIndex >= allDocs.length) currentIndex = 0;
+    showImage();
+}
+
+// Khi tiếp tân thay đổi Select Box, cập nhật DocTypeID cho ảnh đó
+$('#ddlDocTypeID').on('change', function () {
+    if (allDocs[currentIndex]) {
+        allDocs[currentIndex].DocTypeID = $(this).val();
+        // Bạn có thể gọi API cập nhật ngay hoặc lưu tất cả khi nhấn Save
+    }
+});
+
+// Hàm nhận dạng OCR
+function recognizeOCR() {
+    if (allDocs.length === 0) return;
+
+    let currentPath = allDocs[currentIndex].FilePath;
+    let type = $('#ddlDocTypeID').val();
+
+    // Hiệu ứng loading
+    $('#btnReconize').html('<i class="fas fa-spinner fa-spin"></i> Processing...');
+
+    $.post('/Sales/STContract/STContractDetail?handler=ReconizeDocument', {
+        filePath: currentPath,
+        docType: type
+    }, function (res) {
+        if (res.success) {
+            // Đổ dữ liệu trích xuất vào các trường bên trái
+            if (res.data.fullName) $('#txtCustomerName').val(res.data.fullName);
+            if (res.data.passportNo) $('#txtIDPassportNo').val(res.data.passportNo);
+            if (res.data.birthday) $('#txtBirthday').val(res.data.birthday.split('T')[0]);
+            // ... thêm các trường khác
+            alert("Trích xuất dữ liệu thành công!");
+        } else {
+            alert("Không thể nhận dạng hình ảnh này.");
+        }
+        $('#btnReconize').html('<i class="fas fa-magic"></i> Recognize');
+    });
+}
