@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Data;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Mail;
@@ -28,6 +29,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
         private const string AnnualYearColumn = "ForYear";
 
         private const int FUNCTION_ID = 71;
+        private const string NotifyFontFamily = "'VNI-WIN', 'VNI-Times', 'VNI-Helve', sans-serif";
 
         private const int PermissionViewDetail = 2;
         private const int PermissionAdd = 3;
@@ -1198,17 +1200,19 @@ namespace SmartSam.Pages.Purchasing.Supplier
             var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl)
                 ? string.Empty
                 : $"{Request.Scheme}://{Request.Host}{detailUrl}";
+            var submitTimeText = DateTime.Now.ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
             var body = $@"
 <p>Dear {{RECIPIENT_LABEL}},</p>
 <p>A new supplier has just been <b>submitted</b> and is waiting for your approval.</p>
 <ul>
-  <li>Supplier Code: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(supplierCode)}</span></b></li>
-  <li>Supplier Name: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(supplierName)}</span></b></li>
-  <li>Submitted by: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(operatorCode)}</span></b></li>
-  <li>Submit time: <b>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</b></li>
+  <li>Supplier Code: <b>{WebUtility.HtmlEncode(supplierCode)}</b></li>
+  <li>Supplier Name: <b>{WebUtility.HtmlEncode(supplierName)}</b></li>
+  <li>Submitted by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
+  <li>Submit time: <b>{submitTimeText}</b></li>
 </ul>
 {(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Approve Supplier New</a></p>")}
 <p>SmartSam System</p>";
+            body = WrapNotifyMessageBody(body);
 
             var htmlBody = EmailTemplateHelper.WrapInNotifyTemplate("APPROVE SUPPLIER NEW", "#17a2b8", DateTime.Now, body);
             var notifyRequest = new SupplierSubmitNotifyRequestViewModel
@@ -1334,6 +1338,11 @@ namespace SmartSam.Pages.Purchasing.Supplier
             {
                 _logger.LogError(ex, "Cannot send notification email for new supplier submit to level {NextLevel}.", notifyRequest.NextLevel);
             }
+        }
+
+        private static string WrapNotifyMessageBody(string messageBody)
+        {
+            return $"<div style='font-family:{NotifyFontFamily};'>{messageBody}</div>";
         }
 
         // Reset the workflow so a disapproved supplier can be submitted again from the beginning.
@@ -1505,7 +1514,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                     var employeeName = string.IsNullOrWhiteSpace(EmployeeName) ? string.Empty : EmployeeName.Trim();
                     if (!string.IsNullOrWhiteSpace(employeeName))
                     {
-                        var title = (Title ?? string.Empty).Trim();
+                        var title = (Title ?? string.Empty).Trim().TrimEnd('.');
                         if (!string.IsNullOrWhiteSpace(title))
                         {
                             return string.IsNullOrWhiteSpace(EmployeeCode)
