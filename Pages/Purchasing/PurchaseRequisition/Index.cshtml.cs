@@ -449,7 +449,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
                 {
                     RequestNo = Convert.ToString(rd["RequestNo"]) ?? string.Empty,
                     RequestDate = rd["RequestDate"] == DBNull.Value ? null : Convert.ToDateTime(rd["RequestDate"]),
-                    RequestDateText = rd["RequestDate"] == DBNull.Value ? string.Empty : Convert.ToDateTime(rd["RequestDate"]).ToString("dd-MMM-yyyy"),
+                    RequestDateText = rd["RequestDate"] == DBNull.Value ? string.Empty : Convert.ToDateTime(rd["RequestDate"]).ToString("MMM d, yyyy", CultureInfo.InvariantCulture),
                     Description = Convert.ToString(rd["Description"]) ?? string.Empty,
                     ItemCode = Convert.ToString(rd["ItemCode"]) ?? string.Empty,
                     ItemName = Convert.ToString(rd["ItemName"]) ?? string.Empty,
@@ -830,7 +830,7 @@ ORDER BY p.RequestDate DESC, p.RequestNo DESC, d.RecordID", conn);
                 PrQty = Convert.ToDecimal(rd["PrQty"]),
                 RecQty = Convert.ToDecimal(rd["RecQty"]),
                 DiffQty = Convert.ToDecimal(rd["DiffQty"]),
-                RecDateText = recDate.HasValue ? recDate.Value.ToString("d-MMM-yyyy", CultureInfo.InvariantCulture) : string.Empty,
+                RecDateText = recDate.HasValue ? recDate.Value.ToString("MMM d, yyyy", CultureInfo.InvariantCulture) : string.Empty,
                 PoNo = Convert.ToString(rd["PONos"]) ?? string.Empty,
                 Remark = Convert.ToString(rd["Remark"]) ?? string.Empty
             });
@@ -1039,7 +1039,7 @@ WHERE EmployeeID = @EmployeeID", conn);
 
         var trimmed = value.Trim();
         return DateTime.TryParse(trimmed, out var parsed)
-            ? parsed.ToString("d/M/yyyy", CultureInfo.InvariantCulture)
+            ? parsed.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)
             : trimmed;
     }
 

@@ -93,7 +93,7 @@ internal static class PurchaseRequisitionPdfReport
                 info.Item().Row(row =>
                 {
                     row.ConstantItem(180).Text($"Purchase Requisition Number: {model.RequestNo}").Bold();
-                    row.RelativeItem().Text($"Date:  {FormatDate(model.RequestDate, "dd - MMM - yyyy")}").Bold();
+                    row.RelativeItem().Text($"Date:  {FormatDate(model.RequestDate, "MMM d, yyyy")}").Bold();
                 });
                 info.Item().Text($"Purchase Purpose: {model.Description}");
                 info.Item().Text($"Currency Unit: {model.CurrencyText}");
@@ -262,7 +262,7 @@ internal static class PurchaseRequisitionPdfReport
                     table.Cell().ColumnSpan(8).Element(GroupCell).Row(row =>
                     {
                         row.ConstantItem(95).Text($"PR No.: {group.RequestNo}").Bold();
-                        row.ConstantItem(120).Text($"PR Date: {FormatDate(group.RequestDate, "d - MMM - yyyy")}").Bold();
+                        row.ConstantItem(120).Text($"PR Date: {FormatDate(group.RequestDate, "MMM d, yyyy")}").Bold();
                         row.RelativeItem().Text($"Description: {group.Description}");
                     });
 

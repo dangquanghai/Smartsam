@@ -15,7 +15,7 @@
     var useSupplierLinkMode = Model.IsSupplierLinkMode;
 }
 
-<section class="content">
+<section class="content approve-supplier-page approve-supplier-vni-win">
     <div class="container-fluid">
         @if (!string.IsNullOrWhiteSpace(Model.Message))
         {
@@ -185,26 +185,60 @@
                                     }
                                 }
 
-                                <button
-                                    type="button"
-                                    class="btn btn-sm btn-action-add mr-2"
-                                    disabled="@(!Model.CanApproveByLevel ? "disabled" : null)"
-                                    data-confirm-handler="Approve"
-                                    data-confirm-title="Approve Confirmation"
-                                    data-confirm-message="Are you sure you want to approve this supplier?"
-                                    data-confirm-kind="primary">
-                                    <i class="fas fa-check mr-1"></i>Approve Supplier
-                                </button>
-                                <button
-                                    type="button"
-                                    class="btn btn-sm btn-action-copy mr-2"
-                                    disabled="@(!Model.CanDisapproveByLevel ? "disabled" : null)"
-                                    data-confirm-handler="Disapprove"
-                                    data-confirm-title="Disapprove Confirmation"
-                                    data-confirm-message="Are you sure you want to disapprove this supplier?"
-                                    data-confirm-kind="primary">
-                                    <i class="fas fa-ban mr-1"></i>DisApprove Supplier
-                                </button>
+                                @if (!Model.HideApprovalActionButtons)
+                                {
+                                    @if (Model.ShowRestoreInsteadOfApprovalButtons)
+                                    {
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-action-restore mr-2"
+                                            data-confirm-handler="Restore"
+                                            data-confirm-title="Restore Confirmation"
+                                            data-confirm-message="Are you sure you want to restore this supplier to the state before the latest approval action?"
+                                            data-confirm-kind="info"
+                                            data-confirm-skip-validation="true">
+                                            <i class="fas fa-undo mr-1"></i>@Model.RestoreActionCaption
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-action-add mr-2"
+                                            disabled="@(!Model.CanApproveByLevel ? "disabled" : null)"
+                                            data-confirm-handler="Approve"
+                                            data-confirm-title="Approve Confirmation"
+                                            data-confirm-message="Are you sure you want to approve this supplier?"
+                                            data-confirm-kind="primary">
+                                            <i class="fas fa-check mr-1"></i>Approve Supplier
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-action-copy mr-2"
+                                            disabled="@(!Model.CanDisapproveByLevel ? "disabled" : null)"
+                                            data-confirm-handler="Disapprove"
+                                            data-confirm-title="Disapprove Confirmation"
+                                            data-confirm-message="Are you sure you want to disapprove this supplier?"
+                                            data-confirm-kind="danger">
+                                            <i class="fas fa-ban mr-1"></i>DisApprove Supplier
+                                        </button>
+                                    }
+                                    @if (!useSupplierLinkMode)
+                                    {
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-action-batch mr-2"
+                                            disabled="@(!Model.CanBatchApprove ? "disabled" : null)"
+                                            data-confirm-handler="BatchApprove"
+                                            data-confirm-title="Batch Approve Confirmation"
+                                            data-confirm-message="Are you sure you want to approve all suppliers in the current approval scope?"
+                                            data-confirm-kind="primary"
+                                            data-confirm-skip-validation="true"
+                                            data-confirm-subject="current approval scope">
+                                            <i class="fas fa-layer-group mr-1"></i>Batch Approve
+                                        </button>
+                                    }
+                                }
                                 <a class="btn btn-sm btn-action-close mr-3" href="/"><i class="fas fa-times mr-1"></i>Close</a>
                                 <span class="text-danger font-weight-bold mr-3">@(string.IsNullOrWhiteSpace(Model.CurrentSupplierDetail?.SupplierStatusName) ? "N/A" : Model.CurrentSupplierDetail!.SupplierStatusName)</span>
                             </div>
@@ -213,7 +247,7 @@
                                 @if (!useSupplierLinkMode)
                                 {
                                     <span class="text-primary font-weight-bold mr-3">@Model.CurrentSupplierPosition/@Model.CurrentPageSupplierCount Suppliers</span>
-                                    <input asp-for="GoToOrder" type="number" min="1" max="@Model.CurrentPageSupplierCount" class="form-control form-control-sm mr-2" style="width:80px" />
+                                    <input asp-for="GoToKeyword" class="form-control form-control-sm approve-goto-input mr-2" placeholder="Supplier Code / Name" />
                                     <button type="submit" formaction="?handler=GoTo" class="btn btn-sm btn-action-close goto-btn-compact"><i class="fas fa-share-square mr-1"></i>Go to</button>
                                 }
                             </div>

@@ -38,14 +38,15 @@
         modal.modal('show');
     }
 
-    function submitFormByHandler(handler) {
+    function submitFormByHandler(handler, options) {
         const form = $('#approveSupplierForm');
         if (!form.length) return;
 
+        const submitOptions = options || {};
         form.attr('action', '?handler=' + handler);
 
         const htmlForm = form[0];
-        if (htmlForm && typeof htmlForm.checkValidity === 'function' && !htmlForm.checkValidity()) {
+        if (!submitOptions.skipValidation && htmlForm && typeof htmlForm.checkValidity === 'function' && !htmlForm.checkValidity()) {
             htmlForm.reportValidity();
             return;
         }
@@ -72,8 +73,12 @@
             const title = $button.data('confirm-title') || 'Confirmation';
             const message = $button.data('confirm-message') || '';
             const kind = $button.data('confirm-kind') || 'primary';
+            const skipValidation = $button.data('confirm-skip-validation') === true || $button.data('confirm-skip-validation') === 'true';
+            const subject = ($button.data('confirm-subject') || '').toString().trim();
             const supplierName = $('#EditSupplier_SupplierName').val() || '';
-            const messageHtml = `${escapeHtml(message)}<br><br>Supplier: <strong class="vni-font">${escapeHtml(supplierName || 'N/A')}</strong>`;
+            const subjectLabel = subject || supplierName || 'N/A';
+            const subjectTitle = subject ? 'Target' : 'Supplier';
+            const messageHtml = `${escapeHtml(message)}<br><br>${escapeHtml(subjectTitle)}: <strong class="approve-supplier-vni-win">${escapeHtml(subjectLabel)}</strong>`;
 
             showConfirmModal({
                 title: title,
@@ -81,7 +86,7 @@
                 messageHtml: messageHtml,
                 kind: kind,
                 onConfirm: function () {
-                    submitFormByHandler(handler);
+                    submitFormByHandler(handler, { skipValidation: skipValidation });
                 }
             });
         });

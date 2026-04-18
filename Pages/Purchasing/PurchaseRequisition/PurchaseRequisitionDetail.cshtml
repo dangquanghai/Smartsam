@@ -31,7 +31,7 @@
 
                     <div class="row prq-detail-form-row mb-3">
                         <div class="col-lg-3 col-md-6 prq-detail-form-col">
-                            <label class="prq-detail-label">No.<span class="required-mark">*</span></label>
+                            <label class="prq-detail-label">PR No.<span class="required-mark">*</span></label>
                             <input asp-for="Requisition.RequestNo" class="form-control form-control-sm vni-font" readonly="@(Model.IsReadOnlyMode ? "readonly" : null)" />
                             <span asp-validation-for="Requisition.RequestNo" class="text-danger small"></span>
                         </div>

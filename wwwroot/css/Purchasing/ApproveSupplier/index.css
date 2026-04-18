@@ -1,3 +1,26 @@
+.approve-supplier-vni-win,
+.approve-supplier-vni-win .card,
+.approve-supplier-vni-win .card-title,
+.approve-supplier-vni-win .btn,
+.approve-supplier-vni-win .form-control,
+.approve-supplier-vni-win .col-form-label-sm,
+.approve-supplier-vni-win .table,
+.approve-supplier-vni-win .modal-content,
+.approve-supplier-vni-win .modal-title,
+.approve-supplier-vni-win .modal-body,
+.approve-supplier-vni-win .modal-footer,
+.approve-supplier-vni-win .alert,
+.approve-supplier-vni-win .text-muted,
+.approve-supplier-vni-win .font-weight-bold,
+.approve-supplier-vni-win span,
+.approve-supplier-vni-win div,
+.approve-supplier-vni-win p,
+.approve-supplier-vni-win label,
+.approve-supplier-vni-win textarea,
+.approve-supplier-vni-win input {
+    font-family: "VNI-WIN", "VNI-Times", "VNI-Helve", sans-serif !important;
+}
+
 .module-action-bar .btn {
     min-width: 110px;
 }
@@ -15,6 +38,18 @@
 .module-action-bar .btn-action-copy {
     background-color: #dc3545;
     border-color: #dc3545;
+    color: #fff;
+}
+
+.module-action-bar .btn-action-restore {
+    background-color: #fd7e14;
+    border-color: #fd7e14;
+    color: #fff;
+}
+
+.module-action-bar .btn-action-batch {
+    background-color: #138496;
+    border-color: #138496;
     color: #fff;
 }
 
@@ -177,6 +212,11 @@
     min-width: auto !important;
     padding-left: .5rem;
     padding-right: .5rem;
+}
+
+.approve-goto-input {
+    width: 240px;
+    max-width: 100%;
 }
 
 #actionConfirmModal .modal-header {

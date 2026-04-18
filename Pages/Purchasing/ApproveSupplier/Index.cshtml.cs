@@ -1,9 +1,11 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.Data;
+using System.Globalization;
 using System.Net;
 using System.Net.Mail;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Data.SqlClient;
@@ -17,8 +19,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 {
     public class ApproveSupplierDetailModel : BasePageModel
     {
-        // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
-        private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
+        private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
+        // private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
         private readonly ILogger<ApproveSupplierDetailModel> _logger;
         private readonly ISecurityService _securityService;
         private const int NoDepartmentScopeValue = -1;
@@ -26,6 +28,9 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         private const int PermissionViewList = 1;
         private const int PermissionApprove = 2;
         private const string ProcessedSupplierSessionKeyPrefix = "ApproveSupplierProcessed";
+        private const string UndoSupplierSessionKeyPrefix = "ApproveSupplierUndo";
+        private const string ScopeActionLockedSessionKeyPrefix = "ApproveSupplierActionLocked";
+        private const string NotifyFontFamily = "'VNI-WIN', 'VNI-Times', 'VNI-Helve', sans-serif";
 
         private ApproveEmployeeDataScopeViewModel _dataScope = new ApproveEmployeeDataScopeViewModel();
         private bool _isAdminRole;
@@ -52,13 +57,16 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public ApproveSupplierDetailViewModel EditSupplier { get; set; } = new ApproveSupplierDetailViewModel();
 
         [BindProperty]
-        public int? GoToOrder { get; set; }
+        public string? GoToKeyword { get; set; }
 
         [TempData]
         public string? FlashMessage { get; set; }
 
         [TempData]
         public string? FlashMessageType { get; set; }
+
+        [TempData]
+        public string? GoToKeywordTemp { get; set; }
 
         public string? Message { get; set; }
         public string MessageType { get; set; } = "info";
@@ -87,6 +95,15 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public bool CanEditComment => CanEditAllSupplierFields || CanEditCommentOnly;
         public bool CanApproveByLevel => !IsCurrentSupplierReadOnly && _dataScope.LevelCheckSupplier.HasValue && _dataScope.LevelCheckSupplier.Value is >= 1 and <= 4;
         public bool CanDisapproveByLevel => !IsCurrentSupplierReadOnly && _dataScope.LevelCheckSupplier.HasValue && _dataScope.LevelCheckSupplier.Value is >= 2 and <= 4;
+        public bool CanRestoreCurrentSupplier { get; private set; }
+        public string RestoreActionCaption { get; private set; } = "Restore Action";
+        public bool ShowRestoreInsteadOfApprovalButtons => IsCurrentSupplierReadOnly && CanRestoreCurrentSupplier;
+        public bool HideApprovalActionButtons { get; private set; }
+        public bool CanBatchApprove => !IsSupplierLinkMode
+            && HasPermission(PermissionApprove)
+            && _dataScope.LevelCheckSupplier.HasValue
+            && _dataScope.LevelCheckSupplier.Value is >= 1 and <= 4
+            && Rows.Any(x => !IsProcessedSupplierInCurrentLogin(x.SupplierID));
 
         // Xử lý tải dữ liệu ban đầu của màn hình.
         public IActionResult OnGet()
@@ -111,6 +128,13 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 Message = FlashMessage;
                 MessageType = string.IsNullOrWhiteSpace(FlashMessageType) ? "info" : FlashMessageType!;
             }
+
+            if (!string.IsNullOrWhiteSpace(GoToKeywordTemp))
+            {
+                GoToKeyword = GoToKeywordTemp;
+            }
+
+            RefreshCurrentApprovalScopeActionLock();
 
             // 2. Load dữ liệu màn hình theo đúng phạm vi quyền
             LoadSupplierRows();
@@ -199,14 +223,22 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 return RedirectToCurrentList();
             }
 
-            var order = GoToOrder.GetValueOrDefault();
-            if (order < 1 || order > Rows.Count)
+            var keyword = (GoToKeyword ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(keyword))
             {
-                SetFlashMessage($"Go to must be from 1 to {Rows.Count}.", "warning");
+                SetFlashMessage("Please input Supplier Code or Supplier Name.", "warning");
                 return RedirectToCurrentList();
             }
 
-            CurrentSupplierId = Rows[order - 1].SupplierID;
+            var targetSupplierId = FindSupplierIdByKeyword(keyword);
+            if (!targetSupplierId.HasValue)
+            {
+                SetFlashMessage("Cannot find supplier by the entered code or name in current approval scope.", "warning");
+                return RedirectToCurrentList();
+            }
+
+            CurrentSupplierId = targetSupplierId.Value;
+            GoToKeywordTemp = keyword;
             return RedirectToCurrentList();
         }
 
@@ -268,14 +300,17 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             }
 
             var currentLevel = _dataScope.LevelCheckSupplier.Value;
-            LoadSupplierRows();
-            var isLastSupplierInScope = IsApproveSupplierNewMode || IsLastSupplierInCurrentRows(supplierId);
-            var shouldNotifyNextLevel = currentLevel < 4 && isLastSupplierInScope;
-            var shouldNotifyCompletionToPurchaser = currentLevel == 4 && isLastSupplierInScope;
             var operatorCode = User.Identity?.Name?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(operatorCode))
             {
                 SetFlashMessage("Cannot identify operator.", "error");
+                return RedirectToCurrentList();
+            }
+
+            var undoSnapshot = GetSupplierUndoSnapshot(supplierId);
+            if (undoSnapshot is null)
+            {
+                SetFlashMessage("Cannot load supplier snapshot for restore.", "error");
                 return RedirectToCurrentList();
             }
 
@@ -292,6 +327,25 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 return RedirectToCurrentList();
             }
 
+            var shouldNotifyNextLevel = false;
+            var shouldNotifyCompletionToPurchaser = false;
+            if (IsSupplierLinkMode)
+            {
+                shouldNotifyNextLevel = currentLevel < 4;
+                shouldNotifyCompletionToPurchaser = currentLevel == 4;
+            }
+            else
+            {
+                var remainingSupplierCount = CountPendingSuppliersInCurrentApprovalScope();
+                shouldNotifyNextLevel = currentLevel < 4 && remainingSupplierCount == 0;
+                shouldNotifyCompletionToPurchaser = currentLevel == 4 && remainingSupplierCount == 0;
+            }
+
+            if (!IsSupplierLinkMode)
+            {
+                LoadSupplierRows();
+            }
+
             if (!IsSupplierLinkMode)
             {
                 MarkSupplierProcessedInCurrentLogin(supplierId);
@@ -302,6 +356,20 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 : shouldNotifyNextLevel
                     ? TryQueueNotifyNextLevel(currentLevel, current, "approved")
                     : null;
+            if (DidTriggerScopeMailNotification(notifyResult))
+            {
+                SetCurrentApprovalScopeActionLocked(true);
+            }
+            var canRestore = string.IsNullOrWhiteSpace(notifyResult);
+            SetSupplierUndoStateInCurrentLogin(new ApproveSupplierUndoState
+            {
+                ActionType = ApproveSupplierActionType.Approve,
+                SupplierId = supplierId,
+                AppliedStatus = currentLevel,
+                IsLocked = !canRestore,
+                Snapshot = undoSnapshot
+            });
+
             CurrentSupplierId = IsSupplierLinkMode ? supplierId : GetNextActiveSupplierIdAfterProcessing(supplierId);
             var approveMessage = "Approved supplier successfully.";
             if (!string.IsNullOrWhiteSpace(notifyResult))
@@ -366,6 +434,13 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 return RedirectToCurrentList();
             }
 
+            var undoSnapshot = GetSupplierUndoSnapshot(supplierId);
+            if (undoSnapshot is null)
+            {
+                SetFlashMessage("Cannot load supplier snapshot for restore.", "error");
+                return RedirectToCurrentList();
+            }
+
             var disapproved = DisapproveByLevel(
                 supplierId,
                 currentLevel,
@@ -383,10 +458,151 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 MarkSupplierProcessedInCurrentLogin(supplierId);
             }
 
+            SetSupplierUndoStateInCurrentLogin(new ApproveSupplierUndoState
+            {
+                ActionType = ApproveSupplierActionType.Disapprove,
+                SupplierId = supplierId,
+                AppliedStatus = 5,
+                IsLocked = false,
+                Snapshot = undoSnapshot
+            });
+
             CurrentSupplierId = IsSupplierLinkMode ? supplierId : GetNextActiveSupplierIdAfterProcessing(supplierId);
             var disapproveMessage = "Disapproved supplier successfully.";
 
             SetFlashMessage(disapproveMessage, "success");
+            return RedirectToCurrentList();
+        }
+
+        // Khôi phục lại trạng thái trước khi vừa approve/disapprove.
+        public IActionResult OnPostRestore()
+        {
+            SupplierId = ResolveSupplierIdFromRequest();
+
+            PagePerm = GetUserPermissions();
+            LoadUserDataScope();
+            if (!HasPermission(PermissionApprove))
+            {
+                return Redirect("/");
+            }
+
+            var supplierId = EditSupplier.SupplierID;
+            if (supplierId <= 0)
+            {
+                SetFlashMessage("Invalid supplier.", "warning");
+                return RedirectToCurrentList();
+            }
+
+            var undoState = GetSupplierUndoStateInCurrentLogin(supplierId);
+            if (undoState is null)
+            {
+                SetFlashMessage("No restore information was found for this supplier.", "warning");
+                return RedirectToCurrentList();
+            }
+
+            if (undoState.IsLocked)
+            {
+                SetFlashMessage("This supplier can no longer be restored because notification email has already been sent.", "warning");
+                return RedirectToCurrentList();
+            }
+
+            var current = GetSupplierDetail(supplierId);
+            if (current is null)
+            {
+                SetFlashMessage("Supplier not found.", "warning");
+                return RedirectToCurrentList();
+            }
+
+            if (!CanAccessDepartment(current.DeptID))
+            {
+                return Forbid();
+            }
+
+            if (!RestoreSupplierFromUndoState(undoState))
+            {
+                SetFlashMessage("Restore failed because supplier state has changed.", "warning");
+                return RedirectToCurrentList();
+            }
+
+            RemoveSupplierUndoStateInCurrentLogin(supplierId);
+            UnmarkSupplierProcessedInCurrentLogin(supplierId);
+            CurrentSupplierId = supplierId;
+            SetFlashMessage("Restored supplier approval state successfully.", "success");
+            return RedirectToCurrentList();
+        }
+
+        // Duyệt hàng loạt tất cả supplier đang chờ duyệt trong scope hiện tại.
+        public IActionResult OnPostBatchApprove()
+        {
+            SupplierId = ResolveSupplierIdFromRequest();
+
+            PagePerm = GetUserPermissions();
+            LoadUserDataScope();
+            if (!HasPermission(PermissionApprove))
+            {
+                return Redirect("/");
+            }
+
+            if (IsSupplierLinkMode)
+            {
+                SetFlashMessage("Batch approve is only available in the approval list.", "warning");
+                return RedirectToCurrentList();
+            }
+
+            if (!_dataScope.LevelCheckSupplier.HasValue || _dataScope.LevelCheckSupplier.Value is < 1 or > 4)
+            {
+                SetFlashMessage("You have no right to batch approve.", "warning");
+                return RedirectToCurrentList();
+            }
+
+            var currentLevel = _dataScope.LevelCheckSupplier.Value;
+            var operatorCode = User.Identity?.Name?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(operatorCode))
+            {
+                SetFlashMessage("Cannot identify operator.", "error");
+                return RedirectToCurrentList();
+            }
+
+            var pendingRows = SearchSupplierRows(BuildCriteria());
+            if (pendingRows.Count == 0)
+            {
+                SetFlashMessage("There are no suppliers waiting for approval in the current scope.", "warning");
+                return RedirectToCurrentList();
+            }
+
+            var sampleSupplier = GetSupplierDetail(pendingRows[0].SupplierID);
+            if (sampleSupplier is null)
+            {
+                SetFlashMessage("Cannot load supplier data for batch approval.", "error");
+                return RedirectToCurrentList();
+            }
+
+            var updatedRows = BatchApproveSuppliers(pendingRows.Select(x => x.SupplierID).ToList(), currentLevel, operatorCode);
+            if (updatedRows <= 0)
+            {
+                SetFlashMessage("Batch approve failed because supplier status is no longer in the expected workflow step.", "warning");
+                return RedirectToCurrentList();
+            }
+
+            MarkSuppliersProcessedInCurrentLogin(pendingRows.Select(x => x.SupplierID));
+            ClearAllSupplierUndoStatesInCurrentLogin();
+
+            var notifyResult = currentLevel == 4
+                ? TryQueueNotifyApprovalCompleted(currentLevel, sampleSupplier, "approved")
+                : TryQueueNotifyNextLevel(currentLevel, sampleSupplier, "approved");
+            if (DidTriggerScopeMailNotification(notifyResult))
+            {
+                SetCurrentApprovalScopeActionLocked(true);
+            }
+
+            CurrentSupplierId = null;
+            var batchMessage = $"Batch approved {updatedRows} supplier(s) successfully.";
+            if (!string.IsNullOrWhiteSpace(notifyResult))
+            {
+                batchMessage += $" {notifyResult}";
+            }
+
+            SetFlashMessage(batchMessage, "success");
             return RedirectToCurrentList();
         }
 
@@ -455,6 +671,9 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             SupplierServiceRows = new List<ApproveSupplierServiceRowViewModel>();
             CurrentSupplierPosition = 0;
             IsCurrentSupplierReadOnly = false;
+            CanRestoreCurrentSupplier = false;
+            HideApprovalActionButtons = IsCurrentApprovalScopeActionLocked() || HasLockedSupplierUndoStateInCurrentLogin();
+            RestoreActionCaption = "Restore Action";
             FirstSupplierId = null;
             LastSupplierId = null;
             PrevSupplierId = null;
@@ -463,7 +682,10 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             if (Rows.Count == 0)
             {
                 CurrentSupplierId = null;
-                GoToOrder = null;
+                if (string.IsNullOrWhiteSpace(GoToKeywordTemp))
+                {
+                    GoToKeyword = string.Empty;
+                }
                 return;
             }
 
@@ -486,7 +708,6 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             CurrentSupplierId = Rows[selectedIndex].SupplierID;
 
             CurrentSupplierPosition = selectedIndex + 1;
-            GoToOrder = CurrentSupplierPosition;
             FirstSupplierId = Rows[0].SupplierID;
             LastSupplierId = Rows[^1].SupplierID;
             PrevSupplierId = selectedIndex > 0 ? Rows[selectedIndex - 1].SupplierID : null;
@@ -508,7 +729,10 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                     LastSupplierId = null;
                     PrevSupplierId = null;
                     NextSupplierId = null;
-                    GoToOrder = null;
+                    if (string.IsNullOrWhiteSpace(GoToKeywordTemp))
+                    {
+                        GoToKeyword = string.Empty;
+                    }
                     return;
                 }
 
@@ -523,6 +747,15 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 {
                     // 4. Trong cùng phiên đăng nhập, supplier đã approve/disapprove vẫn hiển thị nhưng bị khóa thao tác.
                     IsCurrentSupplierReadOnly = true;
+
+                    var undoState = GetSupplierUndoStateInCurrentLogin(CurrentSupplierDetail.SupplierID);
+                    if (undoState is not null && !undoState.IsLocked && !HideApprovalActionButtons)
+                    {
+                        CanRestoreCurrentSupplier = true;
+                        RestoreActionCaption = undoState.ActionType == ApproveSupplierActionType.Disapprove
+                            ? "Restore Disapprove"
+                            : "Restore Approve";
+                    }
                 }
             }
         }
@@ -910,6 +1143,61 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return int.TryParse(rawQuery, out var parsedQuery) ? parsedQuery : null;
         }
 
+        // Tìm supplier theo Supplier Code hoặc Supplier Name trong danh sách hiện tại.
+        private int? FindSupplierIdByKeyword(string keyword)
+        {
+            if (string.IsNullOrWhiteSpace(keyword) || Rows.Count == 0)
+            {
+                return null;
+            }
+
+            var normalizedKeyword = keyword.Trim();
+
+            static bool TextEquals(string? left, string right) =>
+                string.Equals(left?.Trim(), right, StringComparison.OrdinalIgnoreCase);
+
+            static bool TextContains(string? left, string right) =>
+                !string.IsNullOrWhiteSpace(left) && left.Contains(right, StringComparison.OrdinalIgnoreCase);
+
+            return Rows.FirstOrDefault(x => TextEquals(x.SupplierCode, normalizedKeyword))?.SupplierID
+                ?? Rows.FirstOrDefault(x => TextEquals(x.SupplierName, normalizedKeyword))?.SupplierID
+                ?? Rows.FirstOrDefault(x => TextContains(x.SupplierCode, normalizedKeyword))?.SupplierID
+                ?? Rows.FirstOrDefault(x => TextContains(x.SupplierName, normalizedKeyword))?.SupplierID;
+        }
+
+        // Đếm số supplier còn đang chờ duyệt trong scope hiện tại sau khi thao tác.
+        private int CountPendingSuppliersInCurrentApprovalScope()
+        {
+            if (IsSupplierLinkMode)
+            {
+                return 0;
+            }
+
+            return SearchSupplierRows(BuildCriteria()).Count;
+        }
+
+        // Đồng bộ cờ ẩn thao tác của scope hiện tại theo trạng thái pending thực tế.
+        private void RefreshCurrentApprovalScopeActionLock()
+        {
+            if (!IsCurrentApprovalScopeActionLocked())
+            {
+                return;
+            }
+
+            if (IsSupplierLinkMode)
+            {
+                return;
+            }
+
+            // Khi scope đã bước sang phát mail thì giữ nguyên cờ khóa cho toàn bộ phiên hiện tại.
+        }
+
+        private bool DidTriggerScopeMailNotification(string? notifyResult)
+        {
+            return !string.IsNullOrWhiteSpace(notifyResult)
+                && notifyResult.Contains("being sent", StringComparison.OrdinalIgnoreCase);
+        }
+
         // Áp dụng qu tắc truy cập khi mở supplier theo link trực tiếp.
         private bool ApplySupplierLinkAccessRule(ApproveSupplierDetailViewModel supplier)
         {
@@ -959,12 +1247,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         // Kiểm tra supplier có còn được phép chỉnh sửa ở bước duyệt hiện tại hay không.
         private bool CanEditBySupplierLinkState(ApproveSupplierDetailViewModel supplier)
         {
-            if (!IsSupplierLinkMode)
-            {
-                return true;
-            }
-
-            if (!_dataScope.LevelCheckSupplier.HasValue)
+            if (!_dataScope.LevelCheckSupplier.HasValue || _dataScope.LevelCheckSupplier.Value is < 1 or > 4)
             {
                 return false;
             }
@@ -1053,6 +1336,55 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
             conn.Open();
             cmd.ExecuteNonQuery();
+        }
+
+        // Duyệt hàng loạt danh sách supplier đang ở cùng một bước workflow.
+        private int BatchApproveSuppliers(List<int> supplierIds, int levelCheckSupplier, string operatorCode)
+        {
+            if (supplierIds.Count == 0)
+            {
+                return 0;
+            }
+
+            using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+            conn.Open();
+            using var trans = conn.BeginTransaction();
+            using var cmd = new SqlCommand(@"
+                UPDATE dbo.PC_Suppliers
+                SET
+                    PurchaserCode = CASE WHEN @LevelCheck = 1 THEN @OperatorCode ELSE PurchaserCode END,
+                    PurchaserPreparedDate = CASE WHEN @LevelCheck = 1 THEN GETDATE() ELSE PurchaserPreparedDate END,
+                    DepartmentCode = CASE WHEN @LevelCheck = 2 THEN @OperatorCode ELSE DepartmentCode END,
+                    DepartmentApproveDate = CASE WHEN @LevelCheck = 2 THEN GETDATE() ELSE DepartmentApproveDate END,
+                    FinancialCode = CASE WHEN @LevelCheck = 3 THEN @OperatorCode ELSE FinancialCode END,
+                    FinancialApproveDate = CASE WHEN @LevelCheck = 3 THEN GETDATE() ELSE FinancialApproveDate END,
+                    BODCode = CASE WHEN @LevelCheck = 4 THEN @OperatorCode ELSE BODCode END,
+                    BODApproveDate = CASE WHEN @LevelCheck = 4 THEN GETDATE() ELSE BODApproveDate END,
+                    IsApproved = CASE WHEN @LevelCheck = 4 THEN 1 ELSE IsApproved END,
+                    ApprovedDate = CASE WHEN @LevelCheck = 4 THEN GETDATE() ELSE ApprovedDate END,
+                    [Status] = @LevelCheck
+                WHERE SupplierID = @SupplierID
+                  AND ISNULL([Status], 0) + 1 = @LevelCheck", conn, trans);
+
+            cmd.Parameters.Add("@SupplierID", SqlDbType.Int);
+            cmd.Parameters.AddWithValue("@LevelCheck", levelCheckSupplier);
+            cmd.Parameters.AddWithValue("@OperatorCode", operatorCode);
+
+            var totalUpdated = 0;
+            foreach (var supplierId in supplierIds)
+            {
+                cmd.Parameters["@SupplierID"].Value = supplierId;
+                totalUpdated += cmd.ExecuteNonQuery();
+            }
+
+            if (totalUpdated != supplierIds.Count)
+            {
+                trans.Rollback();
+                return 0;
+            }
+
+            trans.Commit();
+            return totalUpdated;
         }
 
         // Thực hiện nghiệp vụ duyệt supplier theo cấp duyệt hiện tại.
@@ -1219,6 +1551,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             var supplierCode = string.IsNullOrWhiteSpace(supplier.SupplierCode) ? supplier.SupplierID.ToString() : supplier.SupplierCode;
             var supplierName = string.IsNullOrWhiteSpace(supplier.SupplierName) ? "-" : supplier.SupplierName;
             var recipientDisplayNames = string.Join(", ", recipients.Select(BuildRecipientDisplayName));
+            var actionTimeText = DateTime.Now.ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
 
             // 1. Dùng chung một page duyệt supplier, chỉ phân biệt bằng tham số type=new
             var detailUrl = Url.Page("/Purchasing/ApproveSupplier/Index", values: new
@@ -1243,7 +1576,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
   <li>Supplier Code: <b>{WebUtility.HtmlEncode(supplierCode)}</b></li>
   <li>Supplier Name: <b>{WebUtility.HtmlEncode(supplierName)}</b></li>
   <li>Action by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
-  <li>Action time: <b>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</b></li>
+  <li>Action time: <b>{actionTimeText}</b></li>
 </ul>
 {(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">{WebUtility.HtmlEncode(PageTitle)}</a></p>")}
 <p>SmartSam System</p>"
@@ -1253,10 +1586,11 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 <p>Please access the approval page to continue reviewing the next suppliers in your workflow.</p>
 <ul>
   <li>Action by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
-  <li>Action time: <b>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</b></li>
+  <li>Action time: <b>{actionTimeText}</b></li>
 </ul>
 {(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">{WebUtility.HtmlEncode(PageTitle)}</a></p>")}
 <p>SmartSam System</p>";
+            body = WrapNotifyMessageBody(body);
             var htmlBody = IsApproveSupplierNewMode
                 ? EmailTemplateHelper.WrapInNotifyTemplate("APPROVE SUPPLIER NEW", "#17a2b8", DateTime.Now, body)
                 : EmailTemplateHelper.WrapInNotifyTemplate("APPROVE SUPPLIER", "#007bff", DateTime.Now, body);
@@ -1313,6 +1647,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             var supplierCode = string.IsNullOrWhiteSpace(supplier.SupplierCode) ? supplier.SupplierID.ToString() : supplier.SupplierCode;
             var supplierName = string.IsNullOrWhiteSpace(supplier.SupplierName) ? "-" : supplier.SupplierName;
             var recipientDisplayNames = string.Join(", ", recipients.Select(BuildRecipientDisplayName));
+            var actionTimeText = DateTime.Now.ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
 
             var detailUrl = IsApproveSupplierNewMode
                 ? Url.Page("/Purchasing/Supplier/SupplierDetail", values: new
@@ -1343,7 +1678,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
   <li>Supplier Name: <b>{WebUtility.HtmlEncode(supplierName)}</b></li>
   <li>Department ID: <b>{WebUtility.HtmlEncode(supplier.DeptID?.ToString() ?? "-")}</b></li>
   <li>Action by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
-  <li>Action time: <b>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</b></li>
+  <li>Action time: <b>{actionTimeText}</b></li>
 </ul>
 {(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Review: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">{WebUtility.HtmlEncode(IsApproveSupplierNewMode ? "Supplier Detail" : "Supplier List")}</a></p>")}
 <p>SmartSam System</p>"
@@ -1353,10 +1688,11 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 <p>All suppliers in the current approval batch have finished the approval workflow.</p>
 <ul>
   <li>Action by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
-  <li>Action time: <b>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</b></li>
+  <li>Action time: <b>{actionTimeText}</b></li>
 </ul>
 {(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Review: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Supplier List</a></p>")}
 <p>SmartSam System</p>";
+            body = WrapNotifyMessageBody(body);
 
             var htmlBody = IsApproveSupplierNewMode
                 ? EmailTemplateHelper.WrapInNotifyTemplate("APPROVE SUPPLIER NEW", "#17a2b8", DateTime.Now, body)
@@ -1379,6 +1715,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
             _ = SendNotifyEmailAsync(notifyRequest);
             return "The completion notification email is being sent to PU.";
+        }
+
+        // Chỉ áp font cho nội dung riêng của chức năng, còn khung ngoài dùng template hệ thống.
+        private static string WrapNotifyMessageBody(string messageBody)
+        {
+            return $"<div style='font-family:{NotifyFontFamily};'>{messageBody}</div>";
         }
 
         // Áp tiền tố subject theo cấu hình EmailSettings khi FunctionID hiện tại thuộc danh sách test.
@@ -1519,43 +1861,154 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return RedirectToPage("./Index", routeValues);
         }
 
-        // Xác định supplier kế tiếp trong danh sách hiện tại.
-        private int? GetNextSupplierIdFromCurrentRows(int supplierId)
+        // Chụp snapshot phục vụ thao tác khôi phục sau approve/disapprove.
+        private ApproveSupplierUndoSnapshot? GetSupplierUndoSnapshot(int supplierId)
         {
-            if (Rows.Count == 0)
+            using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+            using var cmd = new SqlCommand(@"
+                SELECT
+                    SupplierID,
+                    SupplierCode,
+                    SupplierName,
+                    Address,
+                    Phone,
+                    Mobile,
+                    Fax,
+                    Contact,
+                    [Position],
+                    Business,
+                    ApprovedDate,
+                    [Document],
+                    Certificate,
+                    Service,
+                    Comment,
+                    IsNew,
+                    CodeOfAcc,
+                    DeptID,
+                    [Status],
+                    PurchaserCode,
+                    PurchaserPreparedDate,
+                    DepartmentCode,
+                    DepartmentApproveDate,
+                    FinancialCode,
+                    FinancialApproveDate,
+                    BODCode,
+                    BODApproveDate,
+                    IsApproved
+                FROM dbo.PC_Suppliers
+                WHERE SupplierID = @SupplierID", conn);
+
+            cmd.Parameters.Add("@SupplierID", SqlDbType.Int).Value = supplierId;
+            conn.Open();
+            using var rd = cmd.ExecuteReader();
+            if (!rd.Read())
             {
                 return null;
             }
 
-            var currentIndex = Rows.FindIndex(x => x.SupplierID == supplierId);
-            if (currentIndex < 0)
+            return new ApproveSupplierUndoSnapshot
             {
-                return CurrentSupplierId;
-            }
-
-            if (currentIndex < Rows.Count - 1)
-            {
-                return Rows[currentIndex + 1].SupplierID;
-            }
-
-            if (currentIndex > 0)
-            {
-                return Rows[currentIndex - 1].SupplierID;
-            }
-
-            return null;
+                SupplierId = Convert.ToInt32(rd["SupplierID"]),
+                SupplierCode = Convert.ToString(rd["SupplierCode"]),
+                SupplierName = Convert.ToString(rd["SupplierName"]),
+                Address = Convert.ToString(rd["Address"]),
+                Phone = Convert.ToString(rd["Phone"]),
+                Mobile = Convert.ToString(rd["Mobile"]),
+                Fax = Convert.ToString(rd["Fax"]),
+                Contact = Convert.ToString(rd["Contact"]),
+                Position = Convert.ToString(rd["Position"]),
+                Business = Convert.ToString(rd["Business"]),
+                ApprovedDate = rd["ApprovedDate"] == DBNull.Value ? null : Convert.ToDateTime(rd["ApprovedDate"]),
+                Document = rd["Document"] != DBNull.Value && Convert.ToBoolean(rd["Document"]),
+                Certificate = Convert.ToString(rd["Certificate"]),
+                Service = Convert.ToString(rd["Service"]),
+                Comment = Convert.ToString(rd["Comment"]),
+                IsNew = rd["IsNew"] != DBNull.Value && Convert.ToBoolean(rd["IsNew"]),
+                CodeOfAcc = Convert.ToString(rd["CodeOfAcc"]),
+                DeptID = rd["DeptID"] == DBNull.Value ? null : Convert.ToInt32(rd["DeptID"]),
+                Status = rd["Status"] == DBNull.Value ? null : Convert.ToInt32(rd["Status"]),
+                PurchaserCode = Convert.ToString(rd["PurchaserCode"]),
+                PurchaserPreparedDate = rd["PurchaserPreparedDate"] == DBNull.Value ? null : Convert.ToDateTime(rd["PurchaserPreparedDate"]),
+                DepartmentCode = Convert.ToString(rd["DepartmentCode"]),
+                DepartmentApproveDate = rd["DepartmentApproveDate"] == DBNull.Value ? null : Convert.ToDateTime(rd["DepartmentApproveDate"]),
+                FinancialCode = Convert.ToString(rd["FinancialCode"]),
+                FinancialApproveDate = rd["FinancialApproveDate"] == DBNull.Value ? null : Convert.ToDateTime(rd["FinancialApproveDate"]),
+                BODCode = Convert.ToString(rd["BODCode"]),
+                BODApproveDate = rd["BODApproveDate"] == DBNull.Value ? null : Convert.ToDateTime(rd["BODApproveDate"]),
+                IsApproved = rd["IsApproved"] != DBNull.Value && Convert.ToBoolean(rd["IsApproved"])
+            };
         }
 
-        // Kiểm tra supplier hiện tại có phải bản ghi cuối danh sách hay không.
-        private bool IsLastSupplierInCurrentRows(int supplierId)
+        // Khôi phục supplier về trạng thái trước khi vừa thao tác.
+        private bool RestoreSupplierFromUndoState(ApproveSupplierUndoState undoState)
         {
-            if (Rows.Count == 0)
-            {
-                return false;
-            }
+            var snapshot = undoState.Snapshot;
+            using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+            using var cmd = new SqlCommand(@"
+                UPDATE dbo.PC_Suppliers
+                SET
+                    SupplierCode = @SupplierCode,
+                    SupplierName = @SupplierName,
+                    Address = @Address,
+                    Phone = @Phone,
+                    Mobile = @Mobile,
+                    Fax = @Fax,
+                    Contact = @Contact,
+                    [Position] = @Position,
+                    Business = @Business,
+                    ApprovedDate = @ApprovedDate,
+                    [Document] = @Document,
+                    Certificate = @Certificate,
+                    Service = @Service,
+                    Comment = @Comment,
+                    IsNew = @IsNew,
+                    CodeOfAcc = @CodeOfAcc,
+                    DeptID = @DeptID,
+                    [Status] = @Status,
+                    PurchaserCode = @PurchaserCode,
+                    PurchaserPreparedDate = @PurchaserPreparedDate,
+                    DepartmentCode = @DepartmentCode,
+                    DepartmentApproveDate = @DepartmentApproveDate,
+                    FinancialCode = @FinancialCode,
+                    FinancialApproveDate = @FinancialApproveDate,
+                    BODCode = @BODCode,
+                    BODApproveDate = @BODApproveDate,
+                    IsApproved = @IsApproved
+                WHERE SupplierID = @SupplierID
+                  AND ISNULL([Status], 0) = @AppliedStatus", conn);
 
-            var currentIndex = Rows.FindIndex(x => x.SupplierID == supplierId);
-            return currentIndex >= 0 && currentIndex == Rows.Count - 1;
+            cmd.Parameters.Add("@SupplierID", SqlDbType.Int).Value = snapshot.SupplierId;
+            cmd.Parameters.Add("@AppliedStatus", SqlDbType.Int).Value = undoState.AppliedStatus;
+            cmd.Parameters.Add("@SupplierCode", SqlDbType.NVarChar, 255).Value = (object?)snapshot.SupplierCode ?? DBNull.Value;
+            cmd.Parameters.Add("@SupplierName", SqlDbType.NVarChar, 255).Value = (object?)snapshot.SupplierName ?? DBNull.Value;
+            cmd.Parameters.Add("@Address", SqlDbType.NVarChar, 255).Value = (object?)snapshot.Address ?? DBNull.Value;
+            cmd.Parameters.Add("@Phone", SqlDbType.NVarChar, 50).Value = (object?)snapshot.Phone ?? DBNull.Value;
+            cmd.Parameters.Add("@Mobile", SqlDbType.NVarChar, 50).Value = (object?)snapshot.Mobile ?? DBNull.Value;
+            cmd.Parameters.Add("@Fax", SqlDbType.NVarChar, 50).Value = (object?)snapshot.Fax ?? DBNull.Value;
+            cmd.Parameters.Add("@Contact", SqlDbType.NVarChar, 255).Value = (object?)snapshot.Contact ?? DBNull.Value;
+            cmd.Parameters.Add("@Position", SqlDbType.NVarChar, 255).Value = (object?)snapshot.Position ?? DBNull.Value;
+            cmd.Parameters.Add("@Business", SqlDbType.NVarChar, 1000).Value = (object?)snapshot.Business ?? DBNull.Value;
+            cmd.Parameters.Add("@ApprovedDate", SqlDbType.DateTime).Value = snapshot.ApprovedDate.HasValue ? snapshot.ApprovedDate.Value : DBNull.Value;
+            cmd.Parameters.Add("@Document", SqlDbType.Bit).Value = snapshot.Document;
+            cmd.Parameters.Add("@Certificate", SqlDbType.NVarChar, 255).Value = (object?)snapshot.Certificate ?? DBNull.Value;
+            cmd.Parameters.Add("@Service", SqlDbType.NVarChar, 1000).Value = (object?)snapshot.Service ?? DBNull.Value;
+            cmd.Parameters.Add("@Comment", SqlDbType.NVarChar, 1000).Value = (object?)snapshot.Comment ?? DBNull.Value;
+            cmd.Parameters.Add("@IsNew", SqlDbType.Bit).Value = snapshot.IsNew;
+            cmd.Parameters.Add("@CodeOfAcc", SqlDbType.NVarChar, 50).Value = (object?)snapshot.CodeOfAcc ?? DBNull.Value;
+            cmd.Parameters.Add("@DeptID", SqlDbType.Int).Value = snapshot.DeptID.HasValue ? snapshot.DeptID.Value : DBNull.Value;
+            cmd.Parameters.Add("@Status", SqlDbType.Int).Value = snapshot.Status.HasValue ? snapshot.Status.Value : DBNull.Value;
+            cmd.Parameters.Add("@PurchaserCode", SqlDbType.NVarChar, 50).Value = (object?)snapshot.PurchaserCode ?? DBNull.Value;
+            cmd.Parameters.Add("@PurchaserPreparedDate", SqlDbType.DateTime).Value = snapshot.PurchaserPreparedDate.HasValue ? snapshot.PurchaserPreparedDate.Value : DBNull.Value;
+            cmd.Parameters.Add("@DepartmentCode", SqlDbType.NVarChar, 50).Value = (object?)snapshot.DepartmentCode ?? DBNull.Value;
+            cmd.Parameters.Add("@DepartmentApproveDate", SqlDbType.DateTime).Value = snapshot.DepartmentApproveDate.HasValue ? snapshot.DepartmentApproveDate.Value : DBNull.Value;
+            cmd.Parameters.Add("@FinancialCode", SqlDbType.NVarChar, 50).Value = (object?)snapshot.FinancialCode ?? DBNull.Value;
+            cmd.Parameters.Add("@FinancialApproveDate", SqlDbType.DateTime).Value = snapshot.FinancialApproveDate.HasValue ? snapshot.FinancialApproveDate.Value : DBNull.Value;
+            cmd.Parameters.Add("@BODCode", SqlDbType.NVarChar, 50).Value = (object?)snapshot.BODCode ?? DBNull.Value;
+            cmd.Parameters.Add("@BODApproveDate", SqlDbType.DateTime).Value = snapshot.BODApproveDate.HasValue ? snapshot.BODApproveDate.Value : DBNull.Value;
+            cmd.Parameters.Add("@IsApproved", SqlDbType.Bit).Value = snapshot.IsApproved;
+
+            conn.Open();
+            return cmd.ExecuteNonQuery() > 0;
         }
 
         // Gộp các supplier đã xử lý trong phiên vào danh sách đang hiển thị.
@@ -1719,6 +2172,45 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             HttpContext.Session.SetString(GetProcessedSupplierSessionKey(), string.Join(",", processedIds.OrderBy(x => x)));
         }
 
+        private void MarkSuppliersProcessedInCurrentLogin(IEnumerable<int> supplierIds)
+        {
+            var processedIds = GetProcessedSupplierIdsInCurrentLogin();
+            var hasChanges = false;
+
+            foreach (var supplierId in supplierIds)
+            {
+                if (processedIds.Add(supplierId))
+                {
+                    hasChanges = true;
+                }
+            }
+
+            if (!hasChanges)
+            {
+                return;
+            }
+
+            HttpContext.Session.SetString(GetProcessedSupplierSessionKey(), string.Join(",", processedIds.OrderBy(x => x)));
+        }
+
+        // Bỏ đánh dấu supplier đã xử lý trong phiên hiện tại.
+        private void UnmarkSupplierProcessedInCurrentLogin(int supplierId)
+        {
+            var processedIds = GetProcessedSupplierIdsInCurrentLogin();
+            if (!processedIds.Remove(supplierId))
+            {
+                return;
+            }
+
+            if (processedIds.Count == 0)
+            {
+                HttpContext.Session.Remove(GetProcessedSupplierSessionKey());
+                return;
+            }
+
+            HttpContext.Session.SetString(GetProcessedSupplierSessionKey(), string.Join(",", processedIds.OrderBy(x => x)));
+        }
+
         // Lấy tập supplier đã xử lý trong phiên đăng nhập hiện tại.
         private HashSet<int> GetProcessedSupplierIdsInCurrentLogin()
         {
@@ -1747,6 +2239,137 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             var authCookie = Request.Cookies[".AspNetCore.Cookies"] ?? string.Empty;
             var authCookieHash = ComputeSha256(authCookie);
             return $"{ProcessedSupplierSessionKeyPrefix}:{employeeCode}:{authCookieHash}";
+        }
+
+        // Lưu trạng thái khôi phục của supplier trong phiên hiện tại.
+        private void SetSupplierUndoStateInCurrentLogin(ApproveSupplierUndoState state)
+        {
+            var undoStates = GetAllSupplierUndoStatesInCurrentLogin();
+            undoStates[state.SupplierId] = state;
+            HttpContext.Session.SetString(GetUndoSupplierSessionKey(), JsonSerializer.Serialize(undoStates));
+        }
+
+        // Lấy trạng thái khôi phục của supplier trong phiên hiện tại.
+        private ApproveSupplierUndoState? GetSupplierUndoStateInCurrentLogin(int supplierId)
+        {
+            var undoStates = GetAllSupplierUndoStatesInCurrentLogin();
+            return undoStates.TryGetValue(supplierId, out var state) ? state : null;
+        }
+
+        // Xóa trạng thái khôi phục của supplier trong phiên hiện tại.
+        private void RemoveSupplierUndoStateInCurrentLogin(int supplierId)
+        {
+            var undoStates = GetAllSupplierUndoStatesInCurrentLogin();
+            if (!undoStates.Remove(supplierId))
+            {
+                return;
+            }
+
+            if (undoStates.Count == 0)
+            {
+                HttpContext.Session.Remove(GetUndoSupplierSessionKey());
+                return;
+            }
+
+            HttpContext.Session.SetString(GetUndoSupplierSessionKey(), JsonSerializer.Serialize(undoStates));
+        }
+
+        // Xóa toàn bộ trạng thái khôi phục trong phiên hiện tại.
+        private void ClearAllSupplierUndoStatesInCurrentLogin()
+        {
+            HttpContext.Session.Remove(GetUndoSupplierSessionKey());
+        }
+
+        private Dictionary<int, ApproveSupplierUndoState> GetAllSupplierUndoStatesInCurrentLogin()
+        {
+            var rawValue = HttpContext.Session.GetString(GetUndoSupplierSessionKey());
+            if (string.IsNullOrWhiteSpace(rawValue))
+            {
+                return new Dictionary<int, ApproveSupplierUndoState>();
+            }
+
+            try
+            {
+                return JsonSerializer.Deserialize<Dictionary<int, ApproveSupplierUndoState>>(rawValue)
+                    ?? new Dictionary<int, ApproveSupplierUndoState>();
+            }
+            catch
+            {
+                return new Dictionary<int, ApproveSupplierUndoState>();
+            }
+        }
+
+        private string GetUndoSupplierSessionKey()
+        {
+            var employeeCode = User.Identity?.Name?.Trim() ?? "ANONYMOUS";
+            var authCookie = Request.Cookies[".AspNetCore.Cookies"] ?? string.Empty;
+            var authCookieHash = ComputeSha256(authCookie);
+            return $"{UndoSupplierSessionKeyPrefix}:{employeeCode}:{authCookieHash}";
+        }
+
+        private bool IsCurrentApprovalScopeActionLocked()
+        {
+            return string.Equals(HttpContext.Session.GetString(GetCurrentApprovalScopeActionLockedSessionKey()), "1", StringComparison.Ordinal);
+        }
+
+        private void SetCurrentApprovalScopeActionLocked(bool isLocked)
+        {
+            var key = GetCurrentApprovalScopeActionLockedSessionKey();
+            if (isLocked)
+            {
+                HttpContext.Session.SetString(key, "1");
+                LockAllSupplierUndoStatesInCurrentLogin();
+            }
+            else
+            {
+                HttpContext.Session.Remove(key);
+            }
+        }
+
+        private bool HasLockedSupplierUndoStateInCurrentLogin()
+        {
+            return GetAllSupplierUndoStatesInCurrentLogin().Values.Any(x => x.IsLocked);
+        }
+
+        private void LockAllSupplierUndoStatesInCurrentLogin()
+        {
+            var undoStates = GetAllSupplierUndoStatesInCurrentLogin();
+            if (undoStates.Count == 0)
+            {
+                return;
+            }
+
+            var updated = false;
+            foreach (var undoState in undoStates.Values)
+            {
+                if (undoState.IsLocked)
+                {
+                    continue;
+                }
+
+                undoState.IsLocked = true;
+                updated = true;
+            }
+
+            if (!updated)
+            {
+                return;
+            }
+
+            HttpContext.Session.SetString(GetUndoSupplierSessionKey(), JsonSerializer.Serialize(undoStates));
+        }
+
+        private string GetCurrentApprovalScopeActionLockedSessionKey()
+        {
+            var employeeCode = User.Identity?.Name?.Trim() ?? "ANONYMOUS";
+            var authCookie = Request.Cookies[".AspNetCore.Cookies"] ?? string.Empty;
+            var authCookieHash = ComputeSha256(authCookie);
+            var mode = IsSupplierLinkMode ? "LINK" : "LIST";
+            var approvalType = IsApproveSupplierNewMode ? "NEW" : "NORMAL";
+            var level = _dataScope.LevelCheckSupplier?.ToString() ?? "NOLEVEL";
+            var deptScope = ResolveDepartmentFilter()?.ToString() ?? "ALL";
+            var supplierScope = IsSupplierLinkMode ? (SupplierId?.ToString() ?? "NOSUPPLIER") : "ALLSUPPLIERS";
+            return $"{ScopeActionLockedSessionKeyPrefix}:{employeeCode}:{authCookieHash}:{mode}:{approvalType}:{level}:{deptScope}:{supplierScope}";
         }
 
         // Tạo mã băm để tách dữ liệu phiên làm việc theo đăng nhập hiện tại.
@@ -1865,10 +2488,51 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         }
     }
 
-    public class ApproveLookupOptionViewModel
+    public enum ApproveSupplierActionType
     {
-        public int Id { get; set; }
-        public string CodeOrName { get; set; } = string.Empty;
+        Approve = 1,
+        Disapprove = 2
+    }
+
+    public class ApproveSupplierUndoState
+    {
+        public ApproveSupplierActionType ActionType { get; set; }
+        public int SupplierId { get; set; }
+        public int AppliedStatus { get; set; }
+        public bool IsLocked { get; set; }
+        public ApproveSupplierUndoSnapshot Snapshot { get; set; } = new ApproveSupplierUndoSnapshot();
+    }
+
+    public class ApproveSupplierUndoSnapshot
+    {
+        public int SupplierId { get; set; }
+        public string? SupplierCode { get; set; }
+        public string? SupplierName { get; set; }
+        public string? Address { get; set; }
+        public string? Phone { get; set; }
+        public string? Mobile { get; set; }
+        public string? Fax { get; set; }
+        public string? Contact { get; set; }
+        public string? Position { get; set; }
+        public string? Business { get; set; }
+        public DateTime? ApprovedDate { get; set; }
+        public bool Document { get; set; }
+        public string? Certificate { get; set; }
+        public string? Service { get; set; }
+        public string? Comment { get; set; }
+        public bool IsNew { get; set; }
+        public string? CodeOfAcc { get; set; }
+        public int? DeptID { get; set; }
+        public int? Status { get; set; }
+        public string? PurchaserCode { get; set; }
+        public DateTime? PurchaserPreparedDate { get; set; }
+        public string? DepartmentCode { get; set; }
+        public DateTime? DepartmentApproveDate { get; set; }
+        public string? FinancialCode { get; set; }
+        public DateTime? FinancialApproveDate { get; set; }
+        public string? BODCode { get; set; }
+        public DateTime? BODApproveDate { get; set; }
+        public bool IsApproved { get; set; }
     }
 
     public class ApproveFilterCriteria
