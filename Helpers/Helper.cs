@@ -287,7 +287,7 @@ namespace SmartSam.Helpers
         public static string WrapInNotifyTemplate(string title, string color, DateTime date, string messageBody)
         {
             return $@"
-                <div style='font-family: ""Segoe UI"", Arial, sans-serif; max-width: 700px; margin: auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); background-color: #ffffff;'>
+                <div style='font-family: VNI-Times, VNI-Helve, ""Segoe UI"", Arial, sans-serif; max-width: 700px; margin: auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); background-color: #ffffff;'>
                     <div style='background-color: {color}; color: white; padding: 25px; text-align: center;'>
                         <h2 style='margin: 0; font-size: 22px; text-transform: uppercase; letter-spacing: 1px;'>{title}</h2>
                         <p style='margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;'>Notification Date: {date:dd/MM/yyyy}</p>
