@@ -290,7 +290,7 @@ namespace SmartSam.Helpers
                 <div style='font-family: VNI-Times, VNI-Helve, ""Segoe UI"", Arial, sans-serif; max-width: 700px; margin: auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); background-color: #ffffff;'>
                     <div style='background-color: {color}; color: white; padding: 25px; text-align: center;'>
                         <h2 style='margin: 0; font-size: 22px; text-transform: uppercase; letter-spacing: 1px;'>{title}</h2>
-                        <p style='margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;'>Notification Date: {date:dd/MM/yyyy}</p>
+                        <p style='margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;'>Notification Date: {date:MMM d, yyyy}</p>
                     </div>
                     <div style='padding: 30px; line-height: 1.6;'>
                         <div style='color: #333; font-size: 15px;'>
