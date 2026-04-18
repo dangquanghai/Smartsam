@@ -527,10 +527,10 @@ function renderDetailRows() {
     }
 
     const deptOptions = buildDepartmentOptions();
-    const html = purchaseOrderDetails.map(function (row) {
+    const html = purchaseOrderDetails.map(function (row, index) {
         return `
             <tr data-key="${escapeHtml(row.tempKey)}">
-                ${canSave ? `<td class="po-detail-action-cell"><div class="po-detail-action-wrap"><button type="button" class="btn btn-xs btn-outline-danger border po-remove-row" data-remove-temp-key="${escapeHtml(row.tempKey)}" title="Remove"><i class="fas fa-trash"></i></button></div></td>` : '<td></td>'}
+                ${canSave ? `<td class="po-detail-action-cell"><div class="po-detail-action-wrap"><button type="button" class="btn btn-xs btn-outline-danger border po-remove-row" data-remove-temp-key="${escapeHtml(row.tempKey)}" title="Remove"><i class="fas fa-trash"></i></button></div></td>` : `<td class="po-detail-stt-cell text-center">${index + 1}</td>`}
                 <td class="po-detail-itemcode">${escapeHtml(row.itemCode)}</td>
                 <td class="tcvn3-font">${escapeHtml(row.itemName)}</td>
                 <td>${escapeHtml(row.unit)}</td>

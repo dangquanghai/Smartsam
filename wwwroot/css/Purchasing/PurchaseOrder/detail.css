@@ -141,6 +141,14 @@
     margin: 0;
 }
 
+.po-detail-stt-cell {
+    width: 50px;
+    padding-left: 0;
+    padding-right: 0;
+    vertical-align: middle;
+    font-weight: 600;
+}
+
 #purchaseOrderAttachmentModal .modal-dialog {
     max-width: min(92vw, 920px);
 }
