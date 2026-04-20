@@ -1,17 +1,22 @@
-﻿$(document).ready(function () {
+﻿
+var MyScan = null; // Khai báo dùng chung toàn file
+$(document).ready(function () {
     // 1. Lấy Mode và ID từ hệ thống
     const urlParams = new URLSearchParams(window.location.search);
     const mode = urlParams.get('mode')?.toLowerCase() || 'add';
+    // KHÔNG khai báo 'const MyScan' ở đây nữa để tránh bị giới hạn phạm vi
+
+    // Chỉ thêm đoạn này để khởi tạo đối tượng khi trang sẵn sàng
+    if (typeof WebFxScan !== 'undefined') {
+        MyScan = new WebFxScan();
+        initScanner(); // Gọi hàm connect
+    }
 
     // 2. Chạy khởi tạo trang
     initializePage(mode);
 
-    // Khởi tạo máy scan ngay khi load trang
-    if (typeof WebFxScan !== 'undefined') {
-        initScanner();
-    }
-
-    // 3. Xử lý sự kiện SUBMIT Form chính
+  
+        // 3. Xử lý sự kiện SUBMIT Form chính
     $('form').on('submit', async function (e) {
         if (mode === 'view') return true;
 
@@ -51,6 +56,8 @@
    CÁC HÀM KHỞI TẠO VÀ VALIDATION (Nội bộ)
    ========================================================================== */
 function initializePage(mode) {
+
+ 
     // Khởi tạo Select2
     if (typeof window.initSelect2 === 'function') {
         window.initSelect2('#CompanyId', 'company');
@@ -101,7 +108,6 @@ function initializePage(mode) {
     // Tự động load Grid dịch vụ ở Vùng 2 nếu là Edit mode
     loadServiceGrid();
 
-    const MyScan = new WebFxScan();
    
 }
 
@@ -671,36 +677,17 @@ function openTenantModal(mode) {
         $('#modalTenantDetail').modal('show');
     }
 }
-/*
-function renderGalleries(passports, police) {
-    // 1. Xử lý Tab Passport (DocType = 1)
-    var htmlPassport = '';
-    if (passports && passports.length > 0) {
-        $.each(passports, function (i, doc) {
-            htmlPassport += createImgItem(doc);
-        });
-    } else {
-        htmlPassport = '<div class="col-12 text-muted p-3 text-center">Chưa có hình Passport.</div>';
-    }
-    $('#passport_gallery').html(htmlPassport);
 
-    // 2. Xử lý Tab Công an (DocType = 2)
-    var htmlPolice = '';
-    if (police && police.length > 0) {
-        $.each(police, function (i, doc) {
-            htmlPolice += createImgItem(doc);
-        });
-    } else {
-        htmlPolice = '<div class="col-12 text-muted p-3 text-center">Chưa có hồ sơ đăng ký công an.</div>';
-    }
-    $('#police_gallery').html(htmlPolice);
-}
-*/
 async function initScanner() {
     try {
+        if (!MyScan) return;
+        // Thử kết nối tới Service Local
         await MyScan.connect({ ip: "127.0.0.1", port: "17778" });
         await MyScan.init();
-    } catch (e) { console.warn("Scanner service not found"); }
+        console.log("✅ Scanner Service connected!");
+    } catch (e) {
+        console.warn("⚠️ Scanner service not found at port 17778");
+    }
 }
 // Hàm con để tạo HTML cho từng tấm ảnh
 function createImgItem(doc) {
@@ -858,42 +845,186 @@ function recognizeOCR() {
         $('#btnReconize').html('<i class="fas fa-magic"></i> Recognize');
     });
 }
+async function callWebSDKScan() {
+    try {
+        if (typeof Swal !== 'undefined') Swal.fire({ title: 'Đang chuẩn bị...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
-function callWebSDKScan() {
-    // 1. Hiển thị thông báo đang chờ máy scan
-    Swal.fire({
-        title: 'Đang kết nối máy scan...',
-        text: 'Vui lòng đặt Passport/ID vào máy',
-        allowOutsideClick: false,
-        didOpen: () => { Swal.showLoading(); }
-    });
+        // 1. Lấy danh sách thiết bị
+        const res = await MyScan.getDeviceList();
+        const devices = res?.data?.options || [];
+        if (devices.length === 0) throw new Error("Không tìm thấy máy scan.");
 
-    // 2. Gọi lệnh Scan (Thay URL port theo đúng tài liệu SDK anh đã cài)
-    $.ajax({
-        url: 'http://127.0.0.1:17778/api/scan', // Ví dụ Port 18080 của SDK
-        type: 'POST',
-        timeout: 60000,
-        success: function (res) {
-            Swal.close();
-            if (res.success) {
-                // Đổ dữ liệu vào các ô Input mà anh đã cực khổ fix xong ở các bước trước
-                fillScanDataToForm(res.data);
+        const dName = devices[0].deviceName;
 
-                // Hiển thị ảnh scan được vào gallery (nếu có)
-                if (res.imageScan) {
-                    displayScanImage(res.imageScan);
+        // 2. Cấu hình (Sử dụng thông số từ tài liệu dành riêng cho Passport)
+        const config = {
+            deviceName: dName,
+            source: "Sheetfed-Front",
+            paperSize: "A6", // QUAN TRỌNG: Phải là A6 cho máy A62
+            recognizeType: "passport", // Để lấy FullName, DocumentNo
+            resolution: 300,
+            mode: "color",
+            autoScan: false // Để mình chủ động bấm nút quét
+        };
+
+        // 3. Khởi tạo (Lệnh này sẽ 'Open Device')
+        const setRes = await MyScan.setScanner(config);
+        if (!setRes.result) throw new Error("Lỗi setScanner: " + setRes.message);
+
+        // 4. Đợi 1 giây cho phần cứng sẵn sàng
+        await new Promise(r => setTimeout(r, 1000));
+
+        // 5. Gọi lệnh quét với Callback (Theo tài liệu ScanOptions)
+        console.log("Bắt đầu quét...");
+        const scanRes = await MyScan.scan(function (fileList) {
+            // Đây là callback xử lý dữ liệu sau khi máy kéo giấy xong
+            if (fileList && fileList.length > 0) {
+                const file = fileList[0];
+                if (file.ocrText) {
+                    // OCR của Plustek thường trả về chuỗi JSON hoặc String tùy phiên bản
+                    console.log("Dữ liệu Passport:", file.ocrText);
+                    // Ví dụ đổ vào form (anh cần kiểm tra cấu trúc file.ocrText trả về)
+                    // $('#txtCustomerName').val(file.ocrText.FullName);
                 }
-            } else {
-                alert("Lỗi scan: " + res.message);
+                if (file.base64) {
+                    $('#current_img_display').attr('src', "data:image/jpeg;base64," + file.base64).show();
+                    $('#no_img_overlay').hide();
+                }
             }
-        },
-        error: function (xhr) {
-            Swal.close();
-            alert("Không thể kết nối với Web SDK. Hãy đảm bảo phần mềm máy scan đã được bật!");
-        }
-    });
-}
+        });
 
+        if (typeof Swal !== 'undefined') Swal.close();
+        if (!scanRes.result) {
+            // Nếu vẫn lỗi 3 (Not Yet Open), kiểm tra xem hộ chiếu đã đặt vào máy chưa
+            if (scanRes.error == 3) alert("Máy chưa sẵn sàng. Anh hãy đặt Hộ chiếu vào khe máy trước khi bấm Scan.");
+            else alert("Lỗi: " + scanRes.message);
+        }
+
+    } catch (err) {
+        if (typeof Swal !== 'undefined') Swal.close();
+        alert("Lỗi: " + err.message);
+    }
+}
+// Hàm phụ để tách biệt logic xử lý dữ liệu sau scan
+function processScanResults(dataList) {
+    if (!dataList || dataList.length === 0) return;
+    const file = dataList[0];
+
+    // Đổ dữ liệu OCR
+    if (file.ocrText) {
+        if (file.ocrText.FullName) $('#txtCustomerName').val(file.ocrText.FullName);
+        if (file.ocrText.DocumentNo) $('#txtIDPassportNo').val(file.ocrText.DocumentNo);
+    }
+
+    // Hiển thị ảnh
+    if (file.base64) {
+        const imgBase = "data:image/jpeg;base64," + file.base64;
+        $('#current_img_display').attr('src', imgBase).show();
+        $('#no_img_overlay').hide();
+    }
+}
+/*
+async function callWebSDKScan() {
+    if (!MyScan) {
+        alert("Thư viện scan.js chưa được tải hoặc bị lỗi!");
+        return;
+    }
+
+    try {
+        // 1. Hiện Loading
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Đang kết nối máy scan...',
+                text: 'Vui lòng đặt Passport/ID vào máy',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+        }
+
+        // 2. Kết nối (Bỏ qua nếu đã kết nối)
+        try {
+            await MyScan.connect({ ip: "127.0.0.1", port: "17778" });
+        } catch (e) {
+            console.log("Sử dụng kết nối hiện có.");
+        }
+
+        // 3. Lấy thiết bị theo đúng tài liệu (CommonReturn.data.options)
+        const response = await MyScan.getDeviceList();
+        console.log("Dữ liệu thô từ tài liệu:", response);
+
+        // Theo tài liệu: kết quả nằm trong response.data.options
+        let devices = [];
+        if (response && response.data && response.data.options) {
+            devices = response.data.options;
+        }
+
+        if (devices.length === 0) {
+            if (typeof Swal !== 'undefined') Swal.close();
+            alert("Không tìm thấy máy scan! (Thiết bị chưa được cắm hoặc Server chưa nhận)");
+            return;
+        }
+
+        // Lấy thiết bị đầu tiên
+        const firstDevice = devices[0];
+        const dName = firstDevice.deviceName; // Tài liệu ghi rõ là 'deviceName'
+
+        console.log("Đã tìm thấy máy scan:", dName);
+
+        const scannerConfig = {
+            deviceName: dName,
+            source: "ADF-Front", // Tùy chỉnh theo máy Plustek của anh
+            paperSize: "A4",
+            resolution: 300,
+            mode: "color"
+        };
+
+        await MyScan.setScanner(scannerConfig);
+
+        // 4. Quét
+        const scanRes = await MyScan.scan();
+        if (typeof Swal !== 'undefined') Swal.close();
+
+        if (scanRes && scanRes.result && scanRes.data && scanRes.data.length > 0) {
+            const file = scanRes.data[0];
+
+            // Đổ dữ liệu OCR vào Form (Nếu có)
+            if (file.ocrText) {
+                if (file.ocrText.FullName) $('#txtCustomerName').val(file.ocrText.FullName);
+                if (file.ocrText.DocumentNo) $('#txtIDPassportNo').val(file.ocrText.DocumentNo);
+            }
+
+            // Hiển thị ảnh vào khung có sẵn của anh
+            if (file.base64) {
+                const imgBase = "data:image/jpeg;base64," + file.base64;
+                $('#current_img_display').attr('src', imgBase).show();
+                $('#no_img_overlay').hide();
+
+                // Nếu anh dùng mảng allDocs để quản lý slider ảnh
+                if (typeof allDocs !== 'undefined') {
+                    allDocs.push({ FilePath: imgBase, DocTypeID: $('#ddlDocTypeID').val() || 1 });
+                    currentIndex = allDocs.length - 1;
+                    $('#img_index_label').text(`${currentIndex + 1} / ${allDocs.length}`);
+                }
+            }
+        } else {
+            alert("Quá trình quét không có dữ liệu trả về.");
+        }
+    } catch (err) {
+        if (typeof Swal !== 'undefined') Swal.close();
+        console.error("Lỗi thực thi:", err);
+        // Alert này giúp anh biết lỗi ở đâu mà không làm "treo" các element khác
+        alert("Lỗi máy scan: " + err.message);
+    }
+}
+*/
+function displayScanImage(base64) {
+    $('#current_img_display').attr('src', base64).show();
+    $('#no_img_overlay').hide();
+    // Thêm vào mảng allDocs để có thể bấm next/back nếu cần
+    allDocs.push({ FilePath: base64, DocTypeID: $('#ddlDocTypeID').val() || 1 });
+    currentIndex = allDocs.length - 1;
+    $('#img_index_label').text(`${currentIndex + 1} / ${allDocs.length}`);
+}
 function fillScanDataToForm(data) {
     // Dùng chính các ID anh đã chuẩn hóa
     if (data.FullName) $('#txtCustomerName').val(data.FullName);
