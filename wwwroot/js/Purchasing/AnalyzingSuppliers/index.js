@@ -1,25 +1,58 @@
 (() => {
     "use strict";
 
-    function syncSupplierSelects(source, target) {
-        if (!source || !target) {
+    function initSupplierSelect2() {
+        if (typeof window.jQuery === "undefined" || typeof window.jQuery.fn.select2 !== "function") {
             return;
         }
 
-        source.addEventListener("change", () => {
-            target.value = source.value;
+        window.jQuery("#Filter_SupplierCode, #Filter_SupplierName").each(function () {
+            const $select = window.jQuery(this);
+            if ($select.hasClass("select2-hidden-accessible")) {
+                $select.select2("destroy");
+            }
+
+            $select.select2({
+                width: "100%",
+                allowClear: true,
+                placeholder: $select.data("placeholder") || "",
+                minimumResultsForSearch: 0
+            });
         });
     }
 
     function initSupplierSync() {
-        const supplierCode = document.getElementById("Filter_SupplierCode");
-        const supplierName = document.getElementById("Filter_SupplierName");
-        if (!supplierCode || !supplierName) {
+        const $ = window.jQuery;
+        if (typeof $ === "undefined") {
             return;
         }
 
-        syncSupplierSelects(supplierCode, supplierName);
-        syncSupplierSelects(supplierName, supplierCode);
+        const supplierCode = $("#Filter_SupplierCode");
+        const supplierName = $("#Filter_SupplierName");
+        if (!supplierCode.length || !supplierName.length) {
+            return;
+        }
+
+        let isSyncing = false;
+        const sync = ($source, $target) => {
+            $source.off("change.analyzingSuppliersSync").on("change.analyzingSuppliersSync", () => {
+                if (isSyncing) {
+                    return;
+                }
+
+                const nextValue = $source.val() || "";
+                if (($target.val() || "") === nextValue) {
+                    return;
+                }
+
+                isSyncing = true;
+                $target.val(nextValue).trigger("change.select2");
+                isSyncing = false;
+            });
+        };
+
+        sync(supplierCode, supplierName);
+        sync(supplierName, supplierCode);
     }
 
     function initPageSizeSubmit() {
@@ -61,6 +94,7 @@
     }
 
     document.addEventListener("DOMContentLoaded", () => {
+        initSupplierSelect2();
         initSupplierSync();
         initPageSizeSubmit();
         initCloseButtons();

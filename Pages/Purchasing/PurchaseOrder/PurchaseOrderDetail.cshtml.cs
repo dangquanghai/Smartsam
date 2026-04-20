@@ -1,7 +1,9 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Globalization;
 using System.IO;
+using System.Net;
+using System.Net.Mail;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -9,6 +11,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Data.SqlClient;
+using SmartSam.Helpers;
 using SmartSam.Pages;
 using SmartSam.Services;
 using SmartSam.Services.Interfaces;
@@ -17,6 +20,7 @@ namespace SmartSam.Pages.Purchasing.PurchaseOrder;
 
 public class PurchaseOrderDetailModel : BasePageModel
 {
+    private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
     private const int FUNCTION_ID = 73;
     private const int PermissionView = 2;
     private const int PermissionAdd = 3;
@@ -214,6 +218,10 @@ public class PurchaseOrderDetailModel : BasePageModel
             return RedirectToCurrentDetail();
         }
 
+        string? notifySubject = null;
+        string? notifyBody = null;
+        List<PurchaseOrderNotifyRecipientViewModel> recipients = new List<PurchaseOrderNotifyRecipientViewModel>();
+
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
         using var trans = conn.BeginTransaction();
@@ -236,15 +244,25 @@ public class PurchaseOrderDetailModel : BasePageModel
                 throw new InvalidOperationException("Purchaser approval failed because purchase order is not in processing status.");
             }
 
+            recipients = GetWorkflowRecipientsByFlag(conn, trans, "IsCFO");
+            notifySubject = "[Purchase Order] Waiting for CFO approve";
+            notifyBody = BuildWorkflowNotifyBody(conn, trans, "PURCHASE ORDER", "#007bff", "is waiting for your approval.", true);
+
             trans.Commit();
-            TempData["SuccessMessage"] = "Purchase order sent to approval successfully.";
         }
         catch (Exception ex)
         {
             trans.Rollback();
             TempData["SuccessMessage"] = ex.Message;
+            return RedirectToCurrentDetail("view");
         }
 
+        if (recipients.Count > 0 && !string.IsNullOrWhiteSpace(notifySubject) && !string.IsNullOrWhiteSpace(notifyBody))
+        {
+            TryQueueWorkflowNotifyEmail(recipients, notifySubject, notifyBody);
+        }
+
+        TempData["SuccessMessage"] = "Purchase order sent to approval successfully.";
         return RedirectToCurrentDetail("view");
     }
 
@@ -587,6 +605,10 @@ public class PurchaseOrderDetailModel : BasePageModel
             return RedirectToCurrentDetail();
         }
 
+        string? notifySubject = null;
+        string? notifyBody = null;
+        List<PurchaseOrderNotifyRecipientViewModel> recipients = new List<PurchaseOrderNotifyRecipientViewModel>();
+
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
         using var trans = conn.BeginTransaction();
@@ -608,6 +630,10 @@ public class PurchaseOrderDetailModel : BasePageModel
                 {
                     throw new InvalidOperationException("Approve failed because CFO step was already processed.");
                 }
+
+                recipients = GetWorkflowRecipientsByFlag(conn, trans, "IsBOD");
+                notifySubject = "[Purchase Order] Waiting for BOD approve";
+                notifyBody = BuildWorkflowNotifyBody(conn, trans, "PURCHASE ORDER", "#17a2b8", "is waiting for your approval.", true);
             }
             else if (CanApproveAsBod())
             {
@@ -626,6 +652,10 @@ public class PurchaseOrderDetailModel : BasePageModel
                 {
                     throw new InvalidOperationException("Approve failed because BOD step was already processed.");
                 }
+
+                recipients = GetPurchaserRecipient(conn, trans, Header.PurId);
+                notifySubject = "[Purchase Order] Approved successfully";
+                notifyBody = BuildWorkflowNotifyBody(conn, trans, "PURCHASE ORDER", "#28a745", "has been approved successfully.", false);
             }
             else
             {
@@ -633,14 +663,20 @@ public class PurchaseOrderDetailModel : BasePageModel
             }
 
             trans.Commit();
-            TempData["SuccessMessage"] = "Purchase order approved successfully.";
         }
         catch (Exception ex)
         {
             trans.Rollback();
             TempData["SuccessMessage"] = ex.Message;
+            return RedirectToCurrentDetail("view");
         }
 
+        if (recipients.Count > 0 && !string.IsNullOrWhiteSpace(notifySubject) && !string.IsNullOrWhiteSpace(notifyBody))
+        {
+            TryQueueWorkflowNotifyEmail(recipients, notifySubject, notifyBody);
+        }
+
+        TempData["SuccessMessage"] = "Purchase order approved successfully.";
         return RedirectToCurrentDetail("view");
     }
 
@@ -1047,10 +1083,10 @@ public class PurchaseOrderDetailModel : BasePageModel
 
         return string.Join(Environment.NewLine, new[]
         {
-            $"Thời gian giao nhận (Delivery date): {deliveryDate}",
-            "Địa điểm giao nhận (Deliver place): 20 Le Thanh Ton st, Sai Gon Ward, HCMC, VN",
-            "Người nhận hàng (Receiver): ",
-            "Phương thức thanh toán (Payment term): "
+            $"Thá»i gian giao nháº­n (Delivery date): {deliveryDate}",
+            "Äá»‹a Ä‘iá»ƒm giao nháº­n (Deliver place): 20 Le Thanh Ton st, Sai Gon Ward, HCMC, VN",
+            "NgÆ°á»i nháº­n hÃ ng (Receiver): ",
+            "PhÆ°Æ¡ng thá»©c thanh toÃ¡n (Payment term): "
         });
     }
 
@@ -1633,6 +1669,270 @@ public class PurchaseOrderDetailModel : BasePageModel
         return Header.Id > 0 && Header.StatusId == 2 && Header.CAId.HasValue && !Header.GDId.HasValue && (_workflowUser.IsBOD || IsAdminRole());
     }
 
+    private static List<PurchaseOrderNotifyRecipientViewModel> GetWorkflowRecipientsByFlag(SqlConnection conn, SqlTransaction trans, string flagColumn)
+    {
+        var rows = new List<PurchaseOrderNotifyRecipientViewModel>();
+
+        using var cmd = new SqlCommand($@"
+SELECT DISTINCT
+    LTRIM(RTRIM(TheEmail)) AS TheEmail,
+    LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode,
+    LTRIM(RTRIM(EmployeeName)) AS EmployeeName,
+    LTRIM(RTRIM(ISNULL(Title, ''))) AS Title
+FROM dbo.MS_Employee
+WHERE ISNULL({flagColumn}, 0) = 1
+  AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
+  AND ISNULL(IsActive, 0) = 1", conn, trans);
+
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var email = Convert.ToString(reader["TheEmail"]) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                continue;
+            }
+
+            rows.Add(new PurchaseOrderNotifyRecipientViewModel
+            {
+                Email = email.Trim(),
+                EmployeeCode = Convert.ToString(reader["EmployeeCode"])?.Trim() ?? string.Empty,
+                EmployeeName = Convert.ToString(reader["EmployeeName"])?.Trim() ?? string.Empty,
+                Title = Convert.ToString(reader["Title"])?.Trim() ?? string.Empty
+            });
+        }
+
+        return rows;
+    }
+
+    private static List<PurchaseOrderNotifyRecipientViewModel> GetPurchaserRecipient(SqlConnection conn, SqlTransaction trans, int? employeeId)
+    {
+        var rows = new List<PurchaseOrderNotifyRecipientViewModel>();
+        if (!employeeId.HasValue || employeeId.Value <= 0)
+        {
+            return rows;
+        }
+
+        using var cmd = new SqlCommand(@"
+SELECT TOP 1
+    LTRIM(RTRIM(TheEmail)) AS TheEmail,
+    LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode,
+    LTRIM(RTRIM(EmployeeName)) AS EmployeeName,
+    LTRIM(RTRIM(ISNULL(Title, ''))) AS Title
+FROM dbo.MS_Employee
+WHERE EmployeeID = @EmployeeID
+  AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
+  AND ISNULL(IsActive, 0) = 1", conn, trans);
+        cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId.Value;
+
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var email = Convert.ToString(reader["TheEmail"]) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                continue;
+            }
+
+            rows.Add(new PurchaseOrderNotifyRecipientViewModel
+            {
+                Email = email.Trim(),
+                EmployeeCode = Convert.ToString(reader["EmployeeCode"])?.Trim() ?? string.Empty,
+                EmployeeName = Convert.ToString(reader["EmployeeName"])?.Trim() ?? string.Empty,
+                Title = Convert.ToString(reader["Title"])?.Trim() ?? string.Empty
+            });
+        }
+
+        return rows;
+    }
+
+    private string BuildWorkflowNotifyBody(SqlConnection conn, SqlTransaction trans, string title, string color, string actionText, bool showApproveLink)
+    {
+        var detailUrl = Url.Page("/Purchasing/PurchaseOrder/PurchaseOrderDetail", values: new
+        {
+            id = Header.Id,
+            mode = "view"
+        });
+
+        var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl)
+            ? string.Empty
+            : $"{Request.Scheme}://{Request.Host}{detailUrl}";
+        var remarkText = string.IsNullOrWhiteSpace(Header.Remark) ? string.Empty : Header.Remark.Trim();
+        var totalAmount = GetCurrentTotalAmount(conn, trans);
+
+        var body = $@"
+<p>Dear {{RECIPIENT_LABEL}},</p>
+<p>Purchase Order <b>{WebUtility.HtmlEncode(Header.PONo)}</b> {WebUtility.HtmlEncode(actionText)}</p>
+<ul>
+  <li>Date: <b>{Header.PODate:MMM dd, yyyy}</b></li>
+  <li>Remark: <b>{WebUtility.HtmlEncode(remarkText)}</b></li>
+  <li>Total Amount: <b>{FormatAmountForView(totalAmount)} {WebUtility.HtmlEncode(GetCurrencyDisplayText(Header.Currency))}</b></li>
+</ul>
+{(showApproveLink && !string.IsNullOrWhiteSpace(absoluteUrl) ? $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Purchase Order Approve</a></p>" : string.Empty)}
+<p>SmartSam System</p>";
+
+        return EmailTemplateHelper.WrapInNotifyTemplate(title, color, DateTime.Now, body);
+    }
+
+    private decimal GetCurrentTotalAmount(SqlConnection conn, SqlTransaction trans)
+    {
+        using var cmd = new SqlCommand(@"
+SELECT ISNULL(AfterVAT, 0)
+FROM dbo.PC_PO
+WHERE POID = @POID", conn, trans);
+        cmd.Parameters.Add("@POID", SqlDbType.Int).Value = Header.Id;
+
+        var value = cmd.ExecuteScalar();
+        return value == null || value == DBNull.Value ? 0M : Convert.ToDecimal(value);
+    }
+
+    private static string FormatAmountForView(decimal amount)
+    {
+        return amount.ToString("#,##0.###");
+    }
+
+    private string GetCurrencyDisplayText(int currencyId)
+    {
+        var selected = CurrencyOptions.FirstOrDefault(x => string.Equals(x.Value, currencyId.ToString(), StringComparison.OrdinalIgnoreCase));
+        if (selected != null && !string.IsNullOrWhiteSpace(selected.Text))
+        {
+            return selected.Text;
+        }
+
+        return currencyId switch
+        {
+            1 => "VND",
+            _ => currencyId.ToString()
+        };
+    }
+
+    private void TryQueueWorkflowNotifyEmail(List<PurchaseOrderNotifyRecipientViewModel> recipients, string subject, string htmlBody)
+    {
+        var senderEmail = _config.GetValue<string>("EmailSettings:SenderEmail");
+        var password = _config.GetValue<string>("EmailSettings:Password");
+        var mailServer = _config.GetValue<string>("EmailSettings:MailServer");
+        var mailPort = _config.GetValue<int?>("EmailSettings:MailPort") ?? 0;
+
+        if (recipients.Count == 0 ||
+            string.IsNullOrWhiteSpace(senderEmail) ||
+            string.IsNullOrWhiteSpace(password) ||
+            string.IsNullOrWhiteSpace(mailServer) ||
+            mailPort <= 0)
+        {
+            return;
+        }
+
+        _ = SendNotifyEmailAsync(new PurchaseOrderWorkflowNotifyRequestViewModel
+        {
+            SenderEmail = senderEmail,
+            Password = password,
+            MailServer = mailServer,
+            MailPort = mailPort,
+            Subject = ApplyMailSubjectPrefix(subject),
+            HtmlBody = htmlBody,
+            Recipients = recipients
+        });
+    }
+
+    private string ApplyMailSubjectPrefix(string subject)
+    {
+        if (string.IsNullOrWhiteSpace(subject))
+        {
+            return subject;
+        }
+
+        var prefix = _config.GetValue<string>("EmailSettings:PrefixSubject")?.Trim();
+        if (string.IsNullOrWhiteSpace(prefix) || !ShouldApplyTestSubjectPrefix())
+        {
+            return subject;
+        }
+
+        return $"{prefix} - {subject}";
+    }
+
+    private bool ShouldApplyTestSubjectPrefix()
+    {
+        var configuredIds = _config.GetValue<string>("EmailSettings:TestFunctionIDs");
+        if (string.IsNullOrWhiteSpace(configuredIds))
+        {
+            return false;
+        }
+
+        return configuredIds
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(value => int.TryParse(value, out var id) && id == FUNCTION_ID);
+    }
+
+    private async Task SendNotifyEmailAsync(PurchaseOrderWorkflowNotifyRequestViewModel notifyRequest)
+    {
+        try
+        {
+            foreach (var recipient in notifyRequest.Recipients)
+            {
+                if (string.IsNullOrWhiteSpace(recipient.Email))
+                {
+                    continue;
+                }
+
+                using var mail = new MailMessage
+                {
+                    From = new MailAddress(notifyRequest.SenderEmail, "SmartSam System"),
+                    Subject = notifyRequest.Subject,
+                    Body = notifyRequest.HtmlBody.Replace("{RECIPIENT_LABEL}", WebUtility.HtmlEncode(BuildRecipientLabel(recipient)), StringComparison.Ordinal),
+                    IsBodyHtml = true
+                };
+
+                mail.To.Add(recipient.Email);
+                mail.CC.Add(NotifyCcEmail);
+
+                using var smtp = new SmtpClient(notifyRequest.MailServer, notifyRequest.MailPort)
+                {
+                    EnableSsl = true,
+                    Credentials = new NetworkCredential(notifyRequest.SenderEmail, notifyRequest.Password)
+                };
+
+                await smtp.SendMailAsync(mail);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Cannot send workflow email for purchase order {PoId}.", Header.Id);
+        }
+    }
+
+    private static string BuildRecipientLabel(PurchaseOrderNotifyRecipientViewModel recipient)
+    {
+        var normalizedTitle = NormalizeGreetingTitle(recipient.Title);
+        var employeeName = (recipient.EmployeeName ?? string.Empty).Trim();
+        var employeeCode = (recipient.EmployeeCode ?? string.Empty).Trim();
+        var email = (recipient.Email ?? string.Empty).Trim();
+
+        if (!string.IsNullOrWhiteSpace(employeeName))
+        {
+            return string.IsNullOrWhiteSpace(normalizedTitle)
+                ? (string.IsNullOrWhiteSpace(employeeCode) ? employeeName : $"{employeeName}({employeeCode})")
+                : (string.IsNullOrWhiteSpace(employeeCode) ? $"{normalizedTitle} {employeeName}" : $"{normalizedTitle} {employeeName}({employeeCode})");
+        }
+
+        if (!string.IsNullOrWhiteSpace(employeeCode))
+        {
+            return employeeCode;
+        }
+
+        return email;
+    }
+
+    private static string NormalizeGreetingTitle(string? title)
+    {
+        var trimmed = (title ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return string.Empty;
+        }
+
+        return trimmed.EndsWith(".", StringComparison.Ordinal) ? trimmed : $"{trimmed}.";
+    }
+
     private IActionResult? PrepareExistingRecordForWorkflow()
     {
         PagePerm = GetUserPermissions();
@@ -1932,6 +2232,25 @@ public class PurchaseOrderAttachmentViewModel
     public string SizeText { get; set; } = string.Empty;
 }
 
+public class PurchaseOrderNotifyRecipientViewModel
+{
+    public string Email { get; set; } = string.Empty;
+    public string EmployeeCode { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+}
+
+public class PurchaseOrderWorkflowNotifyRequestViewModel
+{
+    public string SenderEmail { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+    public string MailServer { get; set; } = string.Empty;
+    public int MailPort { get; set; }
+    public string Subject { get; set; } = string.Empty;
+    public string HtmlBody { get; set; } = string.Empty;
+    public List<PurchaseOrderNotifyRecipientViewModel> Recipients { get; set; } = new List<PurchaseOrderNotifyRecipientViewModel>();
+}
+
 public class LookupOptionDto
 {
     public string? Value { get; set; }
@@ -1948,3 +2267,4 @@ public class PrLinesResponse : ApiResponse
 {
     public List<PurchaseOrderPrLineLookup> Data { get; set; } = new List<PurchaseOrderPrLineLookup>();
 }
+

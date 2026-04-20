@@ -415,12 +415,19 @@
                 rows.forEach((row) => {
                     const tr = document.createElement("tr");
                     tr.dataset.viewDetailRow = "1";
-                    const itemText = `${escapeHtml(row.itemCode || "")}${row.itemName ? ` / ${escapeHtml(row.itemName)}` : ""}`;
+                    const itemCodeText = String(row.itemCode || "").trim();
+                    const itemNameText = String(row.itemName || "").trim();
+                    const itemTitle = `${itemCodeText}${itemNameText ? ` / ${itemNameText}` : ""}`;
+                    const itemCodeHtml = itemCodeText ? `<span class="prq-view-detail-item-code">${escapeHtml(itemCodeText)}</span>` : "";
+                    const itemSeparatorHtml = itemCodeText && itemNameText ? '<span class="prq-view-detail-item-separator"> / </span>' : "";
+                    const itemNameHtml = itemNameText
+                        ? `<span class="prq-view-detail-item-name tcvn3-font prq-view-detail-ellipsis" title="${escapeHtml(itemNameText)}">${escapeHtml(itemNameText)}</span>`
+                        : "";
                     tr.innerHTML = `
                         <td>${escapeHtml(row.requestNo || "")}</td>
                         <td>${escapeHtml(row.requestDateText || "")}</td>
                         <td class="prq-view-detail-col-description">${buildSingleLineEllipsisText(row.description || "", "vni-font prq-view-detail-ellipsis")}</td>
-                        <td class="prq-view-detail-col-item"><span class="prq-view-detail-ellipsis tcvn3-font" title="${itemText}">${itemText}</span></td>
+                        <td class="prq-view-detail-col-item" title="${escapeHtml(itemTitle)}"><div class="prq-view-detail-item-wrap">${itemCodeHtml}${itemSeparatorHtml}${itemNameHtml}</div></td>
                         <td class="prq-center">${formatNumber(row.prQty || 0)}</td>
                         <td class="prq-center">${formatNumber(row.recQty || 0)}</td>`;
                     viewDetailRows.appendChild(tr);
