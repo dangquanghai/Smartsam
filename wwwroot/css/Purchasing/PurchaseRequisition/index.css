@@ -276,6 +276,23 @@
     max-width: 300px;
 }
 
+.prq-view-detail-item-wrap {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.prq-view-detail-item-code,
+.prq-view-detail-item-separator {
+    flex: 0 0 auto;
+}
+
+.prq-view-detail-item-name {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 .prq-view-detail-ellipsis {
     display: block;
     max-width: 100%;

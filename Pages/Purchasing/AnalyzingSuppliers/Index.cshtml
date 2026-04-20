@@ -47,7 +47,7 @@
 
                             <div class="form-group mb-2">
                                 <label>Supplier Code</label>
-                                <select id="Filter_SupplierCode" name="SupplierId" class="form-control form-control-sm">
+                                <select id="Filter_SupplierCode" name="SupplierId" class="form-control form-control-sm select2" data-placeholder="-- Type to search Supplier Code --">
                                     @foreach (var option in Model.SupplierCodeOptions)
                                     {
                                         var isSelected = option.Value == (Model.Filter.SupplierId?.ToString() ?? string.Empty);
@@ -58,7 +58,7 @@
 
                             <div class="form-group mb-3">
                                 <label>Supplier Name</label>
-                                <select id="Filter_SupplierName" name="SupplierIdMirror" class="form-control form-control-sm vni-font">
+                                <select id="Filter_SupplierName" name="SupplierIdMirror" class="form-control form-control-sm vni-font select2" data-placeholder="-- Type to search Supplier Name --">
                                     @foreach (var option in Model.SupplierNameOptions)
                                     {
                                         var isSelected = option.Value == (Model.Filter.SupplierId?.ToString() ?? string.Empty);

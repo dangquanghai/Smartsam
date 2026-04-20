@@ -19,8 +19,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 {
     public class ApproveSupplierDetailModel : BasePageModel
     {
-        private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
-        // private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
+        // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
+        private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
         private readonly ILogger<ApproveSupplierDetailModel> _logger;
         private readonly ISecurityService _securityService;
         private const int NoDepartmentScopeValue = -1;
