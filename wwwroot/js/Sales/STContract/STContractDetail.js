@@ -6,6 +6,11 @@
     // 2. Chạy khởi tạo trang
     initializePage(mode);
 
+    // Khởi tạo máy scan ngay khi load trang
+    if (typeof WebFxScan !== 'undefined') {
+        initScanner();
+    }
+
     // 3. Xử lý sự kiện SUBMIT Form chính
     $('form').on('submit', async function (e) {
         if (mode === 'view') return true;
@@ -20,17 +25,7 @@
         }
     });
 
-    // 4. Các sự kiện tính toán tự động
-    /*
-    $('#CurrentRentRate, #PerVAT').on('input', calculateNetPrice);
 
-    $('#CurrentRentRate').on('blur', function () {
-        let val = parseFloat($(this).val().replace(/[^0-9.]/g, '')) || 0;
-        $(this).val(val.toLocaleString('en-US'));
-    }).on('focus', function () {
-        $(this).val($(this).val().replace(/,/g, ''));
-    });
-    */
      $('#CurrentRentRate').on('input', function () {
         let selection = window.getSelection().toString();
         if (selection !== '') return;
@@ -105,6 +100,8 @@ function initializePage(mode) {
 
     // Tự động load Grid dịch vụ ở Vùng 2 nếu là Edit mode
     loadServiceGrid();
+
+    const MyScan = new WebFxScan();
    
 }
 
@@ -636,7 +633,13 @@ function openTenantModal(mode) {
                 $('#ddlArrivalPort').val(info.ArrivalPort || 0);
                 
 
-                $('#txtADCardNo').val(info.ADCardNo || "");
+                
+                // Kiểm tra tất cả các khả năng có thể xảy ra của tên trường
+                var adCardValue = info.A_DCardNo || info.a_DCardNo || info.ADCardNo || info.adCardNo || "";
+
+                $('#txtADCardNo').val(adCardValue);
+
+
                 $('#txtSponsor').val(info.Sponsor || "");
                 $('#txtNotes').val(info.Notes || "");
 
@@ -668,6 +671,7 @@ function openTenantModal(mode) {
         $('#modalTenantDetail').modal('show');
     }
 }
+/*
 function renderGalleries(passports, police) {
     // 1. Xử lý Tab Passport (DocType = 1)
     var htmlPassport = '';
@@ -691,7 +695,13 @@ function renderGalleries(passports, police) {
     }
     $('#police_gallery').html(htmlPolice);
 }
-
+*/
+async function initScanner() {
+    try {
+        await MyScan.connect({ ip: "127.0.0.1", port: "17778" });
+        await MyScan.init();
+    } catch (e) { console.warn("Scanner service not found"); }
+}
 // Hàm con để tạo HTML cho từng tấm ảnh
 function createImgItem(doc) {
     // doc.FilePath là đường dẫn lưu trong DB (vừa tạo ở bảng CM_ContractTenant_Doc)
@@ -847,4 +857,51 @@ function recognizeOCR() {
         }
         $('#btnReconize').html('<i class="fas fa-magic"></i> Recognize');
     });
+}
+
+function callWebSDKScan() {
+    // 1. Hiển thị thông báo đang chờ máy scan
+    Swal.fire({
+        title: 'Đang kết nối máy scan...',
+        text: 'Vui lòng đặt Passport/ID vào máy',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+
+    // 2. Gọi lệnh Scan (Thay URL port theo đúng tài liệu SDK anh đã cài)
+    $.ajax({
+        url: 'http://127.0.0.1:17778/api/scan', // Ví dụ Port 18080 của SDK
+        type: 'POST',
+        timeout: 60000,
+        success: function (res) {
+            Swal.close();
+            if (res.success) {
+                // Đổ dữ liệu vào các ô Input mà anh đã cực khổ fix xong ở các bước trước
+                fillScanDataToForm(res.data);
+
+                // Hiển thị ảnh scan được vào gallery (nếu có)
+                if (res.imageScan) {
+                    displayScanImage(res.imageScan);
+                }
+            } else {
+                alert("Lỗi scan: " + res.message);
+            }
+        },
+        error: function (xhr) {
+            Swal.close();
+            alert("Không thể kết nối với Web SDK. Hãy đảm bảo phần mềm máy scan đã được bật!");
+        }
+    });
+}
+
+function fillScanDataToForm(data) {
+    // Dùng chính các ID anh đã chuẩn hóa
+    if (data.FullName) $('#txtCustomerName').val(data.FullName);
+    if (data.IDNumber) $('#txtIDPassportNo').val(data.IDNumber);
+    if (data.Birthday) $('#txtBirthday').val(data.Birthday); // Cần format YYYY-MM-DD
+    if (data.ExpiryDate) $('#txtPassportUntilDate').val(data.ExpiryDate);
+    if (data.PersonalNumber) $('#txtADCardNo').val(data.PersonalNumber);
+
+    // Ghi chú tự động
+    $('#txtNotes').val("Scanned at " + new Date().toLocaleString());
 }

@@ -877,7 +877,8 @@ namespace SmartSam.Pages.Sales.STContract
             // 2. TRƯỜNG HỢP VIEW/EDIT (Lấy dữ liệu từ SQL)
             // Join với MS_Nation để lấy NationName hiển thị nếu cần
             string sqlInfo = @"
-            SELECT t.Title, t.CustomerName, t.IDPassportNo, t.Birthday, t.Male, t.Nationality,ct.FamilyPos,
+            SELECT t.Title, t.CustomerName, t.IDPassportNo, t.Birthday, t.Male, t.Nationality,ct.FamilyPos,t.Company,    
+            t.VATCode,t.Address, t.PassportUntilDate, 
             n.NationName, ct.* FROM CM_ContractTenant ct 
             JOIN CM_Customer t ON ct.TenantID = t.CustomerID 
             LEFT JOIN MS_Nation n ON t.Nationality = n.NationID
@@ -954,7 +955,8 @@ namespace SmartSam.Pages.Sales.STContract
                     Notes = @Notes, 
                     Sponsor = @Sponsor,
                     TenantType = @TenantType,
-                    A_DCardNo = @ADCardNo
+                    A_DCardNo = @ADCardNo,
+                    LastRegDate =@LastRegDate
                     WHERE ContractTenantID = @ContractTenantID";
 
                     await conn.ExecuteAsync(sqlUpdateContract, dto, trans);
@@ -964,8 +966,8 @@ namespace SmartSam.Pages.Sales.STContract
                     // TRƯỜNG HỢP INSERT: Lần đầu add khách này vào hợp đồng
                     string sqlInsertContract = @"
                     INSERT INTO CM_ContractTenant 
-                    (ContractID, TenantID, FamilyPos, IsMoveOut, VisaNo, VisaDate, VisaExpDate, EntryDate, ArrivalPort, PermitExpDate,ProposeExpDate,Notes, Sponsor,TenantType,A_DCardNo)
-                    VALUES (@ContractID, @TenantID, @FamilyPos, @IsMoveOut, @VisaNo, @VisaDate, @VisaExpDate, @EntryDate, @ArrivalPort,@PermitExpDate,@ProposeExpDate, @Notes, @Sponsor,@TenantType,@ADCardNo)";
+                    (ContractID, TenantID, FamilyPos, IsMoveOut, VisaNo, VisaDate, VisaExpDate, EntryDate, ArrivalPort, PermitExpDate,ProposeExpDate,Notes, Sponsor,TenantType,A_DCardNo,LastRegDate)
+                    VALUES (@ContractID, @TenantID, @FamilyPos, @IsMoveOut, @VisaNo, @VisaDate, @VisaExpDate, @EntryDate, @ArrivalPort,@PermitExpDate,@ProposeExpDate, @Notes, @Sponsor,@TenantType,@ADCardNo,@LastRegDate)";
 
                     await conn.ExecuteAsync(sqlInsertContract, dto, trans);
                 }

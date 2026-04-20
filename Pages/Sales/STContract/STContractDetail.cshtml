@@ -837,9 +837,12 @@
                                     </select>
                                 </div>
                                 <div>
-                                    <button type="button" class="btn btn-warning btn-sm" onclick="recognizeOCR()"><i class="fas fa-magic"></i> OCR</button>
-                                    <button type="button" class="btn btn-info btn-sm" onclick="$('#fileUpload').click()"><i class="fas fa-camera"></i> Scan</button>
+                                    <button type="button" class="btn btn-primary btn-sm" onclick="callWebSDKScan()">
+                                        <i class="fas fa-print"></i> Scan
+                                    </button>
+
                                     <input type="file" id="fileUpload" class="d-none" multiple onchange="handleFileUpload(this)">
+                                    <button type="button" class="btn btn-warning btn-sm" onclick="recognizeOCR()"><i class="fas fa-magic"></i> OCR</button>
                                 </div>
                             </div>
 
@@ -852,11 +855,12 @@
                             </div>
 
                             <div class="d-flex justify-content-between mt-2">
-                                <button type="button" class="btn btn-outline-light btn-sm" onclick="downloadCurrentImg()">
-                                    <i class="fas fa-download"></i> Tải về máy
+                                <button type="button" class="btn btn-info btn-sm" onclick="$('#fileUpload').click()">
+                                    <i class="fas fa-upload"></i> Upload
                                 </button>
+
                                 <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteCurrentImg()">
-                                    <i class="fas fa-trash-alt"></i> Xóa ảnh
+                                    <i class="fas fa-trash-alt"></i> Remove
                                 </button>
                             </div>
                         </div>
@@ -877,5 +881,7 @@
 @section Scripts {
 
     <script src="~/js/Sales/STContract/STContractDetail.js" asp-append-version="true"></script>
+
+    <script src="~/js/Scan/scan.js"></script> ```
 }
 
