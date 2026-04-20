@@ -845,6 +845,7 @@ function recognizeOCR() {
         $('#btnReconize').html('<i class="fas fa-magic"></i> Recognize');
     });
 }
+/*
 async function callWebSDKScan() {
     try {
         if (typeof Swal !== 'undefined') Swal.fire({ title: 'Đang chuẩn bị...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
@@ -854,58 +855,205 @@ async function callWebSDKScan() {
         const devices = res?.data?.options || [];
         if (devices.length === 0) throw new Error("Không tìm thấy máy scan.");
 
+        // Lấy tên máy thực tế (Có thể là "Plustek A62" hoặc "USB Video Device")
         const dName = devices[0].deviceName;
 
-        // 2. Cấu hình (Sử dụng thông số từ tài liệu dành riêng cho Passport)
+        // 2. Cấu hình CHUẨN (Sử dụng cả 2 định dạng Key để đảm bảo tương thích)
         const config = {
-            deviceName: dName,
-            source: "Sheetfed-Front",
-            paperSize: "A6", // QUAN TRỌNG: Phải là A6 cho máy A62
-            recognizeType: "passport", // Để lấy FullName, DocumentNo
-            resolution: 300,
-            mode: "color",
-            autoScan: false // Để mình chủ động bấm nút quét
+            "device-name": dName,
+            "source": "Auto",        // Để driver tự quyết định nguồn
+            "paper-size": "Auto",    // Để driver tự nhận khổ giấy
+            "mode": "color",
+            "resolution": 300,
+            "recognize-type": "passport"
         };
 
-        // 3. Khởi tạo (Lệnh này sẽ 'Open Device')
+        // 3. Khởi tạo
+        console.log("Đang mở thiết bị:", dName);
+      
+        // 1. Gửi lệnh mở máy
         const setRes = await MyScan.setScanner(config);
-        if (!setRes.result) throw new Error("Lỗi setScanner: " + setRes.message);
 
-        // 4. Đợi 1 giây cho phần cứng sẵn sàng
-        await new Promise(r => setTimeout(r, 1000));
+        if (setRes.result) {
+            // 2. Cho máy 1.5s - 2s để "thở" và khởi động motor
+            await new Promise(r => setTimeout(r, 2000));
 
-        // 5. Gọi lệnh quét với Callback (Theo tài liệu ScanOptions)
-        console.log("Bắt đầu quét...");
-        const scanRes = await MyScan.scan(function (fileList) {
-            // Đây là callback xử lý dữ liệu sau khi máy kéo giấy xong
+            // 3. Lúc này mới ra lệnh quét
+            const scanRes = await MyScan.scan();
+
+            if (scanRes.result) {
+                console.log("Quét thành công!");
+                // Gọi hàm hiển thị ảnh và dữ liệu ở đây
+                displayData(scanRes.data[0]);
+            }
+        }
+        // 5. Gọi lệnh quét (KHÔNG truyền callback vào trong hàm scan)
+        console.log("Bắt đầu kéo giấy...");
+        const scanRes = await MyScan.scan();
+
+
+        if (typeof Swal !== 'undefined') Swal.close();
+
+        // 6. Kiểm tra kết quả và xử lý dữ liệu
+        if (scanRes && scanRes.result) {
+            // Dữ liệu nằm trong scanRes.data (thường là một mảng file)
+            const fileList = scanRes.data;
+
             if (fileList && fileList.length > 0) {
                 const file = fileList[0];
-                if (file.ocrText) {
-                    // OCR của Plustek thường trả về chuỗi JSON hoặc String tùy phiên bản
-                    console.log("Dữ liệu Passport:", file.ocrText);
-                    // Ví dụ đổ vào form (anh cần kiểm tra cấu trúc file.ocrText trả về)
-                    // $('#txtCustomerName').val(file.ocrText.FullName);
-                }
+
+                // Đổ ảnh base64
                 if (file.base64) {
                     $('#current_img_display').attr('src', "data:image/jpeg;base64," + file.base64).show();
                     $('#no_img_overlay').hide();
                 }
-            }
-        });
 
-        if (typeof Swal !== 'undefined') Swal.close();
-        if (!scanRes.result) {
-            // Nếu vẫn lỗi 3 (Not Yet Open), kiểm tra xem hộ chiếu đã đặt vào máy chưa
-            if (scanRes.error == 3) alert("Máy chưa sẵn sàng. Anh hãy đặt Hộ chiếu vào khe máy trước khi bấm Scan.");
-            else alert("Lỗi: " + scanRes.message);
+                // Xử lý OCR Passport
+                if (file.ocrText) {
+                    console.log("Dữ liệu Passport thô:", file.ocrText);
+                    // Lưu ý: file.ocrText có thể là String JSON, cần parse nếu cần
+                    // var ocrData = JSON.parse(file.ocrText);
+                }
+                alert("Quét thành công!");
+            }
+        } else {
+            // Xử lý lỗi đặc thù mã số 3
+            if (scanRes.error == 3) {
+                alert("Lỗi 3: Thiết bị chưa sẵn sàng. \nAnh hãy: \n1. Đặt hộ chiếu vào khe máy. \n2. Tắt app DocAction đang chạy ngầm.");
+            } else {
+                alert("Lỗi: " + scanRes.message);
+            }
         }
 
     } catch (err) {
         if (typeof Swal !== 'undefined') Swal.close();
-        alert("Lỗi: " + err.message);
+        alert("Lỗi hệ thống: " + err.message);
     }
 }
-// Hàm phụ để tách biệt logic xử lý dữ liệu sau scan
+*/
+async function callWebSDKScan() {
+    try {
+        // 1. Hiển thị Loading (Sử dụng SweetAlert2 như code cũ của anh)
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Đang kết nối máy scan...',
+                text: 'Vui lòng đặt hộ chiếu sẵn vào khe máy',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+        }
+
+        // 2. Lấy danh sách thiết bị thực tế
+        const resList = await MyScan.getDeviceList();
+        const devices = resList?.data?.options || [];
+
+        if (devices.length === 0) {
+            throw new Error("Không tìm thấy máy scan Plustek A62. Vui lòng kiểm tra cáp USB.");
+        }
+
+        const dName = devices[0].deviceName;
+        console.log("Đang điều khiển thiết bị:", dName);
+
+        // 3. Cấu hình tối ưu (Sử dụng cả 2 định dạng Key để tránh lỗi Driver)
+        const config = {
+            "device-name": dName,
+            "source": "Auto",       // Để Auto để tránh lỗi kẹt khay giấy
+            "paper-size": "Auto",   // Để Auto cho dòng máy Passport
+            "recognize-type": "passport",
+            "resolution": 300,
+            "mode": "color",
+            "autoScan": false
+        };
+
+        // 4. Gửi lệnh mở thiết bị (Set Scanner)
+        const setRes = await MyScan.setScanner(config);
+        if (!setRes || !setRes.result) {
+            throw new Error("Không thể mở thiết bị. Lỗi: " + (setRes?.message || "Unknown"));
+        }
+
+        // 5. KHOẢNG NGHỈ VÀNG: Đợi motor và cảm biến sẵn sàng
+        // Anh đã xác nhận 2s là con số ổn định nhất cho dòng A62
+        console.log("Đang đợi motor khởi động...");
+        await new Promise(r => setTimeout(r, 2000));
+
+        // 6. Thực hiện lệnh quét
+        console.log("Máy bắt đầu kéo giấy...");
+        const scanRes = await MyScan.scan();
+        if (typeof Swal !== 'undefined') Swal.close();
+
+        if (scanRes && scanRes.result) {
+            const file = scanRes.data[0];
+            if (file && file.base64) {
+
+                // --- ĐOẠN SỬA LỖI ERR_INVALID_URL TẠI ĐÂY ---
+                let rawBase64 = file.base64.trim();
+                let finalSrc = "";
+
+                // Kiểm tra nếu chuỗi đã có sẵn tiêu đề data:image...
+                if (rawBase64.startsWith("data:image")) {
+                    finalSrc = rawBase64; // Dùng luôn
+                } else {
+                    finalSrc = "data:image/jpeg;base64," + rawBase64; // Chỉ thêm nếu chưa có
+                }
+
+                const imgElement = $('#current_img_display');
+                imgElement.attr('src', finalSrc);
+                imgElement.show();
+                $('#no_img_overlay').hide();
+                // --------------------------------------------
+
+                console.log("Đã hiển thị ảnh thành công.");
+
+                // Đổ dữ liệu vào Form (nếu có)
+                if (file.ocrText) {
+                    console.log("Dữ liệu Passport nhận được:", file.ocrText);
+
+                    // Họ và tên (Ghép Familyname và Givenname)
+                    const fullName = (ocr.Familyname + " " + ocr.Givenname).trim();
+                    $('#txtFullName').val(fullName); // Giả sử ID ô Họ tên là txtFullName
+
+                    // Số hộ chiếu
+                    $('#txtPassportNo').val(ocr.DocumentNo);
+
+                    // Quốc tịch
+                    $('#txtNationality').val(ocr.Nationality);
+
+                    // Ngày sinh (Định dạng gốc thường là YYMMDD, ví dụ 630730)
+                    if (ocr.Birthday) {
+                        $('#txtDOB').val(formatOCRDate(ocr.Birthday));
+                    }
+
+                    // Ngày hết hạn
+                    if (ocr.Dateofexpiry) {
+                        $('#txtExpiryDate').val(formatOCRDate(ocr.Dateofexpiry));
+                    }
+
+                    // Giới tính (M -> Nam, F -> Nữ)
+                    if (ocr.Sex === "M") {
+                        $('#selectGender').val("Male").trigger('change');
+                    } else if (ocr.Sex === "F") {
+                        $('#selectGender').val("Female").trigger('change');
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        console.error("Lỗi:", err);
+    }
+}
+
+function formatOCRDate(dateStr) {
+    if (!dateStr || dateStr.length !== 6) return "";
+
+    let year = dateStr.substring(0, 2);
+    let month = dateStr.substring(2, 4);
+    let day = dateStr.substring(4, 6);
+
+    // Logic đoán thế kỷ (nếu > 40 thì là 19xx, ngược lại là 20xx)
+    let fullYear = (parseInt(year) > 40) ? "19" + year : "20" + year;
+
+    return `${fullYear}-${month}-${day}`;
+}
 function processScanResults(dataList) {
     if (!dataList || dataList.length === 0) return;
     const file = dataList[0];
