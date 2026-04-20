@@ -141,6 +141,9 @@ padding: 5px;
 
 #purchaseOrderTable tbody td {
     vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .app-table-ellipsis {
@@ -173,6 +176,21 @@ padding: 5px;
 #purchaseOrderSearchForm .select2-container--open,
 #purchaseOrderSearchForm .select2-dropdown {
     z-index: 1030 !important;
+}
+
+.po-supplier-select2-code {
+    font-weight: 600;
+    line-height: 1.15;
+}
+
+.po-supplier-select2-name {
+    color: #495057;
+    line-height: 1.15;
+    white-space: normal;
+}
+
+.select2-results__option--highlighted .po-supplier-select2-name {
+    color: #fff;
 }
 
 .po-status-menu-actions {

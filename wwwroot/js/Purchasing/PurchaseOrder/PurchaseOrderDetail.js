@@ -37,14 +37,21 @@ function initializePage(mode) {
     }
 }
 
-// Supplier va PR dung chung lookup endpoint.
+// Supplier dung lookup endpoint; PR No la dropdown thuong server-rendered.
 function initializeLookupControls() {
-    initializeAjaxSelect2('#SupplierID', window.purchaseOrderDetailPage?.supplierLookupUrl || '');
-    initializeAjaxSelect2('#PRID', window.purchaseOrderDetailPage?.prLookupUrl || '');
+    initializeAjaxSelect2('#SupplierID', window.purchaseOrderDetailPage?.supplierLookupUrl || '', {
+        minimumInputLength: 0,
+        useSelectedTermWhenEmpty: true,
+        templateResult: formatSupplierResult,
+        templateSelection: formatSupplierSelection,
+        escapeMarkup: function (markup) {
+            return markup;
+        }
+    });
 }
 
 // Ham nho de 2 o lookup dung chung cach khoi tao select2.
-function initializeAjaxSelect2(selector, url) {
+function initializeAjaxSelect2(selector, url, options) {
     const $element = $(selector);
     if (!$element.length || !url || typeof $element.select2 !== 'function') {
         return;
@@ -54,7 +61,11 @@ function initializeAjaxSelect2(selector, url) {
         $element.select2('destroy');
     }
 
-    $element.select2({
+    const customOptions = Object.assign({}, options || {});
+    const useSelectedTermWhenEmpty = customOptions.useSelectedTermWhenEmpty === true;
+    delete customOptions.useSelectedTermWhenEmpty;
+
+    const config = Object.assign({
         width: '100%',
         allowClear: true,
         placeholder: $element.find('option:first').text() || '-- Select --',
@@ -64,8 +75,9 @@ function initializeAjaxSelect2(selector, url) {
             dataType: 'json',
             delay: 250,
             data: function (params) {
+                const term = (params.term || '').trim();
                 return {
-                    term: (params.term || '').trim()
+                    term: term || (useSelectedTermWhenEmpty ? getSelect2SearchSeed($element) : '')
                 };
             },
             processResults: function (data) {
@@ -75,7 +87,9 @@ function initializeAjaxSelect2(selector, url) {
             },
             cache: true
         }
-    });
+    }, customOptions);
+
+    $element.select2(config);
 
     $element.on('select2:open', function () {
         const searchField = document.querySelector('.select2-container--open .select2-search__field');
@@ -113,6 +127,26 @@ function getSelect2SearchSeed($element) {
     }
 
     return seed;
+}
+
+function formatSupplierResult(item) {
+    if (!item || item.loading) {
+        return item ? item.text : '';
+    }
+
+    const supplierCode = (item.supplierCode || item.text || '').toString();
+    const supplierName = (item.supplierName || '').toString();
+    const $result = $('<div class="po-supplier-select2-result"></div>');
+    $('<div class="po-supplier-select2-code"></div>').text(supplierCode).appendTo($result);
+    if (supplierName) {
+        $('<div class="po-supplier-select2-name vni-font"></div>').text(supplierName).appendTo($result);
+    }
+
+    return $result;
+}
+
+function formatSupplierSelection(item) {
+    return (item && (item.supplierCode || item.text)) || '';
 }
 
 // Dong tat cac select2 dang mo truoc khi mo modal.
