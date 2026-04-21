@@ -21,9 +21,8 @@ internal static class PurchaseOrderQuestPdfReport
                 page.Content().Column(column =>
                 {
                     column.Item().Element(content => ComposeHeader(content, model));
-                    column.Item().PaddingTop(18).Element(content => ComposeMeta(content, model));
-                    column.Item().PaddingTop(14).Element(content => ComposeSupplierInfo(content, model));
-                    column.Item().PaddingTop(22).Element(ComposeSubject);
+                    column.Item().PaddingTop(18).Element(content => ComposeOverview(content, model));
+                    column.Item().PaddingTop(4).Element(content => ComposeSubject(content, model));
                     column.Item().PaddingTop(18).Text("Chúng tôi xin đặt các mặt hàng sau với các điều kiện dưới đây: We hereby order the following item(s) by under mentioned conditions:").FontSize(7);
                     column.Item().PaddingTop(2).Text("1. Mặt hàng/Items").Bold().FontSize(7);
                     column.Item().PaddingTop(2).Element(content => ComposeItems(content, model));
@@ -56,23 +55,19 @@ internal static class PurchaseOrderQuestPdfReport
         });
     }
 
-    private static void ComposeMeta(IContainer container, PurchaseOrderDetailReportModel model)
-    {
-        container.Row(row =>
-        {
-            row.Spacing(10);
-            row.RelativeItem(1).Row(item => ComposeInlineField(item, "PO No:", model.PONo, 40));
-            row.RelativeItem(1).Row(item => ComposeInlineField(item, "PO Date:", FormatDate(model.PODate, "dd-MMM-yy"), 50));
-            row.RelativeItem(1).Row(item => ComposeInlineField(item, "PR No:", model.RequestNo, 40));
-            row.RelativeItem(1.2f).Row(item => ComposeInlineField(item, "Currency/Đơn vị tiền tệ:", NormalizeLegacyText(model.CurrencyText), 94));
-        });
-    }
-
-    private static void ComposeSupplierInfo(IContainer container, PurchaseOrderDetailReportModel model)
+    private static void ComposeOverview(IContainer container, PurchaseOrderDetailReportModel model)
     {
         container.Column(column =>
         {
-            column.Spacing(2);
+            column.Spacing(5);
+            column.Item().Row(row =>
+            {
+                row.Spacing(10);
+                row.RelativeItem(1).Row(item => ComposeInlineField(item, "PO No:", model.PONo, 40));
+                row.RelativeItem(1).Row(item => ComposeInlineField(item, "PO Date:", FormatDate(model.PODate, "dd-MMM-yy"), 50));
+                row.RelativeItem(1).Row(item => ComposeInlineField(item, "PR No:", model.RequestNo, 40));
+                row.RelativeItem(1.2f).Row(item => ComposeInlineField(item, "Currency/Đơn vị tiền tệ:", NormalizeLegacyText(model.CurrencyText), 94));
+            });
             column.Item().Row(row => ComposeInlineField(row, "Nhà cung cấp/Supplier:", NormalizeLegacyText(model.SupplierDisplay), 88));
             column.Item().Row(row => ComposeInlineField(row, "Địa chỉ/Address:", NormalizeLegacyText(model.SupplierAddress), 68));
             column.Item().Row(row =>
@@ -84,15 +79,15 @@ internal static class PurchaseOrderQuestPdfReport
         });
     }
 
-    private static void ComposeSubject(IContainer container)
+    private static void ComposeSubject(IContainer container, PurchaseOrderDetailReportModel model)
     {
-        container.Row(row => ComposeInlineField(row, "Subject:", string.Empty, 44));
+        container.Row(row => ComposeInlineField(row, "Subject:", NormalizeLegacyText(model.Remark), 44));
     }
 
     private static void ComposeInlineField(RowDescriptor row, string label, string value, float labelWidth)
     {
         row.ConstantItem(labelWidth).AlignBottom().Text(label).Bold();
-        row.RelativeItem().BorderBottom(0.6f).PaddingBottom(1).Text(value);
+        row.RelativeItem().PaddingBottom(1).Text(value);
     }
 
     private static void ComposeItems(IContainer container, PurchaseOrderDetailReportModel model)
@@ -139,8 +134,8 @@ internal static class PurchaseOrderQuestPdfReport
                 table.Cell().Element(BodyCell).Text(NormalizeTcvn3Text(item.ItemName));
                 table.Cell().Element(BodyCell).AlignCenter().Text(item.Unit);
                 table.Cell().Element(BodyCell).AlignCenter().Text(FormatQuantity(item.Quantity));
-                table.Cell().Element(BodyCell).AlignRight().Text(FormatMoney(item.UnitPrice));
-                table.Cell().Element(BodyCell).AlignRight().Text(FormatMoney(item.Amount));
+                table.Cell().Element(BodyCell).AlignRight().Text(FormatTableMoney(item.UnitPrice));
+                table.Cell().Element(BodyCell).AlignRight().Text(FormatTableMoney(item.Amount));
                 table.Cell().Element(BodyCell).Text(item.Remark);
             }
         });
@@ -417,7 +412,12 @@ internal static class PurchaseOrderQuestPdfReport
 
     private static string FormatMoney(decimal value)
     {
-        return value.ToString("#,##0.00", CultureInfo.InvariantCulture);
+        return value.ToString("#,##0.##", CultureInfo.InvariantCulture);
+    }
+
+    private static string FormatTableMoney(decimal value)
+    {
+        return value.ToString("#,##0.##", CultureInfo.InvariantCulture);
     }
 
     private static string FormatPercent(decimal value)
@@ -438,6 +438,7 @@ public sealed class PurchaseOrderDetailReportModel
     public string SupplierContact { get; set; } = string.Empty;
     public string CurrencyText { get; set; } = string.Empty;
     public string TermsAndConditions { get; set; } = string.Empty;
+    public string Remark { get; set; } = string.Empty;
     public decimal BeforeVAT { get; set; }
     public decimal PerVAT { get; set; }
     public decimal VAT { get; set; }
