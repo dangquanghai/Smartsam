@@ -16,7 +16,9 @@
                 width: "100%",
                 allowClear: true,
                 placeholder: $select.data("placeholder") || "",
-                minimumResultsForSearch: 0
+                minimumResultsForSearch: 0,
+                selectionCssClass: "vni-font",
+                dropdownCssClass: "vni-font"
             });
         });
     }

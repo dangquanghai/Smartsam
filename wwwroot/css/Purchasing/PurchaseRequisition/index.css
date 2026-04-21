@@ -403,3 +403,36 @@
         width: 100%;
     }
 }
+
+.content.vni-font,
+.content.vni-font input,
+.content.vni-font textarea,
+.content.vni-font select,
+.content.vni-font button,
+.content.vni-font .form-control,
+.content.vni-font .custom-control-label,
+.content.vni-font .form-check-label,
+.content.vni-font .page-link,
+.content.vni-font .badge,
+.content.vni-font .table,
+.content.vni-font .card-title,
+.content.vni-font .modal-title,
+.content.vni-font .select2-container .select2-selection,
+.content.vni-font .select2-container .select2-selection__rendered,
+.modal.vni-font,
+.modal.vni-font input,
+.modal.vni-font textarea,
+.modal.vni-font select,
+.modal.vni-font button,
+.modal.vni-font .form-control,
+.modal.vni-font .custom-control-label,
+.modal.vni-font .form-check-label,
+.modal.vni-font .page-link,
+.modal.vni-font .badge,
+.modal.vni-font .table,
+.modal.vni-font .card-title,
+.modal.vni-font .modal-title,
+.modal.vni-font .select2-container .select2-selection,
+.modal.vni-font .select2-container .select2-selection__rendered {
+    font-family: "VNI-Times", "VNI-Helve", sans-serif !important;
+}

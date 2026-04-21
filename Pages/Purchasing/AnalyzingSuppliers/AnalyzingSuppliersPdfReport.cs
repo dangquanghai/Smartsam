@@ -73,23 +73,26 @@ internal static class AnalyzingSuppliersPdfReport
                 columns.ConstantColumn(54);
                 columns.ConstantColumn(58);
                 columns.RelativeColumn(2.2f);
-                columns.RelativeColumn(1.4f);
-                columns.RelativeColumn(1.3f);
-                columns.RelativeColumn(1.1f);
+                columns.ConstantColumn(56);
+                columns.ConstantColumn(64);
+                columns.RelativeColumn(2.2f);
             });
 
-            static IContainer HeaderCell(IContainer cell) => cell.Border(1).Background(Colors.Grey.Lighten3).Padding(4).AlignCenter().AlignMiddle();
+            static IContainer HeaderCenterCell(IContainer cell) => cell.Border(1).Background(Colors.Grey.Lighten3).Padding(4).AlignCenter().AlignMiddle();
+            static IContainer HeaderCenterCompactCell(IContainer cell) => cell.Border(1).Background(Colors.Grey.Lighten3).PaddingVertical(4).PaddingHorizontal(2).AlignCenter().AlignMiddle();
+            static IContainer HeaderLeftCell(IContainer cell) => cell.Border(1).Background(Colors.Grey.Lighten3).Padding(4).AlignLeft().AlignMiddle();
             static IContainer BodyCell(IContainer cell) => cell.Border(1).Padding(3).AlignTop();
+            static IContainer BodyCompactCell(IContainer cell) => cell.Border(1).PaddingVertical(3).PaddingHorizontal(2).AlignTop();
 
             table.Header(header =>
             {
-                header.Cell().Element(HeaderCell).Text("PO No.").Bold();
-                header.Cell().Element(HeaderCell).Text("PR No.").Bold();
-                header.Cell().Element(HeaderCell).Text("Date").Bold();
-                header.Cell().Element(HeaderCell).Text("Remark").Bold();
-                header.Cell().Element(HeaderCell).Text("Status").Bold();
-                header.Cell().Element(HeaderCell).Text("Assess Level").Bold();
-                header.Cell().Element(HeaderCell).Text("Comment").Bold();
+                header.Cell().Element(HeaderLeftCell).Text("PO No.").Bold();
+                header.Cell().Element(HeaderLeftCell).Text("PR No.").Bold();
+                header.Cell().Element(HeaderCenterCell).Text("Date").Bold();
+                header.Cell().Element(HeaderLeftCell).Text("Remark").Bold();
+                header.Cell().Element(HeaderCenterCompactCell).Text("Status").Bold();
+                header.Cell().Element(HeaderCenterCompactCell).Text("Assess Level").Bold();
+                header.Cell().Element(HeaderLeftCell).Text("Comment").Bold();
             });
 
             if (model.Rows.Count == 0)
@@ -100,13 +103,13 @@ internal static class AnalyzingSuppliersPdfReport
 
             foreach (var row in model.Rows)
             {
-                table.Cell().Element(BodyCell).Text(row.PONo);
-                table.Cell().Element(BodyCell).Text(row.PRNo);
-                table.Cell().Element(BodyCell).Text(row.PODate?.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture) ?? string.Empty);
-                table.Cell().Element(BodyCell).Text(row.Remark);
-                table.Cell().Element(BodyCell).Text(row.StatusName);
-                table.Cell().Element(BodyCell).Text(row.AssessLevelName);
-                table.Cell().Element(BodyCell).Text(row.Comment);
+                table.Cell().Element(BodyCell).AlignLeft().Text(row.PONo);
+                table.Cell().Element(BodyCell).AlignLeft().Text(row.PRNo);
+                table.Cell().Element(BodyCell).AlignCenter().Text(row.PODate?.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture) ?? string.Empty);
+                table.Cell().Element(BodyCell).AlignLeft().Text(row.Remark);
+                table.Cell().Element(BodyCompactCell).AlignCenter().Text(row.StatusName).FontSize(7.5f);
+                table.Cell().Element(BodyCompactCell).AlignCenter().Text(row.AssessLevelName).FontSize(7.5f);
+                table.Cell().Element(BodyCell).AlignLeft().Text(row.Comment);
             }
         });
     }

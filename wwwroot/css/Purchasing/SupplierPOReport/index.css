@@ -102,3 +102,19 @@
     border-color: #007bff;
     color: #fff;
 }
+
+.content.vni-font,
+.content.vni-font input,
+.content.vni-font textarea,
+.content.vni-font select,
+.content.vni-font button,
+.content.vni-font .form-control,
+.content.vni-font .custom-control-label,
+.content.vni-font .page-link,
+.content.vni-font .badge,
+.content.vni-font .table,
+.content.vni-font .card-title,
+.content.vni-font .select2-container .select2-selection,
+.content.vni-font .select2-container .select2-selection__rendered {
+    font-family: "VNI-Times", "VNI-Helve", sans-serif !important;
+}
