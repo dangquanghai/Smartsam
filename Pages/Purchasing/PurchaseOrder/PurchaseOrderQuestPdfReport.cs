@@ -14,24 +14,24 @@ internal static class PurchaseOrderQuestPdfReport
         {
             container.Page(page =>
             {
-                page.Size(PageSizes.A4.Landscape());
-                page.Margin(15);
-                page.DefaultTextStyle(style => style.FontFamily("Times New Roman").FontSize(10));
+                page.Size(PageSizes.A4);
+                page.Margin(18);
+                page.DefaultTextStyle(style => style.FontFamily("Times New Roman").FontSize(8));
 
                 page.Content().Column(column =>
                 {
                     column.Item().Element(content => ComposeHeader(content, model));
-                    column.Item().PaddingTop(4).Element(content => ComposeMeta(content, model));
-                    column.Item().PaddingTop(4).Element(content => ComposeInfo(content, model));
-                    column.Item().PaddingTop(8).AlignLeft().Text(text =>
-                    {
-                        text.Span("Chúng tôi xin đặt các mặt hàng sau với các điều kiện dưới đây:We hereby order the following item(s) by under mentioned conditions:");
-                    });
-                    column.Item().PaddingTop(4).Text("1. Mặt hàng/Items").Bold();
+                    column.Item().PaddingTop(18).Element(content => ComposeMeta(content, model));
+                    column.Item().PaddingTop(14).Element(content => ComposeSupplierInfo(content, model));
+                    column.Item().PaddingTop(22).Element(ComposeSubject);
+                    column.Item().PaddingTop(18).Text("Chúng tôi xin đặt các mặt hàng sau với các điều kiện dưới đây: We hereby order the following item(s) by under mentioned conditions:").FontSize(7);
+                    column.Item().PaddingTop(2).Text("1. Mặt hàng/Items").Bold().FontSize(7);
                     column.Item().PaddingTop(2).Element(content => ComposeItems(content, model));
                     column.Item().PaddingTop(4).Element(content => ComposeTotals(content, model));
-                    column.Item().PaddingTop(8).Element(content => ComposeFooter(content, model));
+                    column.Item().PaddingTop(10).Element(content => ComposeTermsAndNotes(content, model));
                 });
+
+                page.Footer().Element(content => ComposeFooter(content, model));
             });
         }).GeneratePdf();
     }
@@ -40,13 +40,17 @@ internal static class PurchaseOrderQuestPdfReport
     {
         container.Column(column =>
         {
-            column.Item().AlignCenter().Text("Saigon Sky Garden Co., LTD").Bold().FontSize(14);
-            column.Item().AlignCenter().Text("20 Lê Thánh Tôn, Phường Bến Nghé, Quận 1, Tp. Hồ Chí Minh").FontSize(8);
-            column.Item().AlignCenter().Text("Tel: 84.8.38220002 Email: sales@saigonskygarden.com.vn VAT Code: 0300713227").FontSize(8);
-            column.Item().AlignCenter().Text("-").FontSize(10);
-            column.Item().PaddingTop(4).AlignCenter().Text(text =>
+            column.Item().AlignCenter().Text(text =>
             {
-                text.Span("ĐƠN ĐẶT HÀNG ").Bold().FontSize(18);
+                text.Span("Saigon Sky Garden Co.").Bold().FontSize(16);
+                text.Span("Ltd").Bold().FontSize(16);
+            });
+            column.Item().AlignCenter().Text("20 Le Thanh Ton, Phuong Ben Nghe, Quan 1, Tp. Ho Chi Minh").FontSize(8);
+            column.Item().AlignCenter().Text("Tel: 84.8.38220002 Email: sales@saigonskygarden.com.vn VAT Code: 0300713227").FontSize(8);
+            column.Item().AlignCenter().Text("-").FontSize(9);
+            column.Item().PaddingTop(18).AlignCenter().Text(text =>
+            {
+                text.Span("ĐƠN ĐẶT HÀNG ").Bold().FontSize(20);
                 text.Span("(Purchase Order)").Bold().FontSize(14);
             });
         });
@@ -56,104 +60,39 @@ internal static class PurchaseOrderQuestPdfReport
     {
         container.Row(row =>
         {
-            row.RelativeItem().Text(text =>
-            {
-                text.Span("PR No.: ").Bold();
-                text.Span(model.RequestNo);
-            });
-
-            row.RelativeItem().AlignCenter().Text(text =>
-            {
-                text.Span("PO No.:   ").Bold();
-                text.Span(model.PONo);
-            });
-
-            row.RelativeItem().AlignRight().Text(text =>
-            {
-                text.Span("PO Date: ").Bold();
-                text.Span(FormatDate(model.PODate, "d-MMM-yy"));
-            });
+            row.Spacing(10);
+            row.RelativeItem(1).Row(item => ComposeInlineField(item, "PO No:", model.PONo, 40));
+            row.RelativeItem(1).Row(item => ComposeInlineField(item, "PO Date:", FormatDate(model.PODate, "dd-MMM-yy"), 50));
+            row.RelativeItem(1).Row(item => ComposeInlineField(item, "PR No:", model.RequestNo, 40));
+            row.RelativeItem(1.2f).Row(item => ComposeInlineField(item, "Currency/Đơn vị tiền tệ:", NormalizeLegacyText(model.CurrencyText), 94));
         });
     }
 
-    private static void ComposeInfo(IContainer container, PurchaseOrderDetailReportModel model)
+    private static void ComposeSupplierInfo(IContainer container, PurchaseOrderDetailReportModel model)
     {
         container.Column(column =>
         {
+            column.Spacing(2);
+            column.Item().Row(row => ComposeInlineField(row, "Nhà cung cấp/Supplier:", NormalizeLegacyText(model.SupplierDisplay), 88));
+            column.Item().Row(row => ComposeInlineField(row, "Địa chỉ/Address:", NormalizeLegacyText(model.SupplierAddress), 68));
             column.Item().Row(row =>
             {
-                row.RelativeItem().Column(left =>
-                {
-                    left.Spacing(4);
-                    left.Item().Row(info => ComposeInfoRow(info, "Nhà cung cấp/Supplier", NormalizeVniText(model.SupplierDisplay)));
-                    left.Item().Row(info => ComposeThreeValueRow(info, "Tel", NormalizeVniText(model.SupplierTel), "Fax", string.Empty, "Email", NormalizeVniText(model.SupplierEmail)));
-                    left.Item().Row(info => ComposeTwoValueRow(info, "Người liên hệ/Contact", NormalizeVniText(model.SupplierContact), "Đơn vị tiền tệ/Currency", NormalizeVniText(model.CurrencyText)));
-                });
-            });
-
-            column.Item().PaddingTop(4).Text("Term & Condition:").Bold();
-            column.Item().PaddingLeft(10).Text(text =>
-            {
-                var terms = SplitNotes(NormalizeLegacyText(model.TermsAndConditions)).ToList();
-                if (terms.Count == 0)
-                {
-                    text.Span(string.Empty);
-                    return;
-                }
-
-                for (var i = 0; i < terms.Count; i++)
-                {
-                    if (i > 0)
-                    {
-                        text.Line(string.Empty);
-                    }
-
-                    text.Span(terms[i]);
-                }
+                row.Spacing(14);
+                row.RelativeItem(1).Row(item => ComposeInlineField(item, "Người liên hệ/Contact:", NormalizeLegacyText(model.SupplierContact), 95));
+                row.RelativeItem(1.2f).Row(item => ComposeInlineField(item, "Phone/Mail:", BuildPhoneMailText(model), 58));
             });
         });
     }
 
-    private static void ComposeInfoRow(RowDescriptor row, string label, string value)
+    private static void ComposeSubject(IContainer container)
     {
-        row.ConstantItem(160).Text(label + ":").Bold();
-        row.RelativeItem().Text($"{value}");
+        container.Row(row => ComposeInlineField(row, "Subject:", string.Empty, 44));
     }
 
-    private static void ComposeTwoValueRow(RowDescriptor row, string leftLabel, string leftValue, string rightLabel, string rightValue)
+    private static void ComposeInlineField(RowDescriptor row, string label, string value, float labelWidth)
     {
-        row.RelativeItem(1).Row(left =>
-        {
-            left.ConstantItem(160).Text(leftLabel + ":").Bold();
-            left.RelativeItem().Text($" {leftValue}");
-        });
-
-        row.RelativeItem(1).Row(right =>
-        {
-            right.ConstantItem(160).Text(rightLabel + ":").Bold();
-            right.RelativeItem().Text($" {rightValue}");
-        });
-    }
-
-    private static void ComposeThreeValueRow(RowDescriptor row, string leftLabel, string leftValue, string middleLabel, string middleValue, string rightLabel, string rightValue)
-    {
-        row.RelativeItem(1).Row(left =>
-        {
-            left.ConstantItem(50).Text(leftLabel + ":").Bold();
-            left.RelativeItem().Text($" {leftValue}");
-        });
-
-        row.RelativeItem(1).Row(middle =>
-        {
-            middle.ConstantItem(45).Text(middleLabel + ":").Bold();
-            middle.RelativeItem().Text($" {middleValue}");
-        });
-
-        row.RelativeItem(1).Row(right =>
-        {
-            right.ConstantItem(55).Text(rightLabel + ":").Bold();
-            right.RelativeItem().Text($" {rightValue}");
-        });
+        row.ConstantItem(labelWidth).AlignBottom().Text(label).Bold();
+        row.RelativeItem().BorderBottom(0.6f).PaddingBottom(1).Text(value);
     }
 
     private static void ComposeItems(IContainer container, PurchaseOrderDetailReportModel model)
@@ -162,34 +101,34 @@ internal static class PurchaseOrderQuestPdfReport
         {
             table.ColumnsDefinition(columns =>
             {
+                columns.ConstantColumn(24);
+                columns.ConstantColumn(58);
+                columns.RelativeColumn(1);
                 columns.ConstantColumn(34);
-                columns.ConstantColumn(110);
-                columns.RelativeColumn(2.8f);
-                columns.ConstantColumn(54);
+                columns.ConstantColumn(48);
                 columns.ConstantColumn(64);
-                columns.ConstantColumn(92);
-                columns.ConstantColumn(92);
-                columns.ConstantColumn(120);
+                columns.ConstantColumn(70);
+                columns.ConstantColumn(66);
             });
 
-            static IContainer HeaderCell(IContainer cell) => cell.Border(1).Background(Colors.Grey.Lighten3).Padding(4).AlignCenter().AlignMiddle();
-            static IContainer BodyCell(IContainer cell) => cell.Border(1).Padding(3).AlignTop();
+            static IContainer HeaderCell(IContainer cell) => cell.Border(0.8f).Background(Colors.Grey.Lighten3).Padding(2).AlignCenter().AlignMiddle();
+            static IContainer BodyCell(IContainer cell) => cell.Border(0.8f).Padding(2).AlignMiddle();
 
             table.Header(header =>
             {
-                header.Cell().Element(HeaderCell).Text("STT\n(No)").Bold();
-                header.Cell().Element(HeaderCell).Text("Mã hàng\n(Item code)").Bold();
-                header.Cell().Element(HeaderCell).Text("Mô tả mặt hàng\n(Description)").Bold();
-                header.Cell().Element(HeaderCell).Text("ĐVT\n(Unit)").Bold();
-                header.Cell().Element(HeaderCell).Text("S.Lượng\n(Quantity)").Bold();
-                header.Cell().Element(HeaderCell).Text("Đơn giá\n(Unit Price)").Bold();
-                header.Cell().Element(HeaderCell).Text("Thành tiền\n(Amount)").Bold();
-                header.Cell().Element(HeaderCell).Text("Ghi chú\n(Remarks)").Bold();
+                header.Cell().Element(HeaderCell).Text("STT\n(No)").Bold().FontSize(6);
+                header.Cell().Element(HeaderCell).Text("Mã hàng\n(Item code)").Bold().FontSize(6);
+                header.Cell().Element(HeaderCell).Text("Mô tả mặt hàng\n(Description)").Bold().FontSize(6);
+                header.Cell().Element(HeaderCell).Text("ĐVT\n(Unit)").Bold().FontSize(6);
+                header.Cell().Element(HeaderCell).Text("S.Lượng\n(Quantity)").Bold().FontSize(6);
+                header.Cell().Element(HeaderCell).Text("Đơn giá\n(Unit Price)").Bold().FontSize(6);
+                header.Cell().Element(HeaderCell).Text("Thành tiền\n(Amount)").Bold().FontSize(6);
+                header.Cell().Element(HeaderCell).Text("Ghi chú\n(Remarks)").Bold().FontSize(6);
             });
 
             if (model.Items.Count == 0)
             {
-                table.Cell().ColumnSpan(8).Border(1).Padding(8).AlignCenter().Text("No data");
+                table.Cell().ColumnSpan(8).Border(0.8f).Padding(8).AlignCenter().Text("No data");
                 return;
             }
 
@@ -213,33 +152,60 @@ internal static class PurchaseOrderQuestPdfReport
         {
             table.ColumnsDefinition(columns =>
             {
-                columns.ConstantColumn(40);
-                columns.ConstantColumn(80);
-                columns.ConstantColumn(220);
-                columns.ConstantColumn(98);
-                columns.ConstantColumn(60);
-                columns.ConstantColumn(100);
-                columns.ConstantColumn(100);
-                columns.ConstantColumn(100);
+                columns.ConstantColumn(14);
+                columns.ConstantColumn(28);
+                columns.RelativeColumn(1);
+                columns.ConstantColumn(34);
+                columns.ConstantColumn(48);
+                columns.ConstantColumn(64);
+                columns.ConstantColumn(70);
+                columns.ConstantColumn(64);
             });
 
-            static IContainer LeftCell(IContainer cell) => cell.Border(0).PaddingVertical(2).PaddingHorizontal(8);
-            static IContainer RightCell(IContainer cell) => cell.Border(0).PaddingVertical(2).PaddingHorizontal(8).AlignRight();
+            static IContainer LeftCell(IContainer cell) => cell.PaddingVertical(1).PaddingHorizontal(4);
+            static IContainer RightCell(IContainer cell) => cell.PaddingVertical(1).PaddingHorizontal(4).AlignRight();
 
-            table.Cell().ColumnSpan(3).Element(LeftCell);
-            table.Cell().ColumnSpan(3).Element(RightCell).Text("Tổng trước thuế (Before VAT):").Bold();
+            table.Cell().ColumnSpan(4).Element(LeftCell);
+            table.Cell().ColumnSpan(2).Element(RightCell).Text("Tổng trước thuế (Before VAT):").Bold().FontSize(7);
             table.Cell().Element(RightCell).Text(FormatMoney(model.BeforeVAT)).Bold();
             table.Cell().Element(LeftCell);
 
-            table.Cell().ColumnSpan(3).Element(RightCell).Text($"%VAT: {FormatPercent(model.PerVAT)}").Bold();
-            table.Cell().ColumnSpan(3).Element(RightCell).Text("Tiền thuế (VAT):").Bold();
+            table.Cell().ColumnSpan(2).Element(LeftCell);
+            table.Cell().ColumnSpan(2).Element(RightCell).Text($"% VAT: {FormatPercent(model.PerVAT)}").Bold().FontSize(7);
+            table.Cell().ColumnSpan(2).Element(RightCell).Text("Tiền thuế (VAT):").Bold().FontSize(7);
             table.Cell().Element(RightCell).Text(FormatMoney(model.VAT)).Bold();
             table.Cell().Element(LeftCell);
 
-            table.Cell().ColumnSpan(3).Element(LeftCell);
-            table.Cell().ColumnSpan(3).Element(RightCell).Text("Tổng cộng (Total):").Bold();
+            table.Cell().ColumnSpan(4).Element(LeftCell);
+            table.Cell().ColumnSpan(2).Element(RightCell).Text("Tổng cộng (Total):").Bold().FontSize(7);
             table.Cell().Element(RightCell).Text(FormatMoney(model.AfterVAT)).Bold();
             table.Cell().Element(LeftCell);
+        });
+    }
+
+    private static void ComposeTermsAndNotes(IContainer container, PurchaseOrderDetailReportModel model)
+    {
+        container.Column(column =>
+        {
+            column.Item().BorderTop(0.8f).PaddingTop(6).Text("TERMS & CONDITIONS:").Bold().FontSize(8);
+            column.Item().MinHeight(58).PaddingTop(4).Text(text =>
+            {
+                var terms = SplitNotes(NormalizeLegacyText(model.TermsAndConditions)).ToList();
+                foreach (var line in terms)
+                {
+                    text.Line(line);
+                }
+            });
+
+            column.Item().BorderTop(0.8f).PaddingTop(4).Text("NOTES:").Bold().FontSize(8);
+            column.Item().MinHeight(36).PaddingTop(4).Text(text =>
+            {
+                var notes = SplitNotes(NormalizeLegacyText(model.Notes)).ToList();
+                foreach (var line in notes)
+                {
+                    text.Line(line);
+                }
+            });
         });
     }
 
@@ -247,63 +213,66 @@ internal static class PurchaseOrderQuestPdfReport
     {
         const string DefaultDirectorName = "TATSUYA FUKUZAWA";
         const string DefaultDirectorTitle = "Tổng Giám Đốc";
-        var signer = ResolveSigner(model.Footer);
+        var footer = model.Footer;
+        var directorName = string.IsNullOrWhiteSpace(footer?.ApprovedName) ? DefaultDirectorName : NormalizeLegacyText(footer.ApprovedName);
+        var directorTitle = string.IsNullOrWhiteSpace(footer?.ApprovedTitle) ? DefaultDirectorTitle : NormalizeLegacyText(footer.ApprovedTitle);
 
-        container.Row(row =>
+        container.Height(92).AlignBottom().Row(row =>
         {
-            row.RelativeItem(1f).Column(left =>
+            row.ConstantItem(350).PaddingLeft(20).Column(left =>
             {
-                left.Item().AlignCenter().Text("Công ty TNHH Vườn Thiên Đàng Sài Gòn").Bold().FontSize(9);
-                var signatureWidth = signer.IsFinal ? 220 : 150;
-                var signatureHeight = signer.IsFinal ? 80 : 50;
-
-                left.Item().PaddingTop(34).Width(signatureWidth).Height(signatureHeight).AlignCenter().AlignMiddle().Element(cell =>
+                left.Item().Width(320).Column(signatureBlock =>
                 {
-                    if (signer.Signature != null && signer.Signature.Length > 0)
+                    signatureBlock.Item().Row(top =>
                     {
-                        cell.Image(signer.Signature).FitArea();
-                    }
-                });
+                        top.ConstantItem(82).Text(string.Empty);
+                        top.ConstantItem(156).TranslateY(-14).AlignCenter().AlignTop().Text("Công ty TNHH Vườn Thiên Đàng Sài Gòn").FontSize(8);
+                        top.ConstantItem(82).TranslateX(-24).PaddingTop(1).PaddingLeft(1).Row(signatures =>
+                        {
+                            signatures.ConstantItem(34).Element(cell => ComposeSmallSignature(cell, footer?.PreparedSignature));
+                            signatures.ConstantItem(34).Element(cell => ComposeSmallSignature(cell, footer?.CheckedSignature));
+                        });
+                    });
 
-                left.Item().PaddingTop(2).AlignCenter().Column(box =>
-                {
-                    box.Item().Width(signer.IsFinal ? 190 : 150).AlignCenter().BorderTop(1).PaddingTop(4).Column(nameBox =>
+                    signatureBlock.Item().PaddingTop(2).TranslateX(74).Width(170).Height(44).AlignCenter().AlignMiddle().Element(cell =>
                     {
-                        nameBox.Item().AlignCenter().Text(string.IsNullOrWhiteSpace(signer.Name) ? DefaultDirectorName : signer.Name).Bold();
-                        nameBox.Item().AlignCenter().Text(string.IsNullOrWhiteSpace(signer.Title) ? DefaultDirectorTitle : signer.Title).Italic();
+                        if (footer?.ApprovedSignature is { Length: > 0 })
+                        {
+                            cell.Image(footer.ApprovedSignature).FitArea();
+                        }
+                    });
+
+                    signatureBlock.Item().PaddingTop(1).AlignCenter().Width(170).BorderTop(0.8f).PaddingTop(3).Column(name =>
+                    {
+                        name.Item().AlignCenter().Text(directorName).FontSize(8);
+                        name.Item().AlignCenter().Text(directorTitle).FontSize(8);
                     });
                 });
             });
 
-            row.RelativeItem(1.3f).PaddingLeft(12).Column(right =>
+            row.RelativeItem().PaddingRight(8).PaddingBottom(1).AlignBottom().Column(right =>
             {
-                right.Item().Text("NOTED:").Bold();
-                foreach (var line in SplitNotes(model.Footer?.Notes ?? model.Notes ?? string.Empty))
+                right.Item().AlignRight().Text(text =>
                 {
-                    right.Item().Text($"+ {NormalizeLegacyText(line)}");
-                }
+                    text.Span("Page ");
+                    text.CurrentPageNumber();
+                    text.Span(" of ");
+                    text.TotalPages();
+                });
+                right.Item().PaddingTop(2).AlignRight().Text("QF6.3.Rev: 1");
             });
         });
     }
 
-    private static (byte[]? Signature, string Name, string Title, bool IsFinal) ResolveSigner(PurchaseOrderApprovalFooterModel? footer)
+    private static void ComposeSmallSignature(IContainer container, byte[]? signature)
     {
-        if (footer?.ApprovedSignature is { Length: > 0 })
+        container.Height(20).PaddingHorizontal(2).AlignCenter().AlignMiddle().Element(cell =>
         {
-            return (footer.ApprovedSignature, footer.ApprovedName, footer.ApprovedTitle, true);
-        }
-
-        if (footer?.CheckedSignature is { Length: > 0 })
-        {
-            return (footer.CheckedSignature, footer.CheckedName, footer.CheckedTitle, false);
-        }
-
-        if (footer?.PreparedSignature is { Length: > 0 })
-        {
-            return (footer.PreparedSignature, footer.PreparedName, footer.PreparedTitle, false);
-        }
-
-        return (null, string.Empty, string.Empty, false);
+            if (signature is { Length: > 0 })
+            {
+                cell.Image(signature).FitArea();
+            }
+        });
     }
 
     private static IEnumerable<string> SplitNotes(string notes)
@@ -314,6 +283,18 @@ internal static class PurchaseOrderQuestPdfReport
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(line => line.Trim())
             .Where(line => !string.IsNullOrWhiteSpace(line));
+    }
+
+    private static string BuildPhoneMailText(PurchaseOrderDetailReportModel model)
+    {
+        var phone = NormalizeLegacyText(model.SupplierTel);
+        var email = NormalizeLegacyText(model.SupplierEmail);
+        if (string.IsNullOrWhiteSpace(phone) && string.IsNullOrWhiteSpace(email))
+        {
+            return string.Empty;
+        }
+
+        return $"{phone}/{email}";
     }
 
     private static string NormalizeLegacyText(string? value)
@@ -451,6 +432,7 @@ public sealed class PurchaseOrderDetailReportModel
     public DateTime? PODate { get; set; }
     public string RequestNo { get; set; } = string.Empty;
     public string SupplierDisplay { get; set; } = string.Empty;
+    public string SupplierAddress { get; set; } = string.Empty;
     public string SupplierTel { get; set; } = string.Empty;
     public string SupplierEmail { get; set; } = string.Empty;
     public string SupplierContact { get; set; } = string.Empty;

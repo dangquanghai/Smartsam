@@ -50,12 +50,8 @@
                             <div class="row no-gutters align-items-center mb-2">
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">PR No</label></div>
                                 <div class="col-4">
-                                    <select asp-for="Header.PRID" id="PRID" class="form-control form-control-sm" disabled="@Model.IsViewMode" style="width: 100%;">
+                                    <select asp-for="Header.PRID" asp-items="Model.PrOptions" id="PRID" class="form-control form-control-sm" disabled="@Model.IsViewMode" style="width: 100%;">
                                         <option value="">-- Select PR --</option>
-                                        @if (Model.Header.PRID.HasValue && !string.IsNullOrWhiteSpace(Model.CurrentPrText))
-                                        {
-                                            <option value="@Model.Header.PRID" selected>@Model.CurrentPrText</option>
-                                        }
                                     </select>
                                 </div>
                                 <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Currency</label></div>
@@ -523,7 +519,6 @@
             allowedAttachmentExtensions: '@Model.AllowedAttachmentExtensionsText',
             maxAttachmentSizeMb: @Model.MaxAttachmentSizeMb,
             supplierLookupUrl: '@Url.Page("./PurchaseOrderDetail", "SupplierLookup")',
-            prLookupUrl: '@Url.Page("./PurchaseOrderDetail", "PrLookup")',
             prLinesUrl: '@Url.Page("./PurchaseOrderDetail", "PrLines")',
             questPdfUrl: '@Url.Page("./PurchaseOrderDetail", "ReportQuestPdf")',
             reportId: @Model.Header.Id,

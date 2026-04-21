@@ -84,6 +84,7 @@ public class PurchaseOrderDetailModel : BasePageModel
     public List<SelectListItem> CurrencyOptions { get; set; } = new List<SelectListItem>();
     public List<SelectListItem> AssessLevelOptions { get; set; } = new List<SelectListItem>();
     public List<SelectListItem> DepartmentOptions { get; set; } = new List<SelectListItem>();
+    public List<SelectListItem> PrOptions { get; set; } = new List<SelectListItem>();
     public List<PurchaseOrderAttachmentViewModel> AttachmentList { get; set; } = new List<PurchaseOrderAttachmentViewModel>();
 
     public IActionResult OnGet(int? id, string mode = "view", string? returnUrl = null, bool openConvertModal = false)
@@ -144,6 +145,7 @@ public class PurchaseOrderDetailModel : BasePageModel
             AttachmentList = new List<PurchaseOrderAttachmentViewModel>();
         }
 
+        PrOptions = LoadPrOptions(Header.PRID);
         LoadSelectedLookupTexts();
         SetActionFlags();
         DetailsJson = JsonSerializer.Serialize(Details);
@@ -162,6 +164,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         {
             LoadExistingWorkflowData(Header.Id);
         }
+        PrOptions = LoadPrOptions(Header.PRID);
         LoadSelectedLookupTexts();
 
         var effectivePermissions = GetEffectivePermissionsByStatus(isNew ? 1 : Header.StatusId);
@@ -753,6 +756,56 @@ public class PurchaseOrderDetailModel : BasePageModel
         DepartmentOptions = LoadListFromSql("SELECT DeptID, DeptCode AS DeptText FROM dbo.MS_Department ORDER BY DeptCode", "DeptID", "DeptText");
     }
 
+    private List<SelectListItem> LoadPrOptions(int? selectedPrId)
+    {
+        var rows = new List<SelectListItem>();
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand(@"
+        SELECT TOP 20
+            PRID,
+            ISNULL(RequestNo, '') AS RequestNo
+        FROM dbo.PC_PR
+        WHERE ISNULL(Status, 0) <> 4
+        ORDER BY RequestDate DESC, RequestNo DESC", conn);
+        conn.Open();
+        using (var reader = cmd.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                var value = Convert.ToString(reader["PRID"]) ?? string.Empty;
+                rows.Add(new SelectListItem
+                {
+                    Value = value,
+                    Text = Convert.ToString(reader["RequestNo"]) ?? string.Empty,
+                    Selected = selectedPrId.HasValue && value == selectedPrId.Value.ToString(CultureInfo.InvariantCulture)
+                });
+            }
+        }
+
+        if (selectedPrId.HasValue && selectedPrId.Value > 0 && rows.All(x => x.Value != selectedPrId.Value.ToString(CultureInfo.InvariantCulture)))
+        {
+            using var selectedCmd = new SqlCommand(@"
+            SELECT TOP 1
+                PRID,
+                ISNULL(RequestNo, '') AS RequestNo
+            FROM dbo.PC_PR
+            WHERE PRID = @PRID", conn);
+            selectedCmd.Parameters.Add("@PRID", SqlDbType.Int).Value = selectedPrId.Value;
+            using var selectedReader = selectedCmd.ExecuteReader();
+            if (selectedReader.Read())
+            {
+                rows.Add(new SelectListItem
+                {
+                    Value = Convert.ToString(selectedReader["PRID"]) ?? string.Empty,
+                    Text = Convert.ToString(selectedReader["RequestNo"]) ?? string.Empty,
+                    Selected = true
+                });
+            }
+        }
+
+        return rows;
+    }
+
     private void LoadSelectedLookupTexts()
     {
         CurrentSupplierText = GetSupplierDisplayText(Header.SupplierID);
@@ -814,6 +867,7 @@ public class PurchaseOrderDetailModel : BasePageModel
             ISNULL(pr.RequestNo, '') AS RequestNo,
             ISNULL(s.SupplierCode, '') AS SupplierCode,
             ISNULL(s.SupplierName, '') AS SupplierName,
+            ISNULL(s.Address, '') AS SupplierAddress,
             ISNULL(s.Phone, '') AS SupplierTel,
             ISNULL(s.Email, '') AS SupplierEmail,
             ISNULL(s.Contact, '') AS SupplierContact,
@@ -856,6 +910,7 @@ public class PurchaseOrderDetailModel : BasePageModel
             report.PODate = rd.IsDBNull(rd.GetOrdinal("PODate")) ? null : Convert.ToDateTime(rd["PODate"]);
             report.RequestNo = Convert.ToString(rd["RequestNo"]) ?? string.Empty;
             report.SupplierDisplay = supplierDisplay;
+            report.SupplierAddress = Convert.ToString(rd["SupplierAddress"]) ?? string.Empty;
             report.SupplierTel = Convert.ToString(rd["SupplierTel"]) ?? string.Empty;
             report.SupplierEmail = Convert.ToString(rd["SupplierEmail"]) ?? string.Empty;
             report.SupplierContact = Convert.ToString(rd["SupplierContact"]) ?? string.Empty;
@@ -893,14 +948,14 @@ public class PurchaseOrderDetailModel : BasePageModel
             ApprovedName = LoadEmployeeFullName(conn, approvedEmployeeId),
             PreparedTitle = string.IsNullOrWhiteSpace(preparedTitle) ? "Purchaser" : preparedTitle,
             CheckedTitle = string.IsNullOrWhiteSpace(checkedTitle) ? "Chief Accountant" : checkedTitle,
-            ApprovedTitle = string.IsNullOrWhiteSpace(approvedTitle) ? "General Director" : approvedTitle,
+            ApprovedTitle = string.IsNullOrWhiteSpace(approvedTitle) ? "Tổng Giám Đốc" : approvedTitle,
             DeliveryDate = report.PODate.HasValue ? report.PODate.Value.ToString("MMMM yyyy", CultureInfo.InvariantCulture) : string.Empty,
             DeliveryPlace = "20 Le Thanh Ton st, Sai Gon Ward, HCMC, VN",
             Receiver = BuildReceiverText(report.SupplierContact, report.SupplierTel),
             PaymentTerm = report.TermsAndConditions,
-            PreparedSignature = LoadEmployeeSignature(conn, preparedEmployeeId),
-            CheckedSignature = LoadEmployeeSignature(conn, checkedEmployeeId),
-            ApprovedSignature = LoadEmployeeSignature(conn, approvedEmployeeId),
+            PreparedSignature = LoadEmployeeSignature(conn, preparedEmployeeId, true),
+            CheckedSignature = LoadEmployeeSignature(conn, checkedEmployeeId, true),
+            ApprovedSignature = LoadEmployeeSignature(conn, approvedEmployeeId, false),
             Notes = notesText
         };
 
@@ -962,8 +1017,13 @@ public class PurchaseOrderDetailModel : BasePageModel
             return string.Empty;
         }
 
+        if (!EmployeePositionTitleColumnExists(conn))
+        {
+            return string.Empty;
+        }
+
         using var cmd = new SqlCommand(@"
-        SELECT TOP 1 ISNULL([Position], '')
+        SELECT TOP 1 ISNULL(PositionTitle, '')
         FROM dbo.MS_Employee
         WHERE EmployeeID = @EmployeeID", conn);
         cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId.Value;
@@ -971,39 +1031,92 @@ public class PurchaseOrderDetailModel : BasePageModel
         return value == null || value == DBNull.Value ? string.Empty : Convert.ToString(value)?.Trim() ?? string.Empty;
     }
 
-    private byte[]? LoadEmployeeSignature(SqlConnection conn, int? employeeId)
+    private static bool EmployeePositionTitleColumnExists(SqlConnection conn)
+    {
+        using var cmd = new SqlCommand(@"
+        SELECT CASE
+            WHEN COL_LENGTH('dbo.MS_Employee', 'PositionTitle') IS NULL THEN 0
+            ELSE 1
+        END", conn);
+        var value = cmd.ExecuteScalar();
+        return value != null && value != DBNull.Value && Convert.ToInt32(value) == 1;
+    }
+
+    private byte[]? LoadEmployeeSignature(SqlConnection conn, int? employeeId, bool useSmallSignature)
     {
         if (!employeeId.HasValue || employeeId.Value <= 0)
         {
             return null;
         }
 
+        var signatureColumn = useSmallSignature ? "UrlSmallSign" : "UrlNomalSign";
         using var cmd = new SqlCommand(@"
-        SELECT ISNULL(UrlNomalSign, '') AS UrlNomalSign
+        SELECT
+            ISNULL(" + signatureColumn + @", '') AS SignatureFileName,
+            ISNULL(EmployeeCode, '') AS EmployeeCode
         FROM dbo.MS_Employee
         WHERE EmployeeID = @EmployeeID", conn);
         cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId.Value;
-        var fileName = Convert.ToString(cmd.ExecuteScalar())?.Trim();
-        if (string.IsNullOrWhiteSpace(fileName))
+
+        using var reader = cmd.ExecuteReader();
+        if (!reader.Read())
         {
             return null;
         }
 
-        var signaturePath = ResolveEmployeeSignaturePath(fileName);
-        if (string.IsNullOrWhiteSpace(signaturePath) || !System.IO.File.Exists(signaturePath))
+        var signatureFileName = Convert.ToString(reader["SignatureFileName"])?.Trim();
+        var employeeCode = Convert.ToString(reader["EmployeeCode"])?.Trim();
+        var signaturePath = ResolveEmployeeSignaturePath(signatureFileName, employeeCode, useSmallSignature);
+        if (!string.IsNullOrWhiteSpace(signaturePath) && System.IO.File.Exists(signaturePath))
         {
-            return null;
+            return System.IO.File.ReadAllBytes(signaturePath);
         }
 
-        return System.IO.File.ReadAllBytes(signaturePath);
+        return null;
     }
 
-    private string ResolveEmployeeSignaturePath(string fileName)
+    private string ResolveEmployeeSignaturePath(string? signatureFileName, string? employeeCode, bool useSmallSignature)
     {
-        var cleanedFileName = Path.GetFileName(fileName.Trim());
-        if (string.IsNullOrWhiteSpace(cleanedFileName))
+        var configuredSignaturePath = ResolveEmployeeSignaturePathValue(signatureFileName);
+        if (!string.IsNullOrWhiteSpace(configuredSignaturePath))
+        {
+            return configuredSignaturePath;
+        }
+
+        if (string.IsNullOrWhiteSpace(employeeCode))
         {
             return string.Empty;
+        }
+
+        var signatureFile = $"{employeeCode.Trim()}_{(useSmallSignature ? "SmallSign" : "NormalSign")}.png";
+        return Path.Combine(_webHostEnvironment.ContentRootPath, "Uploads", "Admin", "Employee", signatureFile);
+    }
+
+    private string ResolveEmployeeSignaturePathValue(string? signatureFileName)
+    {
+        if (string.IsNullOrWhiteSpace(signatureFileName))
+        {
+            return string.Empty;
+        }
+
+        var signatureReference = signatureFileName.Trim();
+        if (System.IO.File.Exists(signatureReference))
+        {
+            return signatureReference;
+        }
+
+        var signatureSegments = signatureReference
+            .Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (signatureSegments.Length == 0 || signatureSegments.Any(x => x == "." || x == ".."))
+        {
+            return string.Empty;
+        }
+
+        var contentRootCandidate = Path.Combine([_webHostEnvironment.ContentRootPath, .. signatureSegments]);
+        if (System.IO.File.Exists(contentRootCandidate))
+        {
+            return contentRootCandidate;
         }
 
         var basePath = _config.GetValue<string>("FileUploads:BasePath");
@@ -1016,20 +1129,19 @@ public class PurchaseOrderDetailModel : BasePageModel
             ? basePath
             : Path.Combine(_webHostEnvironment.ContentRootPath, basePath);
 
-        var functionPath = _config.GetValue<string>("FileUploads:Funtions:18");
-        if (!string.IsNullOrWhiteSpace(functionPath))
+        var uploadRootCandidate = Path.Combine([rootPath, .. signatureSegments]);
+        if (System.IO.File.Exists(uploadRootCandidate))
         {
-            var relativeSegments = functionPath
-                .Replace('\\', '/')
-                .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-            if (relativeSegments.Length > 0)
-            {
-                rootPath = Path.Combine([rootPath, .. relativeSegments]);
-            }
+            return uploadRootCandidate;
         }
 
-        return Path.Combine(rootPath, cleanedFileName);
+        var employeeSignatureCandidate = Path.Combine([rootPath, "Admin", "Employee", .. signatureSegments]);
+        if (System.IO.File.Exists(employeeSignatureCandidate))
+        {
+            return employeeSignatureCandidate;
+        }
+
+        return string.Empty;
     }
 
     private static string NormalizeReportDateText(string? value)
@@ -1113,7 +1225,14 @@ public class PurchaseOrderDetailModel : BasePageModel
                 OR SupplierCode LIKE '%' + @term + '%'
                 OR SupplierName LIKE '%' + @term + '%'
           )
-        ORDER BY SupplierCode", conn);
+        ORDER BY
+            CASE
+                WHEN SupplierCode = @term OR SupplierName = @term THEN 0
+                WHEN SupplierCode LIKE @term + '%' THEN 1
+                WHEN SupplierName LIKE @term + '%' THEN 2
+                ELSE 3
+            END,
+            SupplierCode", conn);
         cmd.Parameters.Add("@term", SqlDbType.NVarChar, 100).Value = searchTerm;
         conn.Open();
         using var reader = cmd.ExecuteReader();
@@ -1124,7 +1243,9 @@ public class PurchaseOrderDetailModel : BasePageModel
             rows.Add(new
             {
                 id = Convert.ToString(reader["SupplierID"]) ?? string.Empty,
-                text = string.IsNullOrWhiteSpace(name) ? code : $"{code} ({name})"
+                text = code,
+                supplierCode = code,
+                supplierName = name
             });
         }
 
@@ -1136,11 +1257,11 @@ public class PurchaseOrderDetailModel : BasePageModel
         var rows = new List<object>();
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         using var cmd = new SqlCommand(@"
-        SELECT TOP 50
+        SELECT TOP 20
             PRID,
             ISNULL(RequestNo, '') AS RequestNo
         FROM dbo.PC_PR
-        WHERE ISNULL(Status, 0) <> 3
+        WHERE ISNULL(Status, 0) <> 4
           AND (
                 @term IS NULL
                 OR RequestNo LIKE '%' + @term + '%'
@@ -2267,4 +2388,3 @@ public class PrLinesResponse : ApiResponse
 {
     public List<PurchaseOrderPrLineLookup> Data { get; set; } = new List<PurchaseOrderPrLineLookup>();
 }
-

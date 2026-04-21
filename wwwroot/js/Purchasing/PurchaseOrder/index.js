@@ -94,6 +94,10 @@
             $element.select2('destroy');
         }
 
+        const customOptions = Object.assign({}, options || {});
+        const useSelectedTermWhenEmpty = customOptions.useSelectedTermWhenEmpty === true;
+        delete customOptions.useSelectedTermWhenEmpty;
+
         const config = Object.assign({
             width: '100%',
             allowClear: true,
@@ -104,8 +108,9 @@
                 dataType: 'json',
                 delay: 250,
                 data: function (params) {
+                    const term = (params.term || '').trim();
                     return {
-                        term: (params.term || '').trim()
+                        term: term || (useSelectedTermWhenEmpty ? getSelect2SearchSeed($element) : '')
                     };
                 },
                 processResults: function (data) {
@@ -115,7 +120,7 @@
                 },
                 cache: true
             }
-        }, options || {});
+        }, customOptions);
 
         $element.select2(config);
 
@@ -155,6 +160,26 @@
         }
 
         return seed;
+    }
+
+    function formatSupplierResult(item) {
+        if (!item || item.loading) {
+            return item ? item.text : '';
+        }
+
+        const supplierCode = (item.supplierCode || item.text || '').toString();
+        const supplierName = (item.supplierName || '').toString();
+        const $result = $('<div class="po-supplier-select2-result"></div>');
+        $('<div class="po-supplier-select2-code"></div>').text(supplierCode).appendTo($result);
+        if (supplierName) {
+            $('<div class="po-supplier-select2-name vni-font"></div>').text(supplierName).appendTo($result);
+        }
+
+        return $result;
+    }
+
+    function formatSupplierSelection(item) {
+        return (item && (item.supplierCode || item.text)) || '';
     }
 
     function syncBrowserUrlToSearchState(page, filter) {
@@ -275,7 +300,7 @@
                     </td>
                     <td>${row.poDateDisplay || ''}</td>
                     <td>${row.requestNo || ''}</td>
-                    <td class="vni-font">${row.supplier || ''}</td>
+                    <td class="vni-font">${buildEllipsisCell(row.supplier || '', 'vni-font')}</td>
                     <td>${row.statusName || ''}</td>
                     <td>${row.purchaserCode || ''}</td>
                     <td>${row.chiefACode || ''}</td>
@@ -419,7 +444,15 @@
         initializeSearchDateRange();
         initializeViewDetailDateRange();
         initializeStatusDropdown();
-        initializeAjaxSelect2('#Filter_SupplierKeyword', window.purchaseOrderPage?.supplierLookupUrl || '');
+        initializeAjaxSelect2('#Filter_SupplierKeyword', window.purchaseOrderPage?.supplierLookupUrl || '', {
+            minimumInputLength: 0,
+            useSelectedTermWhenEmpty: true,
+            templateResult: formatSupplierResult,
+            templateSelection: formatSupplierSelection,
+            escapeMarkup: function (markup) {
+                return markup;
+            }
+        });
         syncDateRangeState();
         syncViewDetailDateRangeState();
 

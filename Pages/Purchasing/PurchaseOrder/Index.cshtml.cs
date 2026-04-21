@@ -350,7 +350,14 @@ public class IndexModel : BasePageModel
                 SupplierCode LIKE '%' + @term + '%'
                 OR SupplierName LIKE '%' + @term + '%'
           )
-        ORDER BY SupplierCode", conn);
+        ORDER BY
+            CASE
+                WHEN SupplierCode = @term OR SupplierName = @term THEN 0
+                WHEN SupplierCode LIKE @term + '%' THEN 1
+                WHEN SupplierName LIKE @term + '%' THEN 2
+                ELSE 3
+            END,
+            SupplierCode", conn);
         cmd.Parameters.Add("@term", SqlDbType.NVarChar, 100).Value = searchTerm;
         conn.Open();
         using var reader = cmd.ExecuteReader();
@@ -360,8 +367,10 @@ public class IndexModel : BasePageModel
             var name = Convert.ToString(reader["SupplierName"]) ?? string.Empty;
             rows.Add(new
             {
-                id = Convert.ToString(reader["SupplierID"]) ?? string.Empty,
-                text = string.IsNullOrWhiteSpace(name) ? code : $"{code} ({name})"
+                id = code,
+                text = code,
+                supplierCode = code,
+                supplierName = name
             });
         }
 

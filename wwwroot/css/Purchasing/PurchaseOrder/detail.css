@@ -179,6 +179,21 @@
     z-index: 1040 !important;
 }
 
+.po-supplier-select2-code {
+    font-weight: 600;
+    line-height: 1.15;
+}
+
+.po-supplier-select2-name {
+    color: #495057;
+    line-height: 1.15;
+    white-space: normal;
+}
+
+.select2-results__option--highlighted .po-supplier-select2-name {
+    color: #fff;
+}
+
 @media (max-width: 991.98px) {
     .purchase-order-header-layout {
         flex-direction: column;
