@@ -216,7 +216,7 @@ internal static class PurchaseOrderViewDetailQuestPdfReport
     private static string FormatMoney(decimal value, bool withDecimals)
     {
         return withDecimals
-            ? value.ToString("#,##0.00", CultureInfo.InvariantCulture)
+            ? value.ToString("#,##0.##", CultureInfo.InvariantCulture)
             : value.ToString("#,##0", CultureInfo.InvariantCulture);
     }
 }

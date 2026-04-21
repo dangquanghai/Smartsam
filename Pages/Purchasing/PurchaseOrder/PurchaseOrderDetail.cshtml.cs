@@ -916,6 +916,7 @@ public class PurchaseOrderDetailModel : BasePageModel
             report.SupplierContact = Convert.ToString(rd["SupplierContact"]) ?? string.Empty;
             report.CurrencyText = Convert.ToString(rd["CurrencyName"]) ?? string.Empty;
             report.TermsAndConditions = Convert.ToString(rd["POTerms"]) ?? string.Empty;
+            report.Remark = Convert.ToString(rd["Remark"]) ?? string.Empty;
             report.BeforeVAT = rd.IsDBNull(rd.GetOrdinal("BeforeVAT")) ? 0 : Convert.ToDecimal(rd["BeforeVAT"]);
             report.PerVAT = rd.IsDBNull(rd.GetOrdinal("PerVAT")) ? 0 : Convert.ToDecimal(rd["PerVAT"]);
             report.VAT = rd.IsDBNull(rd.GetOrdinal("VAT")) ? 0 : Convert.ToDecimal(rd["VAT"]);
