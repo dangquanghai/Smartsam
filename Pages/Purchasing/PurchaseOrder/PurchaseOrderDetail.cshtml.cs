@@ -1066,8 +1066,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         var signatureColumn = useSmallSignature ? "UrlSmallSign" : "UrlNomalSign";
         using var cmd = new SqlCommand(@"
         SELECT
-            ISNULL(" + signatureColumn + @", '') AS SignatureFileName,
-            ISNULL(EmployeeCode, '') AS EmployeeCode
+            ISNULL(" + signatureColumn + @", '') AS SignatureFileName
         FROM dbo.MS_Employee
         WHERE EmployeeID = @EmployeeID", conn);
         cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId.Value;
@@ -1079,31 +1078,13 @@ public class PurchaseOrderDetailModel : BasePageModel
         }
 
         var signatureFileName = Convert.ToString(reader["SignatureFileName"])?.Trim();
-        var employeeCode = Convert.ToString(reader["EmployeeCode"])?.Trim();
-        var signaturePath = ResolveEmployeeSignaturePath(signatureFileName, employeeCode, useSmallSignature);
+        var signaturePath = ResolveEmployeeSignaturePathValue(signatureFileName);
         if (!string.IsNullOrWhiteSpace(signaturePath) && System.IO.File.Exists(signaturePath))
         {
             return System.IO.File.ReadAllBytes(signaturePath);
         }
 
         return null;
-    }
-
-    private string ResolveEmployeeSignaturePath(string? signatureFileName, string? employeeCode, bool useSmallSignature)
-    {
-        var configuredSignaturePath = ResolveEmployeeSignaturePathValue(signatureFileName);
-        if (!string.IsNullOrWhiteSpace(configuredSignaturePath))
-        {
-            return configuredSignaturePath;
-        }
-
-        if (string.IsNullOrWhiteSpace(employeeCode))
-        {
-            return string.Empty;
-        }
-
-        var signatureFile = $"{employeeCode.Trim()}_{(useSmallSignature ? "SmallSign" : "NormalSign")}.png";
-        return Path.Combine(_webHostEnvironment.ContentRootPath, "Uploads", "Admin", "Employee", signatureFile);
     }
 
     private string ResolveEmployeeSignaturePathValue(string? signatureFileName)
