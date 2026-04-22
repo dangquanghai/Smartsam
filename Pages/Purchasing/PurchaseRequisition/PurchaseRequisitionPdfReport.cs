@@ -133,8 +133,8 @@ internal static class PurchaseRequisitionPdfReport
                     header.Cell().Element(HeaderLeftCell).Text("Item Code").Bold();
                     header.Cell().Element(HeaderLeftCell).Text("Item Description").Bold();
                     header.Cell().Element(HeaderCell).Text("Unit").Bold();
-                    header.Cell().Element(HeaderCell).Text("Qty MR").Bold();
-                    header.Cell().Element(HeaderCell).Text("Qty Pur.").Bold();
+                    header.Cell().Element(HeaderCell).AlignRight().Text("Qty MR").Bold();
+                    header.Cell().Element(HeaderCell).AlignRight().Text("Qty Pur.").Bold();
                     header.Cell().Element(HeaderCell).AlignRight().Text("U.Price").Bold();
                     header.Cell().Element(HeaderCell).AlignRight().Text("Amount").Bold();
                     header.Cell().Element(HeaderLeftCell).Text("Remarks/Purpose").Bold();
@@ -147,8 +147,8 @@ internal static class PurchaseRequisitionPdfReport
                     table.Cell().Element(BodyCell).AlignLeft().Text(item.ItemCode);
                     table.Cell().Element(BodyCell).AlignLeft().Text(item.ItemDescription);
                     table.Cell().Element(BodyCell).AlignCenter().Text(item.Unit);
-                    table.Cell().Element(BodyCell).AlignCenter().Text(FormatQuantity(item.QtyMr));
-                    table.Cell().Element(BodyCell).AlignCenter().Text(FormatQuantity(item.QtyPur));
+                    table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(item.QtyMr));
+                    table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(item.QtyPur));
                     table.Cell().Element(BodyCell).AlignRight().Text(FormatAmount(item.UnitPrice));
                     table.Cell().Element(BodyCell).AlignRight().Text(FormatWholeAmount(item.Amount));
                     table.Cell().Element(BodyCell).AlignLeft().Text(item.Remark);
