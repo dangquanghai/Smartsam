@@ -138,9 +138,9 @@
                             <a href="@Url.Page("./Index", "ExportExcel", new { SelectedPrId = Model.Requisition.Id })" class="btn btn-sm btn-action-export btn-success border mr-2 mb-2">
                                 <i class="fas fa-file-excel"></i> Export Excel
                             </a>
-                            <a href="@Url.Page("./PurchaseRequisitionDetail", "Report", new { id = Model.Requisition.Id })" class="btn btn-sm btn-action-export btn-primary border mr-2 mb-2" target="_blank" rel="noopener">
+                            <button type="button" class="btn btn-sm btn-action-export btn-primary border mr-2 mb-2" id="btnPrqDetailReportPreview" data-report-url="@Url.Page("./PurchaseRequisitionDetail", "Report", new { id = Model.Requisition.Id })">
                                 <i class="fas fa-file-pdf"></i> Report
-                            </a>
+                            </button>
                         }
                         <div class="ml-auto mb-2 prq-detail-record-total">Total Record(s): <span id="prqDetailRecordCount">0</span></div>
                     </div>
@@ -169,7 +169,7 @@
                                 <tr>
                                     <th style="min-width:70px;">Check</th>
                                     <th style="min-width:110px;">RequestNo</th>
-                                    <th style="min-width:140px;">Item Code</th>
+                                    <th style="min-width:180px;">Item Code</th>
                                     <th style="min-width:500px;" class="prq-add-detail-col-item-name">Item Name</th>
                                     <th style="min-width:90px;" class="prq-center">BUY</th>
                                     <th style="min-width:110px;" class="prq-center prq-sugbuy-header">SugBuy<span class="required-mark">*</span></th>
@@ -306,6 +306,33 @@
                             </div>
                         </form>
                     }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (Model.Requisition.Id > 0)
+{
+    <div class="modal fade vni-font" id="prqDetailReportPreviewModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog prq-report-preview-modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title">Report Preview</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body p-0">
+                    <iframe id="prqDetailReportPreviewFrame" class="prq-report-preview-frame" title="Purchase Requisition Report Preview"></iframe>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-action-export btn-primary border mr-2" id="btnPrqDetailReportOpen">
+                        <i class="fas fa-file-pdf"></i> Report
+                    </button>
+                    <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
+                        <i class="fas fa-times"></i> Close
+                    </button>
                 </div>
             </div>
         </div>

@@ -6,6 +6,7 @@ using SmartSam.Helpers;
 
 using Hangfire;
 using Hangfire.SqlServer;
+using QuestPDF.Drawing;
 using QuestPDF.Infrastructure;
 
 
@@ -67,6 +68,16 @@ builder.Services.AddHangfireServer();
 
 var app = builder.Build();
 
+var pdfFontDirectory = Path.Combine(app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot"), "fonts", "pdf");
+Directory.CreateDirectory(pdfFontDirectory);
+RegisterPdfFontIfExists("VNI-Times", "VNI-Times.ttf");
+RegisterPdfFontIfExists("VNI-Helve", "VNI-Helve.ttf");
+RegisterPdfFontIfExists(".VnTime", "VnTime.ttf");
+RegisterPdfFontIfExists(".VnArial", "VnArial.ttf");
+RegisterPdfFontIfExists(".VnHelvetica", "VnHelvetica.ttf");
+RegisterPdfFontFamilyIfExists("Lato-Regular.ttf");
+RegisterPdfFontFamilyIfExists("Lato-Bold.ttf");
+
 // --- CẤU HÌNH PIPELINE (THỨ TỰ RẤT QUAN TRỌNG) ---
 
 if (!app.Environment.IsDevelopment())
@@ -117,3 +128,27 @@ RecurringJob.AddOrUpdate<VoucherNotifyService>(
 );
 
 app.Run();
+
+void RegisterPdfFontIfExists(string fontAlias, string fileName)
+{
+    var fontPath = Path.Combine(pdfFontDirectory, fileName);
+    if (!File.Exists(fontPath))
+    {
+        return;
+    }
+
+    using var stream = File.OpenRead(fontPath);
+    FontManager.RegisterFontWithCustomName(fontAlias, stream);
+}
+
+void RegisterPdfFontFamilyIfExists(string fileName)
+{
+    var fontPath = Path.Combine(pdfFontDirectory, fileName);
+    if (!File.Exists(fontPath))
+    {
+        return;
+    }
+
+    using var stream = File.OpenRead(fontPath);
+    FontManager.RegisterFont(stream);
+}

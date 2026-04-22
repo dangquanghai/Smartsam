@@ -187,6 +187,25 @@
     max-width: 1280px;
 }
 
+.prq-report-preview-modal-dialog {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100vh;
+    margin: 0;
+}
+
+.prq-report-preview-modal-dialog .modal-content {
+    height: 100vh;
+    border-radius: 0;
+}
+
+.prq-report-preview-frame {
+    display: block;
+    width: 100%;
+    height: calc(100vh - 106px);
+    border: 0;
+}
+
 .prq-detail-col-item-name {
     max-width: 300px;
     white-space: normal !important;

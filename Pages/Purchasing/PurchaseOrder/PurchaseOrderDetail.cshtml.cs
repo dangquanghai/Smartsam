@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Globalization;
 using System.IO;
@@ -461,12 +461,12 @@ public class PurchaseOrderDetailModel : BasePageModel
         PagePerm = GetUserPermissions();
         if (!PagePerm.HasPermission(PermissionView))
         {
-            return RedirectToPage("./Index");
+            return new JsonResult(new { success = false, message = "No permission." });
         }
 
         if (id <= 0)
         {
-            return RedirectToPage("./Index");
+            return new JsonResult(new { success = false, message = "Invalid PO id." });
         }
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -475,14 +475,15 @@ public class PurchaseOrderDetailModel : BasePageModel
         var report = LoadPurchaseOrderReport(conn, id);
         if (string.IsNullOrWhiteSpace(report.PONo))
         {
-            TempData["SuccessMessage"] = "Purchase order is not found.";
-            return RedirectToPage("./Index");
+            return new JsonResult(new { success = false, message = "Purchase order not found." });
         }
 
-        return Content("Purchase Order HTML report is temporarily disabled.", "text/plain; charset=utf-8");
+        return Partial("_PurchaseOrderHtmlReport", report);
     }
 
-    public IActionResult OnGetReportQuestPdf(int id)
+
+
+    public IActionResult OnGetReportQuestPdf(int id, bool download = true)
     {
         PagePerm = GetUserPermissions();
         if (!PagePerm.HasPermission(PermissionView))
@@ -507,7 +508,9 @@ public class PurchaseOrderDetailModel : BasePageModel
 
         var pdf = PurchaseOrderQuestPdfReport.BuildDetailPdf(report);
         var fileName = BuildReportPdfFileName(report.PONo, "questpdf");
-        return File(pdf, "application/pdf", fileName);
+        return download
+            ? File(pdf, "application/pdf", fileName)
+            : File(pdf, "application/pdf");
     }
 
     public IActionResult OnPostEvaluate()
@@ -884,11 +887,17 @@ public class PurchaseOrderDetailModel : BasePageModel
             p.GDId,
             p.PurApproDate,
             p.CAApproDate,
-            p.GDApproDate
+            p.GDApproDate,
+            ISNULL(param.CoName, '') AS CoName,
+            ISNULL(param.CoAddress, '') AS CoAddress,
+            ISNULL(param.CoPhone, '') AS CoPhone,
+            ISNULL(param.CoEmail, '') AS CoEmail,
+            ISNULL(param.CoVATCode, '') AS CoVATCode
         FROM dbo.PC_PO p
         LEFT JOIN dbo.PC_PR pr ON pr.PRID = p.PRID
         LEFT JOIN dbo.PC_Suppliers s ON s.SupplierID = p.SupplierID
         LEFT JOIN dbo.MS_CurrencyFL c ON c.CurrencyID = p.Currency
+        OUTER APPLY (SELECT TOP 1 CoName, CoAddress, CoPhone, CoEmail, CoVATCode FROM dbo.MS_Parameters) param
         WHERE p.POID = @POID", conn))
         {
             cmd.Parameters.Add("@POID", SqlDbType.Int).Value = id;
@@ -922,15 +931,19 @@ public class PurchaseOrderDetailModel : BasePageModel
             report.VAT = rd.IsDBNull(rd.GetOrdinal("VAT")) ? 0 : Convert.ToDecimal(rd["VAT"]);
             report.AfterVAT = rd.IsDBNull(rd.GetOrdinal("AfterVAT")) ? 0 : Convert.ToDecimal(rd["AfterVAT"]);
 
+            report.CoName = Convert.ToString(rd["CoName"]) ?? string.Empty;
+            report.CoAddress = Convert.ToString(rd["CoAddress"]) ?? string.Empty;
+            report.CoPhone = Convert.ToString(rd["CoPhone"]) ?? string.Empty;
+            report.CoEmail = Convert.ToString(rd["CoEmail"]) ?? string.Empty;
+            report.CoVATCode = Convert.ToString(rd["CoVATCode"]) ?? string.Empty;
+
             preparedEmployeeId = rd.IsDBNull(rd.GetOrdinal("PurId")) ? null : Convert.ToInt32(rd["PurId"]);
             checkedEmployeeId = rd.IsDBNull(rd.GetOrdinal("CAId")) ? null : Convert.ToInt32(rd["CAId"]);
             approvedEmployeeId = rd.IsDBNull(rd.GetOrdinal("GDId")) ? null : Convert.ToInt32(rd["GDId"]);
             preparedDateText = NormalizeReportDateText(Convert.ToString(rd["PurApproDate"]));
             checkedDateText = NormalizeReportDateText(Convert.ToString(rd["CAApproDate"]));
             approvedDateText = NormalizeReportDateText(Convert.ToString(rd["GDApproDate"]));
-            notesText = BuildNotesText(
-                Convert.ToString(rd["Note"]) ?? string.Empty,
-                Convert.ToString(rd["Remark"]) ?? string.Empty);
+            notesText = BuildNotesText(Convert.ToString(rd["Note"]) ?? string.Empty);
             rd.Close();
         }
 
@@ -1158,20 +1171,9 @@ public class PurchaseOrderDetailModel : BasePageModel
             : trimmed;
     }
 
-    private static string BuildNotesText(string note, string remark)
+    private static string BuildNotesText(string note)
     {
-        var parts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(note))
-        {
-            parts.Add(note.Trim());
-        }
-
-        if (!string.IsNullOrWhiteSpace(remark))
-        {
-            parts.Add(remark.Trim());
-        }
-
-        return string.Join(Environment.NewLine, parts);
+        return string.IsNullOrWhiteSpace(note) ? string.Empty : note.Trim();
     }
 
     private static string BuildReceiverText(string contact, string tel)

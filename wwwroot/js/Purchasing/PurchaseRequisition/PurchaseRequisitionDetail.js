@@ -76,6 +76,30 @@
             .replace(/'/g, "&#39;");
     }
 
+    async function loadPdfPreview(frame, url, getCurrentUrl) {
+        if (!frame || !url) {
+            return null;
+        }
+
+        const response = await fetch(url, {
+            method: "GET",
+            headers: { "X-Requested-With": "XMLHttpRequest" }
+        });
+
+        if (!response.ok) {
+            throw new Error("Cannot load report preview.");
+        }
+
+        const blob = await response.blob();
+        if (typeof getCurrentUrl === "function" && getCurrentUrl() !== url) {
+            return null;
+        }
+
+        const previewUrl = URL.createObjectURL(blob);
+        frame.src = previewUrl;
+        return previewUrl;
+    }
+
     function buildCollapsibleText(text, previewLength) {
         const safeText = String(text ?? "").trim();
         if (!safeText) {
@@ -185,6 +209,10 @@
         const viewDetailPaginationInfo = document.getElementById("prqViewDetailPaginationInfo");
         const viewDetailPagination = document.getElementById("prqViewDetailPagination");
         const viewDetailPageSize = document.getElementById("prqViewDetailPageSize");
+        const reportPreviewButton = document.getElementById("btnPrqDetailReportPreview");
+        const reportPreviewModal = document.getElementById("prqDetailReportPreviewModal");
+        const reportPreviewFrame = document.getElementById("prqDetailReportPreviewFrame");
+        const reportOpenButton = document.getElementById("btnPrqDetailReportOpen");
         if (!detailsJsonEl || !rowsContainer || !emptyRow) return;
 
         let details = [];
@@ -218,6 +246,8 @@
         };
 
         let pendingConfirmedFormAction = "";
+        let activeReportUrl = String(reportPreviewButton?.getAttribute("data-report-url") || "").trim();
+        let activeReportPreviewObjectUrl = "";
 
         const showAttachmentError = (message) => {
             if (!detailAttachmentError) return;
@@ -929,6 +959,41 @@
             }
         });
 
+        reportPreviewButton?.addEventListener("click", () => {
+            if (!activeReportUrl || !window.jQuery || !reportPreviewModal || !reportPreviewFrame) {
+                return;
+            }
+
+            window.jQuery(reportPreviewModal).modal("show");
+            reportPreviewFrame.removeAttribute("src");
+
+            if (activeReportPreviewObjectUrl) {
+                URL.revokeObjectURL(activeReportPreviewObjectUrl);
+                activeReportPreviewObjectUrl = "";
+            }
+
+            loadPdfPreview(reportPreviewFrame, activeReportUrl, () => activeReportUrl)
+                .then((previewUrl) => {
+                    if (previewUrl) {
+                        activeReportPreviewObjectUrl = previewUrl;
+                    }
+                })
+                .catch(() => {
+                    if (window.jQuery && reportPreviewModal) {
+                        window.jQuery(reportPreviewModal).modal("hide");
+                    }
+                    window.open(activeReportUrl, "_blank", "noopener");
+                });
+        });
+
+        reportOpenButton?.addEventListener("click", () => {
+            if (!activeReportUrl) {
+                return;
+            }
+
+            window.open(activeReportUrl, "_blank", "noopener");
+        });
+
         viewDetailSearchButton?.addEventListener("click", () => {
             loadViewDetailRows(true);
         });
@@ -964,6 +1029,18 @@
         });
 
         currencySelectEl?.addEventListener("change", updateSummary);
+
+        if (window.jQuery && reportPreviewModal) {
+            window.jQuery(reportPreviewModal).on("hidden.bs.modal", () => {
+                if (reportPreviewFrame) {
+                    reportPreviewFrame.removeAttribute("src");
+                }
+                if (activeReportPreviewObjectUrl) {
+                    URL.revokeObjectURL(activeReportPreviewObjectUrl);
+                    activeReportPreviewObjectUrl = "";
+                }
+            });
+        }
 
         document.addEventListener("click", (event) => {
             const readMoreButton = event.target.closest(".prq-read-more");

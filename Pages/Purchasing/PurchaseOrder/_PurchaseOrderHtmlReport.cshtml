@@ -1,0 +1,219 @@
+@model SmartSam.Pages.Purchasing.PurchaseOrder.PurchaseOrderDetailReportModel
+@{
+    var r = Model;
+    var f = r.Footer ?? new SmartSam.Pages.Purchasing.PurchaseOrder.PurchaseOrderApprovalFooterModel();
+    var poDate = r.PODate.HasValue
+        ? r.PODate.Value.ToString("dd-MMM-yy", System.Globalization.CultureInfo.InvariantCulture)
+        : string.Empty;
+    var phoneMailText = string.IsNullOrWhiteSpace(r.SupplierTel) && string.IsNullOrWhiteSpace(r.SupplierEmail)
+        ? string.Empty
+        : $"{r.SupplierTel}/{r.SupplierEmail}";
+    
+    string Money(decimal v)
+    {
+        var s = v.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
+        return s.EndsWith(".00") ? v.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) : s;
+    }
+
+    string ImgTag(byte[]? bytes, string cssClass)
+    {
+        if (bytes == null || bytes.Length == 0) return string.Empty;
+        var b64 = Convert.ToBase64String(bytes);
+        return $"<img src=\"data:image/png;base64,{b64}\" class=\"{cssClass}\" />";
+    }
+}
+<style>
+.po-rpt { font-family: 'Times New Roman', Times, serif; font-size: 12pt; color: #000; max-width: 960px; margin: 0 auto; padding: 20px 24px; line-height: 1.5; }
+.po-rpt-vni { font-family: 'VNI-Times', 'VNI-Helve', sans-serif; }
+.po-rpt-tcvn3 { font-family: 'TCVN3', '.VnTime', '.VnArial', '.VnHelvetica', sans-serif; }
+.po-rpt-tc { text-align: center; }
+.po-rpt-tr { text-align: right; }
+/* --- Header --- */
+.po-rpt-header { text-align: center; margin-bottom: 10px; }
+.po-rpt-header .po-rpt-company { font-size: 20pt; font-weight: bold; }
+.po-rpt-header .po-rpt-addr { font-size: 10pt; }
+.po-rpt-header .po-rpt-tel { font-size: 10pt; }
+.po-rpt-header .po-rpt-dash { font-size: 11pt; margin: 4px 0; }
+.po-rpt-title { text-align: center; margin: 16px 0 12px; }
+.po-rpt-title .po-rpt-title-vn { font-size: 24pt; font-weight: bold; }
+.po-rpt-title .po-rpt-title-en { font-size: 16pt; font-weight: bold; }
+/* --- Inline fields --- */
+.po-rpt-fields { margin-bottom: 10px; }
+.po-rpt-field-row { display: flex; flex-wrap: wrap; gap: 6px 20px; margin-bottom: 5px; }
+.po-rpt-field { display: inline-flex; align-items: baseline; }
+.po-rpt-field-label { font-weight: bold; white-space: nowrap; margin-right: 6px; }
+.po-rpt-field-value { flex: 1; min-width: 60px; }
+.po-rpt-field-full { flex: 1 1 100%; }
+/* --- Items table --- */
+.po-rpt-intro { font-size: 10pt; margin: 12px 0 4px; }
+.po-rpt-items-label { font-weight: bold; font-size: 10pt; margin-bottom: 4px; }
+.po-rpt-items { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+.po-rpt-items th, .po-rpt-items td { border: 1px solid #888; padding: 4px 6px; font-size: 11pt; }
+.po-rpt-items thead th { background: #f0f0f0; text-align: center; font-size: 10pt; vertical-align: middle; }
+/* --- Totals (tfoot inside items table) --- */
+.po-rpt-items tfoot td { border: none !important; padding: 3px 6px; font-size: 11pt; }
+.po-rpt-tot-lbl { text-align: right; font-weight: bold; }
+.po-rpt-tot-val { text-align: right; }
+/* --- Terms/Notes sections --- */
+.po-rpt-section { border-top: 1px solid #888; padding-top: 6px; margin-top: 10px; }
+.po-rpt-section-title { font-weight: bold; font-size: 11pt; margin-bottom: 4px; }
+.po-rpt-section-body { font-size: 11pt; line-height: 1.6; }
+.po-rpt-prewrap { white-space: pre-wrap; }
+/* --- Footer --- */
+.po-rpt-footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 28px; }
+.po-rpt-footer-left { width: 360px; text-align: center; }
+.po-rpt-footer-top { min-height: 54px; margin-bottom: 10px; }
+.po-rpt-footer-company { font-size: 11pt; margin-bottom: 8px; text-align: center; }
+.po-rpt-small-sigs { min-height: 28px; display: flex; justify-content: flex-end; padding-right: 22px; gap: 10px; align-items: center; }
+.po-rpt-small-sig-img { width: 42px; height: 24px; object-fit: contain; display: block; }
+.po-rpt-small-sig-space { width: 42px; height: 24px; }
+.po-rpt-sig-img { max-height: 68px; max-width: 128px; object-fit: contain; display: block; margin: 6px auto; }
+.po-rpt-sig-space { height: 68px; }
+.po-rpt-signer-name { font-weight: bold; font-size: 11pt; border-top: 1px solid #333; padding-top: 3px; min-width: 160px; }
+.po-rpt-signer-title { font-size: 11pt; }
+.po-rpt-footer-right { text-align: right; font-size: 10pt; line-height: 1.5; }
+</style>
+
+<div class="po-rpt">
+  <!-- Header -->
+  <div class="po-rpt-header">
+    <div class="po-rpt-company po-rpt-vni">@r.CoName</div>
+    <div class="po-rpt-addr po-rpt-vni">@r.CoAddress</div>
+    <div class="po-rpt-tel">Tel: @r.CoPhone Email: @r.CoEmail VAT Code: @r.CoVATCode</div>
+    <div class="po-rpt-dash">-</div>
+  </div>
+
+  <!-- Title -->
+  <div class="po-rpt-title">
+    <span class="po-rpt-title-vn">ĐƠN ĐẶT HÀNG </span>
+    <span class="po-rpt-title-en">(Purchase Order)</span>
+  </div>
+
+  <!-- Inline fields -->
+  <div class="po-rpt-fields">
+    <div class="po-rpt-field-row">
+      <span class="po-rpt-field"><span class="po-rpt-field-label">PO No:</span> <span class="po-rpt-field-value">@r.PONo</span></span>
+      <span class="po-rpt-field"><span class="po-rpt-field-label">PO Date:</span> <span class="po-rpt-field-value">@poDate</span></span>
+      <span class="po-rpt-field"><span class="po-rpt-field-label">PR No:</span> <span class="po-rpt-field-value">@r.RequestNo</span></span>
+      <span class="po-rpt-field"><span class="po-rpt-field-label">Currency/Đơn vị tiền tệ:</span> <span class="po-rpt-field-value po-rpt-vni">@r.CurrencyText</span></span>
+    </div>
+    <div class="po-rpt-field-row">
+      <span class="po-rpt-field po-rpt-field-full"><span class="po-rpt-field-label">Nhà cung cấp/Supplier:</span> <span class="po-rpt-field-value po-rpt-vni">@r.SupplierDisplay</span></span>
+    </div>
+    <div class="po-rpt-field-row">
+      <span class="po-rpt-field po-rpt-field-full"><span class="po-rpt-field-label">Địa chỉ/Address:</span> <span class="po-rpt-field-value po-rpt-vni">@r.SupplierAddress</span></span>
+    </div>
+    <div class="po-rpt-field-row">
+      <span class="po-rpt-field"><span class="po-rpt-field-label">Người liên hệ/Contact:</span> <span class="po-rpt-field-value po-rpt-vni">@r.SupplierContact</span></span>
+      <span class="po-rpt-field"><span class="po-rpt-field-label">Phone/Mail:</span> <span class="po-rpt-field-value">@phoneMailText</span></span>
+    </div>
+    <div class="po-rpt-field-row">
+      <span class="po-rpt-field po-rpt-field-full"><span class="po-rpt-field-label">Subject:</span> <span class="po-rpt-field-value po-rpt-vni">@r.Remark</span></span>
+    </div>
+  </div>
+
+  <!-- Intro text -->
+  <div class="po-rpt-intro">Chúng tôi xin đặt các mặt hàng sau với các điều kiện dưới đây: We hereby order the following item(s) by under mentioned conditions:</div>
+  <div class="po-rpt-items-label">1. Mặt hàng/Items</div>
+
+  <!-- Items table -->
+  <table class="po-rpt-items">
+    <thead>
+      <tr>
+        <th style="width:32px">STT<br/>(No)</th>
+        <th style="width:70px">Mã hàng<br/>(Item code)</th>
+        <th>Mô tả mặt hàng<br/>(Description)</th>
+        <th style="width:42px">ĐVT<br/>(Unit)</th>
+        <th style="width:56px">S.Lượng<br/>(Quantity)</th>
+        <th style="width:64px">Đơn giá<br/>(Unit Price)</th>
+        <th style="width:70px">Thành tiền<br/>(Amount)</th>
+        <th style="width:80px">Ghi chú<br/>(Remarks)</th>
+      </tr>
+    </thead>
+    <tbody>
+      @foreach (var item in r.Items)
+      {
+          <tr>
+              <td class="po-rpt-tc">@item.No</td>
+              <td>@item.ItemCode</td>
+              <td class="po-rpt-tcvn3">@item.ItemName</td>
+              <td class="po-rpt-tc">@item.Unit</td>
+              <td class="po-rpt-tr">@Money(item.Quantity)</td>
+              <td class="po-rpt-tr">@Money(item.UnitPrice)</td>
+              <td class="po-rpt-tr">@Money(item.Amount)</td>
+              <td class="po-rpt-vni">@item.Remark</td>
+          </tr>
+      }
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="6" class="po-rpt-tot-lbl">Tổng trước thuế (Before VAT):</td>
+        <td class="po-rpt-tot-val">@Money(r.BeforeVAT)</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td colspan="6" class="po-rpt-tot-lbl"><div style="display:flex;justify-content:flex-end;gap:150px"><span>% VAT: @(r.PerVAT.ToString("0.##"))</span><span>Tiền thuế (VAT):</span></div></td>
+        <td class="po-rpt-tot-val">@Money(r.VAT)</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td colspan="6" class="po-rpt-tot-lbl">Tổng cộng (Total):</td>
+        <td class="po-rpt-tot-val">@Money(r.AfterVAT)</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <!-- Terms & Conditions -->
+  <div class="po-rpt-section">
+    <div class="po-rpt-section-title">TERMS &amp; CONDITIONS:</div>
+    <div class="po-rpt-section-body po-rpt-vni po-rpt-prewrap">@r.TermsAndConditions</div>
+  </div>
+
+  <!-- Notes -->
+  <div class="po-rpt-section">
+    <div class="po-rpt-section-title">NOTES:</div>
+    <div class="po-rpt-section-body po-rpt-vni po-rpt-prewrap">@r.Notes</div>
+  </div>
+
+  <!-- Footer -->
+  <div class="po-rpt-footer">
+    <div class="po-rpt-footer-left">
+      <div class="po-rpt-footer-top">
+        <div class="po-rpt-footer-company po-rpt-vni">@r.CoName</div>
+        <div class="po-rpt-small-sigs">
+          @if (f.PreparedSignature != null && f.PreparedSignature.Length > 0)
+          {
+              @Html.Raw(ImgTag(f.PreparedSignature, "po-rpt-small-sig-img"))
+          }
+          else
+          {
+              <div class="po-rpt-small-sig-space"></div>
+          }
+          @if (f.CheckedSignature != null && f.CheckedSignature.Length > 0)
+          {
+              @Html.Raw(ImgTag(f.CheckedSignature, "po-rpt-small-sig-img"))
+          }
+          else
+          {
+              <div class="po-rpt-small-sig-space"></div>
+          }
+        </div>
+      </div>
+      @if (f.ApprovedSignature != null && f.ApprovedSignature.Length > 0)
+      {
+          @Html.Raw(ImgTag(f.ApprovedSignature, "po-rpt-sig-img"))
+      }
+      else
+      {
+          <div class="po-rpt-sig-space"></div>
+      }
+      <div class="po-rpt-signer-name po-rpt-vni">@f.ApprovedName</div>
+      <div class="po-rpt-signer-title po-rpt-vni">@f.ApprovedTitle</div>
+    </div>
+    <div class="po-rpt-footer-right">
+      Page 1 of 1<br/>
+      QF6.3.Rev: 1
+    </div>
+  </div>
+</div>

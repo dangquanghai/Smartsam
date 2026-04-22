@@ -15,6 +15,9 @@ namespace SmartSam.Pages.Purchasing.PurchaseRequisition;
 
 public class IndexModel : BasePageModel
 {
+    private const string ExcelVniFontName = "VNI-WIN";
+    private const string ExcelTcvn3FontName = ".VnTime";
+
     private static readonly string[] AcceptedDateFormats = ["yyyy-MM-dd", "M/d/yyyy", "MM/dd/yyyy", "d/M/yyyy", "dd/MM/yyyy"];
     private const int FUNCTION_ID = 72;
     private const int PermissionViewList = 1;
@@ -510,6 +513,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
         }
 
         FormatWorksheetAsTable(worksheet, 1, Math.Max(1, rowIndex - 1), headers.Length);
+        ApplyWorksheetFont(worksheet, 1, Math.Max(1, rowIndex - 1), headers.Length, ExcelVniFontName);
         return BuildExcelFileResult(workbook, "purchase_requisition");
     }
 
@@ -539,6 +543,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
         }
 
         FormatWorksheetAsTable(headerSheet, 1, headerRows.Length, 2);
+        ApplyWorksheetFont(headerSheet, 1, headerRows.Length, 2, ExcelVniFontName);
 
         // 2. Sheet thứ hai chứa toàn bộ item detail của phiếu đang chọn.
         var detailHeaders = new[]
@@ -579,6 +584,8 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
         }
 
         FormatWorksheetAsTable(detailSheet, 1, Math.Max(1, rowIndex - 1), detailHeaders.Length);
+        ApplyWorksheetFont(detailSheet, 1, Math.Max(1, rowIndex - 1), detailHeaders.Length, ExcelVniFontName);
+        ApplyColumnFont(detailSheet, 1, Math.Max(1, rowIndex - 1), 3, ExcelTcvn3FontName);
         detailSheet.Column(7).Style.NumberFormat.Format = "#,##0.00";
         detailSheet.Column(8).Style.NumberFormat.Format = "#,##0.00";
         return BuildExcelFileResult(workbook, $"purchase_requisition_{requisition.RequestNo}");
@@ -707,6 +714,7 @@ WHERE p.PRID = @PRID
         using (var detailCmd = new SqlCommand(@"
 SELECT
     ISNULL(i.ItemCode, '') AS ItemCode,
+    ISNULL(i.ItemName, '') AS ItemNameReport,
     LTRIM(RTRIM(
         CONCAT(
             ISNULL(i.ItemName, ''),
@@ -731,6 +739,7 @@ ORDER BY d.RecordID", conn))
                 report.Items.Add(new PurchaseRequisitionDetailReportItem
                 {
                     ItemCode = Convert.ToString(rd["ItemCode"]) ?? string.Empty,
+                    ItemNameReport = Convert.ToString(rd["ItemNameReport"]) ?? string.Empty,
                     ItemDescription = Convert.ToString(rd["ItemDescription"]) ?? string.Empty,
                     Unit = Convert.ToString(rd["Unit"]) ?? string.Empty,
                     QtyMr = Convert.ToDecimal(rd["QtyMr"]),
@@ -1125,6 +1134,16 @@ ORDER BY d.RecordID", conn);
                 worksheet.Column(col).Width = 40;
             }
         }
+    }
+
+    private void ApplyWorksheetFont(IXLWorksheet worksheet, int fromRow, int toRow, int totalColumns, string fontName)
+    {
+        worksheet.Range(fromRow, 1, toRow, totalColumns).Style.Font.FontName = fontName;
+    }
+
+    private void ApplyColumnFont(IXLWorksheet worksheet, int fromRow, int toRow, int columnIndex, string fontName)
+    {
+        worksheet.Range(fromRow, columnIndex, toRow, columnIndex).Style.Font.FontName = fontName;
     }
 
     // Thực hiện xử lý cho hàm BuildExcelFileResult theo nghiệp vụ của màn hình.

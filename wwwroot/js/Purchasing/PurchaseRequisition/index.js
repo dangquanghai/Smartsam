@@ -78,6 +78,30 @@
             .replace(/'/g, "&#39;");
     }
 
+    async function loadPdfPreview(frame, url, getCurrentUrl) {
+        if (!frame || !url) {
+            return null;
+        }
+
+        const response = await fetch(url, {
+            method: "GET",
+            headers: { "X-Requested-With": "XMLHttpRequest" }
+        });
+
+        if (!response.ok) {
+            throw new Error("Cannot load report preview.");
+        }
+
+        const blob = await response.blob();
+        if (typeof getCurrentUrl === "function" && getCurrentUrl() !== url) {
+            return null;
+        }
+
+        const previewUrl = URL.createObjectURL(blob);
+        frame.src = previewUrl;
+        return previewUrl;
+    }
+
     function buildCollapsibleText(value, previewLength = 40) {
         const text = String(value ?? "").trim();
         if (!text) {
@@ -313,6 +337,9 @@
         const viewDetailPaginationInfo = document.getElementById("prqViewDetailPaginationInfo");
         const viewDetailPagination = document.getElementById("prqViewDetailPagination");
         const viewDetailPageSize = document.getElementById("prqViewDetailPageSize");
+        const viewDetailReportPreviewModal = document.getElementById("prqViewDetailReportPreviewModal");
+        const viewDetailReportPreviewFrame = document.getElementById("prqViewDetailReportPreviewFrame");
+        const viewDetailReportOpenButton = document.getElementById("btnPrqViewDetailReportOpen");
 
         const getSelectedRow = () => {
             const rows = typeof window.getPrqSelectedRows === "function" ? window.getPrqSelectedRows() : [];
@@ -325,6 +352,8 @@
             totalPages: 1,
             loading: false
         };
+        let activeViewDetailReportUrl = "";
+        let activeViewDetailReportPreviewObjectUrl = "";
 
         const buildViewDetailPages = (currentPage, totalPages) => {
             const items = [];
@@ -628,7 +657,39 @@
         });
 
         viewDetailReportButton?.addEventListener("click", () => {
-            window.open(buildViewDetailReportUrl(), "_blank");
+            if (!window.jQuery || !viewDetailReportPreviewModal || !viewDetailReportPreviewFrame) {
+                return;
+            }
+
+            activeViewDetailReportUrl = buildViewDetailReportUrl();
+            window.jQuery(viewDetailReportPreviewModal).modal("show");
+            viewDetailReportPreviewFrame.removeAttribute("src");
+
+            if (activeViewDetailReportPreviewObjectUrl) {
+                URL.revokeObjectURL(activeViewDetailReportPreviewObjectUrl);
+                activeViewDetailReportPreviewObjectUrl = "";
+            }
+
+            loadPdfPreview(viewDetailReportPreviewFrame, activeViewDetailReportUrl, () => activeViewDetailReportUrl)
+                .then((previewUrl) => {
+                    if (previewUrl) {
+                        activeViewDetailReportPreviewObjectUrl = previewUrl;
+                    }
+                })
+                .catch((error) => {
+                    if (window.jQuery && viewDetailReportPreviewModal) {
+                        window.jQuery(viewDetailReportPreviewModal).modal("hide");
+                    }
+                    showDangerModal(error.message || "Cannot load report preview.");
+                });
+        });
+
+        viewDetailReportOpenButton?.addEventListener("click", () => {
+            if (!activeViewDetailReportUrl) {
+                return;
+            }
+
+            window.open(activeViewDetailReportUrl, "_blank", "noopener");
         });
 
         viewDetailPageSize?.addEventListener("change", () => {
@@ -662,6 +723,19 @@
                 if (viewDetailDescription) viewDetailDescription.value = "";
                 if (viewDetailRecQty) viewDetailRecQty.value = "";
                 if (viewDetailItemCode) viewDetailItemCode.value = "";
+            });
+        }
+
+        if (window.jQuery && viewDetailReportPreviewModal) {
+            window.jQuery(viewDetailReportPreviewModal).on("hidden.bs.modal", () => {
+                activeViewDetailReportUrl = "";
+                if (viewDetailReportPreviewFrame) {
+                    viewDetailReportPreviewFrame.removeAttribute("src");
+                }
+                if (activeViewDetailReportPreviewObjectUrl) {
+                    URL.revokeObjectURL(activeViewDetailReportPreviewObjectUrl);
+                    activeViewDetailReportPreviewObjectUrl = "";
+                }
             });
         }
 

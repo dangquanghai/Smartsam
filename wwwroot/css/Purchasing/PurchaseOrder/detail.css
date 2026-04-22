@@ -90,10 +90,24 @@
 }
 
 .purchase-order-adddetail-modal-dialog,
-.po-viewdetail-modal-dialog {
-    max-width: 80vw;
-    width: 80vw;
+.po-viewdetail-modal-dialog,
+.purchase-order-report-modal-dialog {
+    max-width: 90vw;
+    width: 90vw;
     margin: 1rem auto;
+}
+
+.purchase-order-report-preview-body {
+    max-height: 80vh;
+    background: #fff;
+    position: relative;
+}
+
+.purchase-order-report-preview-frame {
+    width: 100%;
+    height: 78vh;
+    border: 0;
+    display: block;
 }
 
 .purchase-order-attachment-note {
@@ -215,39 +229,17 @@
     }
 
     .purchase-order-adddetail-modal-dialog,
-    .po-viewdetail-modal-dialog {
+    .po-viewdetail-modal-dialog,
+    .purchase-order-report-modal-dialog {
         max-width: 96vw;
         width: 96vw;
     }
-}
 
-@media print {
-    body.purchase-order-report-printing > *:not(#purchaseOrderReportModal),
-    body.purchase-order-report-printing .modal-backdrop,
-    body.purchase-order-report-printing .modal-header,
-    body.purchase-order-report-printing .modal-footer {
-        display: none !important;
+    .purchase-order-report-preview-body {
+        max-height: 72vh;
     }
 
-    body.purchase-order-report-printing #purchaseOrderReportModal {
-        display: block !important;
-        position: static !important;
-        overflow: visible !important;
-        background: #fff !important;
-    }
-
-    body.purchase-order-report-printing #purchaseOrderReportModal .modal-dialog {
-        max-width: none !important;
-        width: 100% !important;
-        margin: 0 !important;
-    }
-
-    body.purchase-order-report-printing #purchaseOrderReportModal .modal-content {
-        border: none !important;
-        box-shadow: none !important;
-    }
-
-    body.purchase-order-report-printing #purchaseOrderReportContent {
-        display: block !important;
+    .purchase-order-report-preview-frame {
+        height: 70vh;
     }
 }

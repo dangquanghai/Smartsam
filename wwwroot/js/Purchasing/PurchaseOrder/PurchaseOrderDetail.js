@@ -170,8 +170,114 @@ function buildPurchaseOrderQuestPdfUrl() {
         return '';
     }
 
-    return `${baseUrl}&id=${encodeURIComponent(reportId)}`;
+    return appendQueryParam(baseUrl, 'id', reportId);
 }
+
+function buildPurchaseOrderQuestPdfPreviewUrl() {
+    const baseUrl = window.purchaseOrderDetailPage?.questPdfPreviewUrl || '';
+    const reportId = window.purchaseOrderDetailPage?.reportId || 0;
+    if (!baseUrl || !reportId) {
+        return '';
+    }
+
+    return appendQueryParam(baseUrl, 'id', reportId);
+}
+
+function appendQueryParam(baseUrl, name, value) {
+    if (!baseUrl) {
+        return '';
+    }
+
+    const url = new URL(baseUrl, window.location.origin);
+    url.searchParams.set(name, String(value ?? ''));
+    return `${url.pathname}${url.search}`;
+}
+
+let activePurchaseOrderReportPreviewObjectUrl = '';
+
+async function loadPurchaseOrderPdfPreview(frame, url, getCurrentUrl) {
+    if (!frame || !url) {
+        return null;
+    }
+
+    const response = await fetch(url, {
+        method: 'GET',
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    });
+
+    if (!response.ok) {
+        throw new Error('Cannot load report preview.');
+    }
+
+    const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+    if (!contentType.includes('application/pdf')) {
+        const text = await response.text();
+        throw new Error(text || 'Report preview did not return a PDF.');
+    }
+
+    const blob = await response.blob();
+    if (typeof getCurrentUrl === 'function' && getCurrentUrl() !== url) {
+        return null;
+    }
+
+    const previewUrl = URL.createObjectURL(blob);
+    frame.src = previewUrl;
+    return previewUrl;
+}
+
+function clearPurchaseOrderPdfPreview(frame) {
+    if (frame) {
+        frame.removeAttribute('src');
+    }
+
+    if (activePurchaseOrderReportPreviewObjectUrl) {
+        URL.revokeObjectURL(activePurchaseOrderReportPreviewObjectUrl);
+        activePurchaseOrderReportPreviewObjectUrl = '';
+    }
+}
+
+// Mo modal preview bao cao PDF bang iframe, giong luong PR.
+function openPurchaseOrderReportPreviewModal() {
+    const previewUrl = buildPurchaseOrderQuestPdfPreviewUrl();
+    if (!previewUrl) {
+        alert('Purchase order report preview is not available.');
+        return;
+    }
+
+    const $modal = $('#purchaseOrderReportPreviewModal');
+    const $loading = $('#purchaseOrderReportPreviewLoading');
+    const frame = document.getElementById('purchaseOrderReportPreviewFrame');
+
+    if (!$modal.length || !frame) {
+        alert('Report preview modal is not available.');
+        return;
+    }
+
+    $loading.show();
+    clearPurchaseOrderPdfPreview(frame);
+
+    closeOpenSelect2();
+    $modal.modal('show');
+
+    loadPurchaseOrderPdfPreview(frame, previewUrl, function () {
+        return buildPurchaseOrderQuestPdfPreviewUrl();
+    })
+        .then(function (objectUrl) {
+            if (objectUrl) {
+                activePurchaseOrderReportPreviewObjectUrl = objectUrl;
+            }
+            $loading.hide();
+        })
+        .catch(function (error) {
+            $loading.hide();
+            if ($modal.length) {
+                $modal.modal('hide');
+            }
+            alert(error?.message || 'Cannot load PDF preview.');
+        });
+}
+
 
 async function downloadPurchaseOrderQuestPdf() {
     const reportUrl = buildPurchaseOrderQuestPdfUrl();
@@ -346,15 +452,28 @@ function bindMainEvents(mode) {
     const attachmentModal = $('#purchaseOrderAttachmentModal');
     const attachmentInput = document.getElementById('purchaseOrderAttachmentUpload');
     const attachmentError = document.getElementById('purchaseOrderAttachmentError');
+    const reportPreviewModal = $('#purchaseOrderReportPreviewModal');
+    const reportPreviewFrame = document.getElementById('purchaseOrderReportPreviewFrame');
     $('#PerVAT').on('input', updateTotals);
     $('#btnCalculateTotal').on('click', updateTotals);
 
     $('#btnOpenPurchaseOrderReport').on('click', function () {
+        openPurchaseOrderReportPreviewModal();
+    });
+
+    $('#btnExportPurchaseOrderReportPdf').on('click', function () {
         downloadPurchaseOrderQuestPdf().catch(function (error) {
             console.error(error);
             alert(error?.message || 'Cannot export QuestPDF.');
         });
     });
+
+    if (window.jQuery && reportPreviewModal.length) {
+        reportPreviewModal.on('hidden.bs.modal', function () {
+            clearPurchaseOrderPdfPreview(reportPreviewFrame);
+            $('#purchaseOrderReportPreviewLoading').show();
+        });
+    }
 
     $('#btnOpenPurchaseOrderAttachments').on('click', function () {
         closeOpenSelect2();
