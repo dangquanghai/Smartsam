@@ -252,9 +252,9 @@ internal static class PurchaseRequisitionPdfReport
                 {
                     header.Cell().Element(HeaderLeftCell).Text("Item Code").Bold();
                     header.Cell().Element(HeaderLeftCell).Text("Item Name").Bold();
-                    header.Cell().Element(HeaderCell).Text("PR Qty").Bold();
-                    header.Cell().Element(HeaderCell).Text("Rec Qty").Bold();
-                    header.Cell().Element(HeaderCell).Text("Dif Qty").Bold();
+                    header.Cell().Element(HeaderCell).AlignRight().Text("PR Qty").Bold();
+                    header.Cell().Element(HeaderCell).AlignRight().Text("Rec Qty").Bold();
+                    header.Cell().Element(HeaderCell).AlignRight().Text("Dif Qty").Bold();
                     header.Cell().Element(HeaderCell).Text("Rec Date").Bold();
                     header.Cell().Element(HeaderCell).Text("PO No").Bold();
                     header.Cell().Element(HeaderLeftCell).Text("Remark").Bold();
@@ -283,9 +283,9 @@ internal static class PurchaseRequisitionPdfReport
 
                         table.Cell().Element(BodyCell).AlignLeft().Text(item.ItemCode);
                         table.Cell().Element(BodyCell).AlignLeft().Text(item.ItemName);
-                        table.Cell().Element(BodyCell).AlignCenter().Text(FormatQuantity(item.PrQty));
-                        table.Cell().Element(BodyCell).AlignCenter().Text(FormatQuantity(item.RecQty));
-                        table.Cell().Element(BodyCell).AlignCenter().Text(FormatQuantity(item.DiffQty));
+                        table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(item.PrQty));
+                        table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(item.RecQty));
+                        table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(item.DiffQty));
                         table.Cell().Element(BodyCell).AlignCenter().Text(item.RecDateText);
                         table.Cell().Element(BodyCell).AlignCenter().Text(item.PoNo);
                         table.Cell().Element(BodyCell).AlignLeft().Text(item.Remark);
