@@ -707,6 +707,7 @@ WHERE p.PRID = @PRID
         using (var detailCmd = new SqlCommand(@"
 SELECT
     ISNULL(i.ItemCode, '') AS ItemCode,
+    ISNULL(i.ItemName, '') AS ItemNameReport,
     LTRIM(RTRIM(
         CONCAT(
             ISNULL(i.ItemName, ''),
@@ -731,6 +732,7 @@ ORDER BY d.RecordID", conn))
                 report.Items.Add(new PurchaseRequisitionDetailReportItem
                 {
                     ItemCode = Convert.ToString(rd["ItemCode"]) ?? string.Empty,
+                    ItemNameReport = Convert.ToString(rd["ItemNameReport"]) ?? string.Empty,
                     ItemDescription = Convert.ToString(rd["ItemDescription"]) ?? string.Empty,
                     Unit = Convert.ToString(rd["Unit"]) ?? string.Empty,
                     QtyMr = Convert.ToDecimal(rd["QtyMr"]),

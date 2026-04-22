@@ -11,7 +11,8 @@ internal static class PurchaseRequisitionPdfReport
     private const string DetailRev = "1";
     private const string SummaryNoIso = "QF6-2";
     private const string DefaultPdfFontFamily = "VNI-Times";
-    private const float DetailItemCodeColumnWidth = 72;
+    private const string Tcvn3PdfFontFamily = ".VnTime";
+    private const float DetailItemCodeColumnWidth = 84;
     private const float DetailUnitPriceColumnWidth = 72;
     private const float DetailAmountColumnWidth = 58;
 
@@ -131,7 +132,7 @@ internal static class PurchaseRequisitionPdfReport
                 {
                     header.Cell().Element(HeaderCell).Text("No").Bold();
                     header.Cell().Element(HeaderLeftCell).Text("Item Code").Bold();
-                    header.Cell().Element(HeaderLeftCell).Text("Item Description").Bold();
+                    header.Cell().Element(HeaderLeftCell).Text("Item Name").Bold();
                     header.Cell().Element(HeaderCell).Text("Unit").Bold();
                     header.Cell().Element(HeaderCell).AlignRight().Text("Qty MR").Bold();
                     header.Cell().Element(HeaderCell).AlignRight().Text("Qty Pur.").Bold();
@@ -145,7 +146,11 @@ internal static class PurchaseRequisitionPdfReport
                     var item = model.Items[index];
                     table.Cell().Element(BodyCell).AlignCenter().Text((index + 1).ToString(CultureInfo.InvariantCulture));
                     table.Cell().Element(BodyCell).AlignLeft().Text(item.ItemCode);
-                    table.Cell().Element(BodyCell).AlignLeft().Text(item.ItemDescription);
+                    table.Cell().Element(BodyCell).AlignLeft().Text(text =>
+                    {
+                        text.DefaultTextStyle(x => x.FontFamily(Tcvn3PdfFontFamily));
+                        text.Span(item.ItemNameReport);
+                    });
                     table.Cell().Element(BodyCell).AlignCenter().Text(item.Unit);
                     table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(item.QtyMr));
                     table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(item.QtyPur));
@@ -341,6 +346,7 @@ internal sealed class PurchaseRequisitionDetailReportItem
 {
     public string ItemCode { get; set; } = string.Empty;
     public string ItemDescription { get; set; } = string.Empty;
+    public string ItemNameReport { get; set; } = string.Empty;
     public string Unit { get; set; } = string.Empty;
     public decimal QtyMr { get; set; }
     public decimal QtyPur { get; set; }
