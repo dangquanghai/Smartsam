@@ -9,6 +9,9 @@ namespace SmartSam.Pages.Purchasing.SupplierPOReport;
 
 public class IndexModel : BasePageModel
 {
+    private const string ExcelVniFontName = "VNI-WIN";
+    private const string ExcelTcvn3FontName = ".VnTime";
+
     private const int FUNCTION_ID = 74;
     private const int PermissionViewList = 1;
     private readonly PermissionService _permissionService;
@@ -118,6 +121,8 @@ public class IndexModel : BasePageModel
         worksheet.Column(14).Style.NumberFormat.Format = "#,##0";
 
         var usedRange = worksheet.Range(1, 1, Math.Max(1, rowIndex), headers.Length);
+        usedRange.Style.Font.FontName = ExcelVniFontName;
+        worksheet.Range(1, 9, Math.Max(1, rowIndex), 9).Style.Font.FontName = ExcelTcvn3FontName;
         usedRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
         usedRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
         usedRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;

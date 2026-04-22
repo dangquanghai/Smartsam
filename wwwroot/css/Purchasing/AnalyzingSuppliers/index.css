@@ -124,6 +124,34 @@
     opacity: 0.65;
 }
 
+.asp-report-preview-modal-dialog {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100vh;
+    margin: 0;
+}
+
+#aspReportPreviewModal {
+    z-index: 2000;
+}
+
+#aspReportPreviewModal + .modal-backdrop,
+.modal-backdrop.show.asp-report-preview-backdrop {
+    z-index: 1990;
+}
+
+.asp-report-preview-modal-dialog .modal-content {
+    height: 100vh;
+    border-radius: 0;
+}
+
+.asp-report-preview-frame {
+    display: block;
+    width: 100%;
+    height: calc(100vh - 106px);
+    border: 0;
+}
+
 @media (max-width: 767.98px) {
     .asp-table-wrap {
         max-height: none;

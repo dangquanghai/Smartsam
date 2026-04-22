@@ -10,6 +10,8 @@ namespace SmartSam.Pages.Purchasing.AnalyzingSuppliers;
 
 public class IndexModel : BasePageModel
 {
+    private const string ExcelVniFontName = "VNI-WIN";
+
     private const int FUNCTION_ID = 75;
     private const int PermissionViewList = 1;
     private readonly PermissionService _permissionService;
@@ -106,6 +108,7 @@ public class IndexModel : BasePageModel
         }
 
         var usedRange = worksheet.Range(1, 1, Math.Max(1, rowIndex - 1), headers.Length);
+        usedRange.Style.Font.FontName = ExcelVniFontName;
         usedRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
         usedRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
         usedRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;

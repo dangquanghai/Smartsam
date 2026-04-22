@@ -7,6 +7,9 @@ namespace SmartSam.Pages.Purchasing.AnalyzingSuppliers;
 
 internal static class AnalyzingSuppliersPdfReport
 {
+    private const string DefaultPdfFontFamily = "VNI-Times";
+    private const string SansPdfFontFamily = "Lato";
+
     public static byte[] BuildPdf(AnalyzingSuppliersReportModel model)
     {
         return Document.Create(container =>
@@ -15,10 +18,9 @@ internal static class AnalyzingSuppliersPdfReport
             {
                 page.Size(PageSizes.A4.Portrait());
                 page.Margin(18);
-                page.DefaultTextStyle(x => x.FontFamily("Times New Roman").FontSize(8));
+                page.DefaultTextStyle(x => x.FontFamily(DefaultPdfFontFamily).FontSize(8));
 
-                page.Header().Element(header => ComposeHeader(header, model));
-                page.Content().PaddingTop(8).Element(content => ComposeContent(content, model));
+                page.Content().Element(content => ComposePageContent(content, model));
                 page.Footer().AlignRight().Text(text =>
                 {
                     text.Span("Page ");
@@ -28,6 +30,15 @@ internal static class AnalyzingSuppliersPdfReport
                 });
             });
         }).GeneratePdf();
+    }
+
+    private static void ComposePageContent(IContainer container, AnalyzingSuppliersReportModel model)
+    {
+        container.Column(column =>
+        {
+            column.Item().Element(header => ComposeHeader(header, model));
+            column.Item().PaddingTop(8).Element(content => ComposeContent(content, model));
+        });
     }
 
     private static void ComposeHeader(IContainer container, AnalyzingSuppliersReportModel model)
@@ -40,7 +51,11 @@ internal static class AnalyzingSuppliersPdfReport
                 row.ConstantItem(140).AlignRight().Text($"Date: {model.GeneratedDate:dd - MMM - yyyy}");
             });
 
-            column.Item().PaddingTop(8).AlignCenter().Text("Supplier Report").Bold().FontSize(16);
+            column.Item().PaddingTop(8).AlignCenter().Text(text =>
+            {
+                text.DefaultTextStyle(x => x.FontFamily(SansPdfFontFamily).Bold().FontSize(16));
+                text.Span("Supplier Report");
+            });
 
             column.Item().PaddingTop(10).Row(row =>
             {
@@ -70,7 +85,7 @@ internal static class AnalyzingSuppliersPdfReport
             table.ColumnsDefinition(columns =>
             {
                 columns.ConstantColumn(58);
-                columns.ConstantColumn(54);
+                columns.ConstantColumn(66);
                 columns.ConstantColumn(58);
                 columns.RelativeColumn(2.2f);
                 columns.ConstantColumn(56);

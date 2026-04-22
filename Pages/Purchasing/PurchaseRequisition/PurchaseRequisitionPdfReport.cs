@@ -11,6 +11,7 @@ internal static class PurchaseRequisitionPdfReport
     private const string DetailRev = "1";
     private const string SummaryNoIso = "QF6-2";
     private const string DefaultPdfFontFamily = "VNI-Times";
+    private const string SansPdfFontFamily = "Lato";
     private const string Tcvn3PdfFontFamily = ".VnTime";
     private const float DetailItemCodeColumnWidth = 84;
     private const float DetailUnitPriceColumnWidth = 72;
@@ -26,8 +27,7 @@ internal static class PurchaseRequisitionPdfReport
                 page.Margin(18);
                 page.DefaultTextStyle(x => x.FontFamily(DefaultPdfFontFamily).FontSize(9));
 
-                page.Header().Element(header => ComposeDetailHeader(header, model));
-                page.Content().PaddingTop(8).Element(content => ComposeDetailContent(content, model));
+                page.Content().Element(content => ComposeDetailContent(content, model));
                 page.Footer().AlignRight().Text(text =>
                 {
                     text.Span("Page ");
@@ -49,8 +49,7 @@ internal static class PurchaseRequisitionPdfReport
                 page.Margin(18);
                 page.DefaultTextStyle(x => x.FontFamily(DefaultPdfFontFamily).FontSize(9));
 
-                page.Header().Element(header => ComposeSummaryHeader(header, model));
-                page.Content().PaddingTop(8).Element(content => ComposeSummaryContent(content, model));
+                page.Content().Element(content => ComposeSummaryContent(content, model));
                 page.Footer().Row(row =>
                 {
                     row.RelativeItem().AlignLeft().Text(model.GeneratedDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture));
@@ -82,8 +81,16 @@ internal static class PurchaseRequisitionPdfReport
                 table.Cell().Border(1).Padding(6).AlignMiddle().Text("Saigon\nSky\nGarden").Bold().FontSize(12);
                 table.Cell().BorderTop(1).BorderBottom(1).Padding(6).AlignCenter().Column(inner =>
                 {
-                    inner.Item().Text("PURCHASE REQUISITION").Bold().FontSize(16);
-                    inner.Item().Text("PHIẾU ĐỀ NGHỊ MUA HÀNG").Bold().FontSize(15);
+                    inner.Item().Text(text =>
+                    {
+                        text.DefaultTextStyle(x => x.FontFamily(SansPdfFontFamily).Bold().FontSize(16));
+                        text.Span("PURCHASE REQUISITION");
+                    });
+                    inner.Item().Text(text =>
+                    {
+                        text.DefaultTextStyle(x => x.FontFamily(SansPdfFontFamily).Bold().FontSize(15));
+                        text.Span("PHIẾU ĐỀ NGHỊ MUA HÀNG");
+                    });
                 });
                 table.Cell().Border(1).Padding(6).AlignMiddle().Column(inner =>
                 {
@@ -109,6 +116,8 @@ internal static class PurchaseRequisitionPdfReport
     {
         container.Column(column =>
         {
+            column.Item().Element(header => ComposeDetailHeader(header, model));
+            column.Item().PaddingTop(8);
             column.Item().Table(table =>
             {
                 table.ColumnsDefinition(columns =>
@@ -221,8 +230,16 @@ internal static class PurchaseRequisitionPdfReport
             table.Cell().Border(1).Padding(4).AlignCenter().AlignMiddle().Text("SAIGON\nSKY\nGARDEN").Bold().FontSize(11);
             table.Cell().BorderTop(1).BorderBottom(1).Padding(6).AlignCenter().Column(inner =>
             {
-                inner.Item().Text("PURCHASE REPORT").Bold().FontSize(16);
-                inner.Item().Text("BÁO CÁO MUA HÀNG").Bold().FontSize(15);
+                inner.Item().Text(text =>
+                {
+                    text.DefaultTextStyle(x => x.FontFamily(SansPdfFontFamily).Bold().FontSize(16));
+                    text.Span("PURCHASE REPORT");
+                });
+                inner.Item().Text(text =>
+                {
+                    text.DefaultTextStyle(x => x.FontFamily(SansPdfFontFamily).Bold().FontSize(15));
+                    text.Span("BÁO CÁO MUA HÀNG");
+                });
             });
             table.Cell().Border(1).Padding(6).AlignMiddle().Column(inner =>
             {
@@ -235,6 +252,8 @@ internal static class PurchaseRequisitionPdfReport
     {
         container.Column(column =>
         {
+            column.Item().Element(header => ComposeSummaryHeader(header, model));
+            column.Item().PaddingTop(8);
             column.Item().Table(table =>
             {
                 table.ColumnsDefinition(columns =>
@@ -287,7 +306,11 @@ internal static class PurchaseRequisitionPdfReport
                             .AlignTop();
 
                         table.Cell().Element(BodyCell).AlignLeft().Text(item.ItemCode);
-                        table.Cell().Element(BodyCell).AlignLeft().Text(item.ItemName);
+                        table.Cell().Element(BodyCell).AlignLeft().Text(text =>
+                        {
+                            text.DefaultTextStyle(x => x.FontFamily(Tcvn3PdfFontFamily));
+                            text.Span(item.ItemName);
+                        });
                         table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(item.PrQty));
                         table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(item.RecQty));
                         table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(item.DiffQty));
