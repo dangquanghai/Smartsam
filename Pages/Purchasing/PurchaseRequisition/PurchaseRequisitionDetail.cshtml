@@ -11,7 +11,7 @@
     };
 }
 
-<section class="content">
+<section class="content vni-font">
     <div class="container-fluid">
         <form method="post" id="prqDetailForm">
             <input asp-for="Mode" type="hidden" />
@@ -152,7 +152,7 @@
 
 @if (Model.CanSave)
 {
-    <div class="modal fade" id="prqAddDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal fade vni-font" id="prqAddDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
         <div class="modal-dialog modal-xl prq-add-detail-modal-dialog" role="document">
             <div class="modal-content">
                 <div class="modal-header py-2">
@@ -229,7 +229,7 @@
 
 @if (Model.Requisition.Id > 0)
 {
-    <div class="modal fade" id="prqAttachmentModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal fade vni-font" id="prqAttachmentModal" tabindex="-1" role="dialog" aria-hidden="true">
         <div class="modal-dialog modal-lg" role="document">
             <div class="modal-content">
                 <div class="modal-header py-2">
@@ -312,7 +312,7 @@
     </div>
 }
 
-<div class="modal fade" id="prqConfirmActionModal" tabindex="-1" role="dialog" aria-hidden="true">
+<div class="modal fade vni-font" id="prqConfirmActionModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content">
             <div class="modal-header py-2">

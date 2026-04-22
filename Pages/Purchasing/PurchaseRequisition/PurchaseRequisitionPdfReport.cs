@@ -11,6 +11,9 @@ internal static class PurchaseRequisitionPdfReport
     private const string DetailRev = "1";
     private const string SummaryNoIso = "QF6-2";
     private const string DefaultPdfFontFamily = "VNI-Times";
+    private const float DetailItemCodeColumnWidth = 72;
+    private const float DetailUnitPriceColumnWidth = 72;
+    private const float DetailAmountColumnWidth = 58;
 
     public static byte[] BuildDetailPdf(PurchaseRequisitionDetailReportModel model)
     {
@@ -110,13 +113,13 @@ internal static class PurchaseRequisitionPdfReport
                 table.ColumnsDefinition(columns =>
                 {
                     columns.ConstantColumn(28);
-                    columns.ConstantColumn(95);
+                    columns.ConstantColumn(DetailItemCodeColumnWidth);
                     columns.RelativeColumn(2.6f);
                     columns.ConstantColumn(42);
                     columns.ConstantColumn(58);
                     columns.ConstantColumn(58);
-                    columns.ConstantColumn(88);
-                    columns.ConstantColumn(95);
+                    columns.ConstantColumn(DetailUnitPriceColumnWidth);
+                    columns.ConstantColumn(DetailAmountColumnWidth);
                     columns.RelativeColumn(1.8f);
                 });
 
@@ -130,10 +133,10 @@ internal static class PurchaseRequisitionPdfReport
                     header.Cell().Element(HeaderLeftCell).Text("Item Code").Bold();
                     header.Cell().Element(HeaderLeftCell).Text("Item Description").Bold();
                     header.Cell().Element(HeaderCell).Text("Unit").Bold();
-                    header.Cell().Element(HeaderCell).Text("Qty MR").Bold();
-                    header.Cell().Element(HeaderCell).Text("Qty Pur.").Bold();
-                    header.Cell().Element(HeaderCell).Text("U.Price").Bold();
-                    header.Cell().Element(HeaderCell).Text("Amount").Bold();
+                    header.Cell().Element(HeaderCell).AlignRight().Text("Qty MR").Bold();
+                    header.Cell().Element(HeaderCell).AlignRight().Text("Qty Pur.").Bold();
+                    header.Cell().Element(HeaderCell).AlignRight().Text("U.Price").Bold();
+                    header.Cell().Element(HeaderCell).AlignRight().Text("Amount").Bold();
                     header.Cell().Element(HeaderLeftCell).Text("Remarks/Purpose").Bold();
                 });
 
@@ -144,16 +147,16 @@ internal static class PurchaseRequisitionPdfReport
                     table.Cell().Element(BodyCell).AlignLeft().Text(item.ItemCode);
                     table.Cell().Element(BodyCell).AlignLeft().Text(item.ItemDescription);
                     table.Cell().Element(BodyCell).AlignCenter().Text(item.Unit);
-                    table.Cell().Element(BodyCell).AlignCenter().Text(FormatQuantity(item.QtyMr));
-                    table.Cell().Element(BodyCell).AlignCenter().Text(FormatQuantity(item.QtyPur));
-                    table.Cell().Element(BodyCell).AlignCenter().Text(FormatAmount(item.UnitPrice));
-                    table.Cell().Element(BodyCell).AlignCenter().Text(FormatAmount(item.Amount));
+                    table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(item.QtyMr));
+                    table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(item.QtyPur));
+                    table.Cell().Element(BodyCell).AlignRight().Text(FormatAmount(item.UnitPrice));
+                    table.Cell().Element(BodyCell).AlignRight().Text(FormatWholeAmount(item.Amount));
                     table.Cell().Element(BodyCell).AlignLeft().Text(item.Remark);
                 }
 
                 table.Cell().ColumnSpan(6).Border(0).PaddingTop(2);
                 table.Cell().Border(0).Padding(3).AlignRight().Text("Total:").Bold();
-                table.Cell().Border(1).Padding(3).AlignRight().Text(FormatAmount(model.TotalAmount)).Bold();
+                table.Cell().Border(1).Padding(3).AlignRight().Text(FormatWholeAmount(model.TotalAmount)).Bold();
                 table.Cell().Border(0).PaddingTop(2);
             });
 
@@ -249,9 +252,9 @@ internal static class PurchaseRequisitionPdfReport
                 {
                     header.Cell().Element(HeaderLeftCell).Text("Item Code").Bold();
                     header.Cell().Element(HeaderLeftCell).Text("Item Name").Bold();
-                    header.Cell().Element(HeaderCell).Text("PR Qty").Bold();
-                    header.Cell().Element(HeaderCell).Text("Rec Qty").Bold();
-                    header.Cell().Element(HeaderCell).Text("Dif Qty").Bold();
+                    header.Cell().Element(HeaderCell).AlignRight().Text("PR Qty").Bold();
+                    header.Cell().Element(HeaderCell).AlignRight().Text("Rec Qty").Bold();
+                    header.Cell().Element(HeaderCell).AlignRight().Text("Dif Qty").Bold();
                     header.Cell().Element(HeaderCell).Text("Rec Date").Bold();
                     header.Cell().Element(HeaderCell).Text("PO No").Bold();
                     header.Cell().Element(HeaderLeftCell).Text("Remark").Bold();
@@ -280,9 +283,9 @@ internal static class PurchaseRequisitionPdfReport
 
                         table.Cell().Element(BodyCell).AlignLeft().Text(item.ItemCode);
                         table.Cell().Element(BodyCell).AlignLeft().Text(item.ItemName);
-                        table.Cell().Element(BodyCell).AlignCenter().Text(FormatQuantity(item.PrQty));
-                        table.Cell().Element(BodyCell).AlignCenter().Text(FormatQuantity(item.RecQty));
-                        table.Cell().Element(BodyCell).AlignCenter().Text(FormatQuantity(item.DiffQty));
+                        table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(item.PrQty));
+                        table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(item.RecQty));
+                        table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(item.DiffQty));
                         table.Cell().Element(BodyCell).AlignCenter().Text(item.RecDateText);
                         table.Cell().Element(BodyCell).AlignCenter().Text(item.PoNo);
                         table.Cell().Element(BodyCell).AlignLeft().Text(item.Remark);
@@ -315,6 +318,11 @@ internal static class PurchaseRequisitionPdfReport
     private static string FormatAmount(decimal value)
     {
         return value.ToString("#,##0.00", CultureInfo.InvariantCulture);
+    }
+
+    private static string FormatWholeAmount(decimal value)
+    {
+        return value.ToString("#,##0", CultureInfo.InvariantCulture);
     }
 }
 

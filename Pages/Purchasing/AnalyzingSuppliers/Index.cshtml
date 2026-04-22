@@ -30,7 +30,7 @@
 
 }
 
-<section class="content">
+<section class="content vni-font">
     <div class="container-fluid">
         <div class="row">
             <div class="col-md-2">
@@ -136,15 +136,15 @@
                             <table class="table table-hover table-bordered mb-0 asp-table">
                                 <thead class="thead-light">
                                     <tr>
-                                        <th style="min-width: 60px;">No</th>
-                                        <th style="min-width: 140px;">PO No.</th>
+                                        @* <th style="min-width: 60px;">No</th> *@
+                                        <th style="min-width: 130px;">PO No.</th>
                                         <th style="min-width: 120px;">PO Date</th>
                                         <th style="min-width: 130px;">PR No.</th>
                                         <th style="min-width: 330px;" class="asp-col-remark">Remark</th>
-                                        <th style="min-width: 330px;" class="asp-col-supplier">Supplier Code/Name</th>
-                                        <th style="min-width: 180px;">Status</th>
-                                        <th style="min-width: 180px;">Assess Level</th>
-                                        <th style="min-width: 330px;" class="asp-col-comment">Comment</th>
+                                        <th style="min-width: 430px;" class="asp-col-supplier">Supplier Code/Name</th>
+                                        <th style="min-width: 120px;">Status</th>
+                                        <th style="min-width: 120px;">Assess Level</th>
+                                        <th style="min-width: 430px;" class="asp-col-comment">Comment</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -160,7 +160,7 @@
                                         {
                                             var row = Model.Rows[index];
                                             <tr>
-                                                <td>@(Model.PageStart + index)</td>
+                                                @* <td>@(Model.PageStart + index)</td> *@
                                                 <td>
                                                     <a href="@Url.Page("/Purchasing/PurchaseOrder/PurchaseOrderDetail", new { id = row.POID, mode = "view", returnUrl })" class="asp-po-link text-bold">@row.PONo</a>
                                                 </td>

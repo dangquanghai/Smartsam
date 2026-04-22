@@ -34,7 +34,7 @@
 
 }
 
-<section class="content">
+<section class="content vni-font">
     <div class="container-fluid">
         <div class="row">
             <div class="col-md-2">
@@ -159,7 +159,7 @@
                             <table class="table table-hover table-bordered mb-0 spr-table">
                                 <thead class="thead-light">
                                     <tr>
-                                        <th style="min-width: ́80px;">No.</th>
+                                        @* <th style="min-width: 100px;">No.</th> *@
                                         <th style="min-width:100px;">Code</th>
                                         <th class="spr-col-supplier">SupplierName</th>
                                         <th style="min-width:110px;">PONo</th>
@@ -189,7 +189,7 @@
                                         {
                                             var row = Model.Rows[index];
                                             <tr>
-                                                <td>@(Model.PageStart + index)</td>
+                                                @* <td>@(Model.PageStart + index)</td> *@
                                                 <td title="@row.SupplierCode">@row.SupplierCode</td>
                                                 <td class="spr-col-supplier-cell">
                                                     <span class="spr-ellipsis vni-font" title="@row.SupplierName">@row.SupplierName</span>
@@ -203,7 +203,7 @@
                                                 <td>@row.Dept</td>
                                                 <td title="@row.ItemCode">@row.ItemCode</td>
                                                 <td class="spr-col-item-cell">
-                                                    <span class="spr-ellipsis" title="@row.ItemName">@row.ItemName</span>
+                                                    <span class="spr-ellipsis tcvn3-font" title="@row.ItemName">@row.ItemName</span>
                                                 </td>
                                                 <td class="text-right">@row.QuantityText</td>
                                                 <td class="text-right">@row.UnitPriceText</td>
