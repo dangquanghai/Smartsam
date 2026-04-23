@@ -21,6 +21,7 @@ namespace SmartSam.Pages.Purchasing.PurchaseOrder;
 public class PurchaseOrderDetailModel : BasePageModel
 {
     private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
+    private const string NotifyFontFamily = "'VNI-WIN', 'VNI-Times', 'VNI-Helve', sans-serif";
     private const int FUNCTION_ID = 73;
     private const int PermissionView = 2;
     private const int PermissionAdd = 3;
@@ -1944,16 +1945,26 @@ WHERE EmployeeID = @EmployeeID
 
         var body = $@"
 <p>Dear {{RECIPIENT_LABEL}},</p>
-<p>Purchase Order <b>{WebUtility.HtmlEncode(Header.PONo)}</b> {WebUtility.HtmlEncode(actionText)}</p>
+<p>Purchase Order <b>{WrapNotifyValue(Header.PONo)}</b> {WrapNotifyValue(actionText)}</p>
 <ul>
   <li>Date: <b>{Header.PODate:MMM dd, yyyy}</b></li>
-  <li>Remark: <b>{WebUtility.HtmlEncode(remarkText)}</b></li>
+  <li>Remark: <b>{WrapNotifyValue(remarkText)}</b></li>
   <li>Total Amount: <b>{FormatAmountForView(totalAmount)} {WebUtility.HtmlEncode(GetCurrencyDisplayText(Header.Currency))}</b></li>
 </ul>
 {(showApproveLink && !string.IsNullOrWhiteSpace(absoluteUrl) ? $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Purchase Order Approve</a></p>" : string.Empty)}
 <p>SmartSam System</p>";
 
-        return EmailTemplateHelper.WrapInNotifyTemplate(title, color, DateTime.Now, body);
+        return EmailTemplateHelper.WrapInNotifyTemplate(title, color, DateTime.Now, WrapNotifyMessageBody(body));
+    }
+
+    private static string WrapNotifyMessageBody(string messageBody)
+    {
+        return $"<div style='font-family:{NotifyFontFamily};'>{messageBody}</div>";
+    }
+
+    private static string WrapNotifyValue(string value)
+    {
+        return $"<span style='font-family:{NotifyFontFamily};'>{WebUtility.HtmlEncode(value ?? string.Empty)}</span>";
     }
 
     private decimal GetCurrentTotalAmount(SqlConnection conn, SqlTransaction trans)
