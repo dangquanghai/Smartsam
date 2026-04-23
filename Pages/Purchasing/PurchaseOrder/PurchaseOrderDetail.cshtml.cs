@@ -1159,6 +1159,21 @@ public class PurchaseOrderDetailModel : BasePageModel
     {
         var deliveryDate = poDate.ToString("MMMM yyyy", CultureInfo.InvariantCulture);
 
+        // This textarea renders with `vni-font`, so seeded text must use
+        // the same VNI-style glyphs as the legacy DB values shown on the client.
+        return string.Join(Environment.NewLine, new[]
+        {
+            $"Th\u00F4\u00F8i gian giao nha\u00E4n (Delivery date): {deliveryDate}",
+            "\u00D1\u00F2a \u00F1ie\u00E5m giao nha\u00E4n (Deliver place): 20 Le Thanh Ton st, Sai Gon Ward, HCMC, VN",
+            "Ng\u00F6\u00F4\u00F8i nha\u00E4n ha\u00F8ng (Receiver): ",
+            "Ph\u00F6\u00F4ng th\u00F6\u00F9c thanh toa\u00F9n (Payment term): "
+        });
+    }
+
+    private static string BuildDefaultPurchaseOrderTermsLegacyBroken(DateTime poDate)
+    {
+        var deliveryDate = poDate.ToString("MMMM yyyy", CultureInfo.InvariantCulture);
+
         return string.Join(Environment.NewLine, new[]
         {
             $"Thá»i gian giao nháº­n (Delivery date): {deliveryDate}",
