@@ -267,7 +267,24 @@ namespace SmartSam.Pages.Admin.Employee
                 return new JsonResult(new { success = false, message = "Lỗi hệ thống: " + ex.Message });
             }
         }
+        public IActionResult OnGetGetSignature(string fileName)
+        {
+            // 1. Lấy thông số từ cấu hình (Đảm bảo trỏ đúng thư mục ngoài wwwroot)
+            string basePath = _config.GetValue<string>("FileUploads:BasePath") ?? "Uploads";
+            string subPath = _config.GetValue<string>($"FileUploads:Funtions:{FUNCTION_ID}") ?? "/Admin/Employee";
 
+            // 2. Xây dựng đường dẫn vật lý đầy đủ
+            string filePath = Path.Combine(Directory.GetCurrentDirectory(), basePath, subPath.TrimStart('/'), fileName);
+
+            if (!System.IO.File.Exists(filePath))
+            {
+                return NotFound(); // Hoặc trả về một ảnh mặc định "no-image.png"
+            }
+
+            // 3. Đọc file và trả về định dạng image/png
+            var image = System.IO.File.OpenRead(filePath);
+            return File(image, "image/png");
+        }
         public class EmployeeViewModel
         {
             public int EmployeeID { get; set; }

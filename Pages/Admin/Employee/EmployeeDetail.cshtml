@@ -187,7 +187,9 @@
                             <div class="col-md-6 text-center">
                                 <label>Normal Sign</label>
                                 <div class="mb-2">
-                                    <img id="previewNormal" src="@(string.IsNullOrEmpty(Model.Employee.UrlNomalSign) ? "/img/no-signature.png" : Model.Employee.UrlNomalSign)"
+                                    @* Sửa src: Gọi handler GetImg và truyền path từ DB vào *@
+                                    <img id="previewNormal"
+                                         src="@(string.IsNullOrEmpty(Model.Employee.UrlNomalSign) ? "/img/no-signature.png" : Url.Page("EmployeeDetail", "GetImg", new { path = Model.Employee.UrlNomalSign }))"
                                          style="height: 100px; border: 1px dashed #ddd; cursor: pointer;"
                                          onclick="document.getElementById('fileNormal').click();" title="Click to change" />
                                 </div>
@@ -199,7 +201,9 @@
                             <div class="col-md-6 text-center">
                                 <label>Small Sign</label>
                                 <div class="mb-2">
-                                    <img id="previewSmall" src="@(string.IsNullOrEmpty(Model.Employee.UrlSmallSign) ? "/img/no-signature.png" : Model.Employee.UrlSmallSign)"
+                                    @* Tương tự cho Small Sign *@
+                                    <img id="previewSmall"
+                                         src="@(string.IsNullOrEmpty(Model.Employee.UrlSmallSign) ? "/img/no-signature.png" : Url.Page("EmployeeDetail", "GetImg", new { path = Model.Employee.UrlSmallSign }))"
                                          style="height: 60px; border: 1px dashed #ddd; cursor: pointer;"
                                          onclick="document.getElementById('fileSmall').click();" title="Click to change" />
                                 </div>
