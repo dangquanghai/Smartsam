@@ -822,8 +822,10 @@ function addSelectedPrLines() {
             Quantity: availableQuantity,
             UnitPrice: source.unitPrice || source.UnitPrice || 0,
             POAmount: availableQuantity * toNumber(source.unitPrice || source.UnitPrice || 0),
+            RecDept: source.recDept || source.RecDept || '',
+            RecDeptName: source.recDeptName || source.RecDeptName || '',
             Note: source.remark || source.Remark || '',
-            MRRequestNo: $('#PRID option:selected').text() || '',
+            MRRequestNo: source.mrRequestNo || source.MRRequestNo || $('#PRID option:selected').text() || '',
             PrDetailId: source.prDetailId || source.PrDetailId || 0,
             IsPersisted: false,
             SupplierID: expectedSupplierId || null,
@@ -919,9 +921,9 @@ function buildDepartmentOptions() {
         let html = '<option value="">-- Select --</option>';
         for (let i = 0; i < options.length; i += 1) {
             const option = options[i];
-            const optionValue = String(option.value || '');
+            const optionValue = String(option.value || option.Value || '');
             const selected = String(selectedValue || '') === optionValue ? ' selected' : '';
-            html += `<option value="${escapeAttribute(optionValue)}"${selected}>${escapeHtml(option.text || '')}</option>`;
+            html += `<option value="${escapeAttribute(optionValue)}"${selected}>${escapeHtml(option.text || option.Text || '')}</option>`;
         }
         return html;
     };
