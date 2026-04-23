@@ -45,6 +45,7 @@ public class PurchaseOrderDetailModel : BasePageModel
     public bool CanSave { get; private set; }
     public bool CanPurchaserApprove { get; private set; }
     public bool CanEvaluate { get; private set; }
+    public bool CanEditEvaluate { get; private set; }
     public bool CanApprove { get; private set; }
     public bool CanBackToProcessing { get; private set; }
     public bool CanManageAttachments { get; private set; }
@@ -75,6 +76,9 @@ public class PurchaseOrderDetailModel : BasePageModel
 
     [BindProperty]
     public int EstimatePoint { get; set; }
+
+    public int CurrentEstimatePoint { get; private set; }
+    public List<PurchaseOrderEvaluateOptionViewModel> EvaluateOptions { get; private set; } = new List<PurchaseOrderEvaluateOptionViewModel>();
 
     [BindProperty]
     public string? ConvertReason { get; set; }
@@ -521,7 +525,7 @@ public class PurchaseOrderDetailModel : BasePageModel
             return prepare;
         }
 
-        if (!CanEvaluate)
+        if (!CanEditEvaluate)
         {
             TempData["SuccessMessage"] = "You have no permission to evaluate this purchase order.";
             return RedirectToCurrentDetail();
@@ -541,8 +545,6 @@ public class PurchaseOrderDetailModel : BasePageModel
             _ => 13
         };
 
-        // PU chi evaluate sau khi CFO va BOD da duyet xong.
-        // Status se chuyen sang 3 de danh dau PO da duoc purchaser chot gia.
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
         using var trans = conn.BeginTransaction();
@@ -563,26 +565,6 @@ public class PurchaseOrderDetailModel : BasePageModel
                 insertCmd.Parameters.Add("@Point", SqlDbType.Int).Value = EstimatePoint;
                 insertCmd.Parameters.Add("@UserCode", SqlDbType.NVarChar, 50).Value = _workflowUser.EmployeeCode;
                 insertCmd.ExecuteNonQuery();
-            }
-
-            using (var updateCmd = new SqlCommand(@"
-            UPDATE dbo.PC_PO
-            SET PurId = @EmployeeID,
-                PurApproDate = @ApproveDate,
-                StatusID = 3,
-                noted = ''
-            WHERE POID = @POID
-            AND ISNULL(StatusID, 0) = 2
-            AND CAId IS NOT NULL
-            AND GDId IS NOT NULL", conn, trans))
-            {
-                updateCmd.Parameters.Add("@POID", SqlDbType.Int).Value = Header.Id;
-                updateCmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = _workflowUser.EmployeeId;
-                updateCmd.Parameters.Add("@ApproveDate", SqlDbType.VarChar, 12).Value = DateTime.Now.ToString("dd/MM/yyyy");
-                if (updateCmd.ExecuteNonQuery() <= 0)
-                {
-                    throw new InvalidOperationException("Evaluate failed because purchase order is not ready for purchaser evaluation.");
-                }
             }
 
             trans.Commit();
@@ -1066,8 +1048,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         var signatureColumn = useSmallSignature ? "UrlSmallSign" : "UrlNomalSign";
         using var cmd = new SqlCommand(@"
         SELECT
-            ISNULL(" + signatureColumn + @", '') AS SignatureFileName,
-            ISNULL(EmployeeCode, '') AS EmployeeCode
+            ISNULL(" + signatureColumn + @", '') AS SignatureFileName
         FROM dbo.MS_Employee
         WHERE EmployeeID = @EmployeeID", conn);
         cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId.Value;
@@ -1079,31 +1060,13 @@ public class PurchaseOrderDetailModel : BasePageModel
         }
 
         var signatureFileName = Convert.ToString(reader["SignatureFileName"])?.Trim();
-        var employeeCode = Convert.ToString(reader["EmployeeCode"])?.Trim();
-        var signaturePath = ResolveEmployeeSignaturePath(signatureFileName, employeeCode, useSmallSignature);
+        var signaturePath = ResolveEmployeeSignaturePathValue(signatureFileName);
         if (!string.IsNullOrWhiteSpace(signaturePath) && System.IO.File.Exists(signaturePath))
         {
             return System.IO.File.ReadAllBytes(signaturePath);
         }
 
         return null;
-    }
-
-    private string ResolveEmployeeSignaturePath(string? signatureFileName, string? employeeCode, bool useSmallSignature)
-    {
-        var configuredSignaturePath = ResolveEmployeeSignaturePathValue(signatureFileName);
-        if (!string.IsNullOrWhiteSpace(configuredSignaturePath))
-        {
-            return configuredSignaturePath;
-        }
-
-        if (string.IsNullOrWhiteSpace(employeeCode))
-        {
-            return string.Empty;
-        }
-
-        var signatureFile = $"{employeeCode.Trim()}_{(useSmallSignature ? "SmallSign" : "NormalSign")}.png";
-        return Path.Combine(_webHostEnvironment.ContentRootPath, "Uploads", "Admin", "Employee", signatureFile);
     }
 
     private string ResolveEmployeeSignaturePathValue(string? signatureFileName)
@@ -1289,6 +1252,8 @@ public class PurchaseOrderDetailModel : BasePageModel
     {
         Details = new List<PurchaseOrderDetailInput>();
         AttachmentList = new List<PurchaseOrderAttachmentViewModel>();
+        CurrentEstimatePoint = 0;
+        EvaluateOptions = new List<PurchaseOrderEvaluateOptionViewModel>();
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
 
@@ -1374,33 +1339,102 @@ public class PurchaseOrderDetailModel : BasePageModel
         ORDER BY ISNULL(i.ItemCode, '')", conn);
         detailCmd.Parameters.Add("@POID", SqlDbType.Int).Value = id;
 
-        using var detailReader = detailCmd.ExecuteReader();
-        while (detailReader.Read())
+        using (var detailReader = detailCmd.ExecuteReader())
         {
-            Details.Add(new PurchaseOrderDetailInput
+            while (detailReader.Read())
             {
-                TempKey = Guid.NewGuid().ToString("N"),
-                IsPersisted = true,
-                DetailID = detailReader.IsDBNull(detailReader.GetOrdinal("DetailID")) ? 0 : Convert.ToInt32(detailReader["DetailID"]),
-                ItemID = Convert.ToInt32(detailReader["ItemID"]),
-                PrDetailId = detailReader.IsDBNull(detailReader.GetOrdinal("PrDetailId")) ? 0 : Convert.ToInt64(detailReader["PrDetailId"]),
-                ItemCode = Convert.ToString(detailReader["ItemCode"]) ?? string.Empty,
-                ItemName = Convert.ToString(detailReader["ItemName"]) ?? string.Empty,
-                Unit = Convert.ToString(detailReader["Unit"]) ?? string.Empty,
-                Quantity = detailReader.IsDBNull(detailReader.GetOrdinal("Quantity")) ? 0 : Convert.ToDecimal(detailReader["Quantity"]),
-                UnitPrice = detailReader.IsDBNull(detailReader.GetOrdinal("UnitPrice")) ? 0 : Convert.ToDecimal(detailReader["UnitPrice"]),
-                POAmount = detailReader.IsDBNull(detailReader.GetOrdinal("POAmount")) ? 0 : Convert.ToDecimal(detailReader["POAmount"]),
-                RecDept = detailReader.IsDBNull(detailReader.GetOrdinal("RecDept")) ? null : Convert.ToInt32(detailReader["RecDept"]),
-                RecDeptName = Convert.ToString(detailReader["RecDeptName"]) ?? string.Empty,
-                Note = Convert.ToString(detailReader["Note"]) ?? string.Empty,
-                RecQty = detailReader.IsDBNull(detailReader.GetOrdinal("RecQty")) ? 0 : Convert.ToDecimal(detailReader["RecQty"]),
-                RecAmount = detailReader.IsDBNull(detailReader.GetOrdinal("RecAmount")) ? 0 : Convert.ToDecimal(detailReader["RecAmount"]),
-                RecDate = detailReader.IsDBNull(detailReader.GetOrdinal("RecDate")) ? null : Convert.ToDateTime(detailReader["RecDate"]),
-                MRRequestNo = Convert.ToString(detailReader["MRRequestNo"]) ?? string.Empty
+                Details.Add(new PurchaseOrderDetailInput
+                {
+                    TempKey = Guid.NewGuid().ToString("N"),
+                    IsPersisted = true,
+                    DetailID = detailReader.IsDBNull(detailReader.GetOrdinal("DetailID")) ? 0 : Convert.ToInt32(detailReader["DetailID"]),
+                    ItemID = Convert.ToInt32(detailReader["ItemID"]),
+                    PrDetailId = detailReader.IsDBNull(detailReader.GetOrdinal("PrDetailId")) ? 0 : Convert.ToInt64(detailReader["PrDetailId"]),
+                    ItemCode = Convert.ToString(detailReader["ItemCode"]) ?? string.Empty,
+                    ItemName = Convert.ToString(detailReader["ItemName"]) ?? string.Empty,
+                    Unit = Convert.ToString(detailReader["Unit"]) ?? string.Empty,
+                    Quantity = detailReader.IsDBNull(detailReader.GetOrdinal("Quantity")) ? 0 : Convert.ToDecimal(detailReader["Quantity"]),
+                    UnitPrice = detailReader.IsDBNull(detailReader.GetOrdinal("UnitPrice")) ? 0 : Convert.ToDecimal(detailReader["UnitPrice"]),
+                    POAmount = detailReader.IsDBNull(detailReader.GetOrdinal("POAmount")) ? 0 : Convert.ToDecimal(detailReader["POAmount"]),
+                    RecDept = detailReader.IsDBNull(detailReader.GetOrdinal("RecDept")) ? null : Convert.ToInt32(detailReader["RecDept"]),
+                    RecDeptName = Convert.ToString(detailReader["RecDeptName"]) ?? string.Empty,
+                    Note = Convert.ToString(detailReader["Note"]) ?? string.Empty,
+                    RecQty = detailReader.IsDBNull(detailReader.GetOrdinal("RecQty")) ? 0 : Convert.ToDecimal(detailReader["RecQty"]),
+                    RecAmount = detailReader.IsDBNull(detailReader.GetOrdinal("RecAmount")) ? 0 : Convert.ToDecimal(detailReader["RecAmount"]),
+                    RecDate = detailReader.IsDBNull(detailReader.GetOrdinal("RecDate")) ? null : Convert.ToDateTime(detailReader["RecDate"]),
+                    MRRequestNo = Convert.ToString(detailReader["MRRequestNo"]) ?? string.Empty
+                });
+            }
+        }
+
+        using (var estimateCmd = new SqlCommand(@"
+        SELECT TOP 1
+            ISNULL(Point, 0) AS Point
+        FROM dbo.PO_Estimate
+        WHERE POID = @POID
+          AND PO_IndexDetailID IN (13, 14, 15, 16)
+        ORDER BY TheDate DESC, PO_IndexDetailID DESC", conn))
+        {
+            estimateCmd.Parameters.Add("@POID", SqlDbType.Int).Value = id;
+            var estimateValue = estimateCmd.ExecuteScalar();
+            CurrentEstimatePoint = estimateValue == null || estimateValue == DBNull.Value
+                ? 0
+                : Convert.ToInt32(estimateValue);
+        }
+
+        EvaluateOptions = LoadEvaluateOptions(conn);
+
+        AttachmentList = Header.Id > 0 ? LoadAttachmentRows() : new List<PurchaseOrderAttachmentViewModel>();
+    }
+
+    private static List<PurchaseOrderEvaluateOptionViewModel> LoadEvaluateOptions(SqlConnection conn)
+    {
+        var rows = new List<PurchaseOrderEvaluateOptionViewModel>();
+
+        using var cmd = new SqlCommand(@"
+        SELECT
+            PO_IndexDetailID,
+            ISNULL(PO_IndexDetailName, '') AS PO_IndexDetailName,
+            ISNULL(Point, 0) AS Point
+        FROM dbo.PO_IndexDetail
+        WHERE PO_IndexDetailID IN (13, 14, 15, 16)
+        ORDER BY
+            CASE PO_IndexDetailID
+                WHEN 16 THEN 1
+                WHEN 15 THEN 2
+                WHEN 14 THEN 3
+                WHEN 13 THEN 4
+                ELSE 99
+            END", conn);
+
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var detailId = reader.IsDBNull(reader.GetOrdinal("PO_IndexDetailID")) ? 0 : Convert.ToInt32(reader["PO_IndexDetailID"]);
+            var estimatePoint = detailId switch
+            {
+                16 => 1,
+                15 => 2,
+                14 => 3,
+                13 => 4,
+                _ => 0
+            };
+
+            if (estimatePoint <= 0)
+            {
+                continue;
+            }
+
+            rows.Add(new PurchaseOrderEvaluateOptionViewModel
+            {
+                POIndexDetailId = detailId,
+                EstimatePoint = estimatePoint,
+                Name = Convert.ToString(reader["PO_IndexDetailName"]) ?? string.Empty,
+                Point = reader.IsDBNull(reader.GetOrdinal("Point")) ? 0 : Convert.ToInt32(reader["Point"])
             });
         }
 
-        AttachmentList = Header.Id > 0 ? LoadAttachmentRows() : new List<PurchaseOrderAttachmentViewModel>();
+        return rows;
     }
 
     private void LoadExistingWorkflowData(int id)
@@ -1767,12 +1801,8 @@ public class PurchaseOrderDetailModel : BasePageModel
         CanPurchaserApprove = Header.Id > 0
             && Header.StatusId == 1
             && (IsAdminRole() || _workflowUser.IsPurchaser);
-        // Evaluate chi hien sau khi CFO va BOD da ghi nhan xong.
-        CanEvaluate = Header.Id > 0
-            && Header.StatusId == 2
-            && Header.CAId.HasValue
-            && Header.GDId.HasValue
-            && (_workflowUser.IsPurchaser || IsAdminRole());
+        CanEvaluate = Header.Id > 0;
+        CanEditEvaluate = Header.Id > 0 && _workflowUser.IsPurchaser;
         CanApprove = Header.Id > 0 && Header.StatusId == 2 && (CanApproveAsCfo() || CanApproveAsBod());
         CanBackToProcessing = Header.Id > 0
             && Header.StatusId == 2
@@ -2354,6 +2384,15 @@ public class PurchaseOrderAttachmentViewModel
     public DateTime? ModifiedDate { get; set; }
     public long SizeBytes { get; set; }
     public string SizeText { get; set; } = string.Empty;
+}
+
+public class PurchaseOrderEvaluateOptionViewModel
+{
+    public int POIndexDetailId { get; set; }
+    public int EstimatePoint { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public int Point { get; set; }
+    public string DisplayText => string.IsNullOrWhiteSpace(Name) ? string.Empty : $"{Name} ({Point} Points)";
 }
 
 public class PurchaseOrderNotifyRecipientViewModel
