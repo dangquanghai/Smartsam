@@ -385,7 +385,7 @@ public class IndexModel : BasePageModel
         SELECT
             d.PO_IndexDetailID,
             ISNULL(i.PO_IndexDetailName, '') AS PO_IndexDetailName,
-            ISNULL(d.Point, 0) AS Point,
+            ISNULL(i.Point, 0) AS Point,
             d.TheDate,
             ISNULL(e.EmployeeName, '') AS EmployeeName
         FROM dbo.PO_Estimate d

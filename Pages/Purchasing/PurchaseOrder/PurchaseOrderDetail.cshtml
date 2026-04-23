@@ -172,7 +172,7 @@
                         @if (Model.CanEvaluate)
                         {
                             <button type="button" class="btn btn-sm btn-primary mr-2" id="btnEvaluate">
-                                <i class="fas fa-star"></i> Evaluate
+                                <i class="fas fa-star"></i> @(Model.CanEditEvaluate ? "Evaluate" : "Evaluate View")
                             </button>
                         }
                         @if (Model.CanApprove)
@@ -346,42 +346,46 @@
         }
 
         <div class="modal fade" id="purchaseOrderEvaluateModal" tabindex="-1" role="dialog" aria-hidden="true">
-            <div class="modal-dialog" role="document">
+            <div class="modal-dialog purchase-order-evaluate-modal-dialog" role="document">
                 <div class="modal-content">
                     <div class="modal-header py-2">
-                        <h5 class="modal-title">Evaluate Purchase Order</h5>
+                        <h5 class="modal-title">@(Model.CanEditEvaluate ? "Evaluate Purchase Order" : "Evaluate View")</h5>
                         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                             <span aria-hidden="true">&times;</span>
                         </button>
                     </div>
-                    <div class="modal-body">
-                        <div class="form-group mb-2">
-                            <label class="d-block">Price Point</label>
-                            <div class="custom-control custom-radio">
-                                <input class="custom-control-input" type="radio" id="estimatePoint1" name="estimatePointOption" value="1" />
-                                <label class="custom-control-label" for="estimatePoint1">1</label>
+                    <div class="modal-body purchase-order-evaluate-body">
+                        <fieldset class="purchase-order-evaluate-fieldset">
+                            <legend>Price</legend>
+                            <div class="purchase-order-evaluate-options">
+                            @foreach (var option in Model.EvaluateOptions)
+                            {
+                                var radioId = $"estimatePoint{option.EstimatePoint}";
+                                <div class="custom-control custom-radio purchase-order-evaluate-option">
+                                    <input class="custom-control-input" type="radio" id="@radioId" name="estimatePointOption" value="@option.EstimatePoint" @(Model.CurrentEstimatePoint == option.EstimatePoint ? "checked" : null) @(!Model.CanEditEvaluate ? "disabled" : null) />
+                                    <label class="custom-control-label" for="@radioId">@option.DisplayText</label>
+                                </div>
+                            }
                             </div>
-                            <div class="custom-control custom-radio">
-                                <input class="custom-control-input" type="radio" id="estimatePoint2" name="estimatePointOption" value="2" />
-                                <label class="custom-control-label" for="estimatePoint2">2</label>
+                        </fieldset>
+                        @if (Model.CanEditEvaluate)
+                        {
+                            <div class="custom-control custom-checkbox purchase-order-evaluate-confirm">
+                                <input type="checkbox" class="custom-control-input" id="confirmEstimateCheck" />
+                                <label class="custom-control-label" for="confirmEstimateCheck">You make sure with your estimate</label>
                             </div>
-                            <div class="custom-control custom-radio">
-                                <input class="custom-control-input" type="radio" id="estimatePoint3" name="estimatePointOption" value="3" />
-                                <label class="custom-control-label" for="estimatePoint3">3</label>
-                            </div>
-                            <div class="custom-control custom-radio">
-                                <input class="custom-control-input" type="radio" id="estimatePoint4" name="estimatePointOption" value="4" />
-                                <label class="custom-control-label" for="estimatePoint4">4</label>
-                            </div>
-                        </div>
-                        <div class="custom-control custom-checkbox">
-                            <input type="checkbox" class="custom-control-input" id="confirmEstimateCheck" />
-                            <label class="custom-control-label" for="confirmEstimateCheck">You make sure with your estimate</label>
-                        </div>
+                        }
                     </div>
-                    <div class="modal-footer py-2">
-                        <button type="button" class="btn btn-sm btn-primary" id="btnConfirmEvaluate">OK</button>
-                        <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Cancel</button>
+                    <div class="modal-footer py-2 purchase-order-evaluate-footer">
+                        @if (Model.CanEditEvaluate)
+                        {
+                            <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-sm btn-primary" id="btnConfirmEvaluate">OK</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Close</button>
+                        }
                     </div>
                 </div>
             </div>
@@ -538,6 +542,8 @@
             isViewMode: @(Model.IsViewMode ? "true" : "false"),
             canPurchaserApprove: @(Model.CanPurchaserApprove ? "true" : "false"),
             canEvaluate: @(Model.CanEvaluate ? "true" : "false"),
+            canEditEvaluate: @(Model.CanEditEvaluate ? "true" : "false"),
+            currentEstimatePoint: @Model.CurrentEstimatePoint,
             canApprove: @(Model.CanApprove ? "true" : "false"),
             canBackToProcessing: @(Model.CanBackToProcessing ? "true" : "false"),
             canManageAttachments: @(Model.CanManageAttachments ? "true" : "false"),

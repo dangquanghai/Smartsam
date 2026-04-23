@@ -274,6 +274,12 @@ padding: 5px;
     margin: 1.75rem auto;
 }
 
+#purchaseOrderEstimateViewModal .po-estimateview-modal-dialog {
+    max-width: 56vw;
+    width: 56vw;
+    margin: 1.75rem auto;
+}
+
 .po-viewdetail-table-wrap {
     flex: 1 1 auto;
     min-height: 0;

@@ -214,7 +214,7 @@
                         @if (Model.PagePerm.HasPermission(2))
                         {
                             <button class="btn btn-info btn-sm" id="btnViewDetail" type="button">
-                                <i class="fas fa-list-alt"></i> View Detail
+                                <i class="fas fa-search-plus"></i> Search Detail
                             </button>
                             <button class="btn btn-primary btn-sm" id="btnEstimateView" type="button" disabled>
                                 <i class="fas fa-star"></i> Estimate View
@@ -394,7 +394,7 @@
             </div>
 
             <div class="modal fade" id="purchaseOrderEstimateViewModal" tabindex="-1" role="dialog" aria-hidden="true">
-                <div class="modal-dialog modal-xl po-viewdetail-modal-dialog" role="document">
+                <div class="modal-dialog po-estimateview-modal-dialog" role="document">
                     <div class="modal-content">
                         <div class="modal-header py-2">
                             <h5 class="modal-title" id="purchaseOrderEstimateViewTitle">Estimate View</h5>

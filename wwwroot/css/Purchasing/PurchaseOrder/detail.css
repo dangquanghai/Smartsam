@@ -97,6 +97,57 @@
     margin: 1rem auto;
 }
 
+.purchase-order-evaluate-modal-dialog {
+    max-width: min(92vw, 520px);
+    width: min(92vw, 520px);
+    margin: 1.25rem auto;
+}
+
+.purchase-order-evaluate-body {
+    padding: 0.75rem 0.9rem 0.6rem;
+}
+
+.purchase-order-evaluate-fieldset {
+    border: 1px solid #c8c8c8;
+    padding: 0.5rem 0.75rem 0.65rem;
+    margin: 0;
+}
+
+.purchase-order-evaluate-fieldset legend {
+    width: auto;
+    padding: 0 0.35rem;
+    margin-bottom: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.purchase-order-evaluate-options {
+    margin-top: 0.15rem;
+}
+
+.purchase-order-evaluate-option {
+    margin-bottom: 0.45rem;
+    min-height: 1.8rem;
+}
+
+.purchase-order-evaluate-option:last-child {
+    margin-bottom: 0;
+}
+
+.purchase-order-evaluate-option .custom-control-label {
+    line-height: 1.25;
+    font-weight: 600;
+}
+
+.purchase-order-evaluate-confirm {
+    margin-top: 0.7rem;
+}
+
+.purchase-order-evaluate-footer {
+    justify-content: center;
+    gap: 0.5rem;
+}
+
 .purchase-order-report-preview-body {
     max-height: 80vh;
     background: #fff;

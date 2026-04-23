@@ -505,6 +505,12 @@ function bindMainEvents(mode) {
 
     $('#btnEvaluate').on('click', function () {
         closeOpenSelect2();
+        const currentEstimatePoint = toNumber(window.purchaseOrderDetailPage?.currentEstimatePoint || 0);
+        $('input[name="estimatePointOption"]').prop('checked', false);
+        if (currentEstimatePoint > 0) {
+            $(`input[name="estimatePointOption"][value="${currentEstimatePoint}"]`).prop('checked', true);
+        }
+        $('#confirmEstimateCheck').prop('checked', false);
         $('#purchaseOrderEvaluateModal').modal('show');
     });
 
