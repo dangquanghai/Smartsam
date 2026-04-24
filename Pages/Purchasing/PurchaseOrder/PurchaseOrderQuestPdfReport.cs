@@ -57,8 +57,7 @@ internal static class PurchaseOrderQuestPdfReport
             column.Item().AlignCenter().Text("-").FontSize(9);
             column.Item().PaddingTop(18).AlignCenter().Text(text =>
             {
-                text.Span("ĐƠN ĐẶT HÀNG ").Bold().FontSize(20);
-                text.Span("(Purchase Order)").Bold().FontSize(14);
+                text.Span("ĐƠN ĐẶT HÀNG/PURCHASE ORDER").Bold().FontSize(20);
             });
         });
     }
@@ -216,7 +215,7 @@ internal static class PurchaseOrderQuestPdfReport
         var directorName = string.IsNullOrWhiteSpace(footer?.ApprovedName) ? DefaultDirectorName : footer.ApprovedName;
         var directorTitle = string.IsNullOrWhiteSpace(footer?.ApprovedTitle) ? DefaultDirectorTitle : footer.ApprovedTitle;
 
-        container.Height(92).AlignBottom().Row(row =>
+        container.Height(104).AlignBottom().Row(row =>
         {
             row.ConstantItem(350).PaddingLeft(20).Column(left =>
             {
@@ -225,7 +224,7 @@ internal static class PurchaseOrderQuestPdfReport
                     signatureBlock.Item().Row(top =>
                     {
                         top.ConstantItem(82).Text(string.Empty);
-                        top.ConstantItem(156).TranslateY(-14).AlignCenter().AlignTop().Element(content => ComposeStyledValueText(content, model.CoName, VniPdfFontFamily, 8));
+                        top.ConstantItem(156).TranslateY(-14).AlignCenter().AlignTop().Element(content => ComposeStyledValueText(content, model.CoName, VniPdfFontFamily, 11));
                         top.ConstantItem(82).TranslateX(-24).PaddingTop(1).PaddingLeft(1).Row(signatures =>
                         {
                             signatures.ConstantItem(34).Element(cell => ComposeSmallSignature(cell, footer?.PreparedSignature));

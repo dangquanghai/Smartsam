@@ -21,6 +21,7 @@ namespace SmartSam.Pages.Purchasing.PurchaseOrder;
 public class PurchaseOrderDetailModel : BasePageModel
 {
     private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
+    private const string NotifyFontFamily = "'VNI-WIN', 'VNI-Times', 'VNI-Helve', sans-serif";
     private const int FUNCTION_ID = 73;
     private const int PermissionView = 2;
     private const int PermissionAdd = 3;
@@ -1504,6 +1505,7 @@ public class PurchaseOrderDetailModel : BasePageModel
             ISNULL(i.ItemCode, '') AS ItemCode,
             ISNULL(i.ItemName, '') AS ItemName,
             ISNULL(i.Unit, '') AS Unit,
+            ISNULL(CONVERT(nvarchar(50), d.MRRequestNO), '') AS MRRequestNO,
             CASE
                 WHEN ISNULL(d.Quantity, 0) - ISNULL(u.UsedQuantity, 0) < 0 THEN 0
                 ELSE ISNULL(d.Quantity, 0) - ISNULL(u.UsedQuantity, 0)
@@ -1511,11 +1513,20 @@ public class PurchaseOrderDetailModel : BasePageModel
             ISNULL(d.UnitPrice, 0) AS UnitPrice,
             ISNULL(d.Remark, '') AS Remark,
             d.SupplierID,
+            COALESCE(mrDept.DeptID, mrDeptByRequest.DeptID) AS RecDept,
+            ISNULL(COALESCE(mrDept.DeptCode, mrDeptByRequest.DeptCode), '') AS RecDeptName,
             CASE WHEN s.SupplierID IS NULL THEN '' ELSE ISNULL(s.SupplierCode, '') + ' / ' + ISNULL(s.SupplierName, '') END AS SupplierText
         FROM dbo.PC_PRDetail d
         LEFT JOIN dbo.INV_ItemList i ON i.ItemID = d.ItemID
         LEFT JOIN dbo.PC_Suppliers s ON s.SupplierID = d.SupplierID
         LEFT JOIN UsedQuantity u ON u.MRDetailID = d.RecordID
+        LEFT JOIN dbo.MATERIAL_REQUEST_DETAIL mrDetail ON mrDetail.ID = d.MRDetailID
+        LEFT JOIN dbo.MATERIAL_REQUEST mr ON mr.REQUEST_NO = mrDetail.REQUEST_NO
+        LEFT JOIN dbo.INV_KPGroup kp ON kp.KPGroupID = mr.STORE_GROUP
+        LEFT JOIN dbo.MS_Department mrDept ON mrDept.DeptID = kp.DepID
+        LEFT JOIN dbo.MATERIAL_REQUEST mrByRequest ON mrByRequest.REQUEST_NO = TRY_CONVERT(decimal(18, 0), NULLIF(LTRIM(RTRIM(CONVERT(nvarchar(50), d.MRRequestNO))), ''))
+        LEFT JOIN dbo.INV_KPGroup kpByRequest ON kpByRequest.KPGroupID = mrByRequest.STORE_GROUP
+        LEFT JOIN dbo.MS_Department mrDeptByRequest ON mrDeptByRequest.DeptID = kpByRequest.DepID
         WHERE d.PRID = @PRID
         ORDER BY d.RecordID", conn);
         cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = prId;
@@ -1531,10 +1542,13 @@ public class PurchaseOrderDetailModel : BasePageModel
                 ItemCode = Convert.ToString(reader["ItemCode"]) ?? string.Empty,
                 ItemName = Convert.ToString(reader["ItemName"]) ?? string.Empty,
                 Unit = Convert.ToString(reader["Unit"]) ?? string.Empty,
+                MRRequestNo = Convert.ToString(reader["MRRequestNO"]) ?? string.Empty,
                 Quantity = reader.IsDBNull(reader.GetOrdinal("Quantity")) ? 0 : Convert.ToDecimal(reader["Quantity"]),
                 UnitPrice = reader.IsDBNull(reader.GetOrdinal("UnitPrice")) ? 0 : Convert.ToDecimal(reader["UnitPrice"]),
                 Remark = Convert.ToString(reader["Remark"]) ?? string.Empty,
                 SupplierID = reader.IsDBNull(reader.GetOrdinal("SupplierID")) ? null : Convert.ToInt32(reader["SupplierID"]),
+                RecDept = reader.IsDBNull(reader.GetOrdinal("RecDept")) ? null : Convert.ToInt32(reader["RecDept"]),
+                RecDeptName = Convert.ToString(reader["RecDeptName"]) ?? string.Empty,
                 SupplierText = Convert.ToString(reader["SupplierText"]) ?? string.Empty
             });
         }
@@ -1931,16 +1945,26 @@ WHERE EmployeeID = @EmployeeID
 
         var body = $@"
 <p>Dear {{RECIPIENT_LABEL}},</p>
-<p>Purchase Order <b>{WebUtility.HtmlEncode(Header.PONo)}</b> {WebUtility.HtmlEncode(actionText)}</p>
+<p>Purchase Order <b>{WrapNotifyValue(Header.PONo)}</b> {WrapNotifyValue(actionText)}</p>
 <ul>
   <li>Date: <b>{Header.PODate:MMM dd, yyyy}</b></li>
-  <li>Remark: <b>{WebUtility.HtmlEncode(remarkText)}</b></li>
+  <li>Remark: <b>{WrapNotifyValue(remarkText)}</b></li>
   <li>Total Amount: <b>{FormatAmountForView(totalAmount)} {WebUtility.HtmlEncode(GetCurrencyDisplayText(Header.Currency))}</b></li>
 </ul>
 {(showApproveLink && !string.IsNullOrWhiteSpace(absoluteUrl) ? $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Purchase Order Approve</a></p>" : string.Empty)}
 <p>SmartSam System</p>";
 
-        return EmailTemplateHelper.WrapInNotifyTemplate(title, color, DateTime.Now, body);
+        return EmailTemplateHelper.WrapInNotifyTemplate(title, color, DateTime.Now, WrapNotifyMessageBody(body));
+    }
+
+    private static string WrapNotifyMessageBody(string messageBody)
+    {
+        return $"<div style='font-family:{NotifyFontFamily};'>{messageBody}</div>";
+    }
+
+    private static string WrapNotifyValue(string value)
+    {
+        return $"<span style='font-family:{NotifyFontFamily};'>{WebUtility.HtmlEncode(value ?? string.Empty)}</span>";
     }
 
     private decimal GetCurrentTotalAmount(SqlConnection conn, SqlTransaction trans)
@@ -2386,10 +2410,13 @@ public class PurchaseOrderPrLineLookup
     public string ItemCode { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
     public string Unit { get; set; } = string.Empty;
+    public string MRRequestNo { get; set; } = string.Empty;
     public decimal Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public string Remark { get; set; } = string.Empty;
     public int? SupplierID { get; set; }
+    public int? RecDept { get; set; }
+    public string RecDeptName { get; set; } = string.Empty;
     public string SupplierText { get; set; } = string.Empty;
 }
 
