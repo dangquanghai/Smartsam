@@ -179,12 +179,15 @@ public class IndexModel : BasePageModel
             "Remark"
         };
 
+        var companyHeader = LoadCompanyHeader();
+        ApplyExportHeader(worksheet, headers.Length, "PURCHASE ORDER LIST", companyHeader);
+
         for (var i = 0; i < headers.Length; i++)
         {
-            worksheet.Cell(1, i + 1).Value = headers[i];
+            worksheet.Cell(6, i + 1).Value = headers[i];
         }
 
-        var rowIndex = 2;
+        var rowIndex = 7;
         foreach (var row in rows)
         {
             worksheet.Cell(rowIndex, 1).Value = row.PONo;
@@ -199,11 +202,13 @@ public class IndexModel : BasePageModel
             rowIndex++;
         }
 
-        var usedRange = worksheet.Range(1, 1, Math.Max(1, rowIndex - 1), headers.Length);
+        var usedRange = worksheet.Range(6, 1, Math.Max(6, rowIndex - 1), headers.Length);
         usedRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
         usedRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
         usedRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-        worksheet.Row(1).Style.Font.Bold = true;
+        worksheet.Column(4).Style.Font.FontName = "VNI-Times";
+        worksheet.Column(9).Style.Font.FontName = "VNI-Times";
+        worksheet.Row(6).Style.Font.Bold = true;
         worksheet.Columns().AdjustToContents();
 
         using var stream = new MemoryStream();
@@ -239,12 +244,15 @@ public class IndexModel : BasePageModel
             "Rec Date"
         };
 
+        var companyHeader = LoadCompanyHeader();
+        ApplyExportHeader(worksheet, headers.Length, "PURCHASE ORDER DETAIL", companyHeader);
+
         for (var i = 0; i < headers.Length; i++)
         {
-            worksheet.Cell(1, i + 1).Value = headers[i];
+            worksheet.Cell(6, i + 1).Value = headers[i];
         }
 
-        var rowIndex = 2;
+        var rowIndex = 7;
         foreach (var row in rows)
         {
             worksheet.Cell(rowIndex, 1).Value = row.ItemCode;
@@ -260,11 +268,13 @@ public class IndexModel : BasePageModel
             rowIndex++;
         }
 
-        var usedRange = worksheet.Range(1, 1, Math.Max(1, rowIndex - 1), headers.Length);
+        var usedRange = worksheet.Range(6, 1, Math.Max(6, rowIndex - 1), headers.Length);
         usedRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
         usedRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
         usedRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-        worksheet.Row(1).Style.Font.Bold = true;
+        worksheet.Column(2).Style.Font.FontName = "VS1 Times New Roman";
+        worksheet.Column(7).Style.Font.FontName = "VNI-Times";
+        worksheet.Row(6).Style.Font.Bold = true;
         worksheet.Columns().AdjustToContents();
 
         using var stream = new MemoryStream();
@@ -282,6 +292,59 @@ public class IndexModel : BasePageModel
         }
 
         return new JsonResult(LoadSupplierLookup(term));
+    }
+
+    private void ApplyExportHeader(IXLWorksheet worksheet, int headerLength, string reportTitle, PurchaseOrderCompanyHeader companyHeader)
+    {
+        worksheet.Cell(1, 1).Value = companyHeader.CompanyName;
+        worksheet.Cell(1, 1).Style.Font.Bold = true;
+        worksheet.Cell(1, 1).Style.Font.FontName = "VNI-Times";
+        worksheet.Cell(2, 1).Value = companyHeader.Address;
+        worksheet.Cell(2, 1).Style.Font.FontName = "VNI-Times";
+        worksheet.Cell(3, 1).Value = $"Tel: {companyHeader.Phone} Email: {companyHeader.Email} VAT Code: {companyHeader.VatCode}";
+
+        worksheet.Range(4, 1, 4, headerLength).Merge();
+        worksheet.Cell(4, 1).Value = reportTitle;
+        worksheet.Cell(4, 1).Style.Font.Bold = true;
+        worksheet.Cell(4, 1).Style.Font.FontSize = 14;
+        worksheet.Cell(4, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+        worksheet.Range(5, 1, 5, headerLength).Merge();
+        worksheet.Cell(5, 1).Value = $"Export Date: {DateTime.Now:dd/MM/yyyy HH:mm}";
+        worksheet.Cell(5, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+    }
+
+    private PurchaseOrderCompanyHeader LoadCompanyHeader()
+    {
+        var header = new PurchaseOrderCompanyHeader();
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand(@"
+        SELECT TOP 1
+            ISNULL(CoName, '') AS CoName,
+            ISNULL(CoAddress, '') AS CoAddress,
+            ISNULL(CoPhone, '') AS CoPhone,
+            ISNULL(CoEmail, '') AS CoEmail,
+            ISNULL(CoVATCode, '') AS CoVATCode
+        FROM dbo.MS_Parameters", conn);
+
+        conn.Open();
+        using var reader = cmd.ExecuteReader();
+        if (reader.Read())
+        {
+            header.CompanyName = Convert.ToString(reader["CoName"]) ?? string.Empty;
+            header.Address = Convert.ToString(reader["CoAddress"]) ?? string.Empty;
+            header.Phone = Convert.ToString(reader["CoPhone"]) ?? string.Empty;
+            header.Email = Convert.ToString(reader["CoEmail"]) ?? string.Empty;
+            header.VatCode = Convert.ToString(reader["CoVATCode"]) ?? string.Empty;
+        }
+
+        header.CompanyName = string.IsNullOrWhiteSpace(header.CompanyName) ? "Saigon Sky Garden Co., LTD" : header.CompanyName;
+        header.Address = string.IsNullOrWhiteSpace(header.Address) ? "20 Lê Thánh Tôn, Phường Sài Gòn, Tp. Hồ Chí Minh" : header.Address;
+        header.Phone = string.IsNullOrWhiteSpace(header.Phone) ? "84.8.38220002" : header.Phone;
+        header.Email = string.IsNullOrWhiteSpace(header.Email) ? "sales@saigonskygarden.com.vn" : header.Email;
+        header.VatCode = string.IsNullOrWhiteSpace(header.VatCode) ? "0300713227" : header.VatCode;
+
+        return header;
     }
 
     public IActionResult OnGetEstimateView(int poId)
@@ -1113,6 +1176,15 @@ public class PurchaseOrderViewDetailRow
     public DateTime? RecDate { get; set; }
     public string PODateDisplay => PODate?.ToString("dd/MM/yyyy") ?? string.Empty;
     public string RecDateDisplay => RecDate?.ToString("dd/MM/yyyy") ?? string.Empty;
+}
+
+public class PurchaseOrderCompanyHeader
+{
+    public string CompanyName { get; set; } = string.Empty;
+    public string Address { get; set; } = string.Empty;
+    public string Phone { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string VatCode { get; set; } = string.Empty;
 }
 
 public class PurchaseOrderWorkflowUser
