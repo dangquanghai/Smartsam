@@ -5,6 +5,11 @@
     let selectedRequestNo = null;
     let currentPage = 1;
     let currentDataRows = [];
+    let searchDetailState = {
+        currentPage: 1,
+        pageSize: typeof defaultPageSize !== 'undefined' ? defaultPageSize : 10,
+        lastTotal: 0
+    };
 
     function updateHistoryButtonState() {
         $('#btnViewHistory').prop('disabled', !selectedRequestNo);
@@ -319,6 +324,187 @@
         $modal.modal({ backdrop: 'static', keyboard: false, show: true });
     }
 
+    function initializeSearchDetailDateRange() {
+        if (typeof window.initSimpleDateRange !== 'function') {
+            return;
+        }
+
+        window.initSimpleDateRange('MrSearchDetailDateRange', '#MrSearchDetail_FromDate', '#MrSearchDetail_ToDate', {
+            linkedCalendars: false
+        });
+    }
+
+    function applyDefaultSearchDetailDateRange() {
+        const fromDate = $('#Filter_FromDate').val() || formatLocalDate(new Date(new Date().setMonth(new Date().getMonth() - 3)));
+        const toDate = $('#Filter_ToDate').val() || formatLocalDate(new Date());
+
+        $('#MrSearchDetail_UseDateRange').prop('checked', true);
+        $('#MrSearchDetail_FromDate').val(fromDate);
+        $('#MrSearchDetail_ToDate').val(toDate);
+
+        if (typeof window.setDateRangeValue === 'function') {
+            window.setDateRangeValue('MrSearchDetailDateRange', fromDate, toDate);
+        } else {
+            $('#MrSearchDetailDateRange').val(`${fromDate} - ${toDate}`);
+        }
+    }
+
+    function syncSearchDetailDateRangeState() {
+        const enabled = $('#MrSearchDetail_UseDateRange').is(':checked');
+        $('#MrSearchDetailDateRange').prop('disabled', !enabled);
+        if (!enabled) {
+            $('#MrSearchDetail_FromDate').val('');
+            $('#MrSearchDetail_ToDate').val('');
+            $('#MrSearchDetailDateRange').val('');
+        }
+    }
+
+    function resetSearchDetailCriteria() {
+        $('#MrSearchDetail_RequestNo').val($('#Filter_RequestNo').val() || '');
+        $('#MrSearchDetail_StoreGroup').val($('#Filter_StoreGroup').val() || '');
+        $('#MrSearchDetail_ItemCode').val($('#Filter_ItemCode').val() || '');
+        $('#MrSearchDetail_ItemName').val('');
+        $('#MrSearchDetail_IssuedLessThanOrder').prop('checked', false);
+        applyDefaultSearchDetailDateRange();
+        syncSearchDetailDateRangeState();
+
+        const pageSizeSelect = document.getElementById('mrSearchDetailPageSize');
+        searchDetailState.pageSize = pageSize || searchDetailState.pageSize || 10;
+        if (pageSizeSelect) {
+            pageSizeSelect.value = String(searchDetailState.pageSize);
+        }
+    }
+
+    function buildSearchDetailRequest(page = 1) {
+        const storeGroupRaw = ($('#MrSearchDetail_StoreGroup').val() || '').toString().trim();
+        const storeGroup = storeGroupRaw === '' ? null : Number.parseInt(storeGroupRaw, 10);
+
+        return {
+            requestNo: ($('#MrSearchDetail_RequestNo').val() || '').toString().trim() || null,
+            storeGroup: Number.isFinite(storeGroup) ? storeGroup : null,
+            itemCode: ($('#MrSearchDetail_ItemCode').val() || '').toString().trim() || null,
+            itemName: ($('#MrSearchDetail_ItemName').val() || '').toString().trim() || null,
+            issuedLessThanOrder: $('#MrSearchDetail_IssuedLessThanOrder').is(':checked'),
+            useDateRange: $('#MrSearchDetail_UseDateRange').is(':checked'),
+            fromDate: $('#MrSearchDetail_FromDate').val() || null,
+            toDate: $('#MrSearchDetail_ToDate').val() || null,
+            page: page,
+            pageSize: searchDetailState.pageSize || pageSize || 10
+        };
+    }
+
+    function performSearchDetail(page = 1) {
+        const token = $('input[name="__RequestVerificationToken"]').val();
+        const request = buildSearchDetailRequest(page);
+        showSearchDetailLoading(true);
+
+        $.ajax({
+            url: '?handler=SearchDetail',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'RequestVerificationToken': token },
+            data: JSON.stringify(request),
+            success: function (response) {
+                if (response && response.success) {
+                    searchDetailState.currentPage = response.page || page;
+                    searchDetailState.pageSize = response.pageSize || request.pageSize || pageSize || 10;
+                    searchDetailState.lastTotal = response.total || 0;
+                    renderSearchDetailRows(response.data || []);
+                    updateSearchDetailPagination(response.total || 0, response.page || page, response.pageSize || request.pageSize || pageSize || 10, response.totalPages || 1);
+                } else {
+                    searchDetailState.lastTotal = 0;
+                    updateSearchDetailPagination(0, 1, request.pageSize || pageSize || 10, 1);
+                    showSearchDetailError((response && response.message) || 'Search detail failed.');
+                }
+            },
+            error: function (xhr, status, error) {
+                searchDetailState.lastTotal = 0;
+                updateSearchDetailPagination(0, 1, request.pageSize || pageSize || 10, 1);
+                showSearchDetailError('System connection error: ' + error);
+            },
+            complete: function () {
+                showSearchDetailLoading(false);
+            }
+        });
+    }
+
+    function showSearchDetailLoading(show) {
+        if (show) {
+            $('#mrSearchDetailRows').html('<tr><td colspan="11" class="text-center text-muted py-4">Loading...</td></tr>');
+        }
+    }
+
+    function showSearchDetailError(message) {
+        $('#mrSearchDetailRows').html(`<tr><td colspan="11" class="text-center text-danger py-4">${escapeHtml(message)}</td></tr>`);
+    }
+
+    function renderSearchDetailRows(items) {
+        const $tbody = $('#mrSearchDetailRows');
+        if (!items || items.length === 0) {
+            $tbody.html('<tr><td colspan="11" class="text-center text-muted py-4">No detail rows</td></tr>');
+            return;
+        }
+
+        const html = items.map(function (item) {
+            const row = item || {};
+            return `<tr>
+                <td>${escapeHtml(row.requestNo || row.RequestNo || '')}</td>
+                <td>${escapeHtml(row.dateCreateDisplay || row.DateCreateDisplay || '')}</td>
+                <td class="vni-font">${buildEllipsisCell(row.accordingTo || row.AccordingTo || '')}</td>
+                <td class="vni-font">${buildEllipsisCell(row.kpGroupName || row.KPGroupName || '')}</td>
+                <td>${buildEllipsisCell(row.itemCode || row.ItemCode || '')}</td>
+                <td class="tcvn3-font">${buildEllipsisCell(row.itemName || row.ItemName || '')}</td>
+                <td class="text-right">${formatDetailNumber(row.orderQty || row.OrderQty || 0)}</td>
+                <td class="text-right">${formatDetailNumber(row.buyQty || row.BuyQty || 0)}</td>
+                <td class="text-right">${formatDetailNumber(row.receiptQty || row.ReceiptQty || 0)}</td>
+                <td class="text-right">${formatDetailNumber(row.issued || row.Issued || 0)}</td>
+                <td class="vni-font">${buildEllipsisCell(row.note || row.Note || '')}</td>
+            </tr>`;
+        });
+
+        $tbody.html(html.join(''));
+    }
+
+    function updateSearchDetailPagination(total, page, detailPageSize, totalPages) {
+        const $pagination = $('#mrSearchDetailPagination');
+        const $info = $('#mrSearchDetailPaginationInfo');
+
+        if (!total) {
+            $pagination.empty();
+            $info.html('<small>No records</small>');
+            return;
+        }
+
+        const safePageSize = detailPageSize > 0 ? detailPageSize : (searchDetailState.pageSize || 10);
+        const safePage = page > 0 ? page : 1;
+        const start = ((safePage - 1) * safePageSize) + 1;
+        const end = Math.min(safePage * safePageSize, total);
+        $info.html(`<small>Showing ${start}-${end} of ${total}</small>`);
+
+        let html = `<li class="page-item ${safePage <= 1 ? 'disabled' : ''}"><a class="page-link" href="#" data-page="${safePage - 1}">&laquo;</a></li>`;
+        for (let i = 1; i <= totalPages; i += 1) {
+            if (i === 1 || i === totalPages || (i >= safePage - 2 && i <= safePage + 2)) {
+                html += `<li class="page-item ${i === safePage ? 'active' : ''}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+            } else if (i === safePage - 3 || i === safePage + 3) {
+                html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+        }
+        html += `<li class="page-item ${safePage >= totalPages ? 'disabled' : ''}"><a class="page-link" href="#" data-page="${safePage + 1}">&raquo;</a></li>`;
+        $pagination.html(html);
+    }
+
+    function formatDetailNumber(value) {
+        const number = Number(value || 0);
+        if (!Number.isFinite(number)) {
+            return '0';
+        }
+
+        return number.toLocaleString('en-US', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+        });
+    }
+
     // Sử dụng delegation để bắt sự kiện cho link được tạo động
     $(document).on('click', '.mr-request-link', function (e) {
         e.preventDefault();
@@ -461,6 +647,7 @@
         initConditionModeSwitcher();
         initStatusCheckboxDropdown();
         initializeSearchDateRange();
+        initializeSearchDetailDateRange();
         initCreateMrPopup();
         initCreateAutoMrPopup();
 
@@ -496,6 +683,49 @@
             }
 
             loadHistory(selectedRequestNo);
+        });
+
+        $('#btnSearchDetail').off('click').on('click', function () {
+            resetSearchDetailCriteria();
+            $('#mrSearchDetailModal').modal({ backdrop: 'static', keyboard: false, show: true });
+            performSearchDetail(1);
+        });
+
+        $('#btnMrSearchDetailSearch').off('click').on('click', function () {
+            performSearchDetail(1);
+        });
+
+        $(document)
+            .off('keydown', '#MrSearchDetail_RequestNo, #MrSearchDetail_ItemCode, #MrSearchDetail_ItemName')
+            .on('keydown', '#MrSearchDetail_RequestNo, #MrSearchDetail_ItemCode, #MrSearchDetail_ItemName', function (e) {
+                if (e.key !== 'Enter') {
+                    return;
+                }
+
+                e.preventDefault();
+                performSearchDetail(1);
+            });
+
+        $('#MrSearchDetail_UseDateRange').off('change').on('change', function () {
+            syncSearchDetailDateRangeState();
+        });
+
+        $('#mrSearchDetailPageSize').off('change').on('change', function () {
+            const nextPageSize = Number.parseInt($(this).val() || '', 10);
+            if (!Number.isFinite(nextPageSize) || nextPageSize <= 0 || nextPageSize === searchDetailState.pageSize) {
+                return;
+            }
+
+            searchDetailState.pageSize = nextPageSize;
+            performSearchDetail(1);
+        });
+
+        $(document).off('click', '#mrSearchDetailPagination a.page-link').on('click', '#mrSearchDetailPagination a.page-link', function (e) {
+            e.preventDefault();
+            const page = Number.parseInt($(this).data('page'), 10);
+            if (Number.isFinite(page) && page > 0 && page !== searchDetailState.currentPage) {
+                performSearchDetail(page);
+            }
         });
 
         $('#btnClose').off('click').on('click', function () {

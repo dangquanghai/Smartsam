@@ -496,9 +496,190 @@ public class IndexModel : BasePageModel
         });
     }
 
+    /// <summary>
+    /// Tim detail MR theo popup Search Detail.
+    /// </summary>
+    public IActionResult OnPostSearchDetail([FromBody] MaterialRequestSearchDetailRequest request)
+    {
+        var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+        request ??= new MaterialRequestSearchDetailRequest();
+
+        PagePerm = new PagePermissions();
+        PagePerm = GetUserPermissions();
+        LoadUserScopeAsync(cancellationToken).GetAwaiter().GetResult();
+        if (!CanAccessPage())
+        {
+            return new JsonResult(new { success = false, message = "Forbidden" })
+            {
+                StatusCode = StatusCodes.Status403Forbidden
+            };
+        }
+
+        var filter = BuildSearchDetailFilter(request);
+        var (rows, total) = SearchMaterialRequestDetails(filter, cancellationToken);
+        return new JsonResult(new
+        {
+            success = true,
+            data = rows,
+            total,
+            page = filter.Page,
+            pageSize = filter.PageSize,
+            totalPages = filter.PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(total / (double)filter.PageSize))
+        });
+    }
+
     // ==========================================
     // 4. FILTER AND DROPDOWN HELPERS
     // ==========================================
+    private MaterialRequestSearchDetailRequest BuildSearchDetailFilter(MaterialRequestSearchDetailRequest request)
+    {
+        var scopedStoreGroup = IsStoreGroupLocked()
+            ? (_dataScope.StoreGroup ?? NoScopeStoreGroup)
+            : request.StoreGroup;
+
+        return new MaterialRequestSearchDetailRequest
+        {
+            RequestNo = string.IsNullOrWhiteSpace(request.RequestNo) ? null : request.RequestNo.Trim(),
+            StoreGroup = scopedStoreGroup,
+            ItemCode = string.IsNullOrWhiteSpace(request.ItemCode) ? null : request.ItemCode.Trim(),
+            ItemName = string.IsNullOrWhiteSpace(request.ItemName) ? null : request.ItemName.Trim(),
+            IssuedLessThanOrder = request.IssuedLessThanOrder,
+            UseDateRange = request.UseDateRange,
+            FromDate = request.UseDateRange ? request.FromDate : null,
+            ToDate = request.UseDateRange ? request.ToDate : null,
+            Page = request.Page <= 0 ? 1 : request.Page,
+            PageSize = NormalizePageSize(request.PageSize)
+        };
+    }
+
+    private (List<MaterialRequestSearchDetailRow> Rows, int Total) SearchMaterialRequestDetails(MaterialRequestSearchDetailRequest filter, CancellationToken cancellationToken)
+    {
+        var rows = new List<MaterialRequestSearchDetailRow>();
+        var whereParts = new List<string>
+        {
+            "(@RequestNo IS NULL OR CAST(m.REQUEST_NO AS varchar(50)) LIKE '%' + @RequestNo + '%')",
+            "(@StoreGroup IS NULL OR m.STORE_GROUP = @StoreGroup)"
+        };
+
+        if (filter.StoreGroup == NoScopeStoreGroup)
+        {
+            whereParts.Add("1 = 0");
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.ItemCode))
+        {
+            whereParts.Add("LTRIM(RTRIM(ISNULL(dt.ITEMCODE, ''))) LIKE '%' + @ItemCode + '%'");
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.ItemName))
+        {
+            whereParts.Add("i.ItemName LIKE '%' + @ItemName + '%'");
+        }
+
+        if (filter.UseDateRange)
+        {
+            if (filter.FromDate.HasValue)
+            {
+                whereParts.Add("m.DATE_CREATE >= @FromDate");
+            }
+
+            if (filter.ToDate.HasValue)
+            {
+                whereParts.Add("m.DATE_CREATE < DATEADD(DAY, 1, @ToDate)");
+            }
+        }
+
+        if (filter.IssuedLessThanOrder)
+        {
+            whereParts.Add("ISNULL(dt.ISSUED, 0) < ISNULL(dt.NEW_ORDER, 0)");
+        }
+
+        var whereSql = "WHERE " + string.Join(" AND ", whereParts);
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        var total = 0;
+
+        using (var countCmd = new SqlCommand($@"
+            SELECT COUNT(1)
+            FROM dbo.MATERIAL_REQUEST m
+            INNER JOIN dbo.MATERIAL_REQUEST_DETAIL dt ON m.REQUEST_NO = dt.REQUEST_NO
+            INNER JOIN dbo.INV_KPGroup gs ON m.STORE_GROUP = gs.KPGroupID
+            LEFT JOIN dbo.INV_ItemList i ON LTRIM(RTRIM(ISNULL(dt.ITEMCODE, ''))) = LTRIM(RTRIM(ISNULL(i.ItemCode, '')))
+            {whereSql}", conn))
+        {
+            BindSearchDetailParams(countCmd, filter);
+            total = Convert.ToInt32(countCmd.ExecuteScalar() ?? 0);
+        }
+
+        var totalPages = filter.PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(total / (double)filter.PageSize));
+        if (filter.Page > totalPages)
+        {
+            filter.Page = totalPages;
+        }
+
+        using (var dataCmd = new SqlCommand($@"
+            SELECT
+                CAST(m.REQUEST_NO AS bigint) AS REQUEST_NO,
+                m.DATE_CREATE,
+                ISNULL(m.ACCORDINGTO, '') AS ACCORDINGTO,
+                ISNULL(gs.KPGroupName, '') AS KPGroupName,
+                LTRIM(RTRIM(ISNULL(dt.ITEMCODE, ''))) AS ITEMCODE,
+                ISNULL(i.ItemName, '') AS ItemName,
+                ISNULL(dt.NEW_ORDER, 0) AS NEW_ORDER,
+                ISNULL(dt.BUY, 0) AS BUY,
+                ISNULL(dt.RECEIPT_Q, 0) AS RECEIPT_Q,
+                ISNULL(dt.ISSUED, 0) AS ISSUED,
+                ISNULL(dt.NOTE, '') AS NOTE
+            FROM dbo.MATERIAL_REQUEST m
+            INNER JOIN dbo.MATERIAL_REQUEST_DETAIL dt ON m.REQUEST_NO = dt.REQUEST_NO
+            INNER JOIN dbo.INV_KPGroup gs ON m.STORE_GROUP = gs.KPGroupID
+            LEFT JOIN dbo.INV_ItemList i ON LTRIM(RTRIM(ISNULL(dt.ITEMCODE, ''))) = LTRIM(RTRIM(ISNULL(i.ItemCode, '')))
+            {whereSql}
+            ORDER BY m.DATE_CREATE DESC, m.REQUEST_NO DESC, LTRIM(RTRIM(ISNULL(dt.ITEMCODE, '')))
+            OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
+        {
+            BindSearchDetailParams(dataCmd, filter);
+            dataCmd.Parameters.Add("@Offset", SqlDbType.Int).Value = (filter.Page - 1) * filter.PageSize;
+            dataCmd.Parameters.Add("@PageSize", SqlDbType.Int).Value = filter.PageSize;
+
+            using var reader = dataCmd.ExecuteReader();
+            while (reader.Read())
+            {
+                rows.Add(MapSearchDetailRow(reader));
+            }
+        }
+
+        return (rows, total);
+    }
+
+    private static void BindSearchDetailParams(SqlCommand cmd, MaterialRequestSearchDetailRequest filter)
+    {
+        cmd.Parameters.Add("@RequestNo", SqlDbType.VarChar, 50).Value = string.IsNullOrWhiteSpace(filter.RequestNo) ? DBNull.Value : filter.RequestNo.Trim();
+        cmd.Parameters.Add("@StoreGroup", SqlDbType.Int).Value = filter.StoreGroup.HasValue && filter.StoreGroup.Value > 0 ? filter.StoreGroup.Value : DBNull.Value;
+        cmd.Parameters.Add("@ItemCode", SqlDbType.VarChar, 20).Value = string.IsNullOrWhiteSpace(filter.ItemCode) ? DBNull.Value : filter.ItemCode.Trim();
+        cmd.Parameters.Add("@ItemName", SqlDbType.NVarChar, 150).Value = string.IsNullOrWhiteSpace(filter.ItemName) ? DBNull.Value : filter.ItemName.Trim();
+        cmd.Parameters.Add("@FromDate", SqlDbType.DateTime).Value = filter.FromDate.HasValue ? filter.FromDate.Value.Date : DBNull.Value;
+        cmd.Parameters.Add("@ToDate", SqlDbType.DateTime).Value = filter.ToDate.HasValue ? filter.ToDate.Value.Date : DBNull.Value;
+    }
+
+    private static MaterialRequestSearchDetailRow MapSearchDetailRow(SqlDataReader reader)
+    {
+        return new MaterialRequestSearchDetailRow
+        {
+            RequestNo = reader.IsDBNull(reader.GetOrdinal("REQUEST_NO")) ? 0 : Convert.ToInt64(reader["REQUEST_NO"]),
+            DateCreate = reader.IsDBNull(reader.GetOrdinal("DATE_CREATE")) ? null : Convert.ToDateTime(reader["DATE_CREATE"]),
+            AccordingTo = Convert.ToString(reader["ACCORDINGTO"]) ?? string.Empty,
+            KPGroupName = Convert.ToString(reader["KPGroupName"]) ?? string.Empty,
+            ItemCode = Convert.ToString(reader["ITEMCODE"]) ?? string.Empty,
+            ItemName = Convert.ToString(reader["ItemName"]) ?? string.Empty,
+            OrderQty = reader.IsDBNull(reader.GetOrdinal("NEW_ORDER")) ? 0 : Convert.ToDecimal(reader["NEW_ORDER"]),
+            BuyQty = reader.IsDBNull(reader.GetOrdinal("BUY")) ? 0 : Convert.ToDecimal(reader["BUY"]),
+            ReceiptQty = reader.IsDBNull(reader.GetOrdinal("RECEIPT_Q")) ? 0 : Convert.ToDecimal(reader["RECEIPT_Q"]),
+            Issued = reader.IsDBNull(reader.GetOrdinal("ISSUED")) ? 0 : Convert.ToDecimal(reader["ISSUED"]),
+            Note = Convert.ToString(reader["NOTE"]) ?? string.Empty
+        };
+    }
+
     /// <summary>
     /// Nap danh sach bo loc va dropdown cho trang.
     /// </summary>
@@ -1328,6 +1509,36 @@ public class MaterialRequestSearchRequest
     public string? ConditionMode { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 10;
+}
+
+public class MaterialRequestSearchDetailRequest
+{
+    public string? RequestNo { get; set; }
+    public int? StoreGroup { get; set; }
+    public string? ItemCode { get; set; }
+    public string? ItemName { get; set; }
+    public bool IssuedLessThanOrder { get; set; }
+    public bool UseDateRange { get; set; }
+    public DateTime? FromDate { get; set; }
+    public DateTime? ToDate { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 10;
+}
+
+public class MaterialRequestSearchDetailRow
+{
+    public long RequestNo { get; set; }
+    public DateTime? DateCreate { get; set; }
+    public string DateCreateDisplay => DateCreate.HasValue ? DateCreate.Value.ToString("dd/MM/yyyy") : string.Empty;
+    public string AccordingTo { get; set; } = string.Empty;
+    public string KPGroupName { get; set; } = string.Empty;
+    public string ItemCode { get; set; } = string.Empty;
+    public string ItemName { get; set; } = string.Empty;
+    public decimal OrderQty { get; set; }
+    public decimal BuyQty { get; set; }
+    public decimal ReceiptQty { get; set; }
+    public decimal Issued { get; set; }
+    public string Note { get; set; } = string.Empty;
 }
 
 public class MaterialRequestLookupOptionDto

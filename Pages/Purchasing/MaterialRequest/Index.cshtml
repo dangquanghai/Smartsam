@@ -278,6 +278,9 @@
                         <button type="button" id="btnViewHistory" class="btn btn-info btn-sm" disabled>
                             <i class="fas fa-history"></i> View History
                         </button>
+                        <button type="button" id="btnSearchDetail" class="btn btn-info btn-sm">
+                            <i class="fas fa-search-plus"></i> Search Detail
+                        </button>
                         <button type="button" id="btnRefresh" class="btn btn-primary btn-sm">RefreshList</button>
                     </div>
                 </div>
@@ -506,11 +509,141 @@
     </div>
 </div>
 
+<div class="modal fade" id="mrSearchDetailModal" tabindex="-1" role="dialog" aria-labelledby="mrSearchDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl mr-search-detail-modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="mrSearchDetailModalLabel">Search Material Request Detail</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="mr-search-detail-panel">
+                    <div class="mr-search-detail-filter-layout">
+                        <div class="mr-search-detail-filter-row">
+                            <div class="mr-search-detail-field mr-search-detail-request">
+                                <label for="MrSearchDetail_RequestNo">Request No</label>
+                                <input type="text" class="form-control form-control-sm" id="MrSearchDetail_RequestNo" />
+                            </div>
+                            <div class="mr-search-detail-field mr-search-detail-store">
+                                <label for="MrSearchDetail_StoreGroup">Store Group</label>
+                                <select class="form-control form-control-sm" id="MrSearchDetail_StoreGroup">
+                                    @foreach (var option in Model.StoreGroups)
+                                    {
+                                        <option value="@option.Value">@option.Text</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="mr-search-detail-field mr-search-detail-code">
+                                <label for="MrSearchDetail_ItemCode">Item Code</label>
+                                <input type="text" class="form-control form-control-sm" id="MrSearchDetail_ItemCode" />
+                            </div>
+                            <div class="mr-search-detail-field mr-search-detail-name">
+                                <label for="MrSearchDetail_ItemName">Item Name</label>
+                                <input type="text" class="form-control form-control-sm tcvn3-font" id="MrSearchDetail_ItemName" />
+                            </div>
+                        </div>
+                        <div class="mr-search-detail-filter-row">
+                            <div class="mr-search-detail-field mr-search-detail-date">
+                                <div class="mr-search-detail-date-inline">
+                                    <div class="custom-control custom-checkbox mr-search-detail-date-toggle">
+                                        <input type="checkbox" class="custom-control-input" id="MrSearchDetail_UseDateRange" checked="checked" />
+                                        <label class="custom-control-label" for="MrSearchDetail_UseDateRange">Date Create</label>
+                                    </div>
+                                    <div class="mr-search-detail-date-group">
+                                        <input type="text" id="MrSearchDetailDateRange" class="form-control form-control-sm" readonly />
+                                    </div>
+                                </div>
+                                <input type="hidden" id="MrSearchDetail_FromDate" />
+                                <input type="hidden" id="MrSearchDetail_ToDate" />
+                            </div>
+                            <div class="mr-search-detail-check">
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="MrSearchDetail_IssuedLessThanOrder" />
+                                    <label class="custom-control-label" for="MrSearchDetail_IssuedLessThanOrder">Issued &lt; Order</label>
+                                </div>
+                            </div>
+                            <div class="mr-search-detail-actions">
+                                <button type="button" class="btn btn-sm btn-primary" id="btnMrSearchDetailSearch">Search</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-primary mr-search-detail-card mb-0">
+                    <div class="card-header mr-search-detail-card-header d-flex align-items-center justify-content-between flex-wrap">
+                        <div id="mrSearchDetailPaginationInfo" class="d-inline-block mr-2 app-paging-white" style="padding-top: 0.3rem;">
+                            <small>No records</small>
+                        </div>
+                        <div class="card-tools app-paging-white ml-auto">
+                            <nav aria-label="Page navigation" class="d-inline-flex align-items-center flex-nowrap">
+                                <div class="d-inline-flex align-items-center mr-2 mr-page-size-form">
+                                    <label class="mb-0 mr-2 mr-page-size-label" for="mrSearchDetailPageSize">Show</label>
+                                    <select id="mrSearchDetailPageSize" class="form-control form-control-sm mr-page-size-select">
+                                        @foreach (var pageSizeOption in Model.PageSizeOptions)
+                                        {
+                                            <option value="@pageSizeOption" selected="@(Model.Filter.PageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                        }
+                                    </select>
+                                </div>
+                                <ul class="pagination pagination-sm mb-0 d-inline-flex" id="mrSearchDetailPagination"></ul>
+                            </nav>
+                        </div>
+                    </div>
+                    <div class="card-body p-0 mr-search-detail-table-wrap">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered table-hover mb-0 text-nowrap" id="mrSearchDetailTable">
+                                <colgroup>
+                                    <col style="width: 105px;" />
+                                    <col style="width: 95px;" />
+                                    <col style="width: 260px;" />
+                                    <col style="width: 160px;" />
+                                    <col style="width: 120px;" />
+                                    <col style="width: 260px;" />
+                                    <col style="width: 90px;" />
+                                    <col style="width: 90px;" />
+                                    <col style="width: 90px;" />
+                                    <col style="width: 90px;" />
+                                    <col style="width: 220px;" />
+                                </colgroup>
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>Request No</th>
+                                        <th>Date</th>
+                                        <th>According To</th>
+                                        <th>Store Group</th>
+                                        <th>Item Code</th>
+                                        <th>Item Name</th>
+                                        <th class="text-right">Order</th>
+                                        <th class="text-right">Buy</th>
+                                        <th class="text-right">Receipt</th>
+                                        <th class="text-right">Issued</th>
+                                        <th>Note</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="mrSearchDetailRows">
+                                    <tr>
+                                        <td colspan="11" class="text-center text-muted">No data</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Styles {
     <link rel="stylesheet" href="~/css/Purchasing/MaterialRequest/index.css" asp-append-version="true" />
 }
 
 @section Scripts {
     @Html.AntiForgeryToken()
+    <script>
+        const defaultPageSize = @Model.DefaultPageSize;
+    </script>
     <script src="~/js/Purchasing/MaterialRequest/index.js" asp-append-version="true"></script>
 }
