@@ -560,6 +560,181 @@
     width: 100%;
 }
 
+.mr-search-detail-modal-dialog {
+    max-width: 90%;
+    width: 90%;
+    margin: 1.25rem auto;
+}
+
+#mrSearchDetailModal .modal-content {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 2.5rem);
+}
+
+#mrSearchDetailModal .modal-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.mr-search-detail-panel {
+    border: 1px solid #d9dee5;
+    background-color: #f8fbff;
+    padding: 0.5rem 0.65rem;
+    margin-bottom: 0.5rem;
+}
+
+.mr-search-detail-filter-layout {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.mr-search-detail-filter-row {
+    display: grid;
+    grid-template-columns: 150px 220px 170px minmax(260px, 1fr);
+    gap: 0.55rem 0.75rem;
+    align-items: center;
+}
+
+.mr-search-detail-filter-row + .mr-search-detail-filter-row {
+    margin-top: 0.5rem;
+}
+
+.mr-search-detail-request {
+    grid-column: 1;
+}
+
+.mr-search-detail-store {
+    grid-column: 2;
+}
+
+.mr-search-detail-code {
+    grid-column: 3;
+}
+
+.mr-search-detail-name {
+    grid-column: 4;
+}
+
+.mr-search-detail-date {
+    grid-column: 1 / 3;
+}
+
+.mr-search-detail-field > label {
+    margin-bottom: 0.2rem;
+    font-weight: 600;
+    font-size: 0.82rem;
+}
+
+.mr-search-detail-field > .form-control,
+.mr-search-detail-field > select {
+    min-width: 0;
+}
+
+.mr-search-detail-qty-group,
+.mr-search-detail-date-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+}
+
+.mr-search-detail-qty-group > select {
+    flex: 0 0 58px;
+}
+
+.mr-search-detail-qty-group > input,
+.mr-search-detail-date-group {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.mr-search-detail-date-group {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.mr-search-detail-date-group > .form-control {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.mr-search-detail-date-group > .date-clear-btn {
+    flex: 0 0 32px;
+    width: 32px;
+}
+
+.mr-search-detail-date-toggle {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.mr-search-detail-check {
+    grid-column: 3;
+    align-self: center;
+    white-space: nowrap;
+}
+
+.mr-search-detail-actions {
+    grid-column: 4;
+    justify-self: start;
+    align-self: center;
+}
+
+.mr-search-detail-actions .btn {
+    min-width: 96px;
+}
+
+.mr-search-detail-card {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.mr-search-detail-card-header {
+    gap: 0.5rem;
+    background: #007bff;
+    color: #fff;
+    overflow: hidden;
+}
+
+.mr-search-detail-card-header .card-tools {
+    display: flex;
+    align-items: center;
+    float: none !important;
+    min-width: 0;
+}
+
+.mr-search-detail-card-header nav {
+    min-width: 0;
+}
+
+.mr-search-detail-card > .card-body {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.mr-search-detail-table-wrap {
+    max-height: 52vh;
+    overflow: auto;
+}
+
+#mrSearchDetailTable {
+    table-layout: fixed;
+    width: 100%;
+    min-width: 1360px;
+}
+
+#mrSearchDetailTable > tbody > tr > td {
+    vertical-align: middle;
+}
+
 .create-mr-input-row-top {
     width: 100%;
     display: grid;
@@ -1105,5 +1280,32 @@
 
     .mr-item-lookup-check .custom-control-label {
         white-space: normal;
+    }
+
+    .mr-search-detail-filter-row {
+        grid-template-columns: 1fr;
+    }
+
+    .mr-search-detail-panel {
+        display: block;
+    }
+
+    .mr-search-detail-request,
+    .mr-search-detail-store,
+    .mr-search-detail-code,
+    .mr-search-detail-name,
+    .mr-search-detail-date,
+    .mr-search-detail-check,
+    .mr-search-detail-actions {
+        grid-column: auto;
+    }
+
+    .mr-search-detail-date-inline {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .mr-search-detail-actions .btn {
+        width: 100%;
     }
 }
