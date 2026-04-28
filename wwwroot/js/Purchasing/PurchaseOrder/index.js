@@ -383,22 +383,24 @@
         const fromDate = $('#Filter_FromDate').val();
         const toDate = $('#Filter_ToDate').val();
 
-        if (poNo) params.set('PONo', poNo);
-        if (requestNo) params.set('RequestNo', requestNo);
+        if (poNo) params.set('Filter.PONo', poNo);
+        if (requestNo) params.set('Filter.RequestNo', requestNo);
         statusIds.forEach((statusId) => {
             if (Number.isFinite(statusId)) {
-                params.append('StatusIds', String(statusId));
+                params.append('Filter.StatusIds', String(statusId));
             }
         });
-        if (supplierKeyword) params.set('SupplierKeyword', supplierKeyword);
-        if (assessLevelId) params.set('AssessLevelId', assessLevelId);
-        if (remark) params.set('Remark', remark);
-        params.set('UseDateRange', useDateRange ? 'true' : 'false');
-        if (useDateRange && fromDate) params.set('FromDate', fromDate);
-        if (useDateRange && toDate) params.set('ToDate', toDate);
+        if (supplierKeyword) params.set('Filter.SupplierKeyword', supplierKeyword);
+        if (assessLevelId) params.set('Filter.AssessLevelId', assessLevelId);
+        if (remark) params.set('Filter.Remark', remark);
+        params.set('Filter.UseDateRange', useDateRange ? 'true' : 'false');
+        if (useDateRange && fromDate) params.set('Filter.FromDate', fromDate);
+        if (useDateRange && toDate) params.set('Filter.ToDate', toDate);
 
         const query = params.toString();
-        const exportUrl = (window.purchaseOrderPage?.exportUrlBase || '') + (query ? `?${query}` : '');
+        const exportUrlBase = window.purchaseOrderPage?.exportUrlBase || '?handler=ExportExcel';
+        const separator = exportUrlBase.indexOf('?') >= 0 ? '&' : '?';
+        const exportUrl = exportUrlBase + (query ? `${separator}${query}` : '');
         window.location.href = exportUrl;
     });
 
