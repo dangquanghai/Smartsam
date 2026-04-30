@@ -1,0 +1,229 @@
+@page
+@model SmartSam.Pages.Inventory.GroupOfInventoryUser.IndexModel
+@{
+    ViewData["Title"] = "Group of Inventory User";
+    var currentPage = Model.Filter.Page <= 0 ? 1 : Model.Filter.Page;
+    var totalPages = Model.TotalPages <= 0 ? 1 : Model.TotalPages;
+    var pageItems = new List<int?>();
+
+    for (var p = 1; p <= totalPages; p++)
+    {
+        if (p == 1 || p == totalPages || (p >= currentPage - 2 && p <= currentPage + 2))
+        {
+            pageItems.Add(p);
+        }
+        else if (pageItems.Count == 0 || pageItems[^1].HasValue)
+        {
+            pageItems.Add(null);
+        }
+    }
+
+    Func<int, string> pageUrl = (page) => Url.Page("./Index", new
+    {
+        StoreGroupId = Model.Filter.StoreGroupId,
+        DepartmentId = Model.Filter.DepartmentId,
+        EmployeeKeyword = Model.Filter.EmployeeKeyword,
+        ActiveStatus = Model.Filter.ActiveStatus,
+        PageNumber = page,
+        PageSize = Model.Filter.PageSize
+    }) ?? "#";
+}
+
+<section class="content vni-font">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-2">
+                <div class="card card-info">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-search"></i> Search</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" id="inventoryUserSearchForm">
+                            <input type="hidden" name="PageNumber" value="1" />
+                            <input type="hidden" name="PageSize" value="@Model.Filter.PageSize" />
+
+                            <div class="form-group mb-2">
+                                <label>Employee</label>
+                                <input id="Filter_EmployeeKeyword" name="EmployeeKeyword" value="@Model.Filter.EmployeeKeyword" class="form-control form-control-sm vni-font" />
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>Store Group</label>
+                                <select id="Filter_StoreGroupId" name="StoreGroupId" class="form-control form-control-sm select2 vni-font" data-placeholder="--- All ---">
+                                    @foreach (var group in Model.StoreGroupList)
+                                    {
+                                        var selectedGroup = string.IsNullOrWhiteSpace(group.Value)
+                                            ? !Model.Filter.StoreGroupId.HasValue
+                                            : Model.Filter.StoreGroupId?.ToString() == group.Value;
+                                        <option value="@group.Value" selected="@(selectedGroup ? "selected" : null)">@group.Text</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>Department</label>
+                                <select id="Filter_DepartmentId" name="DepartmentId" class="form-control form-control-sm select2 vni-font" data-placeholder="--- All ---">
+                                    @foreach (var department in Model.DepartmentList)
+                                    {
+                                        var selectedDepartment = string.IsNullOrWhiteSpace(department.Value)
+                                            ? !Model.Filter.DepartmentId.HasValue
+                                            : Model.Filter.DepartmentId?.ToString() == department.Value;
+                                        <option value="@department.Value" selected="@(selectedDepartment ? "selected" : null)">@department.Text</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label>Active</label>
+                                <select id="Filter_ActiveStatus" name="ActiveStatus" class="form-control form-control-sm">
+                                    <option value="" selected="@(!Model.Filter.ActiveStatus.HasValue ? "selected" : null)">--- All ---</option>
+                                    <option value="1" selected="@(Model.Filter.ActiveStatus == 1 ? "selected" : null)">Active</option>
+                                    <option value="0" selected="@(Model.Filter.ActiveStatus == 0 ? "selected" : null)">Inactive</option>
+                                </select>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-block btn-sm border mb-2">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-10">
+                <div class="card card-primary">
+                    <div class="card-header giu-table-header">
+                        <div class="giu-table-header-left">
+                            <h3 class="card-title">Inventory Users In Store Group</h3>
+                            <span class="badge badge-light ml-2">@Model.TotalRecords records</span>
+                        </div>
+                        <div class="giu-table-header-right app-paging-white">
+                            <nav aria-label="Page navigation">
+                                <div class="d-inline-block mr-2 giu-pagination-info">
+                                    @if (Model.TotalRecords == 0)
+                                    {
+                                        <small>No records</small>
+                                    }
+                                    else
+                                    {
+                                        <small>Showing @Model.PageStart to @Model.PageEnd of @Model.TotalRecords entries</small>
+                                    }
+                                </div>
+                                <div class="giu-page-size-form d-inline-flex mr-2">
+                                    <label class="mb-0 giu-page-size-label" for="inventoryUserPageSize">Show</label>
+                                    <select id="inventoryUserPageSize" class="form-control form-control-sm giu-page-size-select">
+                                        @foreach (var pageSizeOption in Model.PageSizeOptions)
+                                        {
+                                            <option value="@pageSizeOption" selected="@(Model.Filter.PageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                        }
+                                    </select>
+                                </div>
+                                <ul class="pagination pagination-sm mb-0 d-inline-flex">
+                                    <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+                                        <a class="page-link giu-pager-link" href="@(Model.HasPreviousPage ? pageUrl(currentPage - 1) : "#")">Prev</a>
+                                    </li>
+                                    @foreach (var pageItem in pageItems)
+                                    {
+                                        if (pageItem.HasValue)
+                                        {
+                                            <li class="page-item @(pageItem.Value == currentPage ? "active" : "")">
+                                                <a class="page-link giu-pager-link" href="@pageUrl(pageItem.Value)">@pageItem.Value</a>
+                                            </li>
+                                        }
+                                        else
+                                        {
+                                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                                        }
+                                    }
+                                    <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+                                        <a class="page-link giu-pager-link" href="@(Model.HasNextPage ? pageUrl(currentPage + 1) : "#")">Next</a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-0">
+                        <div class="table-responsive giu-table-wrap">
+                            <table class="table table-hover table-bordered mb-0 text-nowrap giu-table" id="inventoryUserTable">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width: 32px;"></th>
+                                        <th class="giu-col-employee">Employee Name</th>
+                                        <th style="width: 125px;">Employee Code</th>
+                                        <th class="giu-col-group">Store Group</th>
+                                        <th class="giu-col-department">Department</th>
+                                        <th class="giu-col-position">Position</th>
+                                        <th style="width: 80px;" class="giu-center">Active</th>
+                                        <th style="width: 130px;" class="giu-center">INV Control</th>
+                                        <th style="width: 115px;" class="giu-center">See All</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (Model.Rows.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="9" class="text-center text-muted">No data</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        foreach (var row in Model.Rows)
+                                        {
+                                            <tr class="giu-row" data-employee-id="@row.EmployeeId" data-store-group-id="@row.StoreGroupId">
+                                                <td>
+                                                    <input type="radio" class="giu-selector" name="selectedInventoryUser" aria-label="Select row" />
+                                                </td>
+                                                <td class="giu-col-employee">
+                                                    <span class="giu-ellipsis vni-font" title="@row.EmployeeName">@row.EmployeeName</span>
+                                                </td>
+                                                <td class="font-weight-bold">@row.EmployeeCode</td>
+                                                <td class="giu-col-group">
+                                                    <span class="giu-ellipsis vni-font" title="@row.StoreGroupName">@row.StoreGroupName</span>
+                                                </td>
+                                                <td class="giu-col-department">
+                                                    <span class="giu-ellipsis vni-font" title="@row.DepartmentText">@row.DepartmentText</span>
+                                                </td>
+                                                <td class="giu-col-position">
+                                                    <span class="giu-ellipsis vni-font" title="@row.Position">@row.Position</span>
+                                                </td>
+                                                <td class="giu-center">
+                                                    <span class="badge @(row.IsActive ? "badge-success" : "badge-secondary")">@(row.IsActive ? "Yes" : "No")</span>
+                                                </td>
+                                                <td class="giu-center">@(row.IsInventoryControlInDep ? "Yes" : "No")</td>
+                                                <td class="giu-center">@(row.SeeDataAllDept ? "Yes" : "No")</td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-outline card-primary">
+                    <div class="card-footer p-2 text-center module-action-bar giu-action-bar">
+                        <a href="@Url.Page("./Index", "ExportExcel", new {
+                               StoreGroupId = Model.Filter.StoreGroupId,
+                               DepartmentId = Model.Filter.DepartmentId,
+                               EmployeeKeyword = Model.Filter.EmployeeKeyword,
+                               ActiveStatus = Model.Filter.ActiveStatus
+                           })"
+                           class="btn btn-sm btn-action-export border mx-1 my-1">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Inventory/GroupOfInventoryUser/index.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script src="~/js/Inventory/GroupOfInventoryUser/index.js" asp-append-version="true"></script>
+}
