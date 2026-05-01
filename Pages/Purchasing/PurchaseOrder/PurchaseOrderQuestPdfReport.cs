@@ -177,19 +177,20 @@ internal static class PurchaseOrderQuestPdfReport
             static IContainer LeftCell(IContainer cell) => cell.PaddingVertical(1).PaddingHorizontal(4);
             static IContainer RightCell(IContainer cell) => cell.PaddingVertical(1).PaddingHorizontal(4).AlignRight();
 
-            table.Cell().ColumnSpan(4).Element(LeftCell);
-            table.Cell().ColumnSpan(2).Element(RightCell).Text("Tổng trước thuế (Before VAT):").Bold().FontSize(10);
+            table.Cell().ColumnSpan(2).Element(LeftCell);
+            table.Cell().ColumnSpan(4).Element(RightCell).Text("Tổng trước thuế (Before VAT):").Bold().FontSize(10);
             table.Cell().Element(RightCell).Text(FormatMoney(model.BeforeVAT)).Bold();
             table.Cell().Element(LeftCell);
 
-            table.Cell().ColumnSpan(2).Element(LeftCell);
+            table.Cell().Element(LeftCell);
             table.Cell().ColumnSpan(2).Element(RightCell).Text($"% VAT: {FormatPercent(model.PerVAT)}").Bold().FontSize(10);
+            table.Cell().Element(LeftCell);
             table.Cell().ColumnSpan(2).Element(RightCell).Text("Tiền thuế (VAT):").Bold().FontSize(10);
             table.Cell().Element(RightCell).Text(FormatMoney(model.VAT)).Bold();
             table.Cell().Element(LeftCell);
 
-            table.Cell().ColumnSpan(4).Element(LeftCell);
-            table.Cell().ColumnSpan(2).Element(RightCell).Text("Tổng cộng (Total):").Bold().FontSize(10);
+            table.Cell().ColumnSpan(2).Element(LeftCell);
+            table.Cell().ColumnSpan(4).Element(RightCell).Text("Tổng cộng (Total):").Bold().FontSize(10);
             table.Cell().Element(RightCell).Text(FormatMoney(model.AfterVAT)).Bold();
             table.Cell().Element(LeftCell);
         });
