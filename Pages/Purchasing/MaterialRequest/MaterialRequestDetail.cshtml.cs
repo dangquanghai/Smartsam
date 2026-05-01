@@ -1181,6 +1181,7 @@ public class MaterialRequestDetailModel : BasePageModel
         bool includeDocumentWrapper = true)
     {
         var title = detail.IsAuto ? "Material Request Auto Report" : "Material Request Report";
+        var storeGroupText = await ResolveStoreGroupTextForReportAsync(detail.StoreGroup, cancellationToken);
         var builder = new StringBuilder();
         if (includeDocumentWrapper)
         {
@@ -1194,12 +1195,17 @@ public class MaterialRequestDetailModel : BasePageModel
         builder.AppendLine("body{margin:20px;}");
         builder.AppendLine(".mr-report-host{padding:20px;}");
         builder.AppendLine(".mr-report-title{text-align:center;font-size:22px;font-weight:700;margin-bottom:16px;}");
-        builder.AppendLine(".mr-report-meta{display:grid;grid-template-columns:160px 1fr;gap:6px 12px;margin-bottom:18px;}");
-        builder.AppendLine(".mr-report-meta div{padding:2px 0;}");
+        builder.AppendLine(".mr-report-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 24px;margin-bottom:18px;}");
+        builder.AppendLine(".mr-report-field{display:flex;align-items:center;min-height:24px;line-height:1.2;}");
+        builder.AppendLine(".mr-report-label{flex:0 0 110px;font-weight:700;}");
+        builder.AppendLine(".mr-report-value{flex:1;min-width:0;}");
+        builder.AppendLine(".mr-report-field-wide{grid-column:1 / -1;}");
         builder.AppendLine(".mr-report-host table{width:100%;border-collapse:collapse;font-size:12px;}");
         builder.AppendLine(".mr-report-host th,.mr-report-host td{border:1px solid #444;padding:6px;vertical-align:top;}");
         builder.AppendLine(".mr-report-host th{text-align:center;background:#f2f2f2;}");
         builder.AppendLine(".mr-report-host .text-right{text-align:right;}");
+        builder.AppendLine(".mr-report-host .mr-report-vni{font-family:\"VNI-Times\",\"VNI-Helve\",sans-serif;}");
+        builder.AppendLine(".mr-report-host .mr-report-tcvn3{font-family:\"TCVN3\",\".VnTime\",\".VnArial\",\".VnHelvetica\",sans-serif;}");
         builder.AppendLine("@media print{body *{visibility:hidden !important;} #mrReportModal, #mrReportModal *{visibility:visible !important;} #mrReportModal{position:absolute;left:0;top:0;width:100%;margin:0;padding:0;background:#fff !important;} #mrReportModal .modal-dialog{max-width:none !important;width:100% !important;margin:0 !important;} #mrReportModal .modal-header, #mrReportModal .modal-footer{display:none !important;} #mrReportModal .modal-content{border:0 !important;box-shadow:none !important;} #mrReportModal .modal-body{padding:0 !important;overflow:visible !important;} #mrReportContent{padding:0 !important;min-height:auto !important;}}");
         builder.AppendLine("</style>");
 
@@ -1211,14 +1217,14 @@ public class MaterialRequestDetailModel : BasePageModel
         builder.AppendLine("<div class=\"mr-report-host\">");
         builder.AppendLine($"<div class=\"mr-report-title\">{WebUtility.HtmlEncode(title)}</div>");
         builder.AppendLine("<div class=\"mr-report-meta\">");
-        builder.AppendLine($"<div><strong>Request No</strong></div><div>{detail.RequestNo}</div>");
-        builder.AppendLine($"<div><strong>Date Create</strong></div><div>{FormatDate(detail.DateCreate)}</div>");
-        builder.AppendLine($"<div><strong>Store Group</strong></div><div>{WebUtility.HtmlEncode(ResolveStoreGroupText(detail.StoreGroup))}</div>");
-        builder.AppendLine($"<div><strong>Description</strong></div><div>{WebUtility.HtmlEncode(detail.AccordingTo ?? string.Empty)}</div>");
+        builder.AppendLine($"<div class=\"mr-report-field\"><span class=\"mr-report-label\">Request No</span><span class=\"mr-report-value\">{detail.RequestNo}</span></div>");
+        builder.AppendLine($"<div class=\"mr-report-field\"><span class=\"mr-report-label\">Date Create</span><span class=\"mr-report-value\">{FormatDate(detail.DateCreate)}</span></div>");
+        builder.AppendLine($"<div class=\"mr-report-field\"><span class=\"mr-report-label\">Store Group</span><span class=\"mr-report-value mr-report-vni\">{WebUtility.HtmlEncode(storeGroupText)}</span></div>");
+        builder.AppendLine($"<div class=\"mr-report-field mr-report-field-wide\"><span class=\"mr-report-label\">Description</span><span class=\"mr-report-value mr-report-vni\">{WebUtility.HtmlEncode(detail.AccordingTo ?? string.Empty)}</span></div>");
         if (detail.IsAuto)
         {
-            builder.AppendLine($"<div><strong>From Date</strong></div><div>{FormatDate(detail.FromDate)}</div>");
-            builder.AppendLine($"<div><strong>To Date</strong></div><div>{FormatDate(detail.ToDate)}</div>");
+            builder.AppendLine($"<div class=\"mr-report-field\"><span class=\"mr-report-label\">From Date</span><span class=\"mr-report-value\">{FormatDate(detail.FromDate)}</span></div>");
+            builder.AppendLine($"<div class=\"mr-report-field\"><span class=\"mr-report-label\">To Date</span><span class=\"mr-report-value\">{FormatDate(detail.ToDate)}</span></div>");
         }
 
         builder.AppendLine("</div>");
@@ -1234,7 +1240,7 @@ public class MaterialRequestDetailModel : BasePageModel
             {
                 builder.AppendLine("<tr>");
                 builder.AppendLine($"<td>{WebUtility.HtmlEncode(row.ItemCode)}</td>");
-                builder.AppendLine($"<td>{WebUtility.HtmlEncode(row.ItemName)}</td>");
+                builder.AppendLine($"<td class=\"mr-report-tcvn3\">{WebUtility.HtmlEncode(row.ItemName)}</td>");
                 builder.AppendLine($"<td>{WebUtility.HtmlEncode(row.Unit)}</td>");
                 builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.BeginQty)}</td>");
                 builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.ReceiptQty)}</td>");
@@ -1259,13 +1265,13 @@ public class MaterialRequestDetailModel : BasePageModel
             {
                 builder.AppendLine("<tr>");
                 builder.AppendLine($"<td>{WebUtility.HtmlEncode(row.ItemCode)}</td>");
-                builder.AppendLine($"<td>{WebUtility.HtmlEncode(row.ItemName)}</td>");
+                builder.AppendLine($"<td class=\"mr-report-tcvn3\">{WebUtility.HtmlEncode(row.ItemName)}</td>");
                 builder.AppendLine($"<td>{WebUtility.HtmlEncode(row.Unit)}</td>");
                 builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.NewOrder)}</td>");
                 builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.Issued)}</td>");
                 builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.InStock)}</td>");
                 builder.AppendLine($"<td class=\"text-right\">{FormatNumber(row.Buy)}</td>");
-                builder.AppendLine($"<td>{WebUtility.HtmlEncode(row.Note)}</td>");
+                builder.AppendLine($"<td class=\"mr-report-vni\">{WebUtility.HtmlEncode(row.Note)}</td>");
                 builder.AppendLine("</tr>");
             }
         }
@@ -1342,8 +1348,7 @@ public class MaterialRequestDetailModel : BasePageModel
                 CAST(ISNULL(BUY, 0) AS decimal(18,2)) AS BUY,
                 ISNULL(NOTE, '') AS NOTE
             FROM dbo.VIEWOrder
-            WHERE REQUEST_NO = @RequestNo
-            ORDER BY ITEMCODE";
+            WHERE REQUEST_NO = @RequestNo";
 
         var rows = new List<MaterialRequestNormalReportRow>();
         await using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -1367,6 +1372,27 @@ public class MaterialRequestDetailModel : BasePageModel
         }
 
         return rows;
+    }
+
+    private async Task<string> ResolveStoreGroupTextForReportAsync(int? storeGroup, CancellationToken cancellationToken)
+    {
+        if (!storeGroup.HasValue || storeGroup.Value <= 0)
+        {
+            return string.Empty;
+        }
+
+        const string sql = @"
+            SELECT TOP 1 ISNULL(KPGroupName, '') AS KPGroupName
+            FROM dbo.INV_KPGroup
+            WHERE KPGroupID = @StoreGroup";
+
+        await using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        await conn.OpenAsync(cancellationToken);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.Add("@StoreGroup", SqlDbType.Int).Value = storeGroup.Value;
+        var value = await cmd.ExecuteScalarAsync(cancellationToken);
+        var text = Convert.ToString(value) ?? string.Empty;
+        return string.IsNullOrWhiteSpace(text) ? storeGroup.Value.ToString() : text.Trim();
     }
 
     private static string FormatDate(DateTime? value)
