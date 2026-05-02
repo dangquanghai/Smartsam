@@ -1,0 +1,309 @@
+@page
+@model SmartSam.Pages.Inventory.InventoryParameters.InventoryParametersStoreModel
+@{
+    ViewData["Title"] = "Inventory Parameters Store";
+    var currentPage = Model.Filter.Page <= 0 ? 1 : Model.Filter.Page;
+    var totalPages = Model.TotalPages <= 0 ? 1 : Model.TotalPages;
+    var pageItems = new List<int?>();
+    var message = TempData["Message"]?.ToString();
+    var messageType = TempData["MessageType"]?.ToString() ?? "info";
+    var alertClass = messageType == "success"
+        ? "alert-success"
+        : messageType == "warning"
+            ? "alert-warning"
+            : "alert-info";
+
+    for (var p = 1; p <= totalPages; p++)
+    {
+        if (p == 1 || p == totalPages || (p >= currentPage - 2 && p <= currentPage + 2))
+        {
+            pageItems.Add(p);
+        }
+        else if (pageItems.Count == 0 || pageItems[^1].HasValue)
+        {
+            pageItems.Add(null);
+        }
+    }
+
+    Func<int, string> pageUrl = (page) => Url.Page("./InventoryParametersStore", new
+    {
+        GroupId = Model.Filter.GroupId,
+        StoreName = Model.Filter.StoreName,
+        PageNumber = page,
+        PageSize = Model.Filter.PageSize
+    }) ?? "#";
+}
+
+<section class="content vni-font">
+    <div class="container-fluid">
+        @if (!string.IsNullOrWhiteSpace(message))
+        {
+            <div class="alert @alertClass alert-dismissible fade show py-2" role="alert">
+                <strong><i class="fas fa-info-circle"></i></strong> @message
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-md-2">
+                <div class="card card-info">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-search"></i> Search</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" id="inventoryParametersStoreSearchForm">
+                            <input type="hidden" name="GroupId" value="@Model.Filter.GroupId" />
+                            <input type="hidden" name="PageNumber" value="1" />
+                            <input type="hidden" name="PageSize" value="@Model.Filter.PageSize" />
+
+                            <div class="form-group mb-2">
+                                <label>Store Name</label>
+                                <input id="Filter_StoreName" name="StoreName" value="@Model.Filter.StoreName" class="form-control form-control-sm vni-font" />
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-block btn-sm border mb-2">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-10">
+                <div class="card card-primary">
+                    <div class="card-header ips-table-header">
+                        <div class="ips-table-header-left">
+                            <h3 class="card-title">Inventory in Each Group</h3>
+                            <span class="badge badge-light ml-2">@Model.TotalRecords records</span>
+                            @if (!string.IsNullOrWhiteSpace(Model.SelectedGroupName))
+                            {
+                                <span class="badge badge-info ml-2">@Model.SelectedGroupName</span>
+                            }
+                        </div>
+                        <div class="ips-table-header-right app-paging-white">
+                            <nav aria-label="Page navigation">
+                                <div class="d-inline-block mr-2 ips-pagination-info">
+                                    @if (Model.TotalRecords == 0)
+                                    {
+                                        <small>No records</small>
+                                    }
+                                    else
+                                    {
+                                        <small>Showing @Model.PageStart to @Model.PageEnd of @Model.TotalRecords entries</small>
+                                    }
+                                </div>
+                                <div class="ips-page-size-form d-inline-flex mr-2">
+                                    <label class="mb-0 ips-page-size-label" for="inventoryParametersStorePageSize">Show</label>
+                                    <select id="inventoryParametersStorePageSize" class="form-control form-control-sm ips-page-size-select">
+                                        @foreach (var pageSizeOption in Model.PageSizeOptions)
+                                        {
+                                            <option value="@pageSizeOption" selected="@(Model.Filter.PageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                        }
+                                    </select>
+                                </div>
+                                <ul class="pagination pagination-sm mb-0 d-inline-flex">
+                                    <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+                                        <a class="page-link ips-pager-link" href="@(Model.HasPreviousPage ? pageUrl(currentPage - 1) : "#")">Prev</a>
+                                    </li>
+                                    @foreach (var pageItem in pageItems)
+                                    {
+                                        if (pageItem.HasValue)
+                                        {
+                                            <li class="page-item @(pageItem.Value == currentPage ? "active" : "")">
+                                                <a class="page-link ips-pager-link" href="@pageUrl(pageItem.Value)">@pageItem.Value</a>
+                                            </li>
+                                        }
+                                        else
+                                        {
+                                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                                        }
+                                    }
+                                    <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+                                        <a class="page-link ips-pager-link" href="@(Model.HasNextPage ? pageUrl(currentPage + 1) : "#")">Next</a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-0">
+                        <div class="table-responsive ips-table-wrap">
+                            <table class="table table-hover table-bordered mb-0 text-nowrap ips-table" id="inventoryParametersStoreTable">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width: 32px;"></th>
+                                        <th class="ips-col-store">Store Name</th>
+                                        <th class="ips-col-address">Address</th>
+                                        <th class="ips-col-group">INV Group</th>
+                                        <th style="width: 100px;" class="ips-center">Co Store</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (Model.Rows.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted">No data</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        foreach (var row in Model.Rows)
+                                        {
+                                            <tr class="ips-row"
+                                                data-store-id="@row.StoreID"
+                                                data-store-name="@row.StoreName"
+                                                data-address="@row.Address"
+                                                data-store-group-id="@row.KPGroupID"
+                                                data-store-group-name="@row.KPGroupName">
+                                                <td>
+                                                    <input type="radio" class="ips-selector" name="selectedInventoryGroupStore" aria-label="Select row" />
+                                                </td>
+                                                <td class="ips-col-store">
+                                                    <span class="ips-ellipsis vni-font" title="@row.StoreName">@row.StoreName</span>
+                                                </td>
+                                                <td class="ips-col-address">
+                                                    <span class="ips-ellipsis vni-font" title="@row.Address">@row.Address</span>
+                                                </td>
+                                                <td class="ips-col-group">
+                                                    <span class="ips-ellipsis vni-font" title="@row.KPGroupName">@row.KPGroupName</span>
+                                                </td>
+                                                <td class="ips-center">@(row.IsCoStore ? "Yes" : "No")</td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-outline card-primary">
+                    <div class="card-footer p-2 text-center module-action-bar ips-action-bar">
+                        @if (Model.CanAdd)
+                        {
+                            <button type="button" id="ipsAddBtn" class="btn btn-sm btn-action-add border mx-1 my-1" disabled="@(!Model.Filter.GroupId.HasValue)">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        }
+                        @if (Model.CanEdit)
+                        {
+                            <button type="button" id="ipsEditBtn" class="btn btn-sm btn-action-save border mx-1 my-1" disabled>
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                        }
+                        @if (Model.CanDelete)
+                        {
+                            <button type="button" id="ipsDeleteBtn" class="btn btn-sm btn-action-delete border mx-1 my-1" disabled>
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        }
+                        <a href="@Url.Page("/Inventory/InventoryParameters/Index")" class="btn btn-sm btn-action-close border mx-1 my-1">
+                            <i class="fas fa-arrow-left"></i> Back to list
+                        </a>
+                        @* <a href="@Url.Page("./InventoryParametersStore", "ExportExcel", new {
+                               GroupId = Model.Filter.GroupId,
+                               StoreName = Model.Filter.StoreName
+                           })"
+                           class="btn btn-sm btn-action-export border mx-1 my-1">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </a> *@
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="modal fade vni-font" id="inventoryParameterStoreModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg ips-store-modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="post" asp-page-handler="SaveStore" class="ips-store-form" id="inventoryParameterStoreForm" data-current-group-id="@Model.Filter.GroupId">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title font-weight-bold" id="inventoryParameterStoreModalTitle">Inventory Store</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body pb-2">
+                    <input asp-for="StoreInput.StoreID" type="hidden" />
+                    <input type="hidden" name="Filter.GroupId" value="@Model.Filter.GroupId" />
+                    <input type="hidden" name="Filter.StoreName" value="@Model.Filter.StoreName" />
+                    <input type="hidden" name="Filter.Page" value="@Model.Filter.Page" />
+                    <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+
+                    <div class="form-row">
+                        <div class="form-group col-md-12 mb-2">
+                            <label>Store Name<span class="text-danger">*</span></label>
+                            <input asp-for="StoreInput.StoreName" class="form-control form-control-sm vni-font" maxlength="50" required />
+                        </div>
+                        <div class="form-group col-md-12 mb-2">
+                            <label>Address</label>
+                            <input asp-for="StoreInput.Address" class="form-control form-control-sm vni-font" maxlength="100" />
+                        </div>
+                        <div class="form-group col-md-12 mb-2 d-none" id="ipsStoreGroupSelectGroup">
+                            <label>INV Group<span class="text-danger">*</span></label>
+                            <select asp-for="StoreInput.KPGroupID" asp-items="Model.StoreGroupList" class="form-control form-control-sm select2 vni-font" data-placeholder="Select group" required></select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    @if (Model.CanAdd || Model.CanEdit)
+                    {
+                        <button type="submit" class="btn btn-sm btn-action-save border">
+                            <i class="fas fa-save"></i> Save
+                        </button>
+                    }
+                    <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
+                        <i class="fas fa-arrow-left"></i> Back to list
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade vni-font" id="inventoryParameterStoreDeleteModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <form method="post" asp-page-handler="DeleteStore" id="inventoryParameterStoreDeleteForm">
+                <div class="modal-header bg-danger text-white py-2">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="StoreInput.StoreID" id="DeleteStoreInput_StoreID" />
+                    <input type="hidden" name="StoreInput.KPGroupID" id="DeleteStoreInput_KPGroupID" />
+                    <input type="hidden" name="Filter.GroupId" value="@Model.Filter.GroupId" />
+                    <input type="hidden" name="Filter.StoreName" value="@Model.Filter.StoreName" />
+                    <input type="hidden" name="Filter.Page" value="@Model.Filter.Page" />
+                    <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+                    <div>Are you sure to delete store <strong id="inventoryParameterStoreDeleteName"></strong>?</div>
+                </div>
+                <div class="modal-footer py-2">
+                    @if (Model.CanDelete)
+                    {
+                        <button type="submit" class="btn btn-sm btn-action-delete border">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    }
+                    <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Inventory/InventoryParameters/InventoryParametersStore.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script src="~/js/Inventory/InventoryParameters/InventoryParametersStore.js" asp-append-version="true"></script>
+}

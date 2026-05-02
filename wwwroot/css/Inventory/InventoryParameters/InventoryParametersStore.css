@@ -1,0 +1,249 @@
+.ips-table-wrap {
+    max-height: 62vh;
+    overflow: auto;
+    position: relative;
+}
+
+.ips-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #f8f9fa;
+    box-shadow: inset 0 -1px 0 #dee2e6;
+}
+
+.ips-table th,
+.ips-table td {
+    vertical-align: middle;
+}
+
+.ips-row {
+    cursor: pointer;
+}
+
+.ips-row.selected {
+    background-color: #dff0ff !important;
+}
+
+.ips-selector {
+    margin: 0;
+}
+
+.ips-center {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.ips-table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.ips-table-header-left {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.ips-table-header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.ips-page-size-form {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.ips-pagination-info {
+    padding-top: 0.3rem;
+}
+
+.ips-page-size-label {
+    margin-bottom: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.ips-page-size-select {
+    width: 74px;
+    min-width: 74px;
+}
+
+.ips-pager-link {
+    min-width: 34px;
+    text-align: center;
+}
+
+.ips-col-store {
+    width: 240px;
+    min-width: 240px;
+    max-width: 240px;
+}
+
+.ips-col-address {
+    width: 360px;
+    min-width: 360px;
+    max-width: 360px;
+}
+
+.ips-col-group {
+    width: 240px;
+    min-width: 240px;
+    max-width: 240px;
+}
+
+#inventoryParametersStoreSearchForm .select2-container,
+.ips-store-form .select2-container {
+    width: 100% !important;
+}
+
+#inventoryParametersStoreSearchForm .select2-container--default .select2-selection--single,
+.ips-store-form .select2-container--default .select2-selection--single {
+    height: 31px;
+    border-color: #ced4da;
+}
+
+#inventoryParametersStoreSearchForm .select2-container--default .select2-selection--single .select2-selection__rendered,
+.ips-store-form .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 29px;
+    padding-left: 0.5rem;
+}
+
+#inventoryParametersStoreSearchForm .select2-container--default .select2-selection--single .select2-selection__arrow,
+.ips-store-form .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 29px;
+}
+
+.ips-ellipsis {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ips-action-bar .btn-action-export,
+.btn-action-export {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: #fff;
+}
+
+.ips-action-bar .btn {
+    min-width: 110px;
+}
+
+.ips-action-bar .btn-action-add,
+.btn-action-add {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: #fff;
+}
+
+.ips-action-bar .btn-action-save,
+.btn-action-save {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: #fff;
+}
+
+.ips-action-bar .btn-action-delete,
+.btn-action-delete {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: #fff;
+}
+
+.ips-action-bar .btn-action-close,
+.btn-action-close {
+    background-color: #f8f9fa;
+    border-color: #ced4da;
+    color: #495057;
+}
+
+.ips-action-bar .btn:hover,
+.ips-action-bar .btn:focus,
+.btn-action-add:hover,
+.btn-action-add:focus,
+.btn-action-save:hover,
+.btn-action-save:focus,
+.btn-action-delete:hover,
+.btn-action-delete:focus,
+.btn-action-close:hover,
+.btn-action-close:focus,
+.btn-action-export:hover,
+.btn-action-export:focus {
+    color: inherit;
+}
+
+.ips-action-bar .btn-action-add:hover,
+.ips-action-bar .btn-action-add:focus,
+.ips-action-bar .btn-action-save:hover,
+.ips-action-bar .btn-action-save:focus,
+.ips-action-bar .btn-action-delete:hover,
+.ips-action-bar .btn-action-delete:focus,
+.ips-action-bar .btn-action-export:hover,
+.ips-action-bar .btn-action-export:focus,
+.btn-action-save:hover,
+.btn-action-save:focus,
+.btn-action-delete:hover,
+.btn-action-delete:focus {
+    color: #fff;
+}
+
+.ips-store-modal-dialog {
+    max-width: min(96vw, 860px);
+}
+
+@media (max-width: 767.98px) {
+    .ips-table-wrap {
+        max-height: 52vh;
+    }
+
+    .ips-table-header-right {
+        width: 100%;
+    }
+}
+
+.content.vni-font,
+.modal.vni-font,
+.content.vni-font input,
+.modal.vni-font input,
+.content.vni-font textarea,
+.modal.vni-font textarea,
+.content.vni-font select,
+.modal.vni-font select,
+.content.vni-font button,
+.modal.vni-font button,
+.content.vni-font .form-control,
+.modal.vni-font .form-control,
+.content.vni-font .custom-control-label,
+.modal.vni-font .custom-control-label,
+.content.vni-font .form-check-label,
+.modal.vni-font .form-check-label,
+.content.vni-font .page-link,
+.modal.vni-font .page-link,
+.content.vni-font .badge,
+.modal.vni-font .badge,
+.content.vni-font .table,
+.modal.vni-font .table,
+.content.vni-font .card-title,
+.modal.vni-font .card-title,
+.content.vni-font .modal-title,
+.modal.vni-font .modal-title,
+.content.vni-font .select2-container .select2-selection,
+.modal.vni-font .select2-container .select2-selection,
+.content.vni-font .select2-container .select2-selection__rendered,
+.modal.vni-font .select2-container .select2-selection__rendered {
+    font-family: "VNI-Times", "VNI-Helve", sans-serif !important;
+}

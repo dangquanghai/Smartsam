@@ -23,54 +23,57 @@
     }
 }
 <style>
-.po-rpt { font-family: 'Times New Roman', Times, serif; font-size: 12pt; color: #000; max-width: 960px; margin: 0 auto; padding: 20px 24px; line-height: 1.5; }
+.po-rpt { font-family: 'Times New Roman', Times, serif; font-size: 10pt; color: #000; max-width: 960px; margin: 0 auto; padding: 20px 24px; line-height: 1.5; }
 .po-rpt-vni { font-family: 'VNI-Times', 'VNI-Helve', sans-serif; }
 .po-rpt-tcvn3 { font-family: 'TCVN3', '.VnTime', '.VnArial', '.VnHelvetica', sans-serif; }
 .po-rpt-tc { text-align: center; }
 .po-rpt-tr { text-align: right; }
 /* --- Header --- */
 .po-rpt-header { text-align: center; margin-bottom: 10px; }
-.po-rpt-header .po-rpt-company { font-size: 20pt; font-weight: bold; }
+.po-rpt-header .po-rpt-company { font-size: 10pt; font-weight: bold; }
 .po-rpt-header .po-rpt-addr { font-size: 10pt; }
 .po-rpt-header .po-rpt-tel { font-size: 10pt; }
-.po-rpt-header .po-rpt-dash { font-size: 11pt; margin: 4px 0; }
+.po-rpt-header .po-rpt-dash { font-size: 10pt; margin: 4px 0; }
 .po-rpt-title { text-align: center; margin: 16px 0 12px; }
 .po-rpt-title .po-rpt-title-vn { font-size: 24pt; font-weight: bold; }
 .po-rpt-title .po-rpt-title-en { font-size: 16pt; font-weight: bold; }
 /* --- Inline fields --- */
 .po-rpt-fields { margin-bottom: 10px; }
 .po-rpt-field-row { display: flex; flex-wrap: wrap; gap: 6px 20px; margin-bottom: 5px; }
-.po-rpt-field { display: inline-flex; align-items: baseline; }
+.po-rpt-field { display: inline-flex; align-items: center; line-height: 1.2; min-height: 18px; }
 .po-rpt-field-label { font-weight: bold; white-space: nowrap; margin-right: 6px; }
 .po-rpt-field-value { flex: 1; min-width: 60px; }
 .po-rpt-field-full { flex: 1 1 100%; }
+.po-rpt-field-supplier .po-rpt-field-label,
+.po-rpt-field-contact .po-rpt-field-label,
+.po-rpt-field-currency .po-rpt-field-label { min-width: 132px; }
+.po-rpt-field-address .po-rpt-field-label { min-width: 96px; }
+.po-rpt-subject-row { margin-top: 18px; }
 /* --- Items table --- */
-.po-rpt-intro { font-size: 10pt; margin: 12px 0 4px; }
+.po-rpt-intro { font-size: 9.5pt; margin: 12px 0 4px; }
 .po-rpt-items-label { font-weight: bold; font-size: 10pt; margin-bottom: 4px; }
 .po-rpt-items { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
-.po-rpt-items th, .po-rpt-items td { border: 1px solid #888; padding: 4px 6px; font-size: 11pt; }
+.po-rpt-items th, .po-rpt-items td { border: 1px solid #888; padding: 4px 6px; font-size: 10pt; }
 .po-rpt-items thead th { background: #f0f0f0; text-align: center; font-size: 10pt; vertical-align: middle; }
 /* --- Totals (tfoot inside items table) --- */
-.po-rpt-items tfoot td { border: none !important; padding: 3px 6px; font-size: 11pt; }
+.po-rpt-items tfoot td { border: none !important; padding: 3px 6px; font-size: 10pt; }
 .po-rpt-tot-lbl { text-align: right; font-weight: bold; }
 .po-rpt-tot-val { text-align: right; }
 /* --- Terms/Notes sections --- */
 .po-rpt-section { border-top: 1px solid #888; padding-top: 6px; margin-top: 10px; }
-.po-rpt-section-title { font-weight: bold; font-size: 11pt; margin-bottom: 4px; }
-.po-rpt-section-body { font-size: 11pt; line-height: 1.6; }
+.po-rpt-section-title { font-weight: bold; font-size: 10pt; margin-bottom: 4px; }
+.po-rpt-section-body { font-size: 10pt; line-height: 1.6; }
 .po-rpt-prewrap { white-space: pre-wrap; }
 /* --- Footer --- */
 .po-rpt-footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 28px; }
 .po-rpt-footer-left { width: 360px; text-align: center; }
 .po-rpt-footer-top { min-height: 54px; margin-bottom: 10px; }
-.po-rpt-footer-company { font-size: 11pt; margin-bottom: 8px; text-align: center; }
+.po-rpt-footer-company { font-size: 11pt; font-weight: bold; margin-bottom: 8px; text-align: center; }
 .po-rpt-small-sigs { min-height: 28px; display: flex; justify-content: flex-end; padding-right: 22px; gap: 10px; align-items: center; }
 .po-rpt-small-sig-img { width: 42px; height: 24px; object-fit: contain; display: block; }
 .po-rpt-small-sig-space { width: 42px; height: 24px; }
 .po-rpt-sig-img { max-height: 68px; max-width: 128px; object-fit: contain; display: block; margin: 6px auto; }
 .po-rpt-sig-space { height: 68px; }
-.po-rpt-signer-name { font-weight: bold; font-size: 11pt; border-top: 1px solid #333; padding-top: 3px; min-width: 160px; }
-.po-rpt-signer-title { font-size: 11pt; }
 .po-rpt-footer-right { text-align: right; font-size: 10pt; line-height: 1.5; }
 </style>
 
@@ -94,19 +97,19 @@
       <span class="po-rpt-field"><span class="po-rpt-field-label">PO No:</span> <span class="po-rpt-field-value">@r.PONo</span></span>
       <span class="po-rpt-field"><span class="po-rpt-field-label">PO Date:</span> <span class="po-rpt-field-value">@poDate</span></span>
       <span class="po-rpt-field"><span class="po-rpt-field-label">PR No:</span> <span class="po-rpt-field-value">@r.RequestNo</span></span>
-      <span class="po-rpt-field"><span class="po-rpt-field-label">Currency/Đơn vị tiền tệ:</span> <span class="po-rpt-field-value po-rpt-vni">@r.CurrencyText</span></span>
+      <span class="po-rpt-field po-rpt-field-currency"><span class="po-rpt-field-label">Currency/Đơn vị tiền tệ:</span> <span class="po-rpt-field-value po-rpt-vni">@r.CurrencyText</span></span>
     </div>
     <div class="po-rpt-field-row">
-      <span class="po-rpt-field po-rpt-field-full"><span class="po-rpt-field-label">Nhà cung cấp/Supplier:</span> <span class="po-rpt-field-value po-rpt-vni">@r.SupplierDisplay</span></span>
+      <span class="po-rpt-field po-rpt-field-full po-rpt-field-supplier"><span class="po-rpt-field-label">Nhà cung cấp/Supplier:</span> <span class="po-rpt-field-value po-rpt-vni">@r.SupplierDisplay</span></span>
     </div>
     <div class="po-rpt-field-row">
-      <span class="po-rpt-field po-rpt-field-full"><span class="po-rpt-field-label">Địa chỉ/Address:</span> <span class="po-rpt-field-value po-rpt-vni">@r.SupplierAddress</span></span>
+      <span class="po-rpt-field po-rpt-field-full po-rpt-field-address"><span class="po-rpt-field-label">Địa chỉ/Address:</span> <span class="po-rpt-field-value po-rpt-vni">@r.SupplierAddress</span></span>
     </div>
     <div class="po-rpt-field-row">
-      <span class="po-rpt-field"><span class="po-rpt-field-label">Người liên hệ/Contact:</span> <span class="po-rpt-field-value po-rpt-vni">@r.SupplierContact</span></span>
+      <span class="po-rpt-field po-rpt-field-contact"><span class="po-rpt-field-label">Người liên hệ/Contact:</span> <span class="po-rpt-field-value po-rpt-vni">@r.SupplierContact</span></span>
       <span class="po-rpt-field"><span class="po-rpt-field-label">Phone/Mail:</span> <span class="po-rpt-field-value">@phoneMailText</span></span>
     </div>
-    <div class="po-rpt-field-row">
+    <div class="po-rpt-field-row po-rpt-subject-row">
       <span class="po-rpt-field po-rpt-field-full"><span class="po-rpt-field-label">Subject:</span> <span class="po-rpt-field-value po-rpt-vni">@r.Remark</span></span>
     </div>
   </div>
@@ -207,8 +210,6 @@
       {
           <div class="po-rpt-sig-space"></div>
       }
-      <div class="po-rpt-signer-name po-rpt-vni">@f.ApprovedName</div>
-      <div class="po-rpt-signer-title po-rpt-vni">@f.ApprovedTitle</div>
     </div>
     <div class="po-rpt-footer-right">
       Page 1 of 1<br/>

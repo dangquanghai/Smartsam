@@ -20,21 +20,21 @@ internal static class PurchaseOrderQuestPdfReport
             {
                 page.Size(PageSizes.A4);
                 page.Margin(18);
-                page.DefaultTextStyle(style => style.FontFamily(DefaultPdfFontFamily).FontSize(8));
+                page.DefaultTextStyle(style => style.FontFamily(DefaultPdfFontFamily).FontSize(10));
 
                 page.Content().Column(column =>
                 {
                     column.Item().Element(content => ComposeHeader(content, model));
                     column.Item().PaddingTop(18).Element(content => ComposeOverview(content, model));
-                    column.Item().PaddingTop(4).Element(content => ComposeSubject(content, model));
-                    column.Item().PaddingTop(18).Text("Chúng tôi xin đặt các mặt hàng sau với các điều kiện dưới đây: We hereby order the following item(s) by under mentioned conditions:").FontSize(7);
-                    column.Item().PaddingTop(2).Text("1. Mặt hàng/Items").Bold().FontSize(7);
+                    column.Item().PaddingTop(18).Element(content => ComposeSubject(content, model));
+                    column.Item().PaddingTop(18).Text("Chúng tôi xin đặt các mặt hàng sau với các điều kiện dưới đây: We hereby order the following item(s) by under mentioned conditions:").FontSize(9.5f);
+                    column.Item().PaddingTop(2).Text("1. Mặt hàng/Items").Bold().FontSize(10);
                     column.Item().PaddingTop(2).Element(content => ComposeItems(content, model));
                     column.Item().PaddingTop(4).Element(content => ComposeTotals(content, model));
-                    column.Item().PaddingTop(10).Element(content => ComposeTermsAndNotes(content, model));
+                    column.Item().PaddingTop(10).Element(content => ComposeTermsNotesAndSignature(content, model));
                 });
 
-                page.Footer().Element(content => ComposeFooter(content, model));
+                page.Footer().Element(ComposePageFooter);
             });
         }).GeneratePdf();
     }
@@ -46,15 +46,15 @@ internal static class PurchaseOrderQuestPdfReport
             column.Item().AlignCenter().Text(text =>
             {
                 text.DefaultTextStyle(style => style.FontFamily(VniPdfFontFamily));
-                text.Span(model.CoName).Bold().FontSize(16);
+                text.Span(model.CoName).Bold().FontSize(10);
             });
             column.Item().AlignCenter().Text(text =>
             {
-                text.DefaultTextStyle(style => style.FontFamily(VniPdfFontFamily).FontSize(8));
+                text.DefaultTextStyle(style => style.FontFamily(VniPdfFontFamily).FontSize(10));
                 text.Span(model.CoAddress);
             });
-            column.Item().AlignCenter().Text($"Tel: {model.CoPhone} Email: {model.CoEmail} VAT Code: {model.CoVATCode}").FontSize(8);
-            column.Item().AlignCenter().Text("-").FontSize(9);
+            column.Item().AlignCenter().Text($"Tel: {model.CoPhone} Email: {model.CoEmail} VAT Code: {model.CoVATCode}").FontSize(10);
+            column.Item().AlignCenter().Text("-").FontSize(10);
             column.Item().PaddingTop(18).AlignCenter().Text(text =>
             {
                 text.Span("ĐƠN ĐẶT HÀNG/PURCHASE ORDER").Bold().FontSize(20);
@@ -69,18 +69,18 @@ internal static class PurchaseOrderQuestPdfReport
             column.Spacing(5);
             column.Item().Row(row =>
             {
-                row.Spacing(10);
+                row.Spacing(8);
                 row.RelativeItem(1).Row(item => ComposeInlineField(item, "PO No:", model.PONo, 40));
                 row.RelativeItem(1).Row(item => ComposeInlineField(item, "PO Date:", FormatDate(model.PODate, "dd-MMM-yy"), 50));
                 row.RelativeItem(1).Row(item => ComposeInlineField(item, "PR No:", model.RequestNo, 40));
-                row.RelativeItem(1.2f).Row(item => ComposeInlineField(item, "Currency/Đơn vị tiền tệ:", model.CurrencyText, 94, VniPdfFontFamily));
+                row.RelativeItem(1.65f).Row(item => ComposeInlineField(item, "Currency/Đơn vị tiền tệ:", model.CurrencyText, 132, VniPdfFontFamily));
             });
-            column.Item().Row(row => ComposeInlineField(row, "Nhà cung cấp/Supplier:", model.SupplierDisplay, 88, VniPdfFontFamily));
-            column.Item().Row(row => ComposeInlineField(row, "Địa chỉ/Address:", model.SupplierAddress, 68, VniPdfFontFamily));
+            column.Item().Row(row => ComposeInlineField(row, "Nhà cung cấp/Supplier:", model.SupplierDisplay, 132, VniPdfFontFamily));
+            column.Item().Row(row => ComposeInlineField(row, "Địa chỉ/Address:", model.SupplierAddress, 96, VniPdfFontFamily));
             column.Item().Row(row =>
             {
-                row.Spacing(14);
-                row.RelativeItem(1).Row(item => ComposeInlineField(item, "Người liên hệ/Contact:", model.SupplierContact, 95, VniPdfFontFamily));
+                row.Spacing(18);
+                row.RelativeItem(1).Row(item => ComposeInlineField(item, "Người liên hệ/Contact:", model.SupplierContact, 132, VniPdfFontFamily));
                 row.RelativeItem(1.2f).Row(item => ComposeInlineField(item, "Phone/Mail:", BuildPhoneMailText(model), 58));
             });
         });
@@ -93,14 +93,14 @@ internal static class PurchaseOrderQuestPdfReport
 
     private static void ComposeInlineField(RowDescriptor row, string label, string value, float labelWidth, string? valueFontFamily = null)
     {
-        row.ConstantItem(labelWidth).AlignBottom().Text(label).Bold();
+        row.ConstantItem(labelWidth).AlignMiddle().Text(label).Bold();
         if (string.IsNullOrWhiteSpace(valueFontFamily))
         {
-            row.RelativeItem().PaddingBottom(1).Text(value);
+            row.RelativeItem().AlignMiddle().Text(value);
             return;
         }
 
-        row.RelativeItem().PaddingBottom(1).Element(content => ComposeStyledValueText(content, value, valueFontFamily));
+        row.RelativeItem().AlignMiddle().Element(content => ComposeStyledValueText(content, value, valueFontFamily));
     }
 
     private static void ComposeItems(IContainer container, PurchaseOrderDetailReportModel model)
@@ -113,8 +113,8 @@ internal static class PurchaseOrderQuestPdfReport
                 columns.ConstantColumn(58);
                 columns.RelativeColumn(1);
                 columns.ConstantColumn(34);
-                columns.ConstantColumn(48);
-                columns.ConstantColumn(64);
+                columns.ConstantColumn(62);
+                columns.ConstantColumn(70);
                 columns.ConstantColumn(70);
                 columns.ConstantColumn(66);
             });
@@ -124,14 +124,14 @@ internal static class PurchaseOrderQuestPdfReport
 
             table.Header(header =>
             {
-                header.Cell().Element(HeaderCell).Text("STT\n(No)").Bold().FontSize(6);
-                header.Cell().Element(HeaderCell).Text("Mã hàng\n(Item code)").Bold().FontSize(6);
-                header.Cell().Element(HeaderCell).Text("Mô tả mặt hàng\n(Description)").Bold().FontSize(6);
-                header.Cell().Element(HeaderCell).Text("ĐVT\n(Unit)").Bold().FontSize(6);
-                header.Cell().Element(HeaderCell).Text("S.Lượng\n(Quantity)").Bold().FontSize(6);
-                header.Cell().Element(HeaderCell).Text("Đơn giá\n(Unit Price)").Bold().FontSize(6);
-                header.Cell().Element(HeaderCell).Text("Thành tiền\n(Amount)").Bold().FontSize(6);
-                header.Cell().Element(HeaderCell).Text("Ghi chú\n(Remarks)").Bold().FontSize(6);
+                header.Cell().Element(HeaderCell).Text("STT\n(No)").Bold().FontSize(10);
+                header.Cell().Element(HeaderCell).Text("Mã hàng\n(Item code)").Bold().FontSize(10);
+                header.Cell().Element(HeaderCell).Text("Mô tả mặt hàng\n(Description)").Bold().FontSize(10);
+                header.Cell().Element(HeaderCell).Text("ĐVT\n(Unit)").Bold().FontSize(10);
+                header.Cell().Element(HeaderCell).Text("S.Lượng\n(Quantity)").Bold().FontSize(10);
+                header.Cell().Element(HeaderCell).Text("Đơn giá\n(Unit Price)").Bold().FontSize(10);
+                header.Cell().Element(HeaderCell).Text("Thành tiền\n(Amount)").Bold().FontSize(10);
+                header.Cell().Element(HeaderCell).Text("Ghi chú\n(Remarks)").Bold().FontSize(10);
             });
 
             if (model.Items.Count == 0)
@@ -177,43 +177,44 @@ internal static class PurchaseOrderQuestPdfReport
             static IContainer LeftCell(IContainer cell) => cell.PaddingVertical(1).PaddingHorizontal(4);
             static IContainer RightCell(IContainer cell) => cell.PaddingVertical(1).PaddingHorizontal(4).AlignRight();
 
-            table.Cell().ColumnSpan(4).Element(LeftCell);
-            table.Cell().ColumnSpan(2).Element(RightCell).Text("Tổng trước thuế (Before VAT):").Bold().FontSize(7);
+            table.Cell().ColumnSpan(2).Element(LeftCell);
+            table.Cell().ColumnSpan(4).Element(RightCell).Text("Tổng trước thuế (Before VAT):").Bold().FontSize(10);
             table.Cell().Element(RightCell).Text(FormatMoney(model.BeforeVAT)).Bold();
             table.Cell().Element(LeftCell);
 
-            table.Cell().ColumnSpan(2).Element(LeftCell);
-            table.Cell().ColumnSpan(2).Element(RightCell).Text($"% VAT: {FormatPercent(model.PerVAT)}").Bold().FontSize(7);
-            table.Cell().ColumnSpan(2).Element(RightCell).Text("Tiền thuế (VAT):").Bold().FontSize(7);
+            table.Cell().Element(LeftCell);
+            table.Cell().ColumnSpan(2).Element(RightCell).Text($"% VAT: {FormatPercent(model.PerVAT)}").Bold().FontSize(10);
+            table.Cell().Element(LeftCell);
+            table.Cell().ColumnSpan(2).Element(RightCell).Text("Tiền thuế (VAT):").Bold().FontSize(10);
             table.Cell().Element(RightCell).Text(FormatMoney(model.VAT)).Bold();
             table.Cell().Element(LeftCell);
 
-            table.Cell().ColumnSpan(4).Element(LeftCell);
-            table.Cell().ColumnSpan(2).Element(RightCell).Text("Tổng cộng (Total):").Bold().FontSize(7);
+            table.Cell().ColumnSpan(2).Element(LeftCell);
+            table.Cell().ColumnSpan(4).Element(RightCell).Text("Tổng cộng (Total):").Bold().FontSize(10);
             table.Cell().Element(RightCell).Text(FormatMoney(model.AfterVAT)).Bold();
             table.Cell().Element(LeftCell);
         });
     }
 
-    private static void ComposeTermsAndNotes(IContainer container, PurchaseOrderDetailReportModel model)
+    private static void ComposeTermsNotesAndSignature(IContainer container, PurchaseOrderDetailReportModel model)
     {
         container.Column(column =>
         {
-            column.Item().BorderTop(0.8f).PaddingTop(6).Text("TERMS & CONDITIONS:").Bold().FontSize(8);
+            column.Item().BorderTop(0.8f).PaddingTop(6).Text("TERMS & CONDITIONS:").Bold().FontSize(10);
             column.Item().MinHeight(58).PaddingTop(4).Element(content => ComposeStyledLines(content, SplitNotes(model.TermsAndConditions), VniPdfFontFamily));
 
-            column.Item().PaddingTop(6).BorderTop(0.8f).PaddingTop(4).Text("NOTES:").Bold().FontSize(8);
-            column.Item().MinHeight(36).PaddingTop(4).Element(content => ComposeStyledLines(content, SplitNotes(model.Notes), VniPdfFontFamily));
+            column.Item().PaddingTop(6).EnsureSpace(170).Column(tail =>
+            {
+                tail.Item().BorderTop(0.8f).PaddingTop(4).Text("NOTES:").Bold().FontSize(10);
+                tail.Item().MinHeight(36).PaddingTop(4).Element(content => ComposeStyledLines(content, SplitNotes(model.Notes), VniPdfFontFamily));
+                tail.Item().PaddingTop(12).Element(content => ComposeSignatureBlock(content, model));
+            });
         });
     }
 
-    private static void ComposeFooter(IContainer container, PurchaseOrderDetailReportModel model)
+    private static void ComposeSignatureBlock(IContainer container, PurchaseOrderDetailReportModel model)
     {
-        const string DefaultDirectorName = "TATSUYA FUKUZAWA";
-        const string DefaultDirectorTitle = "Tổng Giám Đốc";
         var footer = model.Footer;
-        var directorName = string.IsNullOrWhiteSpace(footer?.ApprovedName) ? DefaultDirectorName : footer.ApprovedName;
-        var directorTitle = string.IsNullOrWhiteSpace(footer?.ApprovedTitle) ? DefaultDirectorTitle : footer.ApprovedTitle;
 
         container.Height(104).AlignBottom().Row(row =>
         {
@@ -224,7 +225,7 @@ internal static class PurchaseOrderQuestPdfReport
                     signatureBlock.Item().Row(top =>
                     {
                         top.ConstantItem(82).Text(string.Empty);
-                        top.ConstantItem(156).TranslateY(-14).AlignCenter().AlignTop().Element(content => ComposeStyledValueText(content, model.CoName, VniPdfFontFamily, 11));
+                        top.ConstantItem(156).TranslateY(-14).AlignCenter().AlignTop().Element(content => ComposeStyledValueText(content, model.CoName, VniPdfFontFamily, 11, true));
                         top.ConstantItem(82).TranslateX(-24).PaddingTop(1).PaddingLeft(1).Row(signatures =>
                         {
                             signatures.ConstantItem(34).Element(cell => ComposeSmallSignature(cell, footer?.PreparedSignature));
@@ -240,15 +241,19 @@ internal static class PurchaseOrderQuestPdfReport
                         }
                     });
 
-                    signatureBlock.Item().PaddingTop(1).AlignCenter().Width(170).BorderTop(0.8f).PaddingTop(3).Column(name =>
-                    {
-                        name.Item().AlignCenter().Element(content => ComposeStyledValueText(content, directorName, VniPdfFontFamily, 8));
-                        name.Item().AlignCenter().Element(content => ComposeStyledValueText(content, directorTitle, VniPdfFontFamily, 8));
-                    });
                 });
             });
 
-            row.RelativeItem().PaddingRight(8).PaddingBottom(1).AlignBottom().Column(right =>
+            row.RelativeItem();
+        });
+    }
+
+    private static void ComposePageFooter(IContainer container)
+    {
+        container.PaddingRight(8).PaddingBottom(1).AlignBottom().Row(row =>
+        {
+            row.RelativeItem();
+            row.ConstantItem(120).Column(right =>
             {
                 right.Item().AlignRight().Text(text =>
                 {
@@ -262,14 +267,19 @@ internal static class PurchaseOrderQuestPdfReport
         });
     }
 
-    private static void ComposeStyledValueText(IContainer container, string value, string fontFamily, float? fontSize = null)
+    private static void ComposeStyledValueText(IContainer container, string value, string fontFamily, float? fontSize = null, bool bold = false)
     {
         container.Text(text =>
         {
             text.DefaultTextStyle(style =>
             {
                 var textStyle = style.FontFamily(fontFamily);
-                return fontSize.HasValue ? textStyle.FontSize(fontSize.Value) : textStyle;
+                if (fontSize.HasValue)
+                {
+                    textStyle = textStyle.FontSize(fontSize.Value);
+                }
+
+                return bold ? textStyle.Bold() : textStyle;
             });
             text.Span(value ?? string.Empty);
         });

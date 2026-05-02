@@ -1,0 +1,302 @@
+@page
+@model SmartSam.Pages.Inventory.InventoryParameters.IndexModel
+@{
+    ViewData["Title"] = "Inventory Parameters";
+    var currentPage = Model.Filter.Page <= 0 ? 1 : Model.Filter.Page;
+    var totalPages = Model.TotalPages <= 0 ? 1 : Model.TotalPages;
+    var pageItems = new List<int?>();
+    var message = TempData["Message"]?.ToString();
+    var messageType = TempData["MessageType"]?.ToString() ?? "info";
+    var alertClass = messageType == "success"
+        ? "alert-success"
+        : messageType == "warning"
+            ? "alert-warning"
+            : "alert-info";
+
+    for (var p = 1; p <= totalPages; p++)
+    {
+        if (p == 1 || p == totalPages || (p >= currentPage - 2 && p <= currentPage + 2))
+        {
+            pageItems.Add(p);
+        }
+        else if (pageItems.Count == 0 || pageItems[^1].HasValue)
+        {
+            pageItems.Add(null);
+        }
+    }
+
+    Func<int, string> pageUrl = (page) => Url.Page("./Index", new
+    {
+        GroupName = Model.Filter.GroupName,
+        DepartmentId = Model.Filter.DepartmentId,
+        AdminGroup = Model.Filter.AdminGroup,
+        PageNumber = page,
+        PageSize = Model.Filter.PageSize
+    }) ?? "#";
+}
+
+<section class="content vni-font">
+    <div class="container-fluid">
+        @if (!string.IsNullOrWhiteSpace(message))
+        {
+            <div class="alert @alertClass alert-dismissible fade show py-2" role="alert">
+                <strong><i class="fas fa-info-circle"></i></strong> @message
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-md-2">
+                <div class="card card-info">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-search"></i> Search</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" id="inventoryParametersSearchForm">
+                            <input type="hidden" name="PageNumber" value="1" />
+                            <input type="hidden" name="PageSize" value="@Model.Filter.PageSize" />
+
+                            <div class="form-group mb-2">
+                                <label>Group Name</label>
+                                <input id="Filter_GroupName" name="GroupName" value="@Model.Filter.GroupName" class="form-control form-control-sm vni-font" />
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>Department</label>
+                                <select id="Filter_DepartmentId" name="DepartmentId" class="form-control form-control-sm select2 vni-font" data-placeholder="--- All ---">
+                                    @foreach (var department in Model.DepartmentList)
+                                    {
+                                        var selectedDepartment = string.IsNullOrWhiteSpace(department.Value)
+                                            ? !Model.Filter.DepartmentId.HasValue
+                                            : Model.Filter.DepartmentId?.ToString() == department.Value;
+                                        <option value="@department.Value" selected="@(selectedDepartment ? "selected" : null)">@department.Text</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label>Admin Group</label>
+                                <select id="Filter_AdminGroup" name="AdminGroup" class="form-control form-control-sm">
+                                    <option value="" selected="@(!Model.Filter.AdminGroup.HasValue ? "selected" : null)">--- All ---</option>
+                                    <option value="0" selected="@(Model.Filter.AdminGroup == 0 ? "selected" : null)">No</option>
+                                    <option value="1" selected="@(Model.Filter.AdminGroup == 1 ? "selected" : null)">Yes</option>
+                                </select>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-block btn-sm border mb-2">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-10">
+                <div class="card card-primary">
+                    <div class="card-header ip-table-header">
+                        <div class="ip-table-header-left">
+                            <h3 class="card-title">Inventory Parameters</h3>
+                            <span class="badge badge-light ml-2">@Model.TotalRecords records</span>
+                        </div>
+                        <div class="ip-table-header-right app-paging-white">
+                            <nav aria-label="Page navigation">
+                                <div class="d-inline-block mr-2 ip-pagination-info">
+                                    @if (Model.TotalRecords == 0)
+                                    {
+                                        <small>No records</small>
+                                    }
+                                    else
+                                    {
+                                        <small>Showing @Model.PageStart to @Model.PageEnd of @Model.TotalRecords entries</small>
+                                    }
+                                </div>
+                                <div class="ip-page-size-form d-inline-flex mr-2">
+                                    <label class="mb-0 ip-page-size-label" for="inventoryParametersPageSize">Show</label>
+                                    <select id="inventoryParametersPageSize" class="form-control form-control-sm ip-page-size-select">
+                                        @foreach (var pageSizeOption in Model.PageSizeOptions)
+                                        {
+                                            <option value="@pageSizeOption" selected="@(Model.Filter.PageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                        }
+                                    </select>
+                                </div>
+                                <ul class="pagination pagination-sm mb-0 d-inline-flex">
+                                    <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+                                        <a class="page-link ip-pager-link" href="@(Model.HasPreviousPage ? pageUrl(currentPage - 1) : "#")">Prev</a>
+                                    </li>
+                                    @foreach (var pageItem in pageItems)
+                                    {
+                                        if (pageItem.HasValue)
+                                        {
+                                            <li class="page-item @(pageItem.Value == currentPage ? "active" : "")">
+                                                <a class="page-link ip-pager-link" href="@pageUrl(pageItem.Value)">@pageItem.Value</a>
+                                            </li>
+                                        }
+                                        else
+                                        {
+                                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                                        }
+                                    }
+                                    <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+                                        <a class="page-link ip-pager-link" href="@(Model.HasNextPage ? pageUrl(currentPage + 1) : "#")">Next</a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-0">
+                        <div class="table-responsive ip-table-wrap">
+                            <table class="table table-hover table-bordered mb-0 text-nowrap ip-table" id="inventoryParametersTable">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width: 32px;"></th>
+                                        <th class="ip-col-group">Group Name</th>
+                                        <th class="ip-col-department">Department</th>
+                                        <th style="width: 120px;" class="ip-center">Admin Group</th>
+                                        <th style="width: 95px;" class="ip-center">Member</th>
+                                        <th style="width: 95px;" class="ip-center">Store</th>
+                                        <th style="width: 95px;" class="ip-center">Items</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (Model.Rows.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted">No data</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        foreach (var row in Model.Rows)
+                                        {
+                                            <tr class="ip-row"
+                                                data-group-id="@row.KPGroupID"
+                                                data-group-name="@row.KPGroupName"
+                                                data-department-id="@row.DepID"
+                                                data-is-admin-group="@(row.IsAdminGroup ? "true" : "false")"
+                                                data-member-url="@Url.Page("/Inventory/InventoryParameters/InventoryParametersMember", new { GroupId = row.KPGroupID })"
+                                                data-store-url="@Url.Page("/Inventory/InventoryParameters/InventoryParametersStore", new { GroupId = row.KPGroupID })">
+                                                <td>
+                                                    <input type="radio" class="ip-selector" name="selectedInventoryGroup" aria-label="Select row" />
+                                                </td>
+                                                <td class="ip-col-group">
+                                                    <span class="ip-ellipsis vni-font" title="@row.KPGroupName">@row.KPGroupName</span>
+                                                </td>
+                                                <td class="ip-col-department">
+                                                    <span class="ip-ellipsis vni-font" title="@row.DepartmentText">@row.DepartmentText</span>
+                                                </td>
+                                                <td class="ip-center">
+                                                    <span class="badge @(row.IsAdminGroup ? "badge-warning" : "badge-secondary")">@(row.IsAdminGroup ? "Yes" : "No")</span>
+                                                </td>
+                                                <td class="ip-center">
+                                                    <a class="ip-count-link" href="@Url.Page("/Inventory/InventoryParameters/InventoryParametersMember", new { GroupId = row.KPGroupID })">@row.MemberCount</a>
+                                                </td>
+                                                <td class="ip-center">
+                                                    <a class="ip-count-link" href="@Url.Page("/Inventory/InventoryParameters/InventoryParametersStore", new { GroupId = row.KPGroupID })">@row.StoreCount</a>
+                                                </td>
+                                                <td class="ip-center">@row.ItemCount</td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-outline card-primary">
+                    <div class="card-footer p-2 text-center module-action-bar ip-action-bar">
+                        @if (Model.CanAdd)
+                        {
+                            <button type="button" id="ipAddBtn" class="btn btn-sm btn-action-add border mx-1 my-1">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        }
+                        @if (Model.CanEdit)
+                        {
+                            <button type="button" id="ipEditBtn" class="btn btn-sm btn-action-save border mx-1 my-1" disabled>
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                        }
+                        <button type="button" id="ipViewMemberBtn" class="btn btn-sm btn-action-close border mx-1 my-1" disabled>
+                            <i class="fas fa-users"></i> View Member
+                        </button>
+                        <button type="button" id="ipViewStoreBtn" class="btn btn-sm btn-action-close border mx-1 my-1" disabled>
+                            <i class="fas fa-store"></i> View Store
+                        </button>
+                        @* <a href="@Url.Page("./Index", "ExportExcel", new {
+                               GroupName = Model.Filter.GroupName,
+                               DepartmentId = Model.Filter.DepartmentId,
+                               AdminGroup = Model.Filter.AdminGroup
+                           })"
+                           class="btn btn-sm btn-action-export border mx-1 my-1">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </a> *@
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="modal fade vni-font" id="inventoryParameterGroupModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg ip-group-modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="post" asp-page-handler="SaveGroup" class="ip-group-form" id="inventoryParameterGroupForm">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title font-weight-bold" id="inventoryParameterGroupModalTitle">Inventory Group</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body pb-2">
+                    <input asp-for="GroupInput.KPGroupID" type="hidden" />
+                    <input type="hidden" name="Filter.GroupName" value="@Model.Filter.GroupName" />
+                    <input type="hidden" name="Filter.DepartmentId" value="@Model.Filter.DepartmentId" />
+                    <input type="hidden" name="Filter.AdminGroup" value="@Model.Filter.AdminGroup" />
+                    <input type="hidden" name="Filter.Page" value="@Model.Filter.Page" />
+                    <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+
+                    <div class="form-row">
+                        <div class="form-group col-md-6 mb-2">
+                            <label>Group Name<span class="text-danger">*</span></label>
+                            <input asp-for="GroupInput.KPGroupName" class="form-control form-control-sm vni-font" maxlength="50" required />
+                        </div>
+                        <div class="form-group col-md-4 mb-2">
+                            <label>Department<span class="text-danger">*</span></label>
+                            <select asp-for="GroupInput.DepID" asp-items="Model.DepartmentList" class="form-control form-control-sm select2 vni-font" data-placeholder="--- Select ---" required></select>
+                        </div>
+                        <div class="form-group col-md-2 mb-2 d-flex align-items-end">
+                            <div class="custom-control custom-checkbox mb-1">
+                                <input asp-for="GroupInput.IsAdminGroup" class="custom-control-input" />
+                                <label class="custom-control-label" asp-for="GroupInput.IsAdminGroup">Admin</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    @if (Model.CanAdd || Model.CanEdit)
+                    {
+                        <button type="submit" class="btn btn-sm btn-action-save border">
+                            <i class="fas fa-save"></i> Save
+                        </button>
+                    }
+                    <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
+                        <i class="fas fa-arrow-left"></i> Back to list
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Inventory/InventoryParameters/index.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script src="~/js/Inventory/InventoryParameters/index.js" asp-append-version="true"></script>
+}
