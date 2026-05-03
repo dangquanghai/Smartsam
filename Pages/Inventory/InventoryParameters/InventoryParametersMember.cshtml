@@ -80,7 +80,7 @@
 
                             <div class="form-group mb-3">
                                 <label>Active</label>
-                                <select id="Filter_ActiveStatus" name="ActiveStatus" class="form-control form-control-sm">
+                                <select id="Filter_ActiveStatus" name="ActiveStatus" class="form-control form-control-sm select2 vni-font" data-placeholder="--- All ---">
                                     <option value="" selected="@(!Model.Filter.ActiveStatus.HasValue ? "selected" : null)">--- All ---</option>
                                     <option value="1" selected="@(Model.Filter.ActiveStatus == 1 ? "selected" : null)">Active</option>
                                     <option value="0" selected="@(Model.Filter.ActiveStatus == 0 ? "selected" : null)">Inactive</option>

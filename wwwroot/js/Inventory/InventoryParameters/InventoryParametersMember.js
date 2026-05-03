@@ -240,6 +240,7 @@
         initSelection();
         initPageSizeSubmit();
         initSelect2("#Filter_DepartmentId");
+        initSelect2("#Filter_ActiveStatus");
         initSelect2("#MemberInput_KPGroupID", { dropdownParent: "#inventoryParameterMemberModal", allowClear: false });
         initSelect2("#MemberInput_EmployeeID", { dropdownParent: "#inventoryParameterMemberModal", allowClear: false });
         initActions();
