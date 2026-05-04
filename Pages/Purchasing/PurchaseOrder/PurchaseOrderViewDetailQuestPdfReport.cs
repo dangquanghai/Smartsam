@@ -7,6 +7,10 @@ namespace SmartSam.Pages.Purchasing.PurchaseOrder;
 
 internal static class PurchaseOrderViewDetailQuestPdfReport
 {
+    private const string DefaultPdfFontFamily = "Times New Roman";
+    private const string VniPdfFontFamily = "VNI-Times";
+    private const string Tcvn3PdfFontFamily = ".VnTime";
+
     public static byte[] BuildPdf(IReadOnlyList<PurchaseOrderViewDetailRow> rows)
     {
         return Document.Create(container =>
@@ -15,7 +19,7 @@ internal static class PurchaseOrderViewDetailQuestPdfReport
             {
                 page.Size(PageSizes.A4.Landscape());
                 page.Margin(8);
-                page.DefaultTextStyle(style => style.FontFamily("Times New Roman").FontSize(9));
+                page.DefaultTextStyle(style => style.FontFamily(DefaultPdfFontFamily).FontSize(9));
 
                 page.Content().Column(column =>
                 {
@@ -136,7 +140,7 @@ internal static class PurchaseOrderViewDetailQuestPdfReport
                 totalRecQty += row.RecQty;
 
                 table.Cell().Element(BodyCell).Text(Encode(row.ItemCode));
-                table.Cell().Element(BodyCell).Text(NormalizeLegacyText(row.ItemName));
+                table.Cell().Element(BodyCell).Element(content => ComposeStyledText(content, row.ItemName, Tcvn3PdfFontFamily));
                 table.Cell().Element(BodyCell).Text(Encode(row.PONo));
                 table.Cell().Element(BodyCell).Text(FormatDate(row.PODate, "MM/dd/yy"));
 
@@ -149,8 +153,8 @@ internal static class PurchaseOrderViewDetailQuestPdfReport
                 table.Cell().Element(BodyCell).AlignRight().Text(isUsd ? string.Empty : FormatMoney(row.RecAmount, false));
                 table.Cell().Element(BodyCell).AlignRight().Text(isUsd ? FormatMoney(row.RecAmount, true) : string.Empty);
                 table.Cell().Element(BodyCell).Text(FormatDate(row.RecDate, "MM/dd/yy"));
-                table.Cell().Element(BodyCell).Text(NormalizeLegacyText(row.ForDepartment));
-                table.Cell().Element(BodyCell).Text(NormalizeLegacyText(row.Note));
+                table.Cell().Element(BodyCell).Text(Encode(row.ForDepartment));
+                table.Cell().Element(BodyCell).Element(content => ComposeStyledText(content, row.Note, VniPdfFontFamily));
             }
 
             static IContainer TotalLabelCell(IContainer cell) => cell.Border(1).PaddingVertical(3).PaddingHorizontal(2).AlignRight().AlignMiddle();
@@ -181,16 +185,9 @@ internal static class PurchaseOrderViewDetailQuestPdfReport
         return row.CurrencyName.Contains("USD", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string NormalizeLegacyText(string? value)
+    private static void ComposeStyledText(IContainer container, string? value, string fontFamily)
     {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return string.Empty;
-        }
-
-        var text = PurchaseOrderQuestPdfReport.NormalizeTcvn3Text(value);
-        text = PurchaseOrderQuestPdfReport.NormalizeVniText(text);
-        return text;
+        container.Text(Encode(value)).FontFamily(fontFamily);
     }
 
     private static string Encode(string? value)

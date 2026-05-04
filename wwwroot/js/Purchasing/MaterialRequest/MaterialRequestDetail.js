@@ -16,7 +16,7 @@
         canReplace: toBoolData($form.data('can-replace'))
     };
     mrShowAdvancedColumns = toBoolData($form.data('show-advanced-columns'));
-    mrLineColspan = mrShowAdvancedColumns ? 15 : 10;
+    mrLineColspan = mrShowAdvancedColumns ? 14 : 10;
 
     // Start page
     initializePage(mode, currentStatusId, actionPerm);
@@ -572,7 +572,7 @@ function validateMainForm(actionMode) {
         }
 
         const numberChecks = [
-            { selector: '.mr-line-notrec', label: 'NotRec' },
+            { selector: '.mr-line-issued', label: 'ISSUE' },
             { selector: '.mr-line-accin', label: 'Acc.In' },
             { selector: '.mr-line-price', label: 'Price' }
         ];
@@ -690,8 +690,9 @@ function createLineRowHtml(row) {
             </td>
             <td><input type="text" inputmode="decimal" class="form-control form-control-sm mr-line-order" value="${row.orderQty ?? 0}" /></td>
             <td>
-                <span class="mr-readonly-cell-text">${row.notReceipt ?? 0}</span>
+                <span class="mr-readonly-cell-text">${row.issued ?? 0}</span>
                 <input type="hidden" class="mr-line-notrec" value="${row.notReceipt ?? 0}" />
+                <input type="hidden" class="mr-line-issued" value="${row.issued ?? 0}" />
             </td>
             <td>
                 <span class="mr-readonly-cell-text">${row.inStock ?? 0}</span>
@@ -713,10 +714,6 @@ function createLineRowHtml(row) {
             <td class="${advancedClass}">
                 <span class="mr-readonly-cell-text">${row.normQty ?? 0}</span>
                 <input type="hidden" class="mr-line-normqty" value="${row.normQty ?? 0}" />
-            </td>
-            <td class="${advancedClass}">
-                <span class="mr-readonly-cell-text">${row.issued ?? 0}</span>
-                <input type="hidden" class="mr-line-issued" value="${row.issued ?? 0}" />
             </td>
             <td class="text-center align-middle ${advancedClass}">
                 <input type="checkbox" class="mr-line-flag-checkbox" disabled ${isChecked(row.newItem) ? 'checked' : ''} />

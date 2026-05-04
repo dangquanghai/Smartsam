@@ -90,9 +90,9 @@ padding: 5px;
 
 #purchaseOrderTable > thead > tr > th:nth-child(5),
 #purchaseOrderTable > tbody > tr > td:nth-child(5) {
-    width: 320px;
-    min-width: 320px;
-    max-width: 320px;
+    width: 480px;
+    min-width: 480px;
+    max-width: 480px;
 }
 
 .po-table-header {
