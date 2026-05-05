@@ -78,7 +78,7 @@
 
                             <div class="form-group mb-3">
                                 <label>Admin Group</label>
-                                <select id="Filter_AdminGroup" name="AdminGroup" class="form-control form-control-sm">
+                                <select id="Filter_AdminGroup" name="AdminGroup" class="form-control form-control-sm select2 vni-font" data-placeholder="--- All ---">
                                     <option value="" selected="@(!Model.Filter.AdminGroup.HasValue ? "selected" : null)">--- All ---</option>
                                     <option value="0" selected="@(Model.Filter.AdminGroup == 0 ? "selected" : null)">No</option>
                                     <option value="1" selected="@(Model.Filter.AdminGroup == 1 ? "selected" : null)">Yes</option>

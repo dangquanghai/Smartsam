@@ -1,0 +1,665 @@
+@page
+@model SmartSam.Pages.Inventory.InventoryItemList.IndexModel
+@{
+    ViewData["Title"] = "Inventory Item List";
+    var currentPage = Model.Filter.Page <= 0 ? 1 : Model.Filter.Page;
+    var totalPages = Model.TotalPages <= 0 ? 1 : Model.TotalPages;
+    var pageItems = new List<int?>();
+    var message = TempData["Message"]?.ToString();
+    var messageType = TempData["MessageType"]?.ToString() ?? "info";
+    var alertClass = messageType == "success"
+        ? "alert-success"
+        : messageType == "warning"
+            ? "alert-warning"
+            : "alert-info";
+
+    for (var p = 1; p <= totalPages; p++)
+    {
+        if (p == 1 || p == totalPages || (p >= currentPage - 2 && p <= currentPage + 2))
+        {
+            pageItems.Add(p);
+        }
+        else if (pageItems.Count == 0 || pageItems[^1].HasValue)
+        {
+            pageItems.Add(null);
+        }
+    }
+
+    Func<int, string> pageUrl = (page) => Url.Page("./Index", new
+    {
+        Model.Filter.ItemCode,
+        Model.Filter.ItemName,
+        Model.Filter.ItemCatg,
+        Model.Filter.KPGroupItem,
+        Model.Filter.ActiveStatus,
+        Model.Filter.SpecialView,
+        PageNumber = page,
+        PageSize = Model.Filter.PageSize
+    }) ?? "#";
+
+}
+
+<section class="content vni-font">
+    <div class="container-fluid">
+        @if (!string.IsNullOrWhiteSpace(message))
+        {
+            <div class="alert @alertClass alert-dismissible fade show py-2" role="alert">
+                <strong><i class="fas fa-info-circle"></i></strong> @message
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        <div class="row">
+            <div class="col-md-2">
+                <div class="card card-info">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-search"></i> Search</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" id="inventoryItemListSearchForm">
+                            <input type="hidden" name="PageNumber" value="1" />
+                            <input type="hidden" name="PageSize" value="@Model.Filter.PageSize" />
+
+                            <div class="form-group mb-2">
+                                <label>Item Code</label>
+                                <input id="Filter_ItemCode" name="ItemCode" value="@Model.Filter.ItemCode" class="form-control form-control-sm vni-font" maxlength="20" />
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>Item Name</label>
+                                <input id="Filter_ItemName" name="ItemName" value="@Model.Filter.ItemName" class="form-control form-control-sm vni-font" maxlength="150" />
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>Catg</label>
+                                <select id="Filter_ItemCatg" name="ItemCatg" class="form-control form-control-sm select2 vni-font" data-placeholder="--- All ---">
+                                    @foreach (var catg in Model.CategoryList)
+                                    {
+                                        var selectedCatg = string.IsNullOrWhiteSpace(catg.Value)
+                                            ? !Model.Filter.ItemCatg.HasValue
+                                            : Model.Filter.ItemCatg?.ToString() == catg.Value;
+                                        <option value="@catg.Value" selected="@(selectedCatg ? "selected" : null)">@catg.Text</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>INV Group</label>
+                                <select id="Filter_KPGroupItem" name="KPGroupItem" class="form-control form-control-sm select2 vni-font" data-placeholder="--- All ---">
+                                    @foreach (var group in Model.KpGroupList)
+                                    {
+                                        var selectedGroup = string.IsNullOrWhiteSpace(group.Value)
+                                            ? !Model.Filter.KPGroupItem.HasValue
+                                            : Model.Filter.KPGroupItem?.ToString() == group.Value;
+                                        <option value="@group.Value" selected="@(selectedGroup ? "selected" : null)">@group.Text</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label>Active</label>
+                                <select id="Filter_ActiveStatus" name="ActiveStatus" class="form-control form-control-sm select2 vni-font" data-placeholder="--- All ---">
+                                    <option value="" selected="@(!Model.Filter.ActiveStatus.HasValue ? "selected" : null)">--- All ---</option>
+                                    <option value="0" selected="@(Model.Filter.ActiveStatus == 0 ? "selected" : null)">Inactive</option>
+                                    <option value="1" selected="@(Model.Filter.ActiveStatus == 1 ? "selected" : null)">Active</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label>View</label>
+                                <div class="custom-control custom-radio">
+                                    <input type="radio"
+                                           id="Filter_SpecialView_NoActionOneYear"
+                                           name="SpecialView"
+                                           value="NoActionOneYear"
+                                           class="custom-control-input iil-special-view-radio"
+                                           checked="@(Model.Filter.SpecialView == "NoActionOneYear" ? "checked" : null)" />
+                                    <label class="custom-control-label" for="Filter_SpecialView_NoActionOneYear">No Action 1Y</label>
+                                </div>
+                                <div class="custom-control custom-radio">
+                                    <input type="radio"
+                                           id="Filter_SpecialView_NewItems"
+                                           name="SpecialView"
+                                           value="NewItems"
+                                           class="custom-control-input iil-special-view-radio"
+                                           checked="@(Model.Filter.SpecialView == "NewItems" ? "checked" : null)" />
+                                    <label class="custom-control-label" for="Filter_SpecialView_NewItems">View New</label>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-block btn-sm border mb-2">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-10">
+                <div class="card card-primary">
+                    <div class="card-header iil-table-header">
+                        <div class="iil-table-header-left">
+                            <h3 class="card-title">Inventory Item List</h3>
+                            <span class="badge badge-light ml-2">@Model.TotalRecords records</span>
+                            @if (!string.IsNullOrWhiteSpace(Model.SpecialViewTitle))
+                            {
+                                <span class="badge badge-info ml-2">@Model.SpecialViewTitle</span>
+                            }
+                        </div>
+                        <div class="iil-table-header-right app-paging-white">
+                            <nav aria-label="Page navigation">
+                                <div class="d-inline-block mr-2 iil-pagination-info">
+                                    @if (Model.TotalRecords == 0)
+                                    {
+                                        <small>No records</small>
+                                    }
+                                    else
+                                    {
+                                        <small>Showing @Model.PageStart to @Model.PageEnd of @Model.TotalRecords entries</small>
+                                    }
+                                </div>
+                                <div class="iil-page-size-form d-inline-flex mr-2">
+                                    <label class="mb-0 iil-page-size-label" for="inventoryItemListPageSize">Show</label>
+                                    <select id="inventoryItemListPageSize" class="form-control form-control-sm iil-page-size-select">
+                                        @foreach (var pageSizeOption in Model.PageSizeOptions)
+                                        {
+                                            <option value="@pageSizeOption" selected="@(Model.Filter.PageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                        }
+                                    </select>
+                                </div>
+                                <ul class="pagination pagination-sm mb-0 d-inline-flex">
+                                    <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+                                        <a class="page-link iil-pager-link" href="@(Model.HasPreviousPage ? pageUrl(currentPage - 1) : "#")">Prev</a>
+                                    </li>
+                                    @foreach (var pageItem in pageItems)
+                                    {
+                                        if (pageItem.HasValue)
+                                        {
+                                            <li class="page-item @(pageItem.Value == currentPage ? "active" : "")">
+                                                <a class="page-link iil-pager-link" href="@pageUrl(pageItem.Value)">@pageItem.Value</a>
+                                            </li>
+                                        }
+                                        else
+                                        {
+                                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                                        }
+                                    }
+                                    <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+                                        <a class="page-link iil-pager-link" href="@(Model.HasNextPage ? pageUrl(currentPage + 1) : "#")">Next</a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-0">
+                        <div class="table-responsive iil-table-wrap">
+                            <table class="table table-hover table-bordered mb-0 text-nowrap iil-table" id="inventoryItemListTable">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width: 32px;"></th>
+                                        <th class="iil-col-code">Item Code</th>
+                                        <th class="iil-col-name">Item Name</th>
+                                        <th style="width: 80px;">Catg</th>
+                                        <th style="width: 80px;">Unit</th>
+                                        <th style="width: 110px;" class="iil-right">U.Price</th>
+                                        <th style="width: 70px;" class="iil-center">Curr</th>
+                                        <th class="iil-col-spec">Specification</th>
+                                        <th class="iil-col-group">INV Group</th>
+                                        <th style="width: 110px;" class="iil-right">Re-Order Pnt</th>
+                                        <th style="width: 70px;" class="iil-center">IsSub</th>
+                                        <th style="width: 75px;" class="iil-center">IsApmt</th>
+                                        <th style="width: 80px;" class="iil-center">IsActive</th>
+                                        <th style="width: 150px;">Created Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (Model.Rows.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="14" class="text-center text-muted">No data</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        foreach (var row in Model.Rows)
+                                        {
+                                            <tr class="iil-row"
+                                                data-item-id="@row.ItemID"
+                                                data-item-code="@row.ItemCode"
+                                                data-item-name="@row.ItemName"
+                                                data-item-catg="@row.ItemCatg"
+                                                data-item-catg-text="@row.CategoryText"
+                                                data-unit="@row.Unit"
+                                                data-unit-price="@row.UnitPriceInput"
+                                                data-currency="@row.Currency"
+                                                data-currency-text="@row.CurrencyName"
+                                                data-specification="@row.Specification"
+                                                data-kp-group-item="@row.KPGroupItem"
+                                                data-kp-group-text="@row.KPGroupName"
+                                                data-reorder-point="@row.ReOrderPointInput"
+                                                data-is-sub-item="@(row.IsSubItem ? "true" : "false")"
+                                                data-parent-item-code="@row.ParentItemCode"
+                                                data-is-apartment="@(row.IsApartment ? "true" : "false")"
+                                                data-is-stock="@(row.IsStock ? "true" : "false")"
+                                                data-is-fix-asset="@(row.IsFixAsset ? "true" : "false")"
+                                                data-is-material="@(row.IsMaterial ? "true" : "false")"
+                                                data-is-purchase="@(row.IsPurchase ? "true" : "false")"
+                                                data-is-active="@(row.IsActive ? "true" : "false")"
+                                                data-is-new-item="@(row.IsNewItem ? "true" : "false")">
+                                                <td>
+                                                    <input type="radio" class="iil-selector" name="selectedInventoryItem" aria-label="Select row" />
+                                                </td>
+                                                <td>@row.ItemCode</td>
+                                                <td class="iil-col-name">
+                                                    <span class="iil-ellipsis vni-font" title="@row.ItemName">@row.ItemName</span>
+                                                </td>
+                                                <td title="@row.CatgName">@row.CategoryText</td>
+                                                <td>@row.Unit</td>
+                                                <td class="iil-right">@row.UnitPriceDisplay</td>
+                                                <td class="iil-center">@row.CurrencyName</td>
+                                                <td class="iil-col-spec">
+                                                    <span class="iil-ellipsis vni-font" title="@row.Specification">@row.Specification</span>
+                                                </td>
+                                                <td class="iil-col-group">
+                                                    <span class="iil-ellipsis vni-font" title="@row.KPGroupName">@row.KPGroupName</span>
+                                                </td>
+                                                <td class="iil-right">@row.ReOrderPointDisplay</td>
+                                                <td class="iil-center">@(row.IsSubItem ? "Yes" : "No")</td>
+                                                <td class="iil-center">@(row.IsApartment ? "Yes" : "No")</td>
+                                                <td class="iil-center">
+                                                    <span class="badge @(row.IsActive ? "badge-success" : "badge-secondary")">@(row.IsActive ? "Yes" : "No")</span>
+                                                </td>
+                                                <td>@row.CreatedDateDisplay</td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-outline card-primary">
+                    <div class="card-footer p-2 text-center module-action-bar iil-action-bar">
+                        @if (Model.CanAdd)
+                        {
+                            <button type="button" id="iilAddBtn" class="btn btn-sm btn-action-add border mx-1 my-1">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        }
+                        @if (Model.CanEdit)
+                        {
+                            <button type="button" id="iilEditBtn" class="btn btn-sm btn-action-save border mx-1 my-1" disabled>
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                        }
+                        @if (Model.CanDelete)
+                        {
+                            <button type="button" id="iilDeleteBtn" class="btn btn-sm btn-action-delete border mx-1 my-1" disabled>
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        }
+                        @if (Model.CanCheckStock)
+                        {
+                            <button type="button" id="iilStockBtn" class="btn btn-sm btn-action-close border mx-1 my-1" disabled>
+                                <i class="fas fa-boxes"></i> Stock
+                            </button>
+                        }
+                        @if (Model.CanEdit)
+                        {
+                            <button type="button" id="iilRecallLostOpenBtn" class="btn btn-sm btn-action-warning border mx-1 my-1">
+                                <i class="fas fa-undo"></i> Recall Lost
+                            </button>
+                        }
+                        <a href="@Url.Page("./Index", "ExportExcel", new {
+                               Model.Filter.ItemCode,
+                               Model.Filter.ItemName,
+                               Model.Filter.ItemCatg,
+                               Model.Filter.KPGroupItem,
+                               Model.Filter.ActiveStatus,
+                               Model.Filter.SpecialView
+                           })"
+                           class="btn btn-sm btn-action-export border mx-1 my-1">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="modal fade vni-font" id="inventoryItemModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-xl iil-item-modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="post" asp-page-handler="SaveItem" class="iil-item-form" id="inventoryItemForm">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title font-weight-bold" id="inventoryItemModalTitle">Inventory Item</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body pb-2">
+                    <input asp-for="ItemInput.ItemID" type="hidden" />
+                    <input type="hidden" name="Filter.ItemCode" value="@Model.Filter.ItemCode" />
+                    <input type="hidden" name="Filter.ItemName" value="@Model.Filter.ItemName" />
+                    <input type="hidden" name="Filter.ItemCatg" value="@Model.Filter.ItemCatg" />
+                    <input type="hidden" name="Filter.KPGroupItem" value="@Model.Filter.KPGroupItem" />
+                    <input type="hidden" name="Filter.ActiveStatus" value="@Model.Filter.ActiveStatus" />
+                    <input type="hidden" name="Filter.SpecialView" value="@Model.Filter.SpecialView" />
+                    <input type="hidden" name="Filter.Page" value="@Model.Filter.Page" />
+                    <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+
+                    <div class="form-row">
+                        <div class="form-group col-md-3 mb-2">
+                            <label>Item Code<span class="text-danger">*</span></label>
+                            <input asp-for="ItemInput.ItemCode" class="form-control form-control-sm vni-font" maxlength="20" required />
+                        </div>
+                        <div class="form-group col-md-9 mb-2">
+                            <label>Item Name<span class="text-danger">*</span></label>
+                            <input asp-for="ItemInput.ItemName" class="form-control form-control-sm vni-font" maxlength="150" required />
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col-md-4 mb-2">
+                            <label>Catg</label>
+                            <select asp-for="ItemInput.ItemCatg" asp-items="Model.CategoryInputList" class="form-control form-control-sm select2 vni-font" data-placeholder="---"></select>
+                        </div>
+                        <div class="form-group col-md-4 mb-2">
+                            <label>INV Group</label>
+                            <select asp-for="ItemInput.KPGroupItem" asp-items="Model.KpGroupList" class="form-control form-control-sm select2 vni-font" data-placeholder="---"></select>
+                        </div>
+                        <div class="form-group col-md-4 mb-2">
+                            <label>Currency</label>
+                            <select asp-for="ItemInput.Currency" asp-items="Model.CurrencyList" class="form-control form-control-sm select2 vni-font" data-placeholder="---">
+                                <option value="">---</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col-md-3 mb-2">
+                            <label>Unit</label>
+                            <input asp-for="ItemInput.Unit" class="form-control form-control-sm vni-font" maxlength="10" />
+                        </div>
+                        <div class="form-group col-md-3 mb-2">
+                            <label>Unit Price</label>
+                            <input asp-for="ItemInput.UnitPrice" type="number" min="0" step="0.0001" class="form-control form-control-sm text-right" />
+                        </div>
+                        <div class="form-group col-md-3 mb-2">
+                            <label>Re-Order Point</label>
+                            <input asp-for="ItemInput.ReOrderPoint" type="number" step="0.01" class="form-control form-control-sm text-right" />
+                        </div>
+                        <div class="form-group col-md-3 mb-2">
+                            <label>Parent Item Code</label>
+                            <input asp-for="ItemInput.ParentItemCode" class="form-control form-control-sm vni-font" maxlength="20" />
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col-md-12 mb-2">
+                            <label>Specification</label>
+                            <input asp-for="ItemInput.Specification" class="form-control form-control-sm vni-font" maxlength="50" />
+                        </div>
+                    </div>
+
+                    <div class="iil-check-grid">
+                        <div class="custom-control custom-checkbox">
+                            <input asp-for="ItemInput.IsSubItem" class="custom-control-input" />
+                            <label class="custom-control-label" asp-for="ItemInput.IsSubItem">Sub Item</label>
+                        </div>
+                        <div class="custom-control custom-checkbox">
+                            <input asp-for="ItemInput.IsApartment" class="custom-control-input" />
+                            <label class="custom-control-label" asp-for="ItemInput.IsApartment">Apartment</label>
+                        </div>
+                        <div class="custom-control custom-checkbox">
+                            <input asp-for="ItemInput.IsStock" class="custom-control-input" />
+                            <label class="custom-control-label" asp-for="ItemInput.IsStock">Stock</label>
+                        </div>
+                        <div class="custom-control custom-checkbox">
+                            <input asp-for="ItemInput.IsFixAsset" class="custom-control-input" />
+                            <label class="custom-control-label" asp-for="ItemInput.IsFixAsset">Fixed Asset</label>
+                        </div>
+                        <div class="custom-control custom-checkbox">
+                            <input asp-for="ItemInput.IsMaterial" class="custom-control-input" />
+                            <label class="custom-control-label" asp-for="ItemInput.IsMaterial">Material</label>
+                        </div>
+                        <div class="custom-control custom-checkbox">
+                            <input asp-for="ItemInput.IsPurchase" class="custom-control-input" />
+                            <label class="custom-control-label" asp-for="ItemInput.IsPurchase">Purchase</label>
+                        </div>
+                        <div class="custom-control custom-checkbox">
+                            <input asp-for="ItemInput.IsActive" class="custom-control-input" />
+                            <label class="custom-control-label" asp-for="ItemInput.IsActive">Active</label>
+                        </div>
+                        <div class="custom-control custom-checkbox">
+                            <input asp-for="ItemInput.IsNewItem" class="custom-control-input" />
+                            <label class="custom-control-label" asp-for="ItemInput.IsNewItem">New Item</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    @if (Model.CanAdd || Model.CanEdit)
+                    {
+                        <button type="submit" class="btn btn-sm btn-action-save border">
+                            <i class="fas fa-save"></i> Save
+                        </button>
+                    }
+                    <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
+                        <i class="fas fa-arrow-left"></i> Back to list
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade vni-font" id="inventoryItemDeleteModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <form method="post" asp-page-handler="DeleteItem" id="inventoryItemDeleteForm">
+                <div class="modal-header bg-danger text-white py-2">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="ItemInput.ItemID" id="DeleteItemInput_ItemID" />
+                    <input type="hidden" name="Filter.ItemCode" value="@Model.Filter.ItemCode" />
+                    <input type="hidden" name="Filter.ItemName" value="@Model.Filter.ItemName" />
+                    <input type="hidden" name="Filter.ItemCatg" value="@Model.Filter.ItemCatg" />
+                    <input type="hidden" name="Filter.KPGroupItem" value="@Model.Filter.KPGroupItem" />
+                    <input type="hidden" name="Filter.ActiveStatus" value="@Model.Filter.ActiveStatus" />
+                    <input type="hidden" name="Filter.SpecialView" value="@Model.Filter.SpecialView" />
+                    <input type="hidden" name="Filter.Page" value="@Model.Filter.Page" />
+                    <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+                    <div>Are you sure to delete item <strong id="inventoryItemDeleteName"></strong>?</div>
+                </div>
+                <div class="modal-footer py-2">
+                    @if (Model.CanDelete)
+                    {
+                        <button type="submit" class="btn btn-sm btn-action-delete border">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    }
+                    <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@if (Model.CanEdit)
+{
+    <div class="modal fade vni-font" id="inventoryItemRecallLostModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-xl iil-recall-modal-dialog" role="document">
+            <div class="modal-content">
+                <form method="post" asp-page-handler="RecallLostItem" id="inventoryItemRecallForm">
+                    <div class="modal-header bg-warning py-2">
+                        <h5 class="modal-title font-weight-bold">Recall Lost Item</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body pb-2">
+                        <input type="hidden" name="RecallItemCode" id="RecallItemCode" />
+                        <input type="hidden" name="Filter.ItemCode" value="@Model.Filter.ItemCode" />
+                        <input type="hidden" name="Filter.ItemName" value="@Model.Filter.ItemName" />
+                        <input type="hidden" name="Filter.ItemCatg" value="@Model.Filter.ItemCatg" />
+                        <input type="hidden" name="Filter.KPGroupItem" value="@Model.Filter.KPGroupItem" />
+                        <input type="hidden" name="Filter.ActiveStatus" value="@Model.Filter.ActiveStatus" />
+                        <input type="hidden" name="Filter.SpecialView" value="@Model.Filter.SpecialView" />
+                        <input type="hidden" name="Filter.Page" value="@Model.Filter.Page" />
+                        <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+
+                        <div class="form-row align-items-end mb-2">
+                            <div class="form-group col-md-8 mb-0">
+                                <label for="inventoryItemRecallSearch">Search lost item</label>
+                                <input type="search" id="inventoryItemRecallSearch" class="form-control form-control-sm vni-font" placeholder="Item code, item name, category, specification" />
+                            </div>
+                            <div class="form-group col-md-4 mb-0 text-md-right">
+                                <span class="badge badge-light border">@Model.RecallLostCandidates.Count lost candidate(s)</span>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive iil-recall-table-wrap">
+                            <table class="table table-hover table-bordered table-sm mb-0 text-nowrap iil-recall-table" id="inventoryItemRecallTable">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width: 32px;"></th>
+                                        <th style="width: 150px;">Item Code</th>
+                                        <th style="min-width: 340px;">Item Name</th>
+                                        <th style="width: 90px;">Catg</th>
+                                        <th style="width: 80px;">Unit</th>
+                                        <th style="width: 120px;" class="text-right">U.Price</th>
+                                        <th style="width: 80px;">Curr</th>
+                                        <th style="min-width: 220px;">Specification</th>
+                                        <th style="min-width: 170px;">INV Group</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (Model.RecallLostCandidates.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="9" class="text-center text-muted">No lost item candidate</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        foreach (var candidate in Model.RecallLostCandidates)
+                                        {
+                                            var searchText = $"{candidate.ItemCode} {candidate.ItemName} {candidate.CatgCode} {candidate.CatgName} {candidate.Unit} {candidate.Specification} {candidate.KPGroupName}".ToLowerInvariant();
+                                            <tr class="iil-recall-row"
+                                                data-item-code="@candidate.ItemCode"
+                                                data-item-name="@candidate.ItemName"
+                                                data-search="@searchText">
+                                                <td>
+                                                    <input type="radio" class="iil-recall-selector" name="selectedRecallLostItem" aria-label="Select lost item" />
+                                                </td>
+                                                <td>@candidate.ItemCode</td>
+                                                <td>
+                                                    <span class="iil-ellipsis vni-font" title="@candidate.ItemName">@candidate.ItemName</span>
+                                                </td>
+                                                <td title="@candidate.CatgName">@candidate.CatgCode</td>
+                                                <td>@candidate.Unit</td>
+                                                <td class="text-right">@candidate.UnitPriceDisplay</td>
+                                                <td>@candidate.CurrencyName</td>
+                                                <td>
+                                                    <span class="iil-ellipsis" title="@candidate.Specification">@candidate.Specification</span>
+                                                </td>
+                                                <td>
+                                                    <span class="iil-ellipsis" title="@candidate.KPGroupName">@candidate.KPGroupName</span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="small text-muted mt-2" id="inventoryItemRecallSelection">No item selected</div>
+                    </div>
+                    <div class="modal-footer py-2">
+                        <button type="submit" id="iilRecallLostSubmitBtn" class="btn btn-sm btn-action-warning border" disabled>
+                            <i class="fas fa-undo"></i> Recall Lost
+                        </button>
+                        <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
+                            <i class="fas fa-arrow-left"></i> Back to list
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="modal fade vni-font" id="inventoryItemStockModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title font-weight-bold">Item Stock</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="inventoryItemStockLoading" class="text-muted py-2">Loading stock data...</div>
+                <div id="inventoryItemStockError" class="alert alert-warning py-2 d-none"></div>
+
+                <div id="inventoryItemStockContent" class="d-none">
+                    <div class="mb-2">
+                        <div>
+                            <strong id="inventoryItemStockCode"></strong>
+                            <span id="inventoryItemStockName"></span>
+                        </div>
+                        <div>
+                            Main inventory:
+                            <strong id="inventoryItemStockMainInventory"></strong>
+                            <span id="inventoryItemStockUnit"></span>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered mb-0">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th style="width: 80px;">Year</th>
+                                    <th>Store</th>
+                                    <th style="width: 130px;" class="text-right">BG Quantity</th>
+                                    <th style="width: 130px;" class="text-right">BG Amount</th>
+                                    <th style="width: 80px;">Curr</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inventoryItemStockStoreBody">
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">No store balance data</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Inventory/InventoryItemList/index.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script src="~/js/Inventory/InventoryItemList/index.js" asp-append-version="true"></script>
+}

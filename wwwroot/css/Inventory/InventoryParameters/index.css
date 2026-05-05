@@ -101,6 +101,14 @@
     width: 100% !important;
 }
 
+#inventoryParametersSearchForm .select2-container {
+    z-index: auto !important;
+}
+
+body.modal-open #inventoryParametersSearchForm .select2-container {
+    z-index: 1 !important;
+}
+
 #inventoryParametersSearchForm .select2-container--default .select2-selection--single,
 .ip-group-form .select2-container--default .select2-selection--single {
     height: 31px;

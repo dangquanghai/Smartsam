@@ -154,7 +154,6 @@
                                 <col class="mr-col-buy" />
                                 <col class="mr-col-note" />
                                 <col class="mr-col-normqty @(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")" />
-                                <col class="mr-col-issued @(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")" />
                                 <col class="mr-col-new-item @(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")" />
                                 <col class="mr-col-manual @(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")" />
                                 <col class="mr-col-tempstore @(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")" />
@@ -166,13 +165,12 @@
                                     <th>ITEMNAME</th>
                                     <th>Unit</th>
                                     <th>Order</th>
-                                    <th>NotRec</th>
+                                    <th>ISSUE</th>
                                     <th>In</th>
                                     <th>Acc.In</th>
                                     <th>Buy</th>
                                     <th>Note</th>
                                     <th class="@(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">Norm_Q</th>
-                                    <th class="@(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">ISSUED</th>
                                     <th class="@(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">NEW_IT</th>
                                     <th class="@(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">Manual</th>
                                     <th class="@(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">TempSt</th>
@@ -181,7 +179,7 @@
                             <tbody id="mrLineTableBody">
                                 @if (Model.Lines.Count == 0)
                                 {
-                                    <tr class="mr-line-empty"><td colspan="@(Model.ShowAdvancedDetailColumns ? 15 : 10)" class="text-center text-muted">No line items.</td></tr>
+                                    <tr class="mr-line-empty"><td colspan="@(Model.ShowAdvancedDetailColumns ? 14 : 10)" class="text-center text-muted">No line items.</td></tr>
                                 }
                                 else
                                 {
@@ -211,8 +209,9 @@
                                             </td>
                                             <td><input type="text" inputmode="decimal" class="form-control form-control-sm mr-line-order" value="@(line.OrderQty?.ToString("0.##") ?? "0")" /></td>
                                             <td>
-                                                <span class="mr-readonly-cell-text">@(line.NotReceipt?.ToString("0.##") ?? "0")</span>
+                                                <span class="mr-readonly-cell-text">@(line.Issued?.ToString("0.##") ?? "0")</span>
                                                 <input type="hidden" class="mr-line-notrec" value="@(line.NotReceipt?.ToString("0.##") ?? "0")" />
+                                                <input type="hidden" class="mr-line-issued" value="@(line.Issued?.ToString("0.##") ?? "0")" />
                                             </td>
                                             <td>
                                                 <span class="mr-readonly-cell-text">@(line.InStock?.ToString("0.##") ?? "0")</span>
@@ -234,10 +233,6 @@
                                             <td class="@(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">
                                                 <span class="mr-readonly-cell-text">@(line.NormQty?.ToString("0.##") ?? "0")</span>
                                                 <input type="hidden" class="mr-line-normqty" value="@(line.NormQty?.ToString("0.##") ?? "0")" />
-                                            </td>
-                                            <td class="@(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">
-                                                <span class="mr-readonly-cell-text">@(line.Issued?.ToString("0.##") ?? "0")</span>
-                                                <input type="hidden" class="mr-line-issued" value="@(line.Issued?.ToString("0.##") ?? "0")" />
                                             </td>
                                             <td class="text-center align-middle @(Model.ShowAdvancedDetailColumns ? string.Empty : "d-none")">
                                                 <input type="checkbox" class="mr-line-flag-checkbox" disabled @(line.NewItem ? "checked" : string.Empty) />

@@ -30,8 +30,8 @@
 
                     <div class="card-body">
                         <form method="get" id="purchaseOrderSearchForm">
-                            <input type="hidden" id="PageIndex" name="PageIndex" value="1" />
-                            <input type="hidden" id="PageSize" name="PageSize" value="@Model.DefaultPageSize" />
+                            <input type="hidden" id="PageIndex" name="Filter.Page" value="@Model.Filter.Page" />
+                            <input type="hidden" id="PageSize" name="Filter.PageSize" value="@Model.Filter.PageSize" />
                             <div class="form-group">
                                 <label>Order No.</label>
                                 <input class="form-control form-control-sm" asp-for="Filter.PONo" id="Filter_PONo" />
@@ -154,7 +154,7 @@
                                     <select id="purchaseOrderPageSize" class="form-control form-control-sm po-page-size-select">
                                         @foreach (var pageSizeOption in Model.PageSizeOptions)
                                         {
-                                            <option value="@pageSizeOption" selected="@(Model.DefaultPageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                            <option value="@pageSizeOption" selected="@(Model.Filter.PageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
                                         }
                                     </select>
                                 </div>
@@ -172,12 +172,12 @@
                                     <col style="width: 110px;" />
                                     <col style="width: 110px;" />
                                     <col style="width: 130px;" />
-                                    <col style="width: 290px;" />
-                                    <col style="width: 120px;" />
+                                    <col style="width: 480px;" />
+                                    <col style="width: 160px;" />
                                     <col style="width: 120px;" />
                                     <col style="width: 100px;" />
                                     <col style="width: 100px;" />
-                                    <col style="width: 220px;" />
+                                    <col style="width: 660px;" />
                                 </colgroup>
                                 <thead class="thead-light">
                                     <tr>
@@ -333,7 +333,7 @@
                                                 <select id="purchaseOrderViewDetailPageSize" class="form-control form-control-sm po-viewdetail-page-size-select">
                                                     @foreach (var pageSizeOption in Model.PageSizeOptions)
                                                     {
-                                                        <option value="@pageSizeOption" selected="@(Model.DefaultPageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                                        <option value="@pageSizeOption" selected="@(Model.Filter.PageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
                                                     }
                                                 </select>
                                             </div>

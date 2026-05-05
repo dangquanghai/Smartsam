@@ -262,6 +262,7 @@
                 if (response.success) {
                     state.currentDataRows = response.data || [];
                     renderPurchaseOrders(response.data || []);
+                    initializeLegacyTooltips(CONFIG.selectors.tbody);
                     updatePagination(response.total || 0, response.page || 1, response.pageSize || pageSize, response.totalPages || 1);
                     syncBrowserUrlToSearchState(response.page || page, filter);
                     resetActions();
@@ -305,7 +306,7 @@
                     <td>${row.purchaserCode || ''}</td>
                     <td>${row.chiefACode || ''}</td>
                     <td>${row.gDirectorCode || ''}</td>
-                    <td class="vni-font">${row.remark || ''}</td>
+                    <td class="vni-font">${buildEllipsisCell(row.remark || '', 'vni-font')}</td>
                 </tr>`;
         });
 
@@ -458,8 +459,8 @@
         syncDateRangeState();
         syncViewDetailDateRangeState();
 
-        const queryPage = getQueryInt('Page') || getQueryInt('PageIndex') || 1;
-        const queryPageSize = getQueryInt('PageSize');
+        const queryPage = getQueryInt('Filter.Page') || getQueryInt('Page') || getQueryInt('PageIndex') || 1;
+        const queryPageSize = getQueryInt('Filter.PageSize') || getQueryInt('PageSize');
         const pageSizeSelect = document.getElementById('purchaseOrderPageSize');
         const viewDetailPageSizeSelect = document.getElementById('purchaseOrderViewDetailPageSize');
         const pageSizeInput = document.getElementById('PageSize');
@@ -790,6 +791,7 @@ async function downloadPurchaseOrderPdf(reportUrl, fileName) {
                     viewDetailState.currentPage = response.page || page;
                     viewDetailState.pageSize = response.pageSize || request.pageSize || pageSize || 0;
                     renderViewDetailRows(response.data || []);
+                    initializeLegacyTooltips('#purchaseOrderViewDetailRows');
                     $('#purchaseOrderViewDetailCount').text(`Total Record(s): ${(response.total || 0)}`);
                     updateViewDetailPagination(response.total || 0, response.page || page, response.pageSize || request.pageSize || pageSize || 0, response.totalPages || 1);
                 } else {
@@ -843,7 +845,7 @@ async function downloadPurchaseOrderPdf(reportUrl, fileName) {
                     <td class="text-right">${formatNumber(row.unitPrice || 0)}</td>
                     <td class="text-right">${formatNumber(row.poAmount || 0)}</td>
                     <td>${escapeHtml(row.forDepartment || '')}</td>
-                    <td class="vni-font">${escapeHtml(row.note || '')}</td>
+                    <td class="vni-font">${buildEllipsisCell(row.note || '', 'vni-font')}</td>
                     <td class="text-right">${formatNumber(row.recQty || 0)}</td>
                     <td class="text-right">${formatNumber(row.recAmount || 0)}</td>
                     <td>${escapeHtml(row.recDateDisplay || '')}</td>
@@ -898,6 +900,7 @@ async function downloadPurchaseOrderPdf(reportUrl, fileName) {
             success: function (response) {
                 if (response && response.success) {
                     renderEstimateViewRows(response.data || []);
+                    initializeLegacyTooltips('#purchaseOrderEstimateViewRows');
                 } else {
                     showEstimateViewError((response && response.message) || 'Load estimate view failed.');
                 }
@@ -948,7 +951,34 @@ async function downloadPurchaseOrderPdf(reportUrl, fileName) {
     function buildEllipsisCell(input, extraClass) {
         const raw = (input || '').toString();
         const className = extraClass ? `app-table-ellipsis ${extraClass}` : 'app-table-ellipsis';
-        return `<span class="${className}" title="${escapeHtml(raw)}">${escapeHtml(raw)}</span>`;
+        const tooltipFont = extraClass ? ` data-tooltip-font="${escapeHtml(extraClass)}"` : '';
+        return `<span class="${className}" data-toggle="tooltip"${tooltipFont} title="${escapeHtml(raw)}">${escapeHtml(raw)}</span>`;
+    }
+
+    function initializeLegacyTooltips(container) {
+        const $container = $(container || document);
+        const $tooltips = $container.find('[data-toggle="tooltip"]');
+        if (!$tooltips.length || typeof $tooltips.tooltip !== 'function') {
+            return;
+        }
+
+        $tooltips.tooltip('dispose').tooltip({
+            container: 'body',
+            trigger: 'hover',
+            boundary: 'window'
+        });
+
+        $tooltips.off('inserted.bs.tooltip.poLegacyFont').on('inserted.bs.tooltip.poLegacyFont', function () {
+            const fontClass = ($(this).data('tooltip-font') || '').toString().trim();
+            if (!fontClass) {
+                return;
+            }
+
+            const tooltipId = $(this).attr('aria-describedby');
+            if (tooltipId) {
+                $(`#${tooltipId}`).find('.tooltip-inner').addClass(fontClass);
+            }
+        });
     }
 
     function formatNumber(value) {

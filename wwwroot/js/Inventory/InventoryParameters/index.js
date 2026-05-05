@@ -230,6 +230,7 @@
         initSelection();
         initPageSizeSubmit();
         initSelect2("#Filter_DepartmentId");
+        initSelect2("#Filter_AdminGroup");
         initSelect2("#GroupInput_DepID", { dropdownParent: "#inventoryParameterGroupModal", allowClear: false });
         initActions();
     }
