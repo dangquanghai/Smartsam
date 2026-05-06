@@ -388,7 +388,7 @@ public class IndexModel : BasePageModel
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Cannot create Material Request. {ex.Message}";
+            ErrorMessage = BuildSystemErrorMessage(ex);
             return RedirectToPage("./Index");
         }
     }
@@ -466,9 +466,71 @@ public class IndexModel : BasePageModel
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Cannot create Auto MR. {ex.Message}";
+            ErrorMessage = GetCreateAutoErrorMessage(ex);
             return RedirectToPage("./Index");
         }
+    }
+
+    private static string GetCreateAutoErrorMessage(Exception ex)
+    {
+        return IsDuplicateMaterialRequestRequestNoError(ex)
+            ? $"Cannot create Auto MR because the preview Request No is already in use. Please reopen Generate MR and try again. Error details: {GetExceptionDetails(ex)}"
+            : BuildSystemErrorMessage(ex);
+    }
+
+    private static string BuildSystemErrorMessage(Exception ex)
+    {
+        return $"A system error occurred. Please contact your system administrator. Error details: {GetExceptionDetails(ex)}";
+    }
+
+    private static string GetExceptionDetails(Exception ex)
+    {
+        var current = ex;
+        while (current.InnerException is not null)
+        {
+            current = current.InnerException;
+        }
+
+        return current.Message;
+    }
+
+    private static bool IsDuplicateMaterialRequestRequestNoError(Exception ex)
+    {
+        var sqlEx = FindSqlException(ex);
+        if (sqlEx is null)
+        {
+            return false;
+        }
+
+        return (sqlEx.Number == 2627 || sqlEx.Number == 2601)
+            && sqlEx.Message.Contains("PK_MATRIAL_REQUEST", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static SqlException? FindSqlException(Exception? ex)
+    {
+        if (ex is null)
+        {
+            return null;
+        }
+
+        if (ex is SqlException sqlEx)
+        {
+            return sqlEx;
+        }
+
+        if (ex is AggregateException aggregate)
+        {
+            foreach (var inner in aggregate.InnerExceptions)
+            {
+                var found = FindSqlException(inner);
+                if (found is not null)
+                {
+                    return found;
+                }
+            }
+        }
+
+        return FindSqlException(ex.InnerException);
     }
 
     /// <summary>

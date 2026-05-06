@@ -385,10 +385,10 @@ public class MaterialRequestDetailModel : BasePageModel
                 return new JsonResult(new
                 {
                     success = false,
-                    message = ex is InvalidOperationException ? ex.Message : $"Cannot save Material Request. {ex.Message}"
+                    message = GetUserFacingExceptionMessage(ex)
                 });
             }
-            ModelState.AddModelError(string.Empty, ex is InvalidOperationException ? ex.Message : $"Cannot save Material Request. {ex.Message}");
+            ModelState.AddModelError(string.Empty, GetUserFacingExceptionMessage(ex));
             return Page();
         }
     }
@@ -516,7 +516,7 @@ public class MaterialRequestDetailModel : BasePageModel
             return new JsonResult(new
             {
                 success = false,
-                message = ex is InvalidOperationException ? ex.Message : $"Cannot replace item. {ex.Message}"
+                message = GetUserFacingExceptionMessage(ex)
             })
             {
                 StatusCode = StatusCodes.Status500InternalServerError
@@ -581,7 +581,7 @@ public class MaterialRequestDetailModel : BasePageModel
             return new JsonResult(new
             {
                 success = false,
-                message = ex is InvalidOperationException ? ex.Message : $"Cannot save Buy/Note changes. {ex.Message}"
+                message = GetUserFacingExceptionMessage(ex)
             })
             {
                 StatusCode = StatusCodes.Status500InternalServerError
@@ -709,9 +709,7 @@ public class MaterialRequestDetailModel : BasePageModel
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[MaterialRequest][WorkflowAction:{action}] {ex}");
-            ErrorMessage = ex is InvalidOperationException
-                ? ex.Message
-                : $"Cannot process workflow action. {ex.Message}";
+            ErrorMessage = GetUserFacingExceptionMessage(ex);
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
         }
     }
@@ -785,9 +783,7 @@ public class MaterialRequestDetailModel : BasePageModel
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[MaterialRequest][RejectItem] {ex}");
-            ErrorMessage = ex is InvalidOperationException
-                ? ex.Message
-                : $"Cannot reject item(s). {ex.Message}";
+            ErrorMessage = GetUserFacingExceptionMessage(ex);
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
         }
     }
@@ -862,9 +858,7 @@ public class MaterialRequestDetailModel : BasePageModel
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[MaterialRequest][Calculate] {ex}");
-            ErrorMessage = ex is InvalidOperationException
-                ? ex.Message
-                : $"Cannot calculate Material Request. {ex.Message}";
+            ErrorMessage = GetUserFacingExceptionMessage(ex);
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
         }
     }
@@ -969,8 +963,31 @@ public class MaterialRequestDetailModel : BasePageModel
         }
         catch (Exception ex)
         {
-            return new JsonResult(new { success = false, message = ex.Message });
+            return new JsonResult(new { success = false, message = GetUserFacingExceptionMessage(ex) });
         }
+    }
+
+    private static string GetUserFacingExceptionMessage(Exception ex)
+    {
+        return ex is InvalidOperationException
+            ? ex.Message
+            : BuildSystemErrorMessage(ex);
+    }
+
+    private static string BuildSystemErrorMessage(Exception ex)
+    {
+        return $"A system error occurred. Please contact your system administrator. Error details: {GetExceptionDetails(ex)}";
+    }
+
+    private static string GetExceptionDetails(Exception ex)
+    {
+        var current = ex;
+        while (current.InnerException is not null)
+        {
+            current = current.InnerException;
+        }
+
+        return current.Message;
     }
 
     public async Task<IActionResult> OnGetReport(long id, bool modal = false, CancellationToken cancellationToken = default)
