@@ -97,9 +97,7 @@
                                 <div class="col-10">
                                     <textarea asp-for="Header.Note"
                                               id="Note"
-                                              rows="2"
-                                              maxlength="100"
-                                              oninput="if (this.value.length > this.maxLength) this.value = this.value.slice(0, this.maxLength);"
+                                              rows="6"
                                               class="form-control form-control-sm vni-font"
                                               readonly="@Model.IsViewMode"></textarea>
                                 </div>
@@ -132,7 +130,7 @@
                                     <label class="col-form-label-sm mb-0">Before VAT</label>
                                 </div>
                                 <div class="purchase-order-vat-value">
-                                    <input asp-for="Header.BeforeVAT" id="BeforeVAT" class="form-control form-control-sm text-right" readonly />
+                                    <input asp-for="Header.BeforeVAT" id="BeforeVAT" class="form-control form-control-sm text-right" readonly="@Model.IsViewMode" />
                                 </div>
 
                                 <div></div>
@@ -141,7 +139,7 @@
                                     <label class="col-form-label-sm mb-0">VAT</label>
                                 </div>
                                 <div class="purchase-order-vat-value">
-                                    <input asp-for="Header.VAT" id="VAT" class="form-control form-control-sm text-right" readonly />
+                                    <input asp-for="Header.VAT" id="VAT" class="form-control form-control-sm text-right" readonly="@Model.IsViewMode" />
                                 </div>
 
                                 <div></div>
@@ -150,7 +148,7 @@
                                     <label class="col-form-label-sm mb-0">After VAT</label>
                                 </div>
                                 <div class="purchase-order-vat-value">
-                                    <input asp-for="Header.AfterVAT" id="AfterVAT" class="form-control form-control-sm text-right" readonly />
+                                    <input asp-for="Header.AfterVAT" id="AfterVAT" class="form-control form-control-sm text-right" readonly="@Model.IsViewMode" />
                                 </div>
                             </div>
                         </div>

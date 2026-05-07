@@ -10,6 +10,7 @@ $(document).ready(function () {
         e.preventDefault();
         if (validateMainForm()) {
             syncDetailsJson();
+            normalizeDecimalFieldsForPost();
             $(this).off('submit').submit();
         }
     });
@@ -29,7 +30,7 @@ function initializePage(mode) {
 
     renderDetailRows();
     bindMainEvents(mode);
-    updateTotals();
+    syncDetailsJson();
 
     if (window.purchaseOrderDetailPage?.openConvertModal && window.jQuery) {
         closeOpenSelect2();
@@ -912,6 +913,18 @@ function syncDetailsJson() {
         };
     });
     $('#DetailsJson').val(JSON.stringify(payload));
+}
+
+// Chuyen cac field decimal ve so thô trước khi submit để server bind được.
+function normalizeDecimalFieldsForPost() {
+    ['#ExRate', '#PerVAT', '#BeforeVAT', '#VAT', '#AfterVAT'].forEach(function (selector) {
+        const $field = $(selector);
+        if (!$field.length) {
+            return;
+        }
+
+        $field.val(String(toNumber($field.val())));
+    });
 }
 
 // Tao option dropdown phong ban tu list tren server.
