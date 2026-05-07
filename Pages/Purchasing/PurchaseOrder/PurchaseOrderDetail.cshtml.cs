@@ -185,7 +185,6 @@ public class PurchaseOrderDetailModel : BasePageModel
         }
 
         Details = ParseDetails();
-        RecalculateTotals(Details);
         ValidateHeader(Details);
 
         if (!ModelState.IsValid)
@@ -1645,7 +1644,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         cmd.Parameters.Add("@POTerms", SqlDbType.NVarChar, 2000).Value = string.IsNullOrWhiteSpace(Header.POTerms) ? DBNull.Value : Header.POTerms;
         cmd.Parameters.Add("@StatusID", SqlDbType.Int).Value = Header.StatusId <= 0 ? 1 : Header.StatusId;
         cmd.Parameters.Add("@AssessLevel", SqlDbType.Int).Value = Header.AssessLevel.HasValue ? Header.AssessLevel.Value : DBNull.Value;
-        cmd.Parameters.Add("@Comment", SqlDbType.NVarChar, 2000).Value = string.IsNullOrWhiteSpace(Header.Note) ? DBNull.Value : Header.Note;
+        cmd.Parameters.Add("@Comment", SqlDbType.NVarChar, -1).Value = string.IsNullOrWhiteSpace(Header.Note) ? DBNull.Value : Header.Note;
         cmd.Parameters.Add("@Currency", SqlDbType.Int).Value = Header.Currency <= 0 ? 1 : Header.Currency;
         cmd.Parameters.Add("@ExRate", SqlDbType.Decimal).Value = Header.ExRate;
         cmd.Parameters.Add("@BeforeVAT", SqlDbType.Decimal).Value = Header.BeforeVAT;
@@ -1669,11 +1668,6 @@ public class PurchaseOrderDetailModel : BasePageModel
         if (!Header.SupplierID.HasValue || Header.SupplierID.Value <= 0)
         {
             ModelState.AddModelError("Header.SupplierID", "Supplier is required.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(Header.Note) && Header.Note.Length > 100)
-        {
-            ModelState.AddModelError("Header.Note", "Note must not exceed 100 characters.");
         }
 
         if (!string.IsNullOrWhiteSpace(Header.Remark) && Header.Remark.Length > 100)
@@ -2365,9 +2359,7 @@ public class PurchaseOrderHeader
     public int? AssessLevel { get; set; }
     public int Currency { get; set; } = 1;
     public decimal ExRate { get; set; }
-    [StringLength(100)]
     public string? Comment { get; set; }
-    [StringLength(100)]
     public string? Note { get; set; }
     public decimal BeforeVAT { get; set; }
     public decimal PerVAT { get; set; }
