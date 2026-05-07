@@ -1523,7 +1523,13 @@ public class PurchaseOrderDetailModel : BasePageModel
         LEFT JOIN dbo.MATERIAL_REQUEST mr ON mr.REQUEST_NO = mrDetail.REQUEST_NO
         LEFT JOIN dbo.INV_KPGroup kp ON kp.KPGroupID = mr.STORE_GROUP
         LEFT JOIN dbo.MS_Department mrDept ON mrDept.DeptID = kp.DepID
-        LEFT JOIN dbo.MATERIAL_REQUEST mrByRequest ON mrByRequest.REQUEST_NO = TRY_CONVERT(decimal(18, 0), NULLIF(LTRIM(RTRIM(CONVERT(nvarchar(50), d.MRRequestNO))), ''))
+        OUTER APPLY (
+            SELECT NULLIF(LTRIM(RTRIM(CONVERT(varchar(50), d.MRRequestNO))), '') AS CleanMRRequestNO
+        ) mrRequestNo
+        LEFT JOIN dbo.MATERIAL_REQUEST mrByRequest ON mrByRequest.REQUEST_NO = CASE
+            WHEN mrRequestNo.CleanMRRequestNO NOT LIKE '%[^0-9]%' THEN CONVERT(decimal(18, 0), mrRequestNo.CleanMRRequestNO)
+            ELSE NULL
+        END
         LEFT JOIN dbo.INV_KPGroup kpByRequest ON kpByRequest.KPGroupID = mrByRequest.STORE_GROUP
         LEFT JOIN dbo.MS_Department mrDeptByRequest ON mrDeptByRequest.DeptID = kpByRequest.DepID
         WHERE d.PRID = @PRID
