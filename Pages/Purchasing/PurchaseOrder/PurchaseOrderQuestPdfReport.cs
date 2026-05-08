@@ -201,12 +201,12 @@ internal static class PurchaseOrderQuestPdfReport
         container.Column(column =>
         {
             column.Item().BorderTop(0.8f).PaddingTop(6).Text("TERMS & CONDITIONS:").Bold().FontSize(10);
-            column.Item().MinHeight(58).PaddingTop(4).Element(content => ComposeStyledLines(content, SplitNotes(model.TermsAndConditions), VniPdfFontFamily));
+            column.Item().MinHeight(58).PaddingTop(4).Element(content => ComposeStyledLines(content, SplitNotes(model.TermsAndConditions), Tcvn3PdfFontFamily));
 
             column.Item().PaddingTop(6).EnsureSpace(170).Column(tail =>
             {
                 tail.Item().BorderTop(0.8f).PaddingTop(4).Text("NOTES:").Bold().FontSize(10);
-                tail.Item().MinHeight(36).PaddingTop(4).Element(content => ComposeStyledLines(content, SplitNotes(model.Notes), VniPdfFontFamily));
+                tail.Item().MinHeight(36).PaddingTop(4).Element(content => ComposeStyledLines(content, SplitNotes(model.Notes), Tcvn3PdfFontFamily));
                 tail.Item().PaddingTop(12).Element(content => ComposeSignatureBlock(content, model));
             });
         });

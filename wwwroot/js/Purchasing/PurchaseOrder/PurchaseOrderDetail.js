@@ -8,16 +8,54 @@ $(document).ready(function () {
         }
 
         e.preventDefault();
+        prepareLegacyTcvn3InputsForPost();
         if (validateMainForm()) {
             syncDetailsJson();
             normalizeDecimalFieldsForPost();
             $(this).off('submit').submit();
+            return;
         }
+
+        restoreTcvn3InputsForDisplay();
     });
 });
 
 let purchaseOrderDetails = [];
 let purchaseOrderPrLines = [];
+const TCVN3_WEB_LOWER_U = '\uE001';
+const TCVN3_WEB_UPPER_U = '\uE002';
+
+function toTcvn3WebText(value) {
+    return String(value || '')
+        .replace(/\u00AD/g, TCVN3_WEB_LOWER_U)
+        .replace(/\u01B0/g, TCVN3_WEB_LOWER_U)
+        .replace(/\u00A6/g, TCVN3_WEB_UPPER_U)
+        .replace(/\u01AF/g, TCVN3_WEB_UPPER_U);
+}
+
+function toLegacyTcvn3Text(value) {
+    return String(value || '')
+        .replace(/\uE001/g, '\u00AD')
+        .replace(/\uE002/g, '\u00A6');
+}
+
+function getTcvn3HeaderInputs() {
+    return $('#POTerms, #Note');
+}
+
+function restoreTcvn3InputsForDisplay() {
+    getTcvn3HeaderInputs().each(function () {
+        const $input = $(this);
+        $input.val(toTcvn3WebText($input.val()));
+    });
+}
+
+function prepareLegacyTcvn3InputsForPost() {
+    getTcvn3HeaderInputs().each(function () {
+        const $input = $(this);
+        $input.val(toLegacyTcvn3Text($input.val()));
+    });
+}
 
 function initializePage(mode) {
     initializeLookupControls();
@@ -30,12 +68,24 @@ function initializePage(mode) {
 
     renderDetailRows();
     bindMainEvents(mode);
+    restoreTcvn3InputsForDisplay();
+    bindTcvn3HeaderInputEvents();
     syncDetailsJson();
 
     if (window.purchaseOrderDetailPage?.openConvertModal && window.jQuery) {
         closeOpenSelect2();
         $('#purchaseOrderConvertModal').modal('show');
     }
+}
+
+function bindTcvn3HeaderInputEvents() {
+    getTcvn3HeaderInputs().off('input.tcvn3web').on('input.tcvn3web', function () {
+        const $input = $(this);
+        const normalizedValue = toTcvn3WebText($input.val());
+        if ($input.val() !== normalizedValue) {
+            $input.val(normalizedValue);
+        }
+    });
 }
 
 // Supplier dung lookup endpoint; PR No la dropdown thuong server-rendered.

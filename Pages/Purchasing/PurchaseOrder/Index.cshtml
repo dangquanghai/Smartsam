@@ -433,6 +433,18 @@
 
 @section Styles {
     <link rel="stylesheet" href="~/css/Purchasing/PurchaseOrder/index.css" asp-append-version="true" />
+    <style>
+        @@font-face {
+            font-family: "TCVN3Web";
+            src: url("/fonts/pdf/VnTimeWeb.ttf") format("truetype");
+            font-display: swap;
+        }
+
+        #purchaseOrderTable .tcvn3-font,
+        #purchaseOrderViewDetailTable .tcvn3-font {
+            font-family: "TCVN3Web", "TCVN3", ".VnTime", ".VnArial", ".VnHelvetica", sans-serif !important;
+        }
+    </style>
 }
 
 @section Scripts {

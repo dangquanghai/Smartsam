@@ -1,4 +1,12 @@
 @model SmartSam.Pages.Purchasing.PurchaseOrder.PurchaseOrderDetailReportModel
+@functions {
+  private static string ToTcvn3Web(string? value)
+  {
+    return (value ?? string.Empty)
+      .Replace('\u00AD', '\uE001')
+      .Replace('\u00A6', '\uE002');
+  }
+}
 @{
     var r = Model;
     var f = r.Footer ?? new SmartSam.Pages.Purchasing.PurchaseOrder.PurchaseOrderApprovalFooterModel();
@@ -23,9 +31,15 @@
     }
 }
 <style>
+@@font-face {
+  font-family: 'TCVN3Web';
+  src: url('/fonts/pdf/VnTimeWeb.ttf') format('truetype');
+  font-display: swap;
+}
+
 .po-rpt { font-family: 'Times New Roman', Times, serif; font-size: 10pt; color: #000; max-width: 960px; margin: 0 auto; padding: 20px 24px; line-height: 1.5; }
 .po-rpt-vni { font-family: 'VNI-Times', 'VNI-Helve', sans-serif; }
-.po-rpt-tcvn3 { font-family: 'TCVN3', '.VnTime', '.VnArial', '.VnHelvetica', sans-serif; }
+.po-rpt-tcvn3 { font-family: 'TCVN3Web', 'TCVN3', '.VnTime', '.VnArial', '.VnHelvetica', sans-serif; }
 .po-rpt-tc { text-align: center; }
 .po-rpt-tr { text-align: right; }
 /* --- Header --- */
@@ -138,7 +152,7 @@
           <tr>
               <td class="po-rpt-tc">@item.No</td>
               <td>@item.ItemCode</td>
-              <td class="po-rpt-tcvn3">@item.ItemName</td>
+              <td class="po-rpt-tcvn3">@ToTcvn3Web(item.ItemName)</td>
               <td class="po-rpt-tc">@item.Unit</td>
               <td class="po-rpt-tr">@Money(item.Quantity)</td>
               <td class="po-rpt-tr">@Money(item.UnitPrice)</td>
@@ -169,13 +183,13 @@
   <!-- Terms & Conditions -->
   <div class="po-rpt-section">
     <div class="po-rpt-section-title">TERMS &amp; CONDITIONS:</div>
-    <div class="po-rpt-section-body po-rpt-vni po-rpt-prewrap">@r.TermsAndConditions</div>
+    <div class="po-rpt-section-body po-rpt-tcvn3 po-rpt-prewrap">@ToTcvn3Web(r.TermsAndConditions)</div>
   </div>
 
   <!-- Notes -->
   <div class="po-rpt-section">
     <div class="po-rpt-section-title">NOTES:</div>
-    <div class="po-rpt-section-body po-rpt-vni po-rpt-prewrap">@r.Notes</div>
+    <div class="po-rpt-section-body po-rpt-tcvn3 po-rpt-prewrap">@ToTcvn3Web(r.Notes)</div>
   </div>
 
   <!-- Footer -->

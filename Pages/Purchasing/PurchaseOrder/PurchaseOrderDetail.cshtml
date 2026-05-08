@@ -98,7 +98,7 @@
                                     <textarea asp-for="Header.Note"
                                               id="Note"
                                               rows="6"
-                                              class="form-control form-control-sm vni-font"
+                                              class="form-control form-control-sm tcvn3-font"
                                               readonly="@Model.IsViewMode"></textarea>
                                 </div>
                             </div>
@@ -115,7 +115,7 @@
                             <div class="purchase-order-header-field mb-2">
                                 <label class="col-form-label-sm mt-1 mb-0">Terms &amp; Condition</label>
                                 <div>
-                                    <textarea asp-for="Header.POTerms" id="POTerms" rows="6" class="form-control form-control-sm vni-font" readonly="@Model.IsViewMode"></textarea>
+                                    <textarea asp-for="Header.POTerms" id="POTerms" rows="6" class="form-control form-control-sm tcvn3-font" readonly="@Model.IsViewMode"></textarea>
                                 </div>
                             </div>
 
@@ -531,6 +531,18 @@
 
 @section Styles {
     <link rel="stylesheet" href="~/css/Purchasing/PurchaseOrder/detail.css" asp-append-version="true" />
+    <style>
+        @@font-face {
+            font-family: "TCVN3Web";
+            src: url("/fonts/pdf/VnTimeWeb.ttf") format("truetype");
+            font-display: swap;
+        }
+
+        #purchaseOrderDetailForm .tcvn3-font,
+        #purchaseOrderAddDetailModal .tcvn3-font {
+            font-family: "TCVN3Web", "TCVN3", ".VnTime", ".VnArial", ".VnHelvetica", sans-serif !important;
+        }
+    </style>
 }
 
 @section Scripts {
