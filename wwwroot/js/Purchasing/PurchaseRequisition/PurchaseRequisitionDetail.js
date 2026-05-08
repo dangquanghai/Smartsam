@@ -67,6 +67,29 @@
         return normalizedValue;
     }
 
+    function sanitizeNonNegativeDecimalInputPreserveCaret(input) {
+        if (!(input instanceof HTMLInputElement)) {
+            return "";
+        }
+
+        const rawValue = input.value || "";
+        const selectionStart = input.selectionStart ?? rawValue.length;
+        const sanitizedValue = sanitizeNonNegativeDecimal(rawValue);
+        const sanitizedPrefix = sanitizeNonNegativeDecimal(rawValue.slice(0, selectionStart));
+        const nextCaret = sanitizedPrefix.length;
+
+        if (input.value !== sanitizedValue) {
+            input.value = sanitizedValue;
+        }
+
+        try {
+            input.setSelectionRange(nextCaret, nextCaret);
+        } catch {
+        }
+
+        return sanitizedValue;
+    }
+
     function escapeHtml(value) {
         return String(value ?? "")
             .replace(/&/g, "&amp;")
@@ -671,22 +694,35 @@
                 return;
             }
 
+            const amountInput = row.querySelector(".prq-detail-edit-amount");
+            const priceInput = row.querySelector(".prq-detail-edit-price");
+
             if (target.classList.contains("prq-detail-edit-price")) {
-                target.value = sanitizeNonNegativeDecimal(target.value);
+                sanitizeNonNegativeDecimalInputPreserveCaret(target);
                 detail.unitPrice = toNumber(target.value);
                 detail.amount = toNumber(detail.qtyPur) * toNumber(detail.unitPrice);
             } else if (target.classList.contains("prq-detail-edit-amount")) {
-                target.value = sanitizeNonNegativeDecimal(target.value);
+                sanitizeNonNegativeDecimalInputPreserveCaret(target);
                 detail.amount = toNumber(target.value);
+                detail.unitPrice = toNumber(detail.qtyPur) > 0
+                    ? detail.amount / toNumber(detail.qtyPur)
+                    : 0;
             } else if (target.classList.contains("prq-detail-edit-remark")) {
                 detail.remark = target.value || "";
             } else {
                 return;
             }
 
-            const amountInput = row.querySelector(".prq-detail-edit-amount");
             if (amountInput instanceof HTMLInputElement) {
-                amountInput.value = formatNumber(detail.amount);
+                if (target !== amountInput) {
+                    amountInput.value = formatNumber(detail.amount);
+                }
+            }
+
+            if (priceInput instanceof HTMLInputElement) {
+                if (target !== priceInput) {
+                    priceInput.value = formatNumber(detail.unitPrice);
+                }
             }
 
             syncHiddenInput();
@@ -700,8 +736,24 @@
             }
 
             if (target.classList.contains("prq-detail-edit-price") || target.classList.contains("prq-detail-edit-amount")) {
+                const row = target.closest("tr[data-row='1']");
                 clampNonNegativeDecimalInput(target);
                 target.dispatchEvent(new Event("input", { bubbles: true }));
+
+                if (!row) {
+                    return;
+                }
+
+                const amountInput = row.querySelector(".prq-detail-edit-amount");
+                const priceInput = row.querySelector(".prq-detail-edit-price");
+
+                if (amountInput instanceof HTMLInputElement) {
+                    amountInput.value = formatNumber(amountInput.value);
+                }
+
+                if (priceInput instanceof HTMLInputElement) {
+                    priceInput.value = formatNumber(priceInput.value);
+                }
             }
         }, true);
 
