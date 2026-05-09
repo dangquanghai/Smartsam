@@ -44,6 +44,20 @@
     vertical-align: middle;
 }
 
+.prq-text-left {
+    text-align: left;
+    vertical-align: middle;
+}
+
+.prq-number {
+    text-align: right;
+    vertical-align: middle;
+}
+
+.prq-number-input {
+    text-align: right;
+}
+
 .prq-table-header {
     display: flex;
     align-items: center;

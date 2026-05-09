@@ -88,6 +88,20 @@
     vertical-align: middle;
 }
 
+.prq-text-left {
+    text-align: left;
+    vertical-align: middle;
+}
+
+.prq-number {
+    text-align: right;
+    vertical-align: middle;
+}
+
+.prq-number-input {
+    text-align: right;
+}
+
 .prq-toolbar-top .btn,
 .prq-detail-record-total {
     margin-bottom: 0.35rem;
