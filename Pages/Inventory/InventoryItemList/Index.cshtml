@@ -248,7 +248,12 @@
                                                 data-is-material="@(row.IsMaterial ? "true" : "false")"
                                                 data-is-purchase="@(row.IsPurchase ? "true" : "false")"
                                                 data-is-active="@(row.IsActive ? "true" : "false")"
-                                                data-is-new-item="@(row.IsNewItem ? "true" : "false")">
+                                                data-is-new-item="@(row.IsNewItem ? "true" : "false")"
+                                                data-is-not-item="@(row.IsNotItem ? "true" : "false")"
+                                                data-is-irregular="@(row.IsIrregular ? "true" : "false")"
+                                                data-no-print="@(row.NoPrintWhenHandOverToResident ? "true" : "false")"
+                                                data-item-name-new="@row.ItemNameNew"
+                                                data-replace-for-item-code="@row.ReplaceForItemCode">
                                                 <td>
                                                     <input type="radio" class="iil-selector" name="selectedInventoryItem" aria-label="Select row" />
                                                 </td>
@@ -407,6 +412,17 @@
                         </div>
                     </div>
 
+                    <div class="form-row">
+                        <div class="form-group col-md-8 mb-2">
+                            <label>Item Name New</label>
+                            <input asp-for="ItemInput.ItemNameNew" class="form-control form-control-sm vni-font" maxlength="150" />
+                        </div>
+                        <div class="form-group col-md-4 mb-2">
+                            <label>Replace For Item Code</label>
+                            <input asp-for="ItemInput.ReplaceForItemCode" class="form-control form-control-sm vni-font" maxlength="20" />
+                        </div>
+                    </div>
+
                     <div class="iil-check-grid">
                         <div class="custom-control custom-checkbox">
                             <input asp-for="ItemInput.IsSubItem" class="custom-control-input" />
@@ -439,6 +455,18 @@
                         <div class="custom-control custom-checkbox">
                             <input asp-for="ItemInput.IsNewItem" class="custom-control-input" />
                             <label class="custom-control-label" asp-for="ItemInput.IsNewItem">New Item</label>
+                        </div>
+                        <div class="custom-control custom-checkbox">
+                            <input asp-for="ItemInput.IsNotItem" class="custom-control-input" />
+                            <label class="custom-control-label" asp-for="ItemInput.IsNotItem">Not Item</label>
+                        </div>
+                        <div class="custom-control custom-checkbox">
+                            <input asp-for="ItemInput.IsIrregular" class="custom-control-input" />
+                            <label class="custom-control-label" asp-for="ItemInput.IsIrregular">Irregular</label>
+                        </div>
+                        <div class="custom-control custom-checkbox">
+                            <input asp-for="ItemInput.NoPrintWhenHandOverToResident" class="custom-control-input" />
+                            <label class="custom-control-label" asp-for="ItemInput.NoPrintWhenHandOverToResident">No Print Handover</label>
                         </div>
                     </div>
                 </div>

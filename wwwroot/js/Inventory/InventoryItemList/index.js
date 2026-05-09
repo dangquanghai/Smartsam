@@ -271,6 +271,11 @@
         const isPurchaseInput = document.getElementById("ItemInput_IsPurchase");
         const isActiveInput = document.getElementById("ItemInput_IsActive");
         const isNewItemInput = document.getElementById("ItemInput_IsNewItem");
+        const isNotItemInput = document.getElementById("ItemInput_IsNotItem");
+        const isIrregularInput = document.getElementById("ItemInput_IsIrregular");
+        const noPrintInput = document.getElementById("ItemInput_NoPrintWhenHandOverToResident");
+        const itemNameNewInput = document.getElementById("ItemInput_ItemNameNew");
+        const replaceForItemCodeInput = document.getElementById("ItemInput_ReplaceForItemCode");
         const isEdit = mode === "edit" && !!row;
 
         if (title) {
@@ -326,6 +331,15 @@
         setChecked(isPurchaseInput, isEdit ? row.getAttribute("data-is-purchase") : true);
         setChecked(isActiveInput, isEdit ? row.getAttribute("data-is-active") : true);
         setChecked(isNewItemInput, isEdit ? row.getAttribute("data-is-new-item") : false);
+        setChecked(isNotItemInput, isEdit ? row.getAttribute("data-is-not-item") : false);
+        setChecked(isIrregularInput, isEdit ? row.getAttribute("data-is-irregular") : false);
+        setChecked(noPrintInput, isEdit ? row.getAttribute("data-no-print") : false);
+        if (itemNameNewInput) {
+            itemNameNewInput.value = isEdit ? row.getAttribute("data-item-name-new") || "" : "";
+        }
+        if (replaceForItemCodeInput) {
+            replaceForItemCodeInput.value = isEdit ? row.getAttribute("data-replace-for-item-code") || "" : "";
+        }
         toggleParentInput();
     }
 
