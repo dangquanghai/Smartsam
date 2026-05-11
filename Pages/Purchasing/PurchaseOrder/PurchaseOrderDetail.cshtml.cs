@@ -27,6 +27,7 @@ public class PurchaseOrderDetailModel : BasePageModel
     private const int PermissionAdd = 3;
     private const int PermissionEdit = 4;
     private const int PermissionBackToProcessing = 6;
+    private const int PermissionManageAttachment = 8;
     private readonly PermissionService _permissionService;
     private readonly ISecurityService _securityService;
     private readonly ILogger<PurchaseOrderDetailModel> _logger;
@@ -50,6 +51,8 @@ public class PurchaseOrderDetailModel : BasePageModel
     public bool CanApprove { get; private set; }
     public bool CanBackToProcessing { get; private set; }
     public bool CanManageAttachments { get; private set; }
+    public bool CanUploadAttachments { get; private set; }
+    public bool CanDeleteAttachments { get; private set; }
     public bool OpenConvertModal { get; private set; }
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
     public string BackToListUrl => string.IsNullOrWhiteSpace(ReturnUrl) ? Url.Page("./Index") ?? "./Index" : ReturnUrl;
@@ -83,6 +86,9 @@ public class PurchaseOrderDetailModel : BasePageModel
 
     [BindProperty]
     public string? ConvertReason { get; set; }
+
+    [BindProperty]
+    public bool AttachmentIsInvoice { get; set; }
 
     public List<PurchaseOrderDetailInput> Details { get; set; } = new List<PurchaseOrderDetailInput>();
     public List<SelectListItem> StatusOptions { get; set; } = new List<SelectListItem>();
@@ -311,7 +317,7 @@ public class PurchaseOrderDetailModel : BasePageModel
             return prepare;
         }
 
-        if (!CanManageAttachments)
+        if (!CanUploadAttachments)
         {
             TempData["SuccessMessage"] = "You have no permission to upload attachment.";
             return RedirectToCurrentDetail("edit");
@@ -336,12 +342,15 @@ public class PurchaseOrderDetailModel : BasePageModel
         }
 
         var savedFilePaths = new List<string>();
+        var insertedAttachmentLogIds = new List<int>();
 
         try
         {
             foreach (var attachment in attachmentUploads.Where(file => file != null && file.Length > 0))
             {
-                SaveAttachment(attachment!, savedFilePaths);
+                var attachmentLogId = InsertAttachmentHistoryRow(AttachmentIsInvoice);
+                insertedAttachmentLogIds.Add(attachmentLogId);
+                SaveAttachment(attachment!, attachmentLogId, savedFilePaths);
             }
 
             TempData["SuccessMessage"] = "Attachments uploaded successfully.";
@@ -349,6 +358,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         catch (Exception ex)
         {
             RemoveSavedFiles(savedFilePaths);
+            DeleteAttachmentHistoryRows(insertedAttachmentLogIds);
             TempData["SuccessMessage"] = ex.Message;
         }
 
@@ -363,7 +373,7 @@ public class PurchaseOrderDetailModel : BasePageModel
             return prepare;
         }
 
-        if (!CanManageAttachments)
+        if (!CanDeleteAttachments)
         {
             TempData["SuccessMessage"] = "You have no permission to delete attachment.";
             return RedirectToCurrentDetail("edit");
@@ -398,16 +408,28 @@ public class PurchaseOrderDetailModel : BasePageModel
             foreach (var fileName in fileNames)
             {
                 var fullPath = Path.Combine(folderPath, fileName);
+                if (IsDeletedAttachmentFileName(fileName))
+                {
+                    throw new InvalidOperationException($"Attachment file '{fileName}' is already deleted.");
+                }
+
                 if (!System.IO.File.Exists(fullPath))
                 {
                     throw new InvalidOperationException($"Attachment file '{fileName}' is not found.");
+                }
+
+                var deletedPath = Path.Combine(folderPath, BuildDeletedAttachmentFileName(fileName));
+                if (System.IO.File.Exists(deletedPath))
+                {
+                    throw new InvalidOperationException($"Deleted attachment file '{Path.GetFileName(deletedPath)}' already exists.");
                 }
             }
 
             foreach (var fileName in fileNames)
             {
                 var fullPath = Path.Combine(folderPath, fileName);
-                System.IO.File.Delete(fullPath);
+                var deletedPath = Path.Combine(folderPath, BuildDeletedAttachmentFileName(fileName));
+                System.IO.File.Move(fullPath, deletedPath);
             }
 
             TempData["SuccessMessage"] = "Selected attachments deleted successfully.";
@@ -441,6 +463,10 @@ public class PurchaseOrderDetailModel : BasePageModel
 
         var safeFileName = Path.GetFileName(fileName?.Trim() ?? string.Empty);
         if (string.IsNullOrWhiteSpace(safeFileName))
+        {
+            return NotFound();
+        }
+        if (IsDeletedAttachmentFileName(safeFileName))
         {
             return NotFound();
         }
@@ -1822,6 +1848,8 @@ public class PurchaseOrderDetailModel : BasePageModel
     private void SetActionFlags()
     {
         var effectivePermissions = GetEffectivePermissionsByStatus(Header.StatusId <= 0 ? 1 : Header.StatusId);
+        var canManageAttachmentsByPermission = Header.Id > 0
+            && PagePerm.HasPermission(PermissionManageAttachment);
         CanSave = !IsViewMode && (Mode == "add"
             ? effectivePermissions.Contains(PermissionAdd)
             : effectivePermissions.Contains(PermissionEdit));
@@ -1835,9 +1863,9 @@ public class PurchaseOrderDetailModel : BasePageModel
             && Header.StatusId == 2
             && effectivePermissions.Contains(PermissionBackToProcessing)
             && (_workflowUser.IsPurchaser || _workflowUser.IsCFO || _workflowUser.IsBOD || IsAdminRole());
-        CanManageAttachments = Header.Id > 0
-            && Header.StatusId == 1
-            && effectivePermissions.Contains(PermissionEdit);
+        CanUploadAttachments = canManageAttachmentsByPermission;
+        CanDeleteAttachments = canManageAttachmentsByPermission;
+        CanManageAttachments = CanUploadAttachments || CanDeleteAttachments;
     }
 
     private bool CanApproveAsCfo()
@@ -2158,12 +2186,24 @@ WHERE POID = @POID", conn, trans);
             return rows;
         }
 
+        var attachmentLogs = LoadAttachmentLogMap();
         foreach (var filePath in Directory.GetFiles(folderPath).OrderByDescending(System.IO.File.GetLastWriteTimeUtc))
         {
             var fileInfo = new FileInfo(filePath);
+            if (IsDeletedAttachmentFileName(fileInfo.Name))
+            {
+                continue;
+            }
+
+            var attachmentLogId = TryGetAttachmentLogId(fileInfo.Name);
+            var isInvoice = attachmentLogId.HasValue && attachmentLogs.TryGetValue(attachmentLogId.Value, out var invoiceValue)
+                ? invoiceValue
+                : (bool?)null;
             rows.Add(new PurchaseOrderAttachmentViewModel
             {
+                AttachmentLogId = attachmentLogId,
                 FileName = fileInfo.Name,
+                IsInvoice = isInvoice,
                 ModifiedDate = fileInfo.LastWriteTime,
                 SizeBytes = fileInfo.Length,
                 SizeText = FormatFileSize(fileInfo.Length)
@@ -2201,17 +2241,18 @@ WHERE POID = @POID", conn, trans);
         return null;
     }
 
-    private void SaveAttachment(IFormFile file, List<string> savedFilePaths)
+    private void SaveAttachment(IFormFile file, int attachmentLogId, List<string> savedFilePaths)
     {
         var uploadFolder = ResolveAttachmentFolder();
         Directory.CreateDirectory(uploadFolder);
 
-        var savedFileName = Path.GetFileName(file.FileName?.Trim() ?? string.Empty);
-        if (string.IsNullOrWhiteSpace(savedFileName))
+        var originalFileName = Path.GetFileName(file.FileName?.Trim() ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(originalFileName))
         {
             throw new InvalidOperationException("Attached file name is invalid.");
         }
 
+        var savedFileName = BuildAttachmentFileName(originalFileName, attachmentLogId);
         var fullPath = Path.Combine(uploadFolder, savedFileName);
         if (System.IO.File.Exists(fullPath))
         {
@@ -2224,6 +2265,94 @@ WHERE POID = @POID", conn, trans);
         }
 
         savedFilePaths.Add(fullPath);
+    }
+
+    private Dictionary<int, bool> LoadAttachmentLogMap()
+    {
+        var rows = new Dictionary<int, bool>();
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand(@"
+        SELECT id, ISNULL(IsInvoice, 0) AS IsInvoice
+        FROM dbo.PC_POFileAttached
+        WHERE POID = @POID", conn);
+        cmd.Parameters.Add("@POID", SqlDbType.Int).Value = Header.Id;
+        conn.Open();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            rows[Convert.ToInt32(reader["id"])] = Convert.ToBoolean(reader["IsInvoice"]);
+        }
+
+        return rows;
+    }
+
+    private int InsertAttachmentHistoryRow(bool isInvoice)
+    {
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand(@"
+        INSERT INTO dbo.PC_POFileAttached (POID, IsInvoice, UserID, TheDateTime)
+        VALUES (@POID, @IsInvoice, @UserID, GETDATE());
+        SELECT CAST(SCOPE_IDENTITY() AS int);", conn);
+        cmd.Parameters.Add("@POID", SqlDbType.Int).Value = Header.Id;
+        cmd.Parameters.Add("@IsInvoice", SqlDbType.Bit).Value = isInvoice;
+        cmd.Parameters.Add("@UserID", SqlDbType.Int).Value = _workflowUser.EmployeeId;
+        conn.Open();
+        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
+    }
+
+    private void DeleteAttachmentHistoryRows(IEnumerable<int> attachmentLogIds)
+    {
+        var ids = attachmentLogIds.Where(id => id > 0).Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return;
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        foreach (var id in ids)
+        {
+            using var cmd = new SqlCommand("DELETE FROM dbo.PC_POFileAttached WHERE id = @ID", conn);
+            cmd.Parameters.Add("@ID", SqlDbType.Int).Value = id;
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    private static int? TryGetAttachmentLogId(string fileName)
+    {
+        var nameWithoutExtension = Path.GetFileNameWithoutExtension(fileName);
+        var lastSeparatorIndex = nameWithoutExtension.LastIndexOf("_", StringComparison.Ordinal);
+        if (lastSeparatorIndex > 0
+            && int.TryParse(nameWithoutExtension[(lastSeparatorIndex + 1)..], out var suffixId)
+            && suffixId > 0)
+        {
+            return suffixId;
+        }
+
+        var firstSeparatorIndex = fileName.IndexOf('_', StringComparison.Ordinal);
+        if (firstSeparatorIndex <= 0)
+        {
+            return null;
+        }
+
+        return int.TryParse(fileName[..firstSeparatorIndex], out var prefixId) && prefixId > 0 ? prefixId : null;
+    }
+
+    private static string BuildAttachmentFileName(string originalFileName, int attachmentLogId)
+    {
+        var extension = Path.GetExtension(originalFileName) ?? string.Empty;
+        var nameWithoutExtension = Path.GetFileNameWithoutExtension(originalFileName);
+        return $"{nameWithoutExtension}_{attachmentLogId}{extension}";
+    }
+
+    private static bool IsDeletedAttachmentFileName(string fileName)
+    {
+        return fileName.StartsWith("deleted_", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string BuildDeletedAttachmentFileName(string fileName)
+    {
+        return IsDeletedAttachmentFileName(fileName) ? fileName : $"deleted_{fileName}";
     }
 
     private string ResolveAttachmentFolder()
@@ -2418,7 +2547,9 @@ public class PurchaseOrderPrLineLookup
 
 public class PurchaseOrderAttachmentViewModel
 {
+    public int? AttachmentLogId { get; set; }
     public string FileName { get; set; } = string.Empty;
+    public bool? IsInvoice { get; set; }
     public DateTime? ModifiedDate { get; set; }
     public long SizeBytes { get; set; }
     public string SizeText { get; set; } = string.Empty;

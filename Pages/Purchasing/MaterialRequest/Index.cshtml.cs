@@ -434,6 +434,13 @@ public class IndexModel : BasePageModel
             return RedirectToPage("./Index");
         }
 
+        operatorEmployeeId = ResolveCurrentEmployeeId(operatorEmployeeId, operatorCode);
+        if (!operatorEmployeeId.HasValue || operatorEmployeeId.Value <= 0)
+        {
+            ErrorMessage = "Current user is not linked to an active employee. Please assign this admin account to MS_Employee before creating Auto MR.";
+            return RedirectToPage("./Index");
+        }
+
         // Lay gia tri tu popup, neu nguoi dung khong nhap thi dung mac dinh an toan.
         var dateCreate = CreateAutoDateCreate ?? DateTime.Today;
         var fromDate = CreateAutoFromDate ?? dateCreate.AddMonths(-3);
@@ -905,6 +912,33 @@ public class IndexModel : BasePageModel
     {
         var raw = User.FindFirst("EmployeeID")?.Value;
         return int.TryParse(raw, out var employeeId) && employeeId > 0 ? employeeId : null;
+    }
+
+    private int? ResolveCurrentEmployeeId(int? claimEmployeeId, string? operatorCode)
+    {
+        if (claimEmployeeId.HasValue && claimEmployeeId.Value > 0)
+        {
+            return claimEmployeeId;
+        }
+
+        var employeeCode = string.IsNullOrWhiteSpace(operatorCode)
+            ? User.FindFirst("EmployeeCode")?.Value?.Trim()
+            : operatorCode.Trim();
+        if (string.IsNullOrWhiteSpace(employeeCode))
+        {
+            return null;
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand(@"
+            SELECT TOP 1 EmployeeID
+            FROM dbo.MS_Employee
+            WHERE EmployeeCode = @EmployeeCode
+                AND ISNULL(IsActive, 0) = 1", conn);
+        cmd.Parameters.Add("@EmployeeCode", SqlDbType.VarChar, 50).Value = employeeCode;
+        conn.Open();
+        var value = cmd.ExecuteScalar();
+        return value == null || value == DBNull.Value ? null : Convert.ToInt32(value);
     }
 
     public async Task<IActionResult> OnGetPendingIssueWarning(string? itemCode, int? storeGroup, CancellationToken cancellationToken = default)

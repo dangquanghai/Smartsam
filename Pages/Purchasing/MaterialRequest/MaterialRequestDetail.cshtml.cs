@@ -328,13 +328,11 @@ public class MaterialRequestDetailModel : BasePageModel
             return Forbid();
         }
 
-        var isAutoRequest = IsEdit && existing?.IsAuto == true;
         var lines = ResolvePostedLines();
         await ApplyReadonlyLineRulesAsync(
             lines,
             Id,
             cancellationToken,
-            preserveReadonlyOrder: isAutoRequest,
             preserveEditableNote: ShouldPreserveEditableNote(CurrentStatusId));
 
         if (!ModelState.IsValid)

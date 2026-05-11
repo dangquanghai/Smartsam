@@ -200,7 +200,6 @@ function initializePage(mode, currentStatusId, actionPerm) {
     const canReplace = !!actionPerm.canReplace;
     const showIssueButton = toBoolData($form.data('show-issue-button'));
     const hideZeroBuyLines = toBoolData($form.data('hide-zero-buy-lines'));
-    const isAutoRequest = toBoolData($form.data('is-auto'));
 
     const isViewMode = mode === 'view';
     const disableEditFields = isViewMode || !canSave;
@@ -224,7 +223,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
     const showReplaceAction = canReplace;
     const showApproveAction = !isDraft && canApprove;
     const showRejectAction = !isDraft && canReject;
-    const enableOrderFields = showEditActions && !isAutoRequest;
+    const enableOrderFields = showEditActions;
     const enableBuyFields = showCalculateAction;
     const enableNoteFields = showEditActions || showCalculateAction;
 

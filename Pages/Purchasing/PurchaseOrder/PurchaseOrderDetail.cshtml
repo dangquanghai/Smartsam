@@ -461,11 +461,12 @@
                                         <table class="table table-sm table-bordered mb-0">
                                             <thead class="thead-light">
                                                 <tr>
-                                                    @if (Model.CanManageAttachments)
+                                                    @if (Model.CanDeleteAttachments)
                                                     {
                                                         <th style="width:50px;" class="text-center"></th>
                                                     }
                                                     <th>File</th>
+                                                    <th style="width:90px;" class="text-center">Invoice</th>
                                                     <th style="width:160px;">Modified Date</th>
                                                     <th style="width:120px;">Size</th>
                                                 </tr>
@@ -474,7 +475,7 @@
                                                 @foreach (var attachment in Model.AttachmentList)
                                                 {
                                                     <tr>
-                                                        @if (Model.CanManageAttachments)
+                                                        @if (Model.CanDeleteAttachments)
                                                         {
                                                             <td class="text-center">
                                                                 <input type="checkbox" name="SelectedAttachmentFileNames" value="@attachment.FileName" class="po-attachment-selector" />
@@ -486,6 +487,16 @@
                                                                asp-route-id="@Model.Header.Id"
                                                                asp-route-fileName="@attachment.FileName">@attachment.FileName</a>
                                                         </td>
+                                                        <td class="text-center">
+                                                            @if (attachment.IsInvoice.HasValue)
+                                                            {
+                                                                <input type="checkbox" disabled @(attachment.IsInvoice.Value ? "checked" : string.Empty) />
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="text-muted">-</span>
+                                                            }
+                                                        </td>
                                                         <td>@attachment.ModifiedDate?.ToString("dd/MM/yyyy HH:mm")</td>
                                                         <td>@attachment.SizeText</td>
                                                     </tr>
@@ -496,7 +507,7 @@
                                 </form>
                             }
 
-                            @if (Model.CanManageAttachments)
+                            @if (Model.CanUploadAttachments)
                             {
                                 <form method="post" enctype="multipart/form-data" action="@Url.Page("./PurchaseOrderDetail", "UploadAttachment", new { id = Model.Header.Id, mode = Model.Mode, returnUrl = Model.ReturnUrl })" id="poUploadAttachmentsForm">
                                     @Html.AntiForgeryToken()
@@ -504,14 +515,18 @@
                                     <input asp-for="Mode" type="hidden" />
                                     <input asp-for="ReturnUrl" type="hidden" />
                                     <div class="form-group mb-0">
-                                        <label class="mb-1">Attached Files <span class="purchase-order-attachment-note">Allowed: @Model.AllowedAttachmentExtensionsText | Max size: @Model.MaxAttachmentSizeMb MB</span></label>
                                         <input type="file" name="AttachmentUploads" class="form-control-file" id="purchaseOrderAttachmentUpload" accept="@Model.AllowedAttachmentExtensionsText" multiple />
+                                        <div class="purchase-order-attachment-note mt-1">(Allowed: @Model.AllowedAttachmentExtensionsText | Max size: @Model.MaxAttachmentSizeMb MB)</div>
+                                        <div class="custom-control custom-checkbox mt-2">
+                                            <input asp-for="AttachmentIsInvoice" class="custom-control-input" disabled />
+                                            <label asp-for="AttachmentIsInvoice" class="custom-control-label">Invoice</label>
+                                        </div>
                                         <div id="purchaseOrderAttachmentError" class="text-danger small mt-1" style="display:none;"></div>
-                                        <div class="mt-2">
+                                        <div class="mt-2 d-flex align-items-center flex-wrap">
                                             <button type="submit" class="btn btn-sm btn-action-add border" id="btnPurchaseOrderAttachmentUpload">
                                                 <i class="fas fa-upload"></i> Upload
                                             </button>
-                                            @if (Model.AttachmentList.Count > 0)
+                                            @if (Model.CanDeleteAttachments && Model.AttachmentList.Count > 0)
                                             {
                                                 <button type="submit" class="btn btn-sm btn-action-disapprove border ml-2" id="btnPurchaseOrderAttachmentDelete" form="poDeleteAttachmentsForm" formnovalidate disabled>
                                                     <i class="fas fa-trash"></i> Delete Files
@@ -520,6 +535,14 @@
                                         </div>
                                     </div>
                                 </form>
+                            }
+                            else if (Model.CanDeleteAttachments && Model.AttachmentList.Count > 0)
+                            {
+                                <div class="mt-2">
+                                    <button type="submit" class="btn btn-sm btn-action-disapprove border" id="btnPurchaseOrderAttachmentDelete" form="poDeleteAttachmentsForm" formnovalidate disabled>
+                                        <i class="fas fa-trash"></i> Delete Files
+                                    </button>
+                                </div>
                             }
                         </div>
                     </div>
@@ -557,6 +580,8 @@
             canApprove: @(Model.CanApprove ? "true" : "false"),
             canBackToProcessing: @(Model.CanBackToProcessing ? "true" : "false"),
             canManageAttachments: @(Model.CanManageAttachments ? "true" : "false"),
+            canUploadAttachments: @(Model.CanUploadAttachments ? "true" : "false"),
+            canDeleteAttachments: @(Model.CanDeleteAttachments ? "true" : "false"),
             allowedAttachmentExtensions: '@Model.AllowedAttachmentExtensionsText',
             maxAttachmentSizeMb: @Model.MaxAttachmentSizeMb,
             supplierLookupUrl: '@Html.Raw(Url.Page("./PurchaseOrderDetail", "SupplierLookup"))',

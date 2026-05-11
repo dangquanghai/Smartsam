@@ -398,8 +398,13 @@ function updateAttachmentDeleteButton() {
 function validateAttachmentUpload() {
     const input = document.getElementById('purchaseOrderAttachmentUpload');
     const errorEl = document.getElementById('purchaseOrderAttachmentError');
+    const invoiceInput = document.getElementById('AttachmentIsInvoice');
 
     if (!input || !errorEl || !input.files || input.files.length === 0) {
+        if (invoiceInput) {
+            invoiceInput.checked = false;
+            invoiceInput.disabled = true;
+        }
         if (errorEl) {
             errorEl.textContent = '';
             errorEl.style.display = 'none';
@@ -419,6 +424,10 @@ function validateAttachmentUpload() {
             errorEl.textContent = `Attached file extension is invalid for '${fileName}'. Allowed: ${window.purchaseOrderDetailPage?.allowedAttachmentExtensions || ''}`;
             errorEl.style.display = 'block';
             input.value = '';
+            if (invoiceInput) {
+                invoiceInput.checked = false;
+                invoiceInput.disabled = true;
+            }
             return false;
         }
 
@@ -426,10 +435,17 @@ function validateAttachmentUpload() {
             errorEl.textContent = `Attached file '${fileName}' size must not exceed ${window.purchaseOrderDetailPage?.maxAttachmentSizeMb || 0} MB.`;
             errorEl.style.display = 'block';
             input.value = '';
+            if (invoiceInput) {
+                invoiceInput.checked = false;
+                invoiceInput.disabled = true;
+            }
             return false;
         }
     }
 
+    if (invoiceInput) {
+        invoiceInput.disabled = false;
+    }
     errorEl.textContent = '';
     errorEl.style.display = 'none';
     return true;
@@ -532,6 +548,7 @@ function bindMainEvents(mode) {
             attachmentError.textContent = '';
             attachmentError.style.display = 'none';
         }
+        validateAttachmentUpload();
         if (window.jQuery && attachmentModal.length) {
             attachmentModal.modal('show');
         }
