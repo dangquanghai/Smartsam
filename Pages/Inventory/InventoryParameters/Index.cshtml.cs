@@ -11,7 +11,7 @@ namespace SmartSam.Pages.Inventory.InventoryParameters;
 public class IndexModel : BasePageModel
 {
     private const string ExcelVniFontName = "VNI-WIN";
-    private const int FunctionId = 146;
+    private const int FunctionId = 60;
     private const int PermissionViewList = 1;
     private const int PermissionAdd = 3;
     private const int PermissionEdit = 4;

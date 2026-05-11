@@ -383,8 +383,8 @@ namespace SmartSam.Pages.Sales.STContract
             BEGIN
             UPDATE CM_ContractApmt 
             SET ApartmentNo = @ApmtNo,
-                FromDate = @FromDate,
-                ToDate = @ToDate
+            FromDate = @FromDate,
+            ToDate = @ToDate
             WHERE ContractID = @ContractID
             END
             ELSE
@@ -610,6 +610,17 @@ namespace SmartSam.Pages.Sales.STContract
             sql = " select TenantTypeID, TenantTypeName  from CM_TenantType ";
             ListTenantTypes= LoadListFromSql(sql, "TenantTypeID", "TenantTypeName");
 
+        }
+        public IActionResult OnGetLookupNation(string code)
+        {
+            if (string.IsNullOrEmpty(code)) return new JsonResult(new { id = 0 });
+
+            using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+            // Truy vấn trực tiếp từ bảng MS_Nation
+            string sql = "SELECT NationID FROM MS_Nation WHERE NationCode = @Code";
+            var id = conn.ExecuteScalar<int?>(sql, new { Code = code }) ?? 0;
+
+            return new JsonResult(new { id = id });
         }
 
         public string GetNewSTContractNo()
@@ -982,7 +993,58 @@ namespace SmartSam.Pages.Sales.STContract
                 return new JsonResult(new { success = false, message = "System error: " + ex.Message });
             }
         }
+        public IActionResult OnPostSaveScanDoc(string base64Data, long contractTenantID, string docType)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(base64Data)) return new JsonResult(new { success = false });
 
+                // 1. Đọc cấu hình
+                var basePath = _config["FileUploads:BasePath"]; // "Uploads"
+                var subPath = _config["FileUploads:Funtions:5"]; // "/Sales/STContract"
+
+                // 2. Tạo đường dẫn vật lý NGOÀI wwwroot
+                // Kết quả: {Thư mục gốc Project}\Uploads\Sales\STContract
+                string rootPath = Directory.GetCurrentDirectory();
+                string fullFolderPath = Path.Combine(rootPath, basePath, subPath.TrimStart('/'));
+
+                if (!Directory.Exists(fullFolderPath))
+                {
+                    Directory.CreateDirectory(fullFolderPath);
+                }
+
+                // 3. Giải mã và lưu file
+                string fileName = $"Scan_{contractTenantID}_{DateTime.Now:yyyyMMddHHmmss}.jpg";
+                string fullFilePath = Path.Combine(fullFolderPath, fileName);
+
+                string cleanBase64 = base64Data.Contains(",") ? base64Data.Split(',')[1] : base64Data;
+                byte[] imageBytes = Convert.FromBase64String(cleanBase64);
+                System.IO.File.WriteAllBytes(fullFilePath, imageBytes);
+
+                // 4. Đường dẫn lưu vào Database (TheUrl)
+                // Lưu đường dẫn tương đối để Web có thể map được
+                string fileUrl = "/" + Path.Combine(basePath, subPath.TrimStart('/'), fileName).Replace("\\", "/");
+
+                // 5. Insert vào Database
+                int docTypeID = (docType == "V") ? 2 : 1;
+                using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+                string sql = @"INSERT INTO CM_ContractTenant_Doc (DocTypeID, TheUrl, ContractTenantID, CreatedDate) 
+                       VALUES (@DocTypeID, @TheUrl, @ContractTenantID, GETDATE())";
+
+                conn.Execute(sql, new
+                {
+                    DocTypeID = docTypeID,
+                    TheUrl = fileUrl,
+                    ContractTenantID = contractTenantID
+                });
+
+                return new JsonResult(new { success = true, url = fileUrl });
+            }
+            catch (Exception ex)
+            {
+                return new JsonResult(new { success = false, message = ex.Message });
+            }
+        }
         // Vùng 1.1: CM_Contract
         public class ContractViewModel
         {

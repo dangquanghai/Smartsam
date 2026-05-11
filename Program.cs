@@ -8,6 +8,7 @@ using Hangfire;
 using Hangfire.SqlServer;
 using QuestPDF.Drawing;
 using QuestPDF.Infrastructure;
+using Microsoft.Extensions.FileProviders;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -87,6 +88,14 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseStaticFiles();
+// Cấu hình thêm cho thư mục Uploads nằm ngoài wwwroot
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(
+        Path.Combine(builder.Environment.ContentRootPath, "Uploads")),
+    RequestPath = "/Uploads"
+});
+
 app.UseRouting();
 app.UseSession();
 
