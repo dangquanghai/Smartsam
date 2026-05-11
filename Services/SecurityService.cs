@@ -25,7 +25,7 @@ namespace SmartSam.Services.Implementations
             64,  // Item list
             //66,  // Item Issue
             //67,  // Item Receice 
-            68,  // Item Transfer
+            //68,  // Item Transfer
             70,  // Inventory Report
             90 , // Inventory Make  New year=> tạo số liệu tồn đầu năm cho các kho
             114, // Laundty & Linen  list
@@ -68,14 +68,72 @@ namespace SmartSam.Services.Implementations
                     return FilterPurchaseOrder(raw, objectStatus);
 
                 case 66: // Item Issue
-
-
+                    return FilterItemIssue(raw, objectStatus);
+                case 67:  // Item Receice 
+                    return FilterItemReceice(raw, objectStatus);
+                case 68:  // Item Transfer 
+                    return FilterItemTransfer(raw, objectStatus);
 
                 default:
                     return raw;
             }
         }
-        private List<int> ItemIssue(List<int> raw, int status)
+        private List<int> FilterItemTransfer(List<int> raw, int status)
+        {
+            /* Mã quyền (Action):
+                1: View, 2: View Detail, 3 Add, 4: Edit, 5: Delete 
+
+                Trạng thái ItemIssue: 
+                1: Just Created, 2: Storeman Confirmed, 3: Head Confirmed 
+            */
+            // Các quyền luôn có: Xem và Thêm mới
+            var effective = raw.Where(p => p == 2 || p == 3).ToList();
+
+            if (status == 1)
+            {
+                if (raw.Contains(2)) effective.Add(2);
+                if (raw.Contains(3)) effective.Add(3);
+                if (raw.Contains(4)) effective.Add(4);
+                if (raw.Contains(5)) effective.Add(5);
+            }
+            else// 2,3
+            {
+                if (raw.Contains(2)) effective.Add(2);
+                if (raw.Contains(3)) effective.Add(3);
+
+            }
+
+            return effective;
+        }
+
+        private List<int> FilterItemReceice(List<int> raw, int status)
+        {
+            /* Mã quyền (Action):
+                1: View, 2: View Detail, 3 Add, 4: Edit, 5: Delete 
+
+                Trạng thái ItemIssue: 
+                1: Create Voucher, 2: Storeman Confirmed, 3: Head Checked & Confirmed, 4: PU Confirmed
+            */
+            // Các quyền luôn có: Xem và Thêm mới
+            var effective = raw.Where(p => p == 2 || p == 3).ToList();
+
+            if (status == 1)
+            {
+                if (raw.Contains(2)) effective.Add(2);
+                if (raw.Contains(3)) effective.Add(3);
+                if (raw.Contains(4)) effective.Add(4);
+                if (raw.Contains(5)) effective.Add(5);
+            }
+            else// 2,3,4
+            {
+                if (raw.Contains(2)) effective.Add(2);
+                if (raw.Contains(3)) effective.Add(3);
+
+            }
+
+            return effective;
+        }
+        private List<int> FilterItemIssue(List<int> raw, int status)
         {
             /* Mã quyền (Action):
                 1: View, 2: View Detail, 3 Add, 4: Edit, 5: Delete 
@@ -83,28 +141,24 @@ namespace SmartSam.Services.Implementations
                 Trạng thái ItemIssue: 
                 1: Was Created, 2: Storeman Confirmed, 3: Receiver Confirmed
             */
+
             // Các quyền luôn có: Xem và Thêm mới
-            var effective = raw.Where(p => p == 2 || p == 3 || p == 8).ToList();
-            switch (status)
+            var effective = raw.Where(p => p == 2 || p == 3).ToList();
+
+            if (status == 1)
             {
-                case 1: // PROCESSING
-                        // Được Sửa (4)
-                    if (raw.Contains(4)) effective.Add(4);
+                if (raw.Contains(2)) effective.Add(2);
+                if (raw.Contains(3)) effective.Add(3);
+                if (raw.Contains(4)) effective.Add(4);
+                if (raw.Contains(5)) effective.Add(5);
+            } 
+            else// 2,3
+            {
+                if (raw.Contains(2)) effective.Add(2);
+                if (raw.Contains(3)) effective.Add(3);
 
-                    // Được Đánh giá (7) -> Hành động này sẽ kiêm luôn việc đổi Status sang 2
-                    if (raw.Contains(7)) effective.Add(7);
-                    break;
-
-                case 2: // WAITING FOR APPROVAL
-                        // Khóa Sửa (4), Khóa Đánh giá (7)
-                        // Chỉ cho phép Trả về (6) để quay lại bước 1 nếu cần sửa đổi
-                    if (raw.Contains(6)) effective.Add(6);
-                    break;
-
-                default:
-                    break;
-            }
-
+            }    
+           
             return effective;
         }
     
