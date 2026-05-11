@@ -1,0 +1,23 @@
+﻿@model SmartSam.Pages.Inventory.InventoryTrees.TreeNodeVm
+<li class="inv-tree-node-item @(Model.HasChildren ? "has-children" : "is-leaf")">
+    <div class="inv-tree-node-row @(Model.IsSelected ? "inv-tree-node-selected" : "")">
+        @if (Model.HasChildren)
+        {
+            <button type="button" class="inv-tree-toggle" data-target="children-@Model.CatgId" aria-label="Toggle">@(Model.IsExpanded ? "▾" : "▸")</button>
+        }
+        else
+        {
+            <span class="inv-tree-leaf-connector" aria-hidden="true"></span>
+        }
+        <a href="@(Url.Page("/Inventory/InventoryTrees/Index", new Dictionary<string, object?> { ["Filter.GroupId"] = Model.GroupId, ["Filter.SelectedCatgId"] = Model.CatgId, ["Filter.Page"] = 1 }) ?? "#")" class="inv-tree-node-link @(Model.IsSelected ? "font-weight-bold" : "")">@Model.DisplayText</a>
+    </div>
+    @if (Model.HasChildren)
+    {
+        <ul id="children-@Model.CatgId" class="inv-tree-children" style="display:@(Model.IsExpanded ? "block" : "none")">
+            @foreach (var c in Model.Children)
+            {
+                <partial name="_TreeNode" model="c" />
+            }
+        </ul>
+    }
+</li>

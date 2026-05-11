@@ -192,13 +192,13 @@ internal static class PurchaseRequisitionPdfReport
                 columns.RelativeColumn();
             });
 
-            ComposeApprovalBox(table, "Prepared by", footer.PreparedDate, footer.PreparedTitle, footer.PreparedName, footer.PreparedSignature);
-            ComposeApprovalBox(table, "Checked by", footer.CheckedDate, footer.CheckedTitle, footer.CheckedName, footer.CheckedSignature);
-            ComposeApprovalBox(table, "Approved by", footer.ApprovedDate, footer.ApprovedTitle, footer.ApprovedName, footer.ApprovedSignature);
+            ComposeApprovalBox(table, "Prepared by", footer.PreparedDate, footer.PreparedTitle, footer.PreparedSignature);
+            ComposeApprovalBox(table, "Checked by", footer.CheckedDate, footer.CheckedTitle, footer.CheckedSignature);
+            ComposeApprovalBox(table, "Approved by", footer.ApprovedDate, footer.ApprovedTitle, footer.ApprovedSignature);
         });
     }
 
-    private static void ComposeApprovalBox(TableDescriptor table, string header, string dateText, string title, string fullName, byte[]? signature)
+    private static void ComposeApprovalBox(TableDescriptor table, string header, string dateText, string title, byte[]? signature)
     {
         table.Cell().Border(1).Padding(4).Column(column =>
         {
@@ -211,7 +211,6 @@ internal static class PurchaseRequisitionPdfReport
                     cell.Image(signature).FitArea();
                 }
             });
-            column.Item().MinHeight(18).AlignCenter().Text(string.IsNullOrWhiteSpace(fullName) ? " " : fullName).Bold();
             column.Item().AlignCenter().Text(title).Bold();
         });
     }
@@ -386,9 +385,6 @@ internal sealed class PurchaseRequisitionApprovalFooterModel
     public string PreparedTitle { get; set; } = "Purchase Officer";
     public string CheckedTitle { get; set; } = "Chief Accountant";
     public string ApprovedTitle { get; set; } = "General Director";
-    public string PreparedName { get; set; } = string.Empty;
-    public string CheckedName { get; set; } = string.Empty;
-    public string ApprovedName { get; set; } = string.Empty;
     public byte[]? PreparedSignature { get; set; }
     public byte[]? CheckedSignature { get; set; }
     public byte[]? ApprovedSignature { get; set; }

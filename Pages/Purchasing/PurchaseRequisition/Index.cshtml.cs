@@ -27,6 +27,7 @@ public class IndexModel : BasePageModel
     private const int PermissionApprove = 5;
     private const int PermissionDisapproval = 6;
     private const int PermissionChangeStatus = 6;
+    private const int PermissionUploadAttachment = 7;
     private readonly ILogger<IndexModel> _logger;
     private readonly PermissionService _permissionService;
     private readonly ISecurityService _securityService;
@@ -81,6 +82,7 @@ public class IndexModel : BasePageModel
     public List<PurchaseRequisitionSupplierLookup> SupplierList { get; set; } = new List<PurchaseRequisitionSupplierLookup>();
     public bool CanAddNew { get; set; }
     public bool CanAddAt { get; set; }
+    public bool CanUploadAttachment { get; set; }
     public bool CanEditRequisition { get; set; }
     public bool CanViewDetailRequisition { get; set; }
     public int TotalRecords { get; set; }
@@ -703,9 +705,6 @@ WHERE p.PRID = @PRID
             PreparedDate = preparedDate,
             CheckedDate = checkedDate,
             ApprovedDate = approvedDate,
-            PreparedName = LoadEmployeeFullName(conn, preparedEmployeeId),
-            CheckedName = LoadEmployeeFullName(conn, checkedEmployeeId),
-            ApprovedName = LoadEmployeeFullName(conn, approvedEmployeeId),
             PreparedSignature = LoadEmployeeSignature(conn, preparedEmployeeId),
             CheckedSignature = LoadEmployeeSignature(conn, checkedEmployeeId),
             ApprovedSignature = LoadEmployeeSignature(conn, approvedEmployeeId)
@@ -955,27 +954,6 @@ ORDER BY p.PRID DESC", conn);
         }
 
         return $"WHERE {string.Join(" AND ", whereBuilder)}";
-    }
-
-    private string LoadEmployeeFullName(SqlConnection conn, int? employeeId)
-    {
-        if (!employeeId.HasValue || employeeId.Value <= 0)
-        {
-            return string.Empty;
-        }
-
-        using var cmd = new SqlCommand(@"
-SELECT ISNULL(EmployeeName, '')
-FROM dbo.MS_Employee
-WHERE EmployeeID = @EmployeeID", conn);
-        cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId.Value;
-        var value = cmd.ExecuteScalar();
-        if (value == null || value == DBNull.Value)
-        {
-            return string.Empty;
-        }
-
-        return Convert.ToString(value)?.Trim() ?? string.Empty;
     }
 
     private byte[]? LoadEmployeeSignature(SqlConnection conn, int? employeeId)
@@ -1545,9 +1523,12 @@ VALUES
                 UpdateMaterialRequestAfterAddAt(conn, trans, detail);
             }
 
-            foreach (var attachment in AddAtAttachments.Where(file => file != null && file.Length > 0))
+            if (CanUploadAttachment)
             {
-                SaveAddAtAttachment(conn, trans, newPrId, purchaserId, attachment, savedFilePaths);
+                foreach (var attachment in AddAtAttachments.Where(file => file != null && file.Length > 0))
+                {
+                    SaveAddAtAttachment(conn, trans, newPrId, purchaserId, attachment, savedFilePaths);
+                }
             }
 
             trans.Commit();
@@ -2121,6 +2102,12 @@ WHERE ID = @MRDetailID", conn, trans);
             return;
         }
 
+        if (!CanUploadAttachment)
+        {
+            ModelState.AddModelError(string.Empty, "You have no permission to upload attachment.");
+            return;
+        }
+
         var allowedExtensions = (AllowedAttachmentExtensionsText ?? string.Empty)
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(x => x.StartsWith('.') ? x.ToLowerInvariant() : $".{x.ToLowerInvariant()}")
@@ -2188,6 +2175,7 @@ WHERE ID = @MRDetailID", conn, trans);
 
         CanAddNew = newStatusPermissions.Contains(PermissionAdd);
         CanAddAt = newStatusPermissions.Contains(PermissionAdd);
+        CanUploadAttachment = IsAdminRole() || newStatusPermissions.Contains(PermissionUploadAttachment);
         CanEditRequisition = newStatusPermissions.Contains(PermissionEdit);
         CanViewDetailRequisition = newStatusPermissions.Contains(PermissionViewDetail);
     }

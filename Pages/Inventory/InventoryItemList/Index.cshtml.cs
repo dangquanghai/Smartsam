@@ -174,6 +174,7 @@ public class IndexModel : BasePageModel
 
         try
         {
+            InventoryItemEditSnapshot? originalItem = null;
             if (isEdit && !ItemExists(conn, tx, ItemInput.ItemID))
             {
                 tx.Rollback();
@@ -181,11 +182,9 @@ public class IndexModel : BasePageModel
                 return RedirectToPage("./Index", BuildRouteValues());
             }
 
-            if (ItemCodeExists(conn, tx, ItemInput.ItemCode, ItemInput.ItemID))
+            if (isEdit)
             {
-                tx.Rollback();
-                SetMessage("Item Code already exists.", "warning");
-                return RedirectToPage("./Index", BuildRouteValues());
+                originalItem = GetItemEditSnapshot(conn, tx, ItemInput.ItemID);
             }
 
             if (ItemInput.KPGroupItem.HasValue && !KpGroupExists(conn, tx, ItemInput.KPGroupItem.Value))
@@ -234,7 +233,12 @@ SET ItemCode = @ItemCode,
     IsActive = @IsActive,
     ReOrderPoint = @ReOrderPoint,
     IsNewItem = @IsNewItem,
-    ItemNameNew = CASE WHEN @IsNewItem = 1 THEN @ItemName ELSE ItemNameNew END
+    ItemNameNew = @ItemNameNew,
+    isNotItem = @IsNotItem,
+    IsIrregular = @IsIrregular,
+    NoPrintWhenHandOverToResident = @NoPrintWhenHandOverToResident,
+    ReplaceForItemCode = @ReplaceForItemCode,
+    CreatedDate = GETDATE()
 WHERE ItemID = @ItemID;";
                 cmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = ItemInput.ItemID;
             }
@@ -262,7 +266,11 @@ INSERT INTO dbo.INV_ItemList
     ReOrderPoint,
     IsNewItem,
     CreatedDate,
-    ItemNameNew
+    ItemNameNew,
+    isNotItem,
+    IsIrregular,
+    NoPrintWhenHandOverToResident,
+    ReplaceForItemCode
 )
 VALUES
 (
@@ -284,13 +292,24 @@ VALUES
     @IsActive,
     @ReOrderPoint,
     @IsNewItem,
-    CONVERT(nvarchar(100), GETDATE(), 120),
-    CASE WHEN @IsNewItem = 1 THEN @ItemName ELSE NULL END
+    GETDATE(),
+    @ItemNameNew,
+    @IsNotItem,
+    @IsIrregular,
+    @NoPrintWhenHandOverToResident,
+    @ReplaceForItemCode
 );";
             }
 
             BindItemParams(cmd, parentItemId);
             cmd.ExecuteNonQuery();
+
+            if (isEdit && originalItem != null)
+            {
+                SyncMaterialRequestDetailItem(conn, tx, originalItem.ItemCode, ItemInput.ItemCode, ItemInput.Unit);
+                InsertItemPriceHistory(conn, tx, ItemInput.ItemID, originalItem.UnitPrice, ItemInput.UnitPrice);
+            }
+
             tx.Commit();
 
             SetMessage(isEdit ? "Inventory item updated." : "Inventory item added.", "success");
@@ -330,12 +349,6 @@ VALUES
         if (item == null)
         {
             SetMessage("Inventory item was not found.", "warning");
-            return RedirectToPage("./Index", BuildRouteValues());
-        }
-
-        if (ItemIsInUse(conn, item))
-        {
-            SetMessage("Inventory item is in use and cannot be deleted.", "warning");
             return RedirectToPage("./Index", BuildRouteValues());
         }
 
@@ -536,6 +549,11 @@ SELECT
     ISNULL(item.IsPurchase, 0) AS IsPurchase,
     ISNULL(item.IsActive, 0) AS IsActive,
     ISNULL(item.IsNewItem, 0) AS IsNewItem,
+    ISNULL(item.isNotItem, 0) AS IsNotItem,
+    ISNULL(item.IsIrregular, 0) AS IsIrregular,
+    ISNULL(item.NoPrintWhenHandOverToResident, 0) AS NoPrintWhenHandOverToResident,
+    ISNULL(item.ItemNameNew, '') AS ItemNameNew,
+    ISNULL(item.ReplaceForItemCode, '') AS ReplaceForItemCode,
     ISNULL(item.CreatedDate, '') AS CreatedDate
 FROM dbo.INV_ItemList item
 LEFT JOIN dbo.INV_CatgTree catg ON catg.CatgID = item.ItemCatg
@@ -602,6 +620,11 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;", conn);
                 IsPurchase = Convert.ToBoolean(rd["IsPurchase"]),
                 IsActive = Convert.ToBoolean(rd["IsActive"]),
                 IsNewItem = Convert.ToBoolean(rd["IsNewItem"]),
+                IsNotItem = Convert.ToBoolean(rd["IsNotItem"]),
+                IsIrregular = Convert.ToBoolean(rd["IsIrregular"]),
+                NoPrintWhenHandOverToResident = Convert.ToBoolean(rd["NoPrintWhenHandOverToResident"]),
+                ItemNameNew = Convert.ToString(rd["ItemNameNew"]) ?? string.Empty,
+                ReplaceForItemCode = Convert.ToString(rd["ReplaceForItemCode"]) ?? string.Empty,
                 CreatedDate = Convert.ToString(rd["CreatedDate"]) ?? string.Empty
             });
         }
@@ -916,6 +939,8 @@ ORDER BY bg.Year DESC, store.StoreName;", conn);
         ItemInput.Specification = string.IsNullOrWhiteSpace(ItemInput.Specification) ? null : ItemInput.Specification.Trim();
         ItemInput.Unit = string.IsNullOrWhiteSpace(ItemInput.Unit) ? null : ItemInput.Unit.Trim();
         ItemInput.ParentItemCode = string.IsNullOrWhiteSpace(ItemInput.ParentItemCode) ? null : ItemInput.ParentItemCode.Trim();
+        ItemInput.ItemNameNew = string.IsNullOrWhiteSpace(ItemInput.ItemNameNew) ? null : ItemInput.ItemNameNew.Trim();
+        ItemInput.ReplaceForItemCode = string.IsNullOrWhiteSpace(ItemInput.ReplaceForItemCode) ? null : ItemInput.ReplaceForItemCode.Trim();
 
         if (ItemInput.ItemCatg < 0)
         {
@@ -980,6 +1005,16 @@ ORDER BY bg.Year DESC, store.StoreName;", conn);
             return "Parent Item Code is required for sub item.";
         }
 
+        if (ItemInput.ItemNameNew?.Length > 150)
+        {
+            return "Item Name New cannot exceed 150 characters.";
+        }
+
+        if (ItemInput.ReplaceForItemCode?.Length > 20)
+        {
+            return "Replace For Item Code cannot exceed 20 characters.";
+        }
+
         return null;
     }
 
@@ -1002,6 +1037,11 @@ ORDER BY bg.Year DESC, store.StoreName;", conn);
         cmd.Parameters.Add("@IsPurchase", SqlDbType.Bit).Value = ItemInput.IsPurchase;
         cmd.Parameters.Add("@IsActive", SqlDbType.Bit).Value = ItemInput.IsActive;
         cmd.Parameters.Add("@IsNewItem", SqlDbType.Bit).Value = ItemInput.IsNewItem;
+        cmd.Parameters.Add("@IsNotItem", SqlDbType.Bit).Value = ItemInput.IsNotItem;
+        cmd.Parameters.Add("@IsIrregular", SqlDbType.Bit).Value = ItemInput.IsIrregular;
+        cmd.Parameters.Add("@NoPrintWhenHandOverToResident", SqlDbType.Bit).Value = ItemInput.NoPrintWhenHandOverToResident;
+        cmd.Parameters.Add("@ItemNameNew", SqlDbType.VarChar, 150).Value = ToDbValue(ItemInput.ItemNameNew);
+        cmd.Parameters.Add("@ReplaceForItemCode", SqlDbType.VarChar, 20).Value = ToDbValue(ItemInput.ReplaceForItemCode);
 
         var reorderParam = cmd.Parameters.Add("@ReOrderPoint", SqlDbType.Decimal);
         reorderParam.Precision = 18;
@@ -1030,18 +1070,6 @@ ORDER BY bg.Year DESC, store.StoreName;", conn);
     {
         using var cmd = new SqlCommand("SELECT COUNT(1) FROM dbo.INV_ItemList WHERE ItemID = @ItemID;", conn, tx);
         cmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = itemId;
-        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0) > 0;
-    }
-
-    private bool ItemCodeExists(SqlConnection conn, SqlTransaction tx, string itemCode, int currentItemId)
-    {
-        using var cmd = new SqlCommand(@"
-SELECT COUNT(1)
-FROM dbo.INV_ItemList
-WHERE ItemCode = @ItemCode
-  AND (@CurrentItemID = 0 OR ItemID <> @CurrentItemID);", conn, tx);
-        cmd.Parameters.Add("@ItemCode", SqlDbType.VarChar, 20).Value = itemCode;
-        cmd.Parameters.Add("@CurrentItemID", SqlDbType.Int).Value = currentItemId;
         return Convert.ToInt32(cmd.ExecuteScalar() ?? 0) > 0;
     }
 
@@ -1084,7 +1112,7 @@ SELECT TOP (1) ItemID, ItemCode
 FROM dbo.INV_ItemList
 WHERE ISNULL(IsSubItem, 0) = 0
   AND (@CurrentItemID = 0 OR ItemID <> @CurrentItemID)
-  AND ItemCode LIKE '%' + @ParentItemCode + '%'
+  AND ItemCode LIKE @ParentItemCode + '%'
 ORDER BY ItemCode;", conn, tx);
         cmd.Parameters.Add("@CurrentItemID", SqlDbType.Int).Value = currentItemId;
         cmd.Parameters.Add("@ParentItemCode", SqlDbType.VarChar, 20).Value =
@@ -1101,6 +1129,62 @@ ORDER BY ItemCode;", conn, tx);
             ItemID = Convert.ToInt32(rd["ItemID"]),
             ItemCode = Convert.ToString(rd["ItemCode"]) ?? string.Empty
         };
+    }
+
+    private InventoryItemEditSnapshot? GetItemEditSnapshot(SqlConnection conn, SqlTransaction tx, int itemId)
+    {
+        using var cmd = new SqlCommand(@"
+SELECT TOP (1)
+    ISNULL(ItemCode, '') AS ItemCode,
+    UnitPrice
+FROM dbo.INV_ItemList
+WHERE ItemID = @ItemID;", conn, tx);
+        cmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = itemId;
+
+        using var rd = cmd.ExecuteReader();
+        if (!rd.Read())
+        {
+            return null;
+        }
+
+        return new InventoryItemEditSnapshot
+        {
+            ItemCode = Convert.ToString(rd["ItemCode"]) ?? string.Empty,
+            UnitPrice = ReadNullableDouble(rd["UnitPrice"])
+        };
+    }
+
+    private void SyncMaterialRequestDetailItem(SqlConnection conn, SqlTransaction tx, string oldItemCode, string newItemCode, string? unit)
+    {
+        using var cmd = new SqlCommand(@"
+UPDATE dbo.MATERIAL_REQUEST_DETAIL
+SET ITEMCODE = @NewItemCode,
+    UNIT = @Unit,
+    NEW_ITEM = 0
+WHERE ITEMCODE = @OldItemCode;", conn, tx);
+        cmd.Parameters.Add("@NewItemCode", SqlDbType.VarChar, 20).Value = newItemCode;
+        cmd.Parameters.Add("@Unit", SqlDbType.VarChar, 10).Value = ToDbValue(unit);
+        cmd.Parameters.Add("@OldItemCode", SqlDbType.VarChar, 20).Value = oldItemCode;
+        cmd.ExecuteNonQuery();
+    }
+
+    private void InsertItemPriceHistory(SqlConnection conn, SqlTransaction tx, int itemId, double? oldPrice, double? newPrice)
+    {
+        var legacyOldPrice = oldPrice ?? 0d;
+        var legacyNewPrice = newPrice ?? 0d;
+        if (Math.Abs(legacyNewPrice - legacyOldPrice) < double.Epsilon)
+        {
+            return;
+        }
+
+        using var cmd = new SqlCommand(@"
+INSERT INTO dbo.INV_UpdatePriceOfItemHis(ItemID, UserID, TheDateTime, OldPrice, NewPrice)
+VALUES(@ItemID, @UserID, GETDATE(), @OldPrice, @NewPrice);", conn, tx);
+        cmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = itemId;
+        cmd.Parameters.Add("@UserID", SqlDbType.Int).Value = GetCurrentEmployeeId();
+        cmd.Parameters.Add("@OldPrice", SqlDbType.Float).Value = legacyOldPrice;
+        cmd.Parameters.Add("@NewPrice", SqlDbType.Float).Value = legacyNewPrice;
+        cmd.ExecuteNonQuery();
     }
 
     private InventoryItemDeleteInfo? FindItemForDelete(SqlConnection conn, int itemId)
@@ -1128,51 +1212,6 @@ WHERE ItemID = @ItemID;", conn);
             ItemName = Convert.ToString(rd["ItemName"]) ?? string.Empty,
             Unit = Convert.ToString(rd["Unit"]) ?? string.Empty
         };
-    }
-
-    private bool ItemIsInUse(SqlConnection conn, InventoryItemDeleteInfo item)
-    {
-        return HasTableReference(conn, "dbo", "INV_ItemList", "ParentItemID", item.ItemID, SqlDbType.Int)
-            || HasTableReference(conn, "dbo", "INV_ItemFlowDetail", "ItemID", item.ItemID, SqlDbType.Int)
-            || HasTableReference(conn, "dbo", "INV_ItemStoreBG", "ItemID", item.ItemID, SqlDbType.Int)
-            || HasTableReference(conn, "dbo", "INV_KPGroupIndex", "ItemID", item.ItemID, SqlDbType.Int)
-            || HasTableReference(conn, "dbo", "PC_PRDetail", "ItemID", item.ItemID, SqlDbType.Int)
-            || HasTableReference(conn, "dbo", "MATERIAL_REQUEST_DETAIL", "ITEMCODE", item.ItemCode, SqlDbType.VarChar);
-    }
-
-    private static bool HasTableReference(SqlConnection conn, string schemaName, string tableName, string columnName, object keyValue, SqlDbType keyType)
-    {
-        if (!ColumnExists(conn, schemaName, tableName, columnName))
-        {
-            return false;
-        }
-
-        var sql = $"SELECT TOP (1) 1 FROM {QuoteSqlIdentifier(schemaName)}.{QuoteSqlIdentifier(tableName)} WHERE {QuoteSqlIdentifier(columnName)} = @KeyValue;";
-        using var cmd = new SqlCommand(sql, conn);
-        var parameter = cmd.Parameters.Add("@KeyValue", keyType);
-        parameter.Value = keyValue;
-        return cmd.ExecuteScalar() != null;
-    }
-
-    private static bool ColumnExists(SqlConnection conn, string schemaName, string tableName, string columnName)
-    {
-        using var cmd = new SqlCommand(@"
-SELECT COUNT(1)
-FROM sys.columns col
-INNER JOIN sys.tables tbl ON tbl.object_id = col.object_id
-INNER JOIN sys.schemas sch ON sch.schema_id = tbl.schema_id
-WHERE sch.name = @SchemaName
-  AND tbl.name = @TableName
-  AND col.name = @ColumnName;", conn);
-        cmd.Parameters.Add("@SchemaName", SqlDbType.NVarChar, 128).Value = schemaName;
-        cmd.Parameters.Add("@TableName", SqlDbType.NVarChar, 128).Value = tableName;
-        cmd.Parameters.Add("@ColumnName", SqlDbType.NVarChar, 128).Value = columnName;
-        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0) > 0;
-    }
-
-    private static string QuoteSqlIdentifier(string identifier)
-    {
-        return $"[{identifier.Replace("]", "]]")}]";
     }
 
     private void NormalizeFilter()
@@ -1408,6 +1447,11 @@ public class InventoryItemInput
     public bool IsActive { get; set; } = true;
     public decimal? ReOrderPoint { get; set; }
     public bool IsNewItem { get; set; }
+    public bool IsNotItem { get; set; }
+    public bool IsIrregular { get; set; }
+    public bool NoPrintWhenHandOverToResident { get; set; }
+    public string? ItemNameNew { get; set; }
+    public string? ReplaceForItemCode { get; set; }
 }
 
 public class RecallLostItemCandidate
@@ -1452,6 +1496,11 @@ public class InventoryItemRow
     public bool IsPurchase { get; set; }
     public bool IsActive { get; set; }
     public bool IsNewItem { get; set; }
+    public bool IsNotItem { get; set; }
+    public bool IsIrregular { get; set; }
+    public bool NoPrintWhenHandOverToResident { get; set; }
+    public string ItemNameNew { get; set; } = string.Empty;
+    public string ReplaceForItemCode { get; set; } = string.Empty;
     public string CreatedDate { get; set; } = string.Empty;
 
     public string UnitPriceInput => UnitPrice.HasValue ? UnitPrice.Value.ToString("0.####", CultureInfo.InvariantCulture) : string.Empty;
@@ -1520,6 +1569,12 @@ public class ParentItemLookup
 {
     public int ItemID { get; set; }
     public string ItemCode { get; set; } = string.Empty;
+}
+
+public class InventoryItemEditSnapshot
+{
+    public string ItemCode { get; set; } = string.Empty;
+    public double? UnitPrice { get; set; }
 }
 
 public class CategoryOptionRow

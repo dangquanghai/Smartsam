@@ -618,24 +618,24 @@
                         : (getConfig().canSelectDetail ? `<input type="checkbox" class="prq-detail-selector" ${selectedRowKey === rowKey ? "checked" : ""} />` : "");
                 row.innerHTML = `
                     <td class="prq-center">${selectorCell}</td>
-                    <td><span class="vni-font">${escapeHtml(detail.mrRequestNo || "")}</span></td>
-                    <td title="${escapeHtml(detail.itemCode || "")}">${escapeHtml(detail.itemCode || "")}</td>
+                    <td class="prq-text-left"><span class="vni-font">${escapeHtml(detail.mrRequestNo || "")}</span></td>
+                    <td class="prq-text-left" title="${escapeHtml(detail.itemCode || "")}">${escapeHtml(detail.itemCode || "")}</td>
                     <td class="prq-detail-col-item-name" title="${escapeHtml(detail.itemName || "")}">
                         <span class="tcvn3-font">${escapeHtml(detail.itemName || "")}</span>
                     </td>
-                    <td class="prq-center">${detail.unit || ""}</td>
-                    <td class="prq-center">${formatNumber(detail.qtyFromM)}</td>
-                    <td class="prq-center">${formatNumber(detail.qtyPur)}</td>
-                    <td class="prq-center">${getConfig().canEditExistingDetailFields
-                        ? `<input type="text" inputmode="decimal" class="form-control form-control-sm prq-detail-edit-price" value="${formatNumber(detail.unitPrice)}" />`
+                    <td class="prq-text-left">${detail.unit || ""}</td>
+                    <td class="prq-number">${formatNumber(detail.qtyFromM)}</td>
+                    <td class="prq-number">${formatNumber(detail.qtyPur)}</td>
+                    <td class="prq-number">${getConfig().canEditExistingDetailFields
+                        ? `<input type="text" inputmode="decimal" class="form-control form-control-sm prq-detail-edit-price prq-number-input" value="${formatNumber(detail.unitPrice)}" />`
                         : formatNumber(detail.unitPrice)}</td>
-                    <td class="prq-center prq-detail-col-amount">${getConfig().canEditExistingDetailFields
-                        ? `<input type="text" inputmode="decimal" class="form-control form-control-sm prq-detail-edit-amount" value="${formatNumber(amount)}" />`
+                    <td class="prq-number prq-detail-col-amount">${getConfig().canEditExistingDetailFields
+                        ? `<input type="text" inputmode="decimal" class="form-control form-control-sm prq-detail-edit-amount prq-number-input" value="${formatNumber(amount)}" />`
                         : formatNumber(amount)}</td>
-                    <td class="prq-center prq-detail-col-remark">${getConfig().canEditExistingDetailFields
+                    <td class="prq-text-left prq-detail-col-remark">${getConfig().canEditExistingDetailFields
                         ? `<input type="text" class="form-control form-control-sm prq-detail-edit-remark vni-font" value="${escapeHtml(detail.remark || "")}" />`
                         : `<span class="vni-font">${escapeHtml(detail.remark || "")}</span>`}</td>
-                    <td><span class="vni-font">${escapeHtml(detail.supplierText || "")}</span></td>`;
+                    <td class="prq-text-left"><span class="vni-font">${escapeHtml(detail.supplierText || "")}</span></td>`;
                 rowsContainer.appendChild(row);
             });
 

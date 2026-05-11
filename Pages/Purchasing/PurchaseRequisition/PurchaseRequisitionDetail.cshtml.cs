@@ -26,6 +26,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
     private const int PermissionAdd = 3;
     private const int PermissionEdit = 4;
     private const int PermissionChangeStatus = 6;
+    private const int PermissionUploadAttachment = 7;
     private readonly PermissionService _permissionService;
     private readonly ISecurityService _securityService;
     private readonly ILogger<PurchaseRequisitionDetailModel> _logger;
@@ -435,7 +436,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
         {
             TempData["Message"] = "You have no permission to move item back to MR.";
             TempData["MessageType"] = "warning";
-            return RedirectToCurrentDetail("edit");
+            return RedirectToCurrentDetail();
         }
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -460,7 +461,7 @@ WHERE PRID = @PRID", conn))
         {
             TempData["Message"] = "Please select one detail row to move back to MR.";
             TempData["MessageType"] = "warning";
-            return RedirectToCurrentDetail("edit");
+            return RedirectToCurrentDetail();
         }
         using var trans = conn.BeginTransaction();
 
@@ -560,7 +561,7 @@ WHERE PRID = @PRID
         {
             TempData["Message"] = "You have no permission to reset this requisition to New.";
             TempData["MessageType"] = "warning";
-            return RedirectToCurrentDetail("edit");
+            return RedirectToCurrentDetail();
         }
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -821,7 +822,7 @@ WHERE PRID = @PRID
             TempData["MessageType"] = "error";
         }
 
-        return RedirectToCurrentDetail("edit");
+        return RedirectToCurrentDetail();
     }
 
     // Xóa các file đính kèm đã chọn của PR khỏi cả bảng PC_PR_Doc và thư mục lưu file vật lý.
@@ -837,14 +838,14 @@ WHERE PRID = @PRID
         {
             TempData["Message"] = "You have no permission to delete attachment.";
             TempData["MessageType"] = "warning";
-            return RedirectToCurrentDetail("edit");
+            return RedirectToCurrentDetail();
         }
 
         if (SelectedAttachmentDocIds == null || SelectedAttachmentDocIds.Count == 0)
         {
             TempData["Message"] = "Please select at least one attachment to delete.";
             TempData["MessageType"] = "warning";
-            return RedirectToCurrentDetail("edit");
+            return RedirectToCurrentDetail();
         }
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -910,7 +911,7 @@ WHERE DocID = @DocID
             TempData["MessageType"] = "error";
         }
 
-        return RedirectToCurrentDetail("edit");
+        return RedirectToCurrentDetail();
     }
 
     // Tải file đính kèm đã lưu của PR theo DocID.
@@ -1674,6 +1675,8 @@ WHERE EmployeeCode = @EmployeeCode", conn);
     // Xác định các nút được phép hiển thị theo trạng thái chứng từ và vai trò workflow hiện tại.
     private void SetActionFlags()
     {
+        var canUploadByPermission = Requisition.Id > 0 && (IsAdminRole() || PagePerm.HasPermission(PermissionUploadAttachment));
+
         if (IsViewMode)
         {
             CanSave = false;
@@ -1681,7 +1684,7 @@ WHERE EmployeeCode = @EmployeeCode", conn);
             CanDisapproveWorkflow = CanApproveAsCfo() || CanApproveAsBod();
             CanResetToNew = false;
             CanMoveToMr = false;
-            CanManageAttachments = false;
+            CanManageAttachments = canUploadByPermission;
             CanEditExistingDetailFields = false;
             return;
         }
@@ -1699,7 +1702,7 @@ WHERE EmployeeCode = @EmployeeCode", conn);
             && effectivePermissions.Contains(PermissionChangeStatus)
             && (_workflowUser.IsPurchaser || _workflowUser.IsCFO || _workflowUser.IsBOD || IsAdminRole());
         CanMoveToMr = Requisition.Id > 0 && CanSave && Requisition.Status == 1;
-        CanManageAttachments = Requisition.Id > 0 && CanEditDocument(effectivePermissions);
+        CanManageAttachments = canUploadByPermission;
     }
 
     // Xác định PU/CFO/BOD/Admin có đang thuộc nhóm workflow được phép dùng CST New ở trạng thái Pending hay không.

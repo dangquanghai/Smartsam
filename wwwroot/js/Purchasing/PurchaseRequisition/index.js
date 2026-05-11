@@ -872,17 +872,17 @@
                     <td class="text-center">
                         <input type="checkbox" class="prq-add-at-check" data-index="${index}" ${row.checked ? "checked" : ""} />
                     </td>
-                    <td>${escapeHtml(row.requestNo)}</td>
-                    <td title="${escapeHtml(row.itemCode)}">${escapeHtml(row.itemCode)}</td>
-                    <td class="prq-add-at-col-item-name"><span class="prq-add-at-ellipsis tcvn3-font" title="${escapeHtml(row.itemName)}">${escapeHtml(row.itemName)}</span></td>
-                    <td class="prq-center">${formatNumber(row.buy)}</td>
-                    <td class="prq-center">
-                        <input type="text" inputmode="decimal" class="form-control form-control-sm prq-add-at-sugbuy" data-index="${index}" value="${formatNumber(row.sugBuy)}" />
+                    <td class="prq-text-left">${escapeHtml(row.requestNo)}</td>
+                    <td class="prq-text-left" title="${escapeHtml(row.itemCode)}">${escapeHtml(row.itemCode)}</td>
+                    <td class="prq-add-at-col-item-name prq-text-left"><span class="prq-add-at-ellipsis tcvn3-font" title="${escapeHtml(row.itemName)}">${escapeHtml(row.itemName)}</span></td>
+                    <td class="prq-number">${formatNumber(row.buy)}</td>
+                    <td class="prq-number">
+                        <input type="text" inputmode="decimal" class="form-control form-control-sm prq-add-at-sugbuy prq-number-input" data-index="${index}" value="${formatNumber(row.sugBuy)}" />
                     </td>
-                    <td class="prq-center">${escapeHtml(row.unit)}</td>
-                    <td class="prq-center">${formatNumber(row.unitPrice)}</td>
-                    <td class="prq-add-at-col-specification">${buildSingleLineEllipsisText(row.specification, "vni-font")}</td>
-                    <td class="prq-add-at-col-note">${buildSingleLineEllipsisText(row.note, "vni-font")}</td>`;
+                    <td class="prq-text-left">${escapeHtml(row.unit)}</td>
+                    <td class="prq-number">${formatNumber(row.unitPrice)}</td>
+                    <td class="prq-add-at-col-specification prq-text-left">${buildSingleLineEllipsisText(row.specification, "vni-font")}</td>
+                    <td class="prq-add-at-col-note prq-text-left">${buildSingleLineEllipsisText(row.note, "vni-font")}</td>`;
                 rowsContainer.appendChild(tr);
             });
         };
