@@ -1,0 +1,156 @@
+@page
+@model SmartSam.Pages.Inventory.LinenList.LinenListDetailModel
+@{
+    ViewData["Title"] = "Linen List - Price";
+    var isViewMode = string.Equals(Model.Mode, "view", StringComparison.OrdinalIgnoreCase);
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <strong><i class="fas fa-check-circle"></i> Thông báo:</strong> @TempData["SuccessMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="alert alert-danger">
+                <div asp-validation-summary="All" class="text-danger"></div>
+            </div>
+        }
+
+        <form method="post">
+            <input type="hidden" asp-for="Mode" />
+            <input type="hidden" asp-for="Linen.ID" />
+
+            <div class="row d-flex align-items-stretch">
+                <div class="col-md-7">
+                    <div class="card card-primary card-outline h-100 mb-0">
+                        <div class="card-header">
+                            <h3 class="card-title">Linen list</h3>
+                        </div>
+                        <div class="card-body p-2">
+                            <div class="row no-gutters align-items-center mb-2">
+                                <div class="col-3 text-left pr-2">
+                                    <label class="col-form-label-sm mb-0">LinnenCode(*)</label>
+                                </div>
+                                <div class="col-9">
+                                    <input type="text" asp-for="Linen.LinnenCode" id="LinnenCode" class="form-control form-control-sm" maxlength="50" readonly="@isViewMode" tabindex="1">
+                                </div>
+                            </div>
+
+                            <div class="row no-gutters align-items-center mb-2">
+                                <div class="col-3 text-left pr-2">
+                                    <label class="col-form-label-sm mb-0">EcoWash HCMC</label>
+                                </div>
+                                <div class="col-9">
+                                    <input type="text" asp-for="Linen.EcoWashHcmc" id="EcoWashHcmc" class="form-control form-control-sm" maxlength="10" readonly="@isViewMode" tabindex="2">
+                                </div>
+                            </div>
+
+                            <div class="row no-gutters align-items-center mb-2">
+                                <div class="col-3 text-left pr-2">
+                                    <label class="col-form-label-sm mb-0">Flags</label>
+                                </div>
+                                <div class="col-9">
+                                    <div class="form-row">
+                                        <div class="col-md-3">
+                                            <div class="custom-control custom-checkbox">
+                                                <input type="checkbox" class="custom-control-input" asp-for="Linen.IsLinen" id="IsLinen" disabled="@isViewMode" tabindex="3">
+                                                <label class="custom-control-label" for="IsLinen">IsLinen</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="custom-control custom-checkbox">
+                                                <input type="checkbox" class="custom-control-input" asp-for="Linen.IsUniform" id="IsUniform" disabled="@isViewMode" tabindex="4">
+                                                <label class="custom-control-label" for="IsUniform">IsUniform</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="custom-control custom-checkbox">
+                                                <input type="checkbox" class="custom-control-input" asp-for="Linen.Regular" id="Regular" disabled="@isViewMode" tabindex="5">
+                                                <label class="custom-control-label" for="Regular">Regular</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="custom-control custom-checkbox">
+                                                <input type="checkbox" class="custom-control-input" asp-for="Linen.IsOrder" id="IsOrder" disabled="@isViewMode" tabindex="6">
+                                                <label class="custom-control-label" for="IsOrder">IsOrder</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer p-2 text-center">
+                            @if (Model.CanSave)
+                            {
+                                <button type="submit" class="btn btn-sm btn-primary" id="btnSave">
+                                    <i class="fas fa-save"></i> Save
+                                </button>
+                            }
+                            <a class="btn btn-sm btn-secondary" href="/Inventory/LinenList/Index">
+                                <i class="fas fa-arrow-left"></i> Close
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-5">
+                    <div class="card card-primary h-100 mb-0">
+                        <div class="card-header">
+                            <h3 class="card-title">Linen list detail</h3>
+                        </div>
+                        <div class="card-body p-2">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm mb-0">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th>Column</th>
+                                            <th>Value</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>LinnenCode</td>
+                                            <td>@Model.Linen.LinnenCode</td>
+                                        </tr>
+                                        <tr>
+                                            <td>EcoWash HCMC</td>
+                                            <td>@Model.Linen.EcoWashHcmc</td>
+                                        </tr>
+                                        <tr>
+                                            <td>IsLinen</td>
+                                            <td>@(Model.Linen.IsLinen ? "True" : "False")</td>
+                                        </tr>
+                                        <tr>
+                                            <td>IsUniform</td>
+                                            <td>@(Model.Linen.IsUniform ? "True" : "False")</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Regular</td>
+                                            <td>@(Model.Linen.Regular ? "True" : "False")</td>
+                                        </tr>
+                                        <tr>
+                                            <td>IsOrder</td>
+                                            <td>@(Model.Linen.IsOrder ? "True" : "False")</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="~/js/Inventory/LinenList/LinenListDetail.js" asp-append-version="true"></script>
+}
