@@ -254,12 +254,14 @@
 
     function initPrintReport() {
         $("#btnPrintLinnenNoteDetail").off("click").on("click", function () {
-            $("#linnenReportModal").modal("show");
-            loadPrintPreview();
-        });
+            const reportPageUrl = window.linnenNoteDailyDetail?.reportPageUrl || "";
+            const noteId = $("#Header_Id").val() || "";
+            if (!reportPageUrl || !noteId) {
+                alert("Report preview is not available.");
+                return;
+            }
 
-        $("#btnPreviewLinnenReport").off("click").on("click", function () {
-            loadPrintPreview();
+            window.location.href = `${reportPageUrl}?reportType=pantry&descriptionId=${encodeURIComponent(noteId)}`;
         });
     }
 

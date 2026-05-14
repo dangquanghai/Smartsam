@@ -1,0 +1,244 @@
+@page
+@model SmartSam.Pages.Inventory.LinenReport.IndexModel
+@{
+    ViewData["Title"] = "Linen Report";
+}
+
+@section Styles {
+    <style>
+        .linen-report-page-toolbar {
+            border-bottom: 1px solid #d7d7d7;
+            background: #f8f9fa;
+        }
+
+        .linen-report-page-toolbar .form-control-sm,
+        .linen-report-page-toolbar .custom-select-sm {
+            height: 28px;
+            padding-top: 2px;
+            padding-bottom: 2px;
+        }
+
+        .linen-report-page-toolbar label {
+            font-size: 12px;
+            margin-bottom: 0;
+            white-space: nowrap;
+        }
+
+        .linen-report-page-choice {
+            display: inline-flex;
+            align-items: center;
+            margin-right: 10px;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+
+        .linen-report-page-choice input {
+            margin-right: 4px;
+        }
+
+        .linen-report-page-chart {
+            display: inline-flex;
+            align-items: center;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+
+        .linen-report-page-chart .custom-control-label {
+            padding-top: 1px;
+        }
+
+        .linen-report-page-preview-wrap {
+            min-height: 540px;
+            background: #fff;
+        }
+
+        .linen-report-page-preview-meta {
+            font-size: 12px;
+            color: #495057;
+        }
+
+        .linen-report-page-preview-table {
+            border-collapse: collapse;
+        }
+
+        .linen-report-page-preview-table th,
+        .linen-report-page-preview-table td {
+            border: 1px solid #cfcfcf !important;
+            padding: 3px 4px !important;
+            font-size: 12px;
+            vertical-align: middle !important;
+            white-space: nowrap;
+        }
+
+        .linen-report-page-preview-table thead th {
+            background: #eef2f7;
+            text-align: center;
+        }
+
+        .linen-report-page-pantry-table {
+            min-width: 1560px;
+        }
+
+        .linen-report-page-pantry {
+            background: #fff4df;
+            font-weight: 700;
+        }
+
+        .linen-report-page-time {
+            text-align: center;
+            width: 32px;
+            font-weight: 700;
+        }
+
+        .linen-report-page-doc-table {
+            min-width: 980px;
+        }
+
+        .linen-report-page-record-table {
+            min-width: 1680px;
+        }
+
+        .linen-report-page-record-supplier {
+            background: #f7f7f7;
+            font-weight: 700;
+        }
+
+        .linen-report-page-record-group {
+            background: #fff9e7;
+            font-weight: 700;
+        }
+
+        .linen-report-page-balance-table {
+            min-width: 720px;
+            max-width: 720px;
+        }
+    </style>
+}
+
+<section class="content vni-font">
+    <div class="container-fluid">
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="alert alert-danger py-2" asp-validation-summary="All"></div>
+        }
+
+        <div class="card card-primary">
+            <div class="card-header py-2">
+                <h3 class="card-title">Linen - Report</h3>
+            </div>
+            <div class="card-body p-0">
+                <div class="p-2 linen-report-page-toolbar">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+                        <div class="d-flex flex-wrap align-items-center">
+                            <label class="linen-report-page-choice"><input type="radio" name="linenReportType" value="pantry" @(Model.Filter.ReportType == SmartSam.Pages.Inventory.LinenReport.LinenReportTypes.Pantry ? "checked" : null) />Pantry-Linen</label>
+                            <label class="linen-report-page-choice"><input type="radio" name="linenReportType" value="delivery" @(Model.Filter.ReportType == SmartSam.Pages.Inventory.LinenReport.LinenReportTypes.Delivery ? "checked" : null) />Delivery</label>
+                            <label class="linen-report-page-choice"><input type="radio" name="linenReportType" value="receive" @(Model.Filter.ReportType == SmartSam.Pages.Inventory.LinenReport.LinenReportTypes.Receive ? "checked" : null) />Receive</label>
+                            <label class="linen-report-page-choice"><input type="radio" name="linenReportType" value="laundry-record" @(Model.Filter.ReportType == SmartSam.Pages.Inventory.LinenReport.LinenReportTypes.LaundryRecord ? "checked" : null) />Laudry Record</label>
+                            <label class="linen-report-page-choice"><input type="radio" name="linenReportType" value="not-receive" @(Model.Filter.ReportType == SmartSam.Pages.Inventory.LinenReport.LinenReportTypes.NotReceive ? "checked" : null) />Not Receive</label>
+                            <label class="linen-report-page-choice"><input type="radio" name="linenReportType" value="laundry-balance" @(Model.Filter.ReportType == SmartSam.Pages.Inventory.LinenReport.LinenReportTypes.LaundryBalance ? "checked" : null) />Laundry.U. Balance</label>
+                            <label class="linen-report-page-choice"><input type="radio" name="linenReportType" value="apmt-balance" @(Model.Filter.ReportType == SmartSam.Pages.Inventory.LinenReport.LinenReportTypes.ApmtBalance ? "checked" : null) />Apmt Balance</label>
+                        </div>
+                        <div class="linen-report-page-chart">
+                            <div class="custom-control custom-checkbox mb-0">
+                                <input type="checkbox" class="custom-control-input" id="linenReportChart" disabled="@(!Model.ChartEnabled)" />
+                                <label class="custom-control-label" for="linenReportChart">Chart</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row align-items-center">
+                        <div class="col-md-4 mb-2">
+                            <div class="d-flex align-items-center">
+                                <label class="mr-2" id="linenReportDescriptionLabel">@Model.DescriptionLabel</label>
+                                <select class="form-control form-control-sm vni-font"
+                                        id="linenReportDescription"
+                                        disabled="@(!Model.DescriptionEnabled)">
+                                    @foreach (var option in Model.DescriptionOptions)
+                                    {
+                                        if (option.Value == Convert.ToString(Model.Filter.DescriptionId))
+                                        {
+                                            <option value="@option.Value" selected>@option.Text</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@option.Value">@option.Text</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <div class="d-flex align-items-center">
+                                <label class="mr-2">Linnen</label>
+                                <select class="form-control form-control-sm vni-font"
+                                        id="linenReportLinenCode"
+                                        disabled="@(!Model.LinenEnabled)">
+                                    @foreach (var option in Model.LinenOptions)
+                                    {
+                                        if (option.Value == Model.Filter.LinenCode)
+                                        {
+                                            <option value="@option.Value" selected>@option.Text</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@option.Value">@option.Text</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-2 mb-2">
+                            <div class="d-flex align-items-center">
+                                <label class="mr-2">From</label>
+                                <input type="date"
+                                       class="form-control form-control-sm"
+                                       id="linenReportFromDate"
+                                       value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")"
+                                       disabled="@(!Model.FromEnabled)" />
+                            </div>
+                        </div>
+                        <div class="col-md-2 mb-2">
+                            <div class="d-flex align-items-center">
+                                <label class="mr-2">To</label>
+                                <input type="date"
+                                       class="form-control form-control-sm"
+                                       id="linenReportToDate"
+                                       value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")"
+                                       disabled="@(!Model.ToEnabled)" />
+                            </div>
+                        </div>
+                        <div class="col-md-1 mb-2">
+                            <button type="button" class="btn btn-sm btn-primary btn-block" id="btnPreviewLinenReportPage">Preview</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-2 pt-2 linen-report-page-preview-meta" id="linenReportPreviewMeta">
+                    Click Preview to load report data.
+                </div>
+                <div class="p-2 linen-report-page-preview-wrap">
+                    <div class="table-responsive" id="linenReportPreviewContainer">
+                        <div class="text-center text-muted py-5">Click Preview to load report data.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer py-2 text-center">
+                <a href="/" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-arrow-left"></i> Back
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        window.linenReportPage = {
+            modeOptionsUrl: '@Url.Page("./Index", "ModeOptions")',
+            previewUrl: '@Url.Page("./Index", "Preview")',
+            initialType: '@Model.Filter.ReportType',
+            autoPreview: true
+        };
+    </script>
+    <script src="~/js/Inventory/LinenReport/index.js" asp-append-version="true"></script>
+}

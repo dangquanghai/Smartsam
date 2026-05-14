@@ -481,7 +481,8 @@
         window.linnenNoteDailyDetail = {
             isView: @(isView ? "true" : "false"),
             indexUrl: "@Url.Page("./Index")",
-            printPreviewUrl: "@Url.Page("./LinnenNoteDailyDetail", "PrintPreview", new { id = Model.Header.Id })"
+            printPreviewUrl: "@Url.Page("./LinnenNoteDailyDetail", "PrintPreview", new { id = Model.Header.Id })",
+            reportPageUrl: "@Url.Page("/Inventory/LinenReport/Index")"
         };
     </script>
     <script src="~/js/Inventory/LinnenNoteDaily/LinnenNoteDailyDetail.js" asp-append-version="true"></script>
