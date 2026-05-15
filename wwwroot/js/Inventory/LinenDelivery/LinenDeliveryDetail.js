@@ -65,6 +65,7 @@
         bindPrintEvents();
         bindBillEvents();
         bindDirtyTracking();
+        initReportModal();
         refreshHeaderSections();
         recalcAllRows();
         pageDirty = false;
@@ -182,7 +183,15 @@
                 return;
             }
 
-            window.location.href = `${reportPageUrl}?reportType=delivery&descriptionId=${encodeURIComponent(deliveryId)}`;
+            const popupUrl = `${reportPageUrl}?reportType=delivery&descriptionId=${encodeURIComponent(deliveryId)}&lockedReportType=delivery&popup=true`;
+            $('#linenDeliveryReportFrame').attr('src', popupUrl);
+            $('#linenDeliveryReportModal').modal('show');
+        });
+    }
+
+    function initReportModal() {
+        $('#linenDeliveryReportModal').off('hidden.bs.modal').on('hidden.bs.modal', function () {
+            $('#linenDeliveryReportFrame').attr('src', 'about:blank');
         });
     }
 

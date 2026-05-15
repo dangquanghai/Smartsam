@@ -6,139 +6,344 @@
 
 @section Styles {
     <style>
-        .linen-report-page-toolbar {
-            border-bottom: 1px solid #d7d7d7;
-            background: #f8f9fa;
-        }
-
-        .linen-report-page-toolbar .form-control-sm,
-        .linen-report-page-toolbar .custom-select-sm {
-            height: 28px;
-            padding-top: 2px;
-            padding-bottom: 2px;
-        }
-
-        .linen-report-page-toolbar label {
+        .linen-report-root {
             font-size: 12px;
+        }
+
+        .linen-report-shell {
+            border: 1px solid #9ea7b3;
+            box-shadow: none;
+        }
+
+        .linen-report-shell .card-header {
+            background: #e7edf4;
+            border-bottom: 1px solid #9ea7b3;
+        }
+
+        .linen-report-shell .card-title {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .linen-report-toolbar {
+            background: #efefef;
+            border-bottom: 1px solid #b8b8b8;
+            padding: 0.5rem 0.65rem 0.35rem;
+        }
+
+        .linen-report-toolbar .form-control-sm,
+        .linen-report-toolbar .custom-select-sm {
+            height: 26px;
+            padding-top: 1px;
+            padding-bottom: 1px;
+            border-radius: 0;
+        }
+
+        .linen-report-toolbar label {
             margin-bottom: 0;
             white-space: nowrap;
+            font-weight: 400;
         }
 
-        .linen-report-page-choice {
+        .linen-report-mode-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem 1rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .linen-report-modes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.2rem 0.9rem;
+        }
+
+        .linen-report-mode-item {
             display: inline-flex;
             align-items: center;
-            margin-right: 10px;
-            margin-bottom: 4px;
+            gap: 0.2rem;
             font-size: 12px;
         }
 
-        .linen-report-page-choice input {
-            margin-right: 4px;
+        .linen-report-mode-item input {
+            margin: 0;
         }
 
-        .linen-report-page-chart {
+        .linen-report-chart {
             display: inline-flex;
             align-items: center;
-            margin-bottom: 4px;
-            font-size: 12px;
+            min-height: 26px;
         }
 
-        .linen-report-page-chart .custom-control-label {
-            padding-top: 1px;
+        .linen-report-chart .custom-control-label::before,
+        .linen-report-chart .custom-control-label::after {
+            top: 0.15rem;
         }
 
-        .linen-report-page-preview-wrap {
-            min-height: 540px;
-            background: #fff;
+        .linen-report-filter-row .form-group {
+            margin-bottom: 0.35rem;
         }
 
-        .linen-report-page-preview-meta {
-            font-size: 12px;
-            color: #495057;
+        .linen-report-filter-row .input-group-text {
+            min-width: 54px;
+            justify-content: center;
+            padding: 0.2rem 0.45rem;
+            border-radius: 0;
         }
 
-        .linen-report-page-preview-table {
-            border-collapse: collapse;
-        }
-
-        .linen-report-page-preview-table th,
-        .linen-report-page-preview-table td {
-            border: 1px solid #cfcfcf !important;
-            padding: 3px 4px !important;
-            font-size: 12px;
-            vertical-align: middle !important;
-            white-space: nowrap;
-        }
-
-        .linen-report-page-preview-table thead th {
-            background: #eef2f7;
-            text-align: center;
-        }
-
-        .linen-report-page-pantry-table {
-            min-width: 1560px;
-        }
-
-        .linen-report-page-pantry {
-            background: #fff4df;
-            font-weight: 700;
-        }
-
-        .linen-report-page-time {
-            text-align: center;
-            width: 32px;
-            font-weight: 700;
-        }
-
-        .linen-report-page-doc-table {
-            min-width: 980px;
-        }
-
-        .linen-report-page-record-table {
-            min-width: 1680px;
-        }
-
-        .linen-report-page-record-supplier {
+        .linen-report-viewerbar {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.3rem 0.6rem;
             background: #f7f7f7;
+            border-bottom: 1px solid #b8b8b8;
+        }
+
+        .linen-report-viewer-icons {
+            display: inline-flex;
+            gap: 0.2rem;
+            align-items: center;
+        }
+
+        .linen-report-viewer-icons .btn {
+            min-width: 24px;
+            padding: 0.05rem 0.2rem;
+            border-radius: 0;
+        }
+
+        .linen-report-viewer-page {
+            min-width: 84px;
+            text-align: center;
+            border: 1px solid #b8b8b8;
+            background: #fff;
+            padding: 0.1rem 0.35rem;
+        }
+
+        .linen-report-status {
+            padding: 0.35rem 0.75rem 0;
+            color: #4a5560;
+            min-height: 22px;
+        }
+
+        .linen-report-canvas {
+            background: #b8b8b8;
+            min-height: 76vh;
+            padding: 1.1rem;
+            overflow: auto;
+        }
+
+        .linen-report-paper {
+            width: 100%;
+            max-width: 1120px;
+            min-height: 680px;
+            margin: 0 auto;
+            background: #fff;
+            border: 1px solid #8c8c8c;
+            padding: 1.15rem 1rem 1.4rem;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+        }
+
+        .linen-report-brand {
+            width: 78px;
+            min-width: 78px;
+            text-align: center;
+            font-size: 11px;
+            line-height: 1.15;
+            color: #1a5c93;
             font-weight: 700;
         }
 
-        .linen-report-page-record-group {
-            background: #fff9e7;
+        .linen-report-brand-mark {
+            width: 42px;
+            height: 54px;
+            margin: 0 auto 0.2rem;
+            background:
+                linear-gradient(135deg, #62c2ea 0%, #1e3f8f 100%);
+            clip-path: polygon(50% 0%, 92% 24%, 74% 100%, 50% 76%, 26% 100%, 8% 24%);
+        }
+
+        .linen-report-paper-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 0.9rem;
+        }
+
+        .linen-report-paper-title {
+            flex: 1;
+            text-align: center;
+            font-size: 28px;
+            font-weight: 700;
+            font-family: "Times New Roman", serif;
+            margin-top: 0.35rem;
+        }
+
+        .linen-report-paper-date {
+            min-width: 96px;
+            text-align: right;
+            font-family: "Times New Roman", serif;
+            padding-top: 0.25rem;
+        }
+
+        .linen-report-info-table {
+            width: 100%;
+            margin-bottom: 0.9rem;
+            font-family: "Times New Roman", serif;
+        }
+
+        .linen-report-info-table td {
+            padding: 0.12rem 0.3rem;
+            vertical-align: top;
+        }
+
+        .linen-report-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: "Times New Roman", serif;
+        }
+
+        .linen-report-table th,
+        .linen-report-table td {
+            border: 1px solid #7d7d7d;
+            padding: 0.14rem 0.22rem;
+            vertical-align: middle;
+        }
+
+        .linen-report-table th {
+            text-align: center;
             font-weight: 700;
         }
 
-        .linen-report-page-balance-table {
-            min-width: 720px;
-            max-width: 720px;
+        .linen-report-table .text-right {
+            text-align: right;
+        }
+
+        .linen-report-table .text-center {
+            text-align: center;
+        }
+
+        .linen-report-pantry-table th,
+        .linen-report-pantry-table td {
+            font-size: 11px;
+        }
+
+        .linen-report-pantry-name {
+            font-weight: 700;
+            background: #f7f7f7;
+        }
+
+        .linen-report-pantry-time {
+            width: 26px;
+            text-align: center;
+            font-weight: 700;
+        }
+
+        .linen-report-signatures {
+            display: flex;
+            justify-content: space-around;
+            gap: 2rem;
+            margin-top: 2.6rem;
+            font-family: "Times New Roman", serif;
+        }
+
+        .linen-report-signature {
+            width: 220px;
+            text-align: center;
+        }
+
+        .linen-report-signature-line {
+            margin-top: 3.2rem;
+            border-top: 1px solid #000;
+            height: 1px;
+        }
+
+        .linen-report-group-row td {
+            font-weight: 700;
+            background: #f7f7f7;
+        }
+
+        .linen-report-subgroup-row td {
+            font-weight: 700;
+            background: #fbfbfb;
+        }
+
+        .linen-report-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 480px;
+            color: #666;
+            font-family: "Times New Roman", serif;
+            font-size: 16px;
+        }
+
+        .linen-report-popup .content-wrapper,
+        .linen-report-popup .content,
+        .linen-report-popup .container-fluid {
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+
+        .linen-report-popup .card {
+            border: 0;
+            margin-bottom: 0;
+        }
+
+        .linen-report-popup .linen-report-canvas {
+            min-height: calc(100vh - 122px);
         }
     </style>
 }
 
-<section class="content vni-font">
-    <div class="container-fluid">
+<section class="content linen-report-root @(Model.IsPopup ? "linen-report-popup" : string.Empty)">
+    <div class="container-fluid px-0">
         @if (!ViewData.ModelState.IsValid)
         {
-            <div class="alert alert-danger py-2" asp-validation-summary="All"></div>
+            <div class="alert alert-danger py-2 mb-2" asp-validation-summary="All"></div>
         }
 
-        <div class="card card-primary">
+        <div class="card card-primary card-outline linen-report-shell mb-0">
             <div class="card-header py-2">
                 <h3 class="card-title">Linen - Report</h3>
             </div>
             <div class="card-body p-0">
-                <div class="p-2 linen-report-page-toolbar">
-                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
-                        <div class="d-flex flex-wrap align-items-center">
-                            <label class="linen-report-page-choice"><input type="radio" name="linenReportType" value="pantry" @(Model.Filter.ReportType == SmartSam.Pages.Inventory.LinenReport.LinenReportTypes.Pantry ? "checked" : null) />Pantry-Linen</label>
-                            <label class="linen-report-page-choice"><input type="radio" name="linenReportType" value="delivery" @(Model.Filter.ReportType == SmartSam.Pages.Inventory.LinenReport.LinenReportTypes.Delivery ? "checked" : null) />Delivery</label>
-                            <label class="linen-report-page-choice"><input type="radio" name="linenReportType" value="receive" @(Model.Filter.ReportType == SmartSam.Pages.Inventory.LinenReport.LinenReportTypes.Receive ? "checked" : null) />Receive</label>
-                            <label class="linen-report-page-choice"><input type="radio" name="linenReportType" value="laundry-record" @(Model.Filter.ReportType == SmartSam.Pages.Inventory.LinenReport.LinenReportTypes.LaundryRecord ? "checked" : null) />Laudry Record</label>
-                            <label class="linen-report-page-choice"><input type="radio" name="linenReportType" value="not-receive" @(Model.Filter.ReportType == SmartSam.Pages.Inventory.LinenReport.LinenReportTypes.NotReceive ? "checked" : null) />Not Receive</label>
-                            <label class="linen-report-page-choice"><input type="radio" name="linenReportType" value="laundry-balance" @(Model.Filter.ReportType == SmartSam.Pages.Inventory.LinenReport.LinenReportTypes.LaundryBalance ? "checked" : null) />Laundry.U. Balance</label>
-                            <label class="linen-report-page-choice"><input type="radio" name="linenReportType" value="apmt-balance" @(Model.Filter.ReportType == SmartSam.Pages.Inventory.LinenReport.LinenReportTypes.ApmtBalance ? "checked" : null) />Apmt Balance</label>
+                <div class="linen-report-toolbar">
+                    <div class="linen-report-mode-row">
+                        <div class="linen-report-modes">
+                            <label class="linen-report-mode-item">
+                                <input type="radio" name="linenReportType" value="pantry" @(Model.Filter.ReportType == "pantry" ? "checked" : null) @(Model.IsTypeLocked && Model.Filter.ReportType != "pantry" ? "disabled" : null) />
+                                <span>Pantry-Linen</span>
+                            </label>
+                            <label class="linen-report-mode-item">
+                                <input type="radio" name="linenReportType" value="delivery" @(Model.Filter.ReportType == "delivery" ? "checked" : null) @(Model.IsTypeLocked && Model.Filter.ReportType != "delivery" ? "disabled" : null) />
+                                <span>Delivery</span>
+                            </label>
+                            <label class="linen-report-mode-item">
+                                <input type="radio" name="linenReportType" value="receive" @(Model.Filter.ReportType == "receive" ? "checked" : null) @(Model.IsTypeLocked && Model.Filter.ReportType != "receive" ? "disabled" : null) />
+                                <span>Receive</span>
+                            </label>
+                            <label class="linen-report-mode-item">
+                                <input type="radio" name="linenReportType" value="laundry-record" @(Model.Filter.ReportType == "laundry-record" ? "checked" : null) @(Model.IsTypeLocked && Model.Filter.ReportType != "laundry-record" ? "disabled" : null) />
+                                <span>Laudry Record</span>
+                            </label>
+                            <label class="linen-report-mode-item">
+                                <input type="radio" name="linenReportType" value="not-receive" @(Model.Filter.ReportType == "not-receive" ? "checked" : null) @(Model.IsTypeLocked && Model.Filter.ReportType != "not-receive" ? "disabled" : null) />
+                                <span>Not Receive</span>
+                            </label>
+                            <label class="linen-report-mode-item">
+                                <input type="radio" name="linenReportType" value="laundry-balance" @(Model.Filter.ReportType == "laundry-balance" ? "checked" : null) @(Model.IsTypeLocked && Model.Filter.ReportType != "laundry-balance" ? "disabled" : null) />
+                                <span>Laundry.U. Balance</span>
+                            </label>
+                            <label class="linen-report-mode-item">
+                                <input type="radio" name="linenReportType" value="apmt-balance" @(Model.Filter.ReportType == "apmt-balance" ? "checked" : null) @(Model.IsTypeLocked && Model.Filter.ReportType != "apmt-balance" ? "disabled" : null) />
+                                <span>Apmt Balance</span>
+                            </label>
                         </div>
-                        <div class="linen-report-page-chart">
+                        <div class="linen-report-chart">
                             <div class="custom-control custom-checkbox mb-0">
                                 <input type="checkbox" class="custom-control-input" id="linenReportChart" disabled="@(!Model.ChartEnabled)" />
                                 <label class="custom-control-label" for="linenReportChart">Chart</label>
@@ -146,10 +351,12 @@
                         </div>
                     </div>
 
-                    <div class="form-row align-items-center">
-                        <div class="col-md-4 mb-2">
-                            <div class="d-flex align-items-center">
-                                <label class="mr-2" id="linenReportDescriptionLabel">@Model.DescriptionLabel</label>
+                    <div class="row linen-report-filter-row">
+                        <div class="col-lg-4 col-md-6">
+                            <div class="input-group input-group-sm">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text" id="linenReportDescriptionLabel">@Model.DescriptionLabel</span>
+                                </div>
                                 <select class="form-control form-control-sm vni-font"
                                         id="linenReportDescription"
                                         disabled="@(!Model.DescriptionEnabled)">
@@ -167,9 +374,11 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-3 mb-2">
-                            <div class="d-flex align-items-center">
-                                <label class="mr-2">Linnen</label>
+                        <div class="col-lg-3 col-md-6">
+                            <div class="input-group input-group-sm">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text">Linnen</span>
+                                </div>
                                 <select class="form-control form-control-sm vni-font"
                                         id="linenReportLinenCode"
                                         disabled="@(!Model.LinenEnabled)">
@@ -187,9 +396,11 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-2 mb-2">
-                            <div class="d-flex align-items-center">
-                                <label class="mr-2">From</label>
+                        <div class="col-lg-2 col-md-4">
+                            <div class="input-group input-group-sm">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text">From</span>
+                                </div>
                                 <input type="date"
                                        class="form-control form-control-sm"
                                        id="linenReportFromDate"
@@ -197,9 +408,11 @@
                                        disabled="@(!Model.FromEnabled)" />
                             </div>
                         </div>
-                        <div class="col-md-2 mb-2">
-                            <div class="d-flex align-items-center">
-                                <label class="mr-2">To</label>
+                        <div class="col-lg-2 col-md-4">
+                            <div class="input-group input-group-sm">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text">To</span>
+                                </div>
                                 <input type="date"
                                        class="form-control form-control-sm"
                                        id="linenReportToDate"
@@ -207,26 +420,44 @@
                                        disabled="@(!Model.ToEnabled)" />
                             </div>
                         </div>
-                        <div class="col-md-1 mb-2">
-                            <button type="button" class="btn btn-sm btn-primary btn-block" id="btnPreviewLinenReportPage">Preview</button>
+                        <div class="col-lg-1 col-md-4">
+                            <button type="button" class="btn btn-sm btn-secondary btn-block" id="btnPreviewLinenReportPage">Preview</button>
                         </div>
                     </div>
                 </div>
 
-                <div class="px-2 pt-2 linen-report-page-preview-meta" id="linenReportPreviewMeta">
-                    Click Preview to load report data.
+                <div class="linen-report-viewerbar">
+                    <div class="linen-report-viewer-icons">
+                        <button type="button" class="btn btn-light btn-sm border" disabled><i class="fas fa-times"></i></button>
+                        <button type="button" class="btn btn-light btn-sm border" disabled><i class="fas fa-print"></i></button>
+                        <button type="button" class="btn btn-light btn-sm border" disabled><i class="fas fa-bolt"></i></button>
+                    </div>
+                    <div class="input-group input-group-sm" style="width: 86px;">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text">%</span>
+                        </div>
+                        <input type="text" class="form-control form-control-sm text-center" value="75" readonly />
+                    </div>
+                    <div class="linen-report-viewer-page">1 of 1</div>
                 </div>
-                <div class="p-2 linen-report-page-preview-wrap">
-                    <div class="table-responsive" id="linenReportPreviewContainer">
-                        <div class="text-center text-muted py-5">Click Preview to load report data.</div>
+
+                <div class="linen-report-status" id="linenReportPreviewMeta">Click Preview to load report data.</div>
+                <div class="linen-report-canvas">
+                    <div id="linenReportPreviewContainer">
+                        <div class="linen-report-paper">
+                            <div class="linen-report-empty">Click Preview to load report data.</div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="card-footer py-2 text-center">
-                <a href="/" class="btn btn-secondary btn-sm">
-                    <i class="fas fa-arrow-left"></i> Back
-                </a>
-            </div>
+            @if (!Model.IsPopup)
+            {
+                <div class="card-footer py-2 text-center">
+                    <a href="/" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-arrow-left"></i> Back
+                    </a>
+                </div>
+            }
         </div>
     </div>
 </section>
@@ -234,9 +465,11 @@
 @section Scripts {
     <script>
         window.linenReportPage = {
-            modeOptionsUrl: '@Url.Page("./Index", "ModeOptions")',
-            previewUrl: '@Url.Page("./Index", "Preview")',
+            modeOptionsUrl: '@Url.Page("./Index", "ModeOptions", new { lockedReportType = Model.LockedReportType, popup = Model.IsPopup })',
+            previewUrl: '@Url.Page("./Index", "Preview", new { lockedReportType = Model.LockedReportType, popup = Model.IsPopup })',
             initialType: '@Model.Filter.ReportType',
+            lockedType: '@Model.LockedReportType',
+            isPopup: @(Model.IsPopup ? "true" : "false"),
             autoPreview: true
         };
     </script>

@@ -24,6 +24,12 @@ public class IndexModel : BasePageModel
     [BindProperty(SupportsGet = true)]
     public LinenReportFilter Filter { get; set; } = new LinenReportFilter();
 
+    [BindProperty(SupportsGet = true)]
+    public string LockedReportType { get; set; } = string.Empty;
+
+    [BindProperty(SupportsGet = true)]
+    public bool Popup { get; set; }
+
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
     public List<SelectListItem> DescriptionOptions { get; set; } = new List<SelectListItem>();
     public List<SelectListItem> LinenOptions { get; set; } = new List<SelectListItem>();
@@ -33,6 +39,8 @@ public class IndexModel : BasePageModel
     public bool FromEnabled { get; private set; }
     public bool ToEnabled { get; private set; }
     public bool ChartEnabled { get; private set; }
+    public bool IsTypeLocked { get; private set; }
+    public bool IsPopup => Popup;
 
     public IActionResult OnGet()
     {
@@ -65,7 +73,7 @@ public class IndexModel : BasePageModel
         try
         {
             using var conn = OpenConnection();
-            var modeState = BuildModeState(conn, NormalizeReportType(reportType), descriptionId);
+            var modeState = BuildModeState(conn, ResolveRequestedReportType(reportType), descriptionId);
             return new JsonResult(new
             {
                 success = true,
@@ -100,7 +108,7 @@ public class IndexModel : BasePageModel
             return new JsonResult(new { success = false, message = "Forbidden" });
         }
 
-        var normalizedType = NormalizeReportType(reportType);
+        var normalizedType = ResolveRequestedReportType(reportType);
         var normalizedLinenCode = (linenCode ?? string.Empty).Trim();
         var normalizedFromDate = (fromDate ?? DateTime.Today).Date;
         var normalizedToDate = (toDate ?? DateTime.Today).Date;
@@ -170,47 +178,46 @@ public class IndexModel : BasePageModel
 
         var rows = new List<LinenPantryPreviewRow>();
         using (var cmd = new SqlCommand(@"
-SELECT t.Pentry,
-       ISNULL(p.PentryName, 'Pantry ' + CONVERT(varchar(10), t.Pentry)) AS PentryName,
-       t.TimeSection,
-       ISNULL(t.BathBe, 0) AS BathBe,
-       ISNULL(t.BathDe, 0) AS BathDe,
-       ISNULL(t.BathRe, 0) AS BathRe,
-       ISNULL(t.HandBe, 0) AS HandBe,
-       ISNULL(t.HandDe, 0) AS HandDe,
-       ISNULL(t.HandRe, 0) AS HandRe,
-       ISNULL(t.FaceBe, 0) AS FaceBe,
-       ISNULL(t.FaceDe, 0) AS FaceDe,
-       ISNULL(t.FaceRe, 0) AS FaceRe,
-       ISNULL(t.BathMBe, 0) AS BathMBe,
-       ISNULL(t.BathMDe, 0) AS BathMDe,
-       ISNULL(t.BathMRe, 0) AS BathMRe,
-       ISNULL(t.PillowBe, 0) AS PillowBe,
-       ISNULL(t.PillowDe, 0) AS PillowDe,
-       ISNULL(t.PillowRe, 0) AS PillowRe,
-       ISNULL(t.SheetSBe, 0) AS SheetSBe,
-       ISNULL(t.SheetSDe, 0) AS SheetSDe,
-       ISNULL(t.SheetSRe, 0) AS SheetSRe,
-       ISNULL(t.DCoverSBe, 0) AS DCoverSBe,
-       ISNULL(t.DCoverSDe, 0) AS DCoverSDe,
-       ISNULL(t.DCoverSRe, 0) AS DCoverSRe,
-       ISNULL(t.SheetKBe, 0) AS SheetKBe,
-       ISNULL(t.SheetKDe, 0) AS SheetKDe,
-       ISNULL(t.SheetKRe, 0) AS SheetKRe,
-       ISNULL(t.DCoverKBe, 0) AS DCoverKBe,
-       ISNULL(t.DCoverKDe, 0) AS DCoverKDe,
-       ISNULL(t.DCoverKRe, 0) AS DCoverKRe,
-       ISNULL(t.KClothBe, 0) AS KClothBe,
-       ISNULL(t.KClothDe, 0) AS KClothDe,
-       ISNULL(t.KClothRe, 0) AS KClothRe,
-       ISNULL(t.DClothBe, 0) AS DClothBe,
-       ISNULL(t.DClothDe, 0) AS DClothDe,
-       ISNULL(t.DClothRe, 0) AS DClothRe
-FROM dbo.LN_PentryLinenTemp t
-LEFT JOIN dbo.LN_Pentry p ON t.Pentry = p.PentryID
-WHERE t.UserCode = @UserCode
-  AND t.PickupID = @PickupID
-ORDER BY ISNULL(p.IsOrder, t.Pentry), t.Pentry, t.TimeSection;", conn))
+SELECT ISNULL(IsOrder, 0) AS IsOrder,
+       ISNULL(PentryName, '') AS PentryName,
+       ISNULL(TimeSection, 0) AS TimeSection,
+       ISNULL(BathBe, 0) AS BathBe,
+       ISNULL(BathDe, 0) AS BathDe,
+       ISNULL(BathRe, 0) AS BathRe,
+       ISNULL(HandBe, 0) AS HandBe,
+       ISNULL(HandDe, 0) AS HandDe,
+       ISNULL(HandRe, 0) AS HandRe,
+       ISNULL(FaceBe, 0) AS FaceBe,
+       ISNULL(FaceDe, 0) AS FaceDe,
+       ISNULL(FaceRe, 0) AS FaceRe,
+       ISNULL(BathMBe, 0) AS BathMBe,
+       ISNULL(BathMDe, 0) AS BathMDe,
+       ISNULL(BathMRe, 0) AS BathMRe,
+       ISNULL(PillowBe, 0) AS PillowBe,
+       ISNULL(PillowDe, 0) AS PillowDe,
+       ISNULL(PillowRe, 0) AS PillowRe,
+       ISNULL(SheetSBe, 0) AS SheetSBe,
+       ISNULL(SheetSDe, 0) AS SheetSDe,
+       ISNULL(SheetSRe, 0) AS SheetSRe,
+       ISNULL(DCoverSBe, 0) AS DCoverSBe,
+       ISNULL(DCoverSDe, 0) AS DCoverSDe,
+       ISNULL(DCoverSRe, 0) AS DCoverSRe,
+       ISNULL(SheetKBe, 0) AS SheetKBe,
+       ISNULL(SheetKDe, 0) AS SheetKDe,
+       ISNULL(SheetKRe, 0) AS SheetKRe,
+       ISNULL(DCoverKBe, 0) AS DCoverKBe,
+       ISNULL(DCoverKDe, 0) AS DCoverKDe,
+       ISNULL(DCoverKRe, 0) AS DCoverKRe,
+       ISNULL(KClothBe, 0) AS KClothBe,
+       ISNULL(KClothDe, 0) AS KClothDe,
+       ISNULL(KClothRe, 0) AS KClothRe,
+       ISNULL(DClothBe, 0) AS DClothBe,
+       ISNULL(DClothDe, 0) AS DClothDe,
+       ISNULL(DClothRe, 0) AS DClothRe
+FROM dbo.ViewPentryLinen
+WHERE ID = @PickupID
+  AND UserCode = @UserCode
+ORDER BY IsOrder, TimeSection;", conn))
         {
             cmd.Parameters.Add("@UserCode", SqlDbType.VarChar, 50).Value = GetCurrentUserCode();
             cmd.Parameters.Add("@PickupID", SqlDbType.Int).Value = descriptionId.Value;
@@ -220,7 +227,7 @@ ORDER BY ISNULL(p.IsOrder, t.Pentry), t.Pentry, t.TimeSection;", conn))
             {
                 rows.Add(new LinenPantryPreviewRow
                 {
-                    Pentry = ToInt(rd["Pentry"]),
+                    Pentry = ToInt(rd["IsOrder"]),
                     PentryName = Convert.ToString(rd["PentryName"]) ?? string.Empty,
                     TimeSection = ToInt(rd["TimeSection"]),
                     BathBe = ToInt(rd["BathBe"]),
@@ -283,28 +290,20 @@ ORDER BY ISNULL(p.IsOrder, t.Pentry), t.Pentry, t.TimeSection;", conn))
         var preview = new LinenDeliveryPreviewHeader();
 
         using var cmd = new SqlCommand(@"
-SELECT mt.DeliveryID,
-       mt.DeliveryDate,
-       ISNULL(mt.Des, '') AS Des,
-       ISNULL(tp.LaundryTypeName, '') AS LaundryTypeName,
-       ISNULL(sp.SupplierName, '') AS SupplierName,
-       ISNULL(loc.Location, ISNULL(dt.Location, '')) AS Location,
-       ISNULL(CASE WHEN ISNULL(dt.LinenCode, '') <> '' THEN dt.LinenCode ELSE ln.LinnenCode END, '') AS LinenCode,
-       ISNULL(dt.IsChild, 0) AS IsChild,
-       ISNULL(dt.Express, 0) AS Express,
-       ISNULL(dt.Quantity, 0) AS Quantity,
-       ISNULL(dt.Price, 0) AS Price,
-       ISNULL(dt.Amount, 0) AS Amount,
-       ISNULL(dt.Note, '') AS Note
-FROM dbo.LN_DeliveryMT mt
-INNER JOIN dbo.LN_DeliveryDT dt ON mt.DeliveryID = dt.DeliveryID
-LEFT JOIN dbo.LN_LaudryType tp ON tp.LaundryTypeID = mt.DeliveryType
-LEFT JOIN dbo.PC_Suppliers sp ON sp.SupplierID = mt.SupplierID
-LEFT JOIN dbo.LN_Linnen ln ON ln.ID = dt.LinnenID
-LEFT JOIN dbo.ViewLNLocation_New loc ON loc.locationID = dt.LocationID
-WHERE mt.DeliveryID = @DeliveryID
-  AND (@LinenCode = '' OR ISNULL(CASE WHEN ISNULL(dt.LinenCode, '') <> '' THEN dt.LinenCode ELSE ln.LinnenCode END, '') = @LinenCode)
-ORDER BY dt.ID;", conn);
+SELECT SupplierName,
+       DeliveryID,
+       DeliveryDate,
+       Des,
+       LaundryTypeName,
+       Location,
+       LinnenCode,
+       Quantity,
+       Price,
+       Amount,
+       Note
+FROM dbo.ViewLinenDelivery
+WHERE DeliveryID = @DeliveryID
+  AND (@LinenCode = '' OR ISNULL(LinnenCode, '') = @LinenCode);", conn);
         cmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = descriptionId.Value;
         cmd.Parameters.Add("@LinenCode", SqlDbType.VarChar, 50).Value = linenCode;
 
@@ -325,8 +324,6 @@ ORDER BY dt.ID;", conn);
                 {
                     Location = Convert.ToString(rd["Location"]) ?? string.Empty,
                     LinenCode = Convert.ToString(rd["LinenCode"]) ?? string.Empty,
-                    IsChild = ToBool(rd["IsChild"]),
-                    Express = ToBool(rd["Express"]),
                     Quantity = ToDecimal(rd["Quantity"]),
                     Price = ToDecimal(rd["Price"]),
                     Amount = ToDecimal(rd["Amount"]),
@@ -364,28 +361,20 @@ ORDER BY dt.ID;", conn);
         var preview = new LinenReceivePreviewHeader();
 
         using var cmd = new SqlCommand(@"
-SELECT mt.ReceiveID,
-       mt.ReceiveDate,
-       ISNULL(mt.Des, '') AS Des,
-       ISNULL(dm.Des, '') AS RefDeliveryDes,
-       ISNULL(sp.SupplierName, '') AS SupplierName,
-       ISNULL(loc.Location, ISNULL(dt.Location, '')) AS Location,
-       ISNULL(CASE WHEN ISNULL(dt.LinnenCode, '') <> '' THEN dt.LinnenCode ELSE ln.LinnenCode END, '') AS LinenCode,
-       ISNULL(dt.IsChild, 0) AS IsChild,
-       ISNULL(dt.Express, 0) AS Express,
-       ISNULL(dt.Quantity, 0) AS Quantity,
-       ISNULL(dt.Price, 0) AS Price,
-       ISNULL(dt.Amount, 0) AS Amount,
-       ISNULL(dt.Note, '') AS Note
-FROM dbo.LN_ReceiveMT mt
-INNER JOIN dbo.LN_ReceiveDT dt ON mt.ReceiveID = dt.ReceiveID
-LEFT JOIN dbo.LN_DeliveryMT dm ON mt.SendID = dm.DeliveryID
-LEFT JOIN dbo.PC_Suppliers sp ON sp.SupplierID = mt.SupplierID
-LEFT JOIN dbo.LN_Linnen ln ON ln.ID = dt.LinnenID
-LEFT JOIN dbo.ViewLNLocation_New loc ON loc.locationID = dt.LocationID
-WHERE mt.ReceiveID = @ReceiveID
-  AND (@LinenCode = '' OR ISNULL(CASE WHEN ISNULL(dt.LinnenCode, '') <> '' THEN dt.LinnenCode ELSE ln.LinnenCode END, '') = @LinenCode)
-ORDER BY dt.ID;", conn);
+SELECT ReceiveID,
+       Des,
+       DesOfDe,
+       SupplierName,
+       ReceiveDate,
+       Location,
+       LinnenCode,
+       Quantity,
+       Price,
+       Amount,
+       Note
+FROM dbo.ViewLinenReceive
+WHERE ReceiveID = @ReceiveID
+  AND (@LinenCode = '' OR ISNULL(LinnenCode, '') = @LinenCode);", conn);
         cmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = descriptionId.Value;
         cmd.Parameters.Add("@LinenCode", SqlDbType.VarChar, 50).Value = linenCode;
 
@@ -406,8 +395,6 @@ ORDER BY dt.ID;", conn);
                 {
                     Location = Convert.ToString(rd["Location"]) ?? string.Empty,
                     LinenCode = Convert.ToString(rd["LinenCode"]) ?? string.Empty,
-                    IsChild = ToBool(rd["IsChild"]),
-                    Express = ToBool(rd["Express"]),
                     Quantity = ToDecimal(rd["Quantity"]),
                     Price = ToDecimal(rd["Price"]),
                     Amount = ToDecimal(rd["Amount"]),
@@ -457,48 +444,60 @@ ORDER BY dt.ID;", conn);
 
         var rows = new List<LaundryRecordPreviewRow>();
         using (var cmd = new SqlCommand(@"
-SELECT ISNULL(SupplierID, 0) AS SupplierID,
-       ISNULL(GroupID, 0) AS GroupID,
-       ISNULL(SupplierName, '') AS SupplierName,
-       ISNULL(LinenCode, '') AS LinenCode,
-       ISNULL(Price, 0) AS Price,
-       ISNULL(D01, 0) AS D01,
-       ISNULL(D02, 0) AS D02,
-       ISNULL(D03, 0) AS D03,
-       ISNULL(D04, 0) AS D04,
-       ISNULL(D05, 0) AS D05,
-       ISNULL(D06, 0) AS D06,
-       ISNULL(D07, 0) AS D07,
-       ISNULL(D08, 0) AS D08,
-       ISNULL(D09, 0) AS D09,
-       ISNULL(D10, 0) AS D10,
-       ISNULL(D11, 0) AS D11,
-       ISNULL(D12, 0) AS D12,
-       ISNULL(D13, 0) AS D13,
-       ISNULL(D14, 0) AS D14,
-       ISNULL(D15, 0) AS D15,
-       ISNULL(D16, 0) AS D16,
-       ISNULL(D17, 0) AS D17,
-       ISNULL(D18, 0) AS D18,
-       ISNULL(D19, 0) AS D19,
-       ISNULL(D20, 0) AS D20,
-       ISNULL(D21, 0) AS D21,
-       ISNULL(D22, 0) AS D22,
-       ISNULL(D23, 0) AS D23,
-       ISNULL(D24, 0) AS D24,
-       ISNULL(D25, 0) AS D25,
-       ISNULL(D26, 0) AS D26,
-       ISNULL(D27, 0) AS D27,
-       ISNULL(D28, 0) AS D28,
-       ISNULL(D29, 0) AS D29,
-       ISNULL(D30, 0) AS D30,
-       ISNULL(D31, 0) AS D31
+SELECT View_LNLinenRecord.SupplierID,
+       View_LNLinenRecord.LinenCode,
+       View_LNLinenRecord.Price,
+       View_LNLinenRecord.GroupID,
+       View_LNLinenRecord.MyMonth,
+       View_LNLinenRecord.MyYear,
+       PC_Suppliers.SupplierName,
+       SUM(View_LNLinenRecord.D01) AS D01,
+       SUM(View_LNLinenRecord.D02) AS D02,
+       SUM(View_LNLinenRecord.D03) AS D03,
+       SUM(View_LNLinenRecord.D04) AS D04,
+       SUM(View_LNLinenRecord.D05) AS D05,
+       SUM(View_LNLinenRecord.D06) AS D06,
+       SUM(View_LNLinenRecord.D07) AS D07,
+       SUM(View_LNLinenRecord.D08) AS D08,
+       SUM(View_LNLinenRecord.D09) AS D09,
+       SUM(View_LNLinenRecord.D10) AS D10,
+       SUM(View_LNLinenRecord.D11) AS D11,
+       SUM(View_LNLinenRecord.D12) AS D12,
+       SUM(View_LNLinenRecord.D13) AS D13,
+       SUM(View_LNLinenRecord.D14) AS D14,
+       SUM(View_LNLinenRecord.D15) AS D15,
+       SUM(View_LNLinenRecord.D16) AS D16,
+       SUM(View_LNLinenRecord.D17) AS D17,
+       SUM(View_LNLinenRecord.D18) AS D18,
+       SUM(View_LNLinenRecord.D19) AS D19,
+       SUM(View_LNLinenRecord.D20) AS D20,
+       SUM(View_LNLinenRecord.D21) AS D21,
+       SUM(View_LNLinenRecord.D22) AS D22,
+       SUM(View_LNLinenRecord.D23) AS D23,
+       SUM(View_LNLinenRecord.D24) AS D24,
+       SUM(View_LNLinenRecord.D25) AS D25,
+       SUM(View_LNLinenRecord.D26) AS D26,
+       SUM(View_LNLinenRecord.D27) AS D27,
+       SUM(View_LNLinenRecord.D28) AS D28,
+       SUM(View_LNLinenRecord.D29) AS D29,
+       SUM(View_LNLinenRecord.D30) AS D30,
+       SUM(View_LNLinenRecord.D31) AS D31
 FROM dbo.View_LNLinenRecord
-WHERE UserCode = @UserCode
-  AND MyMonth = @MyMonth
-  AND MyYear = @MyYear
-  AND (@LinenCode = '' OR LinenCode = @LinenCode)
-ORDER BY SupplierID ASC, GroupID, LinenCode ASC;", conn))
+INNER JOIN dbo.PC_Suppliers ON View_LNLinenRecord.SupplierID = dbo.PC_Suppliers.SupplierID
+WHERE View_LNLinenRecord.UserCode = @UserCode
+  AND View_LNLinenRecord.MyMonth = @MyMonth
+  AND View_LNLinenRecord.MyYear = @MyYear
+  AND (@LinenCode = '' OR View_LNLinenRecord.LinenCode = @LinenCode)
+GROUP BY View_LNLinenRecord.SupplierID,
+         View_LNLinenRecord.LinenCode,
+         View_LNLinenRecord.Price,
+         View_LNLinenRecord.GroupID,
+         View_LNLinenRecord.MyMonth,
+         View_LNLinenRecord.MyYear,
+         dbo.PC_Suppliers.SupplierName
+ORDER BY View_LNLinenRecord.SupplierID ASC,
+         View_LNLinenRecord.GroupID,
+         View_LNLinenRecord.LinenCode ASC;", conn))
         {
             cmd.Parameters.Add("@UserCode", SqlDbType.VarChar, 15).Value = GetCurrentUserCode();
             cmd.Parameters.Add("@MyMonth", SqlDbType.Int).Value = fromDate.Month;
@@ -929,6 +928,19 @@ WHERE ID = @ID;", conn);
     private void NormalizeFilter()
     {
         Filter.ReportType = NormalizeReportType(Filter.ReportType);
+        var lockedType = NormalizeLockedReportType(LockedReportType);
+        if (!string.IsNullOrWhiteSpace(lockedType))
+        {
+            LockedReportType = lockedType;
+            Filter.ReportType = lockedType;
+            IsTypeLocked = true;
+        }
+        else
+        {
+            LockedReportType = string.Empty;
+            IsTypeLocked = false;
+        }
+
         Filter.LinenCode = (Filter.LinenCode ?? string.Empty).Trim();
         Filter.FromDate ??= DateTime.Today;
         Filter.ToDate ??= DateTime.Today;
@@ -951,6 +963,32 @@ WHERE ID = @ID;", conn);
             LinenReportTypes.LaundryBalance => LinenReportTypes.LaundryBalance,
             LinenReportTypes.ApmtBalance => LinenReportTypes.ApmtBalance,
             _ => LinenReportTypes.LaundryRecord
+        };
+    }
+
+    private string ResolveRequestedReportType(string? reportType)
+    {
+        if (!string.IsNullOrWhiteSpace(LockedReportType))
+        {
+            return LockedReportType;
+        }
+
+        return NormalizeReportType(reportType);
+    }
+
+    private static string NormalizeLockedReportType(string? reportType)
+    {
+        var value = (reportType ?? string.Empty).Trim().ToLowerInvariant();
+        return value switch
+        {
+            LinenReportTypes.Pantry => LinenReportTypes.Pantry,
+            LinenReportTypes.Delivery => LinenReportTypes.Delivery,
+            LinenReportTypes.Receive => LinenReportTypes.Receive,
+            LinenReportTypes.LaundryRecord => LinenReportTypes.LaundryRecord,
+            LinenReportTypes.NotReceive => LinenReportTypes.NotReceive,
+            LinenReportTypes.LaundryBalance => LinenReportTypes.LaundryBalance,
+            LinenReportTypes.ApmtBalance => LinenReportTypes.ApmtBalance,
+            _ => string.Empty
         };
     }
 

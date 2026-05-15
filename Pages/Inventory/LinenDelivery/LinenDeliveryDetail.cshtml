@@ -106,76 +106,16 @@
         }
 
         .linen-delivery-report-modal-dialog {
-            max-width: 94%;
+            max-width: 90vw;
+            width: 90vw;
         }
 
-        .linen-delivery-report-toolbar {
-            border-bottom: 1px solid #d7d7d7;
-            background: #f8f9fa;
-        }
-
-        .linen-delivery-report-toolbar .form-control-sm,
-        .linen-delivery-report-toolbar .custom-select-sm {
-            height: 28px;
-            padding-top: 2px;
-            padding-bottom: 2px;
-        }
-
-        .linen-delivery-report-toolbar label {
-            font-size: 12px;
-            margin-bottom: 0;
-            white-space: nowrap;
-        }
-
-        .linen-delivery-report-choice {
-            display: inline-flex;
-            align-items: center;
-            margin-right: 10px;
-            margin-bottom: 4px;
-            font-size: 12px;
-        }
-
-        .linen-delivery-report-choice input {
-            margin-right: 4px;
-        }
-
-        .linen-delivery-report-chart {
-            display: inline-flex;
-            align-items: center;
-            margin-bottom: 4px;
-            font-size: 12px;
-        }
-
-        .linen-delivery-report-chart .custom-control-label {
-            padding-top: 1px;
-        }
-
-        .linen-delivery-report-preview-wrap {
-            min-height: 420px;
+        .linen-delivery-report-iframe {
+            display: block;
+            width: 100%;
+            height: calc(100vh - 150px);
+            border: 0;
             background: #fff;
-        }
-
-        .linen-delivery-report-preview-table {
-            min-width: 980px;
-            border-collapse: collapse;
-        }
-
-        .linen-delivery-report-preview-table th,
-        .linen-delivery-report-preview-table td {
-            border: 1px solid #cfcfcf !important;
-            padding: 3px 4px !important;
-            font-size: 12px;
-            vertical-align: middle !important;
-        }
-
-        .linen-delivery-report-preview-table thead th {
-            background: #eef2f7;
-            text-align: center;
-        }
-
-        .linen-delivery-report-preview-meta {
-            font-size: 12px;
-            color: #495057;
         }
     </style>
 }
@@ -448,72 +388,9 @@
                 </button>
             </div>
             <div class="modal-body p-0">
-                <div class="p-2 linen-delivery-report-toolbar">
-                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
-                        <div class="d-flex flex-wrap align-items-center">
-                            <label class="linen-delivery-report-choice"><input type="radio" name="linenDeliveryReportType" value="pantry" disabled />Pantry-Linen</label>
-                            <label class="linen-delivery-report-choice"><input type="radio" name="linenDeliveryReportType" value="delivery" checked />Delivery</label>
-                            <label class="linen-delivery-report-choice"><input type="radio" name="linenDeliveryReportType" value="receive" disabled />Receive</label>
-                            <label class="linen-delivery-report-choice"><input type="radio" name="linenDeliveryReportType" value="laundry-record" disabled />Laundry Record</label>
-                            <label class="linen-delivery-report-choice"><input type="radio" name="linenDeliveryReportType" value="not-receive" disabled />Not Receive</label>
-                            <label class="linen-delivery-report-choice"><input type="radio" name="linenDeliveryReportType" value="laundry-balance" disabled />Laundry.U. Balance</label>
-                            <label class="linen-delivery-report-choice"><input type="radio" name="linenDeliveryReportType" value="apmt-balance" disabled />Apmt Balance</label>
-                        </div>
-                        <div class="linen-delivery-report-chart">
-                            <div class="custom-control custom-checkbox mb-0">
-                                <input type="checkbox" class="custom-control-input" id="linenDeliveryReportChart" disabled />
-                                <label class="custom-control-label" for="linenDeliveryReportChart">Chart</label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-row align-items-center">
-                        <div class="col-md-4 mb-2">
-                            <div class="d-flex align-items-center">
-                                <label class="mr-2">Des</label>
-                                <select class="form-control form-control-sm vni-font" id="linenDeliveryReportDescription">
-                                    <option value="@Model.Header.DeliveryID">@Model.Header.Description</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-3 mb-2">
-                            <div class="d-flex align-items-center">
-                                <label class="mr-2">Linnen</label>
-                                <select class="form-control form-control-sm vni-font" id="linenDeliveryReportLinenCode">
-                                    <option value="">ALL</option>
-                                    @foreach (var linenCode in reportLinenCodes)
-                                    {
-                                        <option value="@linenCode">@linenCode</option>
-                                    }
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-2 mb-2">
-                            <div class="d-flex align-items-center">
-                                <label class="mr-2">From</label>
-                                <input type="date" class="form-control form-control-sm" id="linenDeliveryReportFromDate" value="@Model.Header.DeliveryDate.ToString("yyyy-MM-dd")" readonly />
-                            </div>
-                        </div>
-                        <div class="col-md-2 mb-2">
-                            <div class="d-flex align-items-center">
-                                <label class="mr-2">To</label>
-                                <input type="date" class="form-control form-control-sm" id="linenDeliveryReportToDate" value="@Model.Header.DeliveryDate.ToString("yyyy-MM-dd")" readonly />
-                            </div>
-                        </div>
-                        <div class="col-md-1 mb-2">
-                            <button type="button" class="btn btn-sm btn-primary btn-block" id="btnPreviewLinenDeliveryReport">Preview</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="px-2 pt-2 linen-delivery-report-preview-meta" id="linenDeliveryReportPreviewMeta">
-                    Delivery: @Model.Header.Description
-                </div>
-                <div class="p-2 linen-delivery-report-preview-wrap">
-                    <div class="table-responsive" id="linenDeliveryReportPreviewContainer">
-                        <div class="text-center text-muted py-5">Click Preview to load report data.</div>
-                    </div>
-                </div>
+                <iframe id="linenDeliveryReportFrame"
+                        class="linen-delivery-report-iframe"
+                        title="Linen Delivery Report"></iframe>
             </div>
             <div class="modal-footer py-2">
                 <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">

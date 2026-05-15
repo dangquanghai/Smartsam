@@ -261,92 +261,16 @@
                 return;
             }
 
-            window.location.href = `${reportPageUrl}?reportType=pantry&descriptionId=${encodeURIComponent(noteId)}`;
+            const popupUrl = `${reportPageUrl}?reportType=pantry&descriptionId=${encodeURIComponent(noteId)}&lockedReportType=pantry&popup=true`;
+            $("#linnenReportFrame").attr("src", popupUrl);
+            $("#linnenReportModal").modal("show");
         });
     }
 
-    function loadPrintPreview() {
-        const previewUrl = window.linnenNoteDailyDetail?.printPreviewUrl || "";
-        if (!previewUrl) {
-            alert("Report preview is not available.");
-            return;
-        }
-
-        const linenCode = ($("#linnenReportLinenCode").val() || "").toString().trim();
-        const requestUrl = new URL(previewUrl, window.location.origin);
-        if (linenCode) {
-            requestUrl.searchParams.set("linenCode", linenCode);
-        }
-
-        $("#linnenReportPreviewContainer").html('<div class="text-center text-muted py-5">Loading report data...</div>');
-
-        $.ajax({
-            url: requestUrl.toString(),
-            type: "GET",
-            success: function (response) {
-                if (!response || response.success !== true) {
-                    const message = response && response.message ? response.message : "Cannot load report preview.";
-                    $("#linnenReportPreviewContainer").html(`<div class="alert alert-danger mb-0">${escapeHtml(message)}</div>`);
-                    return;
-                }
-
-                renderPrintPreview(response);
-            },
-            error: function (xhr) {
-                const message = xhr && xhr.responseText ? xhr.responseText : "Cannot load report preview.";
-                $("#linnenReportPreviewContainer").html(`<div class="alert alert-danger mb-0">${escapeHtml(message)}</div>`);
-            }
+    function initReportModal() {
+        $("#linnenReportModal").off("hidden.bs.modal").on("hidden.bs.modal", function () {
+            $("#linnenReportFrame").attr("src", "about:blank");
         });
-    }
-
-    function renderPrintPreview(response) {
-        const columns = Array.isArray(response.columns) ? response.columns : [];
-        const rows = Array.isArray(response.rows) ? response.rows : [];
-        const noteText = response.description || "";
-        const dateText = response.dateCreate || "";
-
-        $("#linnenReportPreviewMeta").text(`Note: ${noteText} | Date: ${dateText}`);
-
-        if (columns.length === 0 || rows.length === 0) {
-            $("#linnenReportPreviewContainer").html('<div class="text-center text-muted py-5">No preview data.</div>');
-            return;
-        }
-
-        let html = '<table class="table table-bordered table-sm mb-0 linnen-report-preview-table"><thead><tr>';
-        html += '<th rowspan="2">Pantry</th><th rowspan="2">A/P</th>';
-        columns.forEach(function (column) {
-            html += `<th colspan="3">${escapeHtml(column.title || "")}</th>`;
-        });
-        html += '</tr><tr>';
-        columns.forEach(function () {
-            html += '<th>Be</th><th>De</th><th>Re</th>';
-        });
-        html += '</tr></thead><tbody>';
-
-        rows.forEach(function (row) {
-            html += '<tr>';
-            html += `<td class="ln-report-pantry">${escapeHtml(row.pentryName || "")}</td>`;
-            html += `<td class="ln-report-time">${row.timeSection === 1 ? "A" : "P"}</td>`;
-            columns.forEach(function (column) {
-                html += `<td class="text-right">${formatPreviewNumber(row[column.beField])}</td>`;
-                html += `<td class="text-right">${formatPreviewNumber(row[column.deField])}</td>`;
-                html += `<td class="text-right">${formatPreviewNumber(row[column.reField])}</td>`;
-            });
-            html += '</tr>';
-        });
-
-        html += '</tbody></table>';
-        $("#linnenReportPreviewContainer").html(html);
-    }
-
-    function formatPreviewNumber(value) {
-        const numeric = Number.parseInt(value, 10);
-        if (!Number.isFinite(numeric) || numeric === 0) return "";
-        return numeric.toString();
-    }
-
-    function escapeHtml(value) {
-        return $("<div>").text(value || "").html();
     }
 
     document.addEventListener("DOMContentLoaded", function () {
@@ -356,5 +280,6 @@
         initCloseButton();
         initUnsavedChangeGuard();
         initPrintReport();
+        initReportModal();
     });
 })();
