@@ -15,6 +15,22 @@
         currentDataRows: []
     };
 
+    function initializeSearchDateRange() {
+        if (typeof window.initSimpleDateRange !== 'function') {
+            return;
+        }
+
+        window.initSimpleDateRange('LinnenNoteDateRange', '#Filter_FromDate', '#Filter_ToDate', {
+            linkedCalendars: false
+        });
+
+        const fromDate = $('#Filter_FromDate').val();
+        const toDate = $('#Filter_ToDate').val();
+        if (fromDate && toDate && typeof window.setDateRangeValue === 'function') {
+            window.setDateRangeValue('LinnenNoteDateRange', fromDate, toDate);
+        }
+    }
+
     function performSearch(page = 1) {
         state.currentPage = page;
         const token = $('input[name="__RequestVerificationToken"]').val();
@@ -176,6 +192,7 @@
 
     function initializePage() {
         initEvents();
+        initializeSearchDateRange();
         performSearch(1);
     }
 

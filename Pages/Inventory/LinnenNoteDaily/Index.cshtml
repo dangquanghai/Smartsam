@@ -22,14 +22,14 @@
                                 <input asp-for="Filter.Description" class="form-control form-control-sm" />
                             </div>
 
-                            <div class="form-group mb-2">
-                                <label>From Date</label>
-                                <input asp-for="Filter.FromDate" type="date" class="form-control form-control-sm" />
-                            </div>
-
                             <div class="form-group mb-3">
-                                <label>To Date</label>
-                                <input asp-for="Filter.ToDate" type="date" class="form-control form-control-sm" />
+                                <label>From - To Date</label>
+                                <input type="text"
+                                       id="LinnenNoteDateRange"
+                                       class="form-control form-control-sm"
+                                       readonly />
+                                <input asp-for="Filter.FromDate" type="hidden" />
+                                <input asp-for="Filter.ToDate" type="hidden" />
                             </div>
 
                             <button type="submit" class="btn btn-primary btn-block btn-sm border">
