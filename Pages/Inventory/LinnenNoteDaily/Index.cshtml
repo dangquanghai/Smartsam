@@ -6,10 +6,10 @@
 
 <section class="content">
     <div class="container-fluid">
-        <div class="row">
+        <div class="row linnen-note-layout-row">
             <!-- SEARCH PANEL (LEFT) -->
-            <div class="col-md-2">
-                <div class="card card-info">
+            <div class="col-md-2 linnen-note-search-column">
+                <div class="card card-info linnen-note-search-panel">
                     <div class="card-header">
                         <h3 class="card-title"><i class="fas fa-search"></i> Search</h3>
                     </div>
@@ -24,10 +24,12 @@
 
                             <div class="form-group mb-3">
                                 <label>From - To Date</label>
-                                <input type="text"
-                                       id="LinnenNoteDateRange"
-                                       class="form-control form-control-sm"
-                                       readonly />
+                                <div class="linnen-note-date-range-control">
+                                    <input type="text"
+                                           id="LinnenNoteDateRange"
+                                           class="form-control form-control-sm"
+                                           readonly />
+                                </div>
                                 <input asp-for="Filter.FromDate" type="hidden" />
                                 <input asp-for="Filter.ToDate" type="hidden" />
                             </div>
@@ -41,15 +43,17 @@
             </div>
 
             <!-- RESULT + ACTION (RIGHT) -->
-            <div class="col-md-10">
+            <div class="col-md-10 linnen-note-result-column" id="linnenNoteResultPanelContainer">
                 <!-- RESULT GRID -->
                 <div class="card card-primary">
-                    <div class="card-header">
-                        <h3 class="card-title">Pantry Linen</h3>
-                        <span class="badge badge-light ml-2" id="total-records-badge">0 records</span>
-                        <div class="card-tools float-right app-paging-white">
+                    <div class="card-header linnen-note-table-header">
+                        <div class="linnen-note-table-header-left">
+                            <h3 class="card-title">Pantry Linen</h3>
+                            <span class="badge badge-light ml-2" id="total-records-badge">0 records</span>
+                        </div>
+                        <div class="linnen-note-table-header-right app-paging-white">
                             <nav aria-label="Page navigation">
-                                <div id="pagination-info" class="d-inline-block mr-2" style="padding-top: 0.3rem;">
+                                <div id="pagination-info" class="d-inline-block mr-2 linnen-note-table-paging-info">
                                     <small>No records</small>
                                 </div>
                                 <ul class="pagination pagination-sm mb-0 d-inline-flex" id="pagination">
@@ -60,15 +64,25 @@
                     <div class="card-body p-0">
                         <div class="table-responsive">
                             <table class="table table-hover table-bordered mb-0 text-nowrap" id="linnenNoteTable">
+                                <colgroup>
+                                    <col style="width: 32px;" />
+                                    <col style="width: 90px;" />
+                                    <col style="width: 120px;" />
+                                    <col style="width: 0;" />
+                                    <col style="width: 80px;" />
+                                    <col style="width: 80px;" />
+                                    <col style="width: 80px;" />
+                                    <col style="width: 100px;" />
+                                </colgroup>
                                 <thead class="thead-light">
                                     <tr>
-                                        <th></th>
+                                        <th style="width: 32px;"></th>
                                         <th style="width: 90px;">ID</th>
-                                        <th style="width: 130px;">Date</th>
+                                        <th style="width: 120px;">Date</th>
                                         <th>Note</th>
-                                        <th style="width: 90px;" class="text-center">Close</th>
-                                        <th style="width: 90px;" class="text-center">Rent</th>
-                                        <th style="width: 90px;" class="text-center">Start</th>
+                                        <th style="width: 80px;" class="text-center">Close</th>
+                                        <th style="width: 80px;" class="text-center">Rent</th>
+                                        <th style="width: 80px;" class="text-center">Start</th>
                                         <th style="width: 100px;" class="text-right">Details</th>
                                     </tr>
                                 </thead>
@@ -83,7 +97,7 @@
                 </div>
 
                 <!-- ACTION PANEL -->
-                <div class="card card-outline card-primary">
+                <div class="card card-outline card-primary linnen-note-action-panel">
                     <div class="card-footer p-2 text-center">
                         @if (Model.CanAdd)
                         {
@@ -100,6 +114,10 @@
         </div>
     </div>
 </section>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Inventory/LinnenNoteDaily/index.css" asp-append-version="true" />
+}
 
 @section Scripts {
     <script>
