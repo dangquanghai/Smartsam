@@ -230,7 +230,7 @@ ORDER BY LinnenCode
             "LinnenCode",
             "IsLinen",
             "IsUniform",
-            "EcoWash HCMC",
+            "Price (EcoWash HCMC)",
             "Regular",
             "IsOrder"
         };
