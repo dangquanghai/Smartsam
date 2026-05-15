@@ -14,6 +14,33 @@ public class LinnenNoteDailyDetailModel : BasePageModel
     private const int FunctionId = 115;
     private const int PermissionView = 1;
     private const int PermissionUpdate = 2;
+    private static readonly IReadOnlyList<LinnenNoteDailyGridColumn> FixedDetailColumns = new List<LinnenNoteDailyGridColumn>
+    {
+        new LinnenNoteDailyGridColumn("BATH", "Bath"),
+        new LinnenNoteDailyGridColumn("HAND", "Hand"),
+        new LinnenNoteDailyGridColumn("FACE", "Face"),
+        new LinnenNoteDailyGridColumn("BATH-MAT", "Bath mat"),
+        new LinnenNoteDailyGridColumn("PILLOW-CASE", "Pillow case"),
+        new LinnenNoteDailyGridColumn("SHEET-S", "Sheet S"),
+        new LinnenNoteDailyGridColumn("D-COVER-S", "D Cover S"),
+        new LinnenNoteDailyGridColumn("SHEET-K", "Sheet K"),
+        new LinnenNoteDailyGridColumn("D-COVER-K", "D Cover K"),
+        new LinnenNoteDailyGridColumn("K-CLOTH", "K Cloth"),
+        new LinnenNoteDailyGridColumn("D-CLOTH", "D Cloth")
+    };
+    private static readonly IReadOnlyList<LinnenNoteDailyPantryDefinition> FixedPantries = new List<LinnenNoteDailyPantryDefinition>
+    {
+        new LinnenNoteDailyPantryDefinition(1, "03"),
+        new LinnenNoteDailyPantryDefinition(2, "05"),
+        new LinnenNoteDailyPantryDefinition(3, "06"),
+        new LinnenNoteDailyPantryDefinition(4, "07"),
+        new LinnenNoteDailyPantryDefinition(5, "08"),
+        new LinnenNoteDailyPantryDefinition(6, "09"),
+        new LinnenNoteDailyPantryDefinition(7, "11"),
+        new LinnenNoteDailyPantryDefinition(8, "12"),
+        new LinnenNoteDailyPantryDefinition(9, "14"),
+        new LinnenNoteDailyPantryDefinition(10, "GOLF")
+    };
     private readonly PermissionService _permissionService;
 
     public LinnenNoteDailyDetailModel(IConfiguration config, PermissionService permissionService) : base(config)
@@ -40,6 +67,8 @@ public class LinnenNoteDailyDetailModel : BasePageModel
     public bool CanSave { get; private set; }
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
     public List<LinnenNoteDailyDetailRow> Details { get; set; } = new List<LinnenNoteDailyDetailRow>();
+    public IReadOnlyList<LinnenNoteDailyGridColumn> DetailColumns => FixedDetailColumns;
+    public IReadOnlyList<LinnenNoteDailyPantryDefinition> DetailPantries => FixedPantries;
 
     public IActionResult OnGet(int? id, string mode = "view")
     {
@@ -267,7 +296,7 @@ ORDER BY ISNULL(p.IsOrder, dt.Pentry), dt.Pentry, dt.TimeSection, ISNULL(l.IsOrd
                 Id = Convert.ToInt32(rd["ID"]),
                 HeaderId = Convert.ToInt32(rd["IDDeAndRe"]),
                 Pentry = Convert.ToInt32(rd["Pentry"]),
-                PentryName = Convert.ToString(rd["PentryName"]) ?? string.Empty,
+                PentryName = GetPantryDisplayName(Convert.ToInt32(rd["Pentry"]), Convert.ToString(rd["PentryName"])),
                 TimeSection = Convert.ToInt32(rd["TimeSection"]),
                 LinenCode = Convert.ToString(rd["LinenCode"]) ?? string.Empty,
                 LinenName = Convert.ToString(rd["LinenName"]) ?? string.Empty,
@@ -494,7 +523,7 @@ ORDER BY ISNULL(p.IsOrder, t.Pentry), t.Pentry, t.TimeSection;", conn);
             rows.Add(new LinnenReportPreviewRow
             {
                 Pentry = ToInt(rd["Pentry"]),
-                PentryName = Convert.ToString(rd["PentryName"]) ?? string.Empty,
+                PentryName = GetPantryDisplayName(ToInt(rd["Pentry"]), Convert.ToString(rd["PentryName"])),
                 TimeSection = ToInt(rd["TimeSection"]),
                 BathBe = ToInt(rd["BathBe"]),
                 BathDe = ToInt(rd["BathDe"]),
@@ -559,6 +588,19 @@ ORDER BY ISNULL(p.IsOrder, t.Pentry), t.Pentry, t.TimeSection;", conn);
         }
 
         return columns.Where(x => x.Code == code).ToList();
+    }
+
+    private static string GetPantryDisplayName(int pentryId, string? fallbackName)
+    {
+        foreach (var pantry in FixedPantries)
+        {
+            if (pantry.PentryId == pentryId)
+            {
+                return pantry.DisplayName;
+            }
+        }
+
+        return (fallbackName ?? string.Empty).Trim();
     }
 
     private string GetCurrentUserCode()
@@ -634,6 +676,30 @@ public class LinnenNoteDailyDetailRow
     public int Be { get; set; }
     public int De { get; set; }
     public int Re { get; set; }
+}
+
+public class LinnenNoteDailyGridColumn
+{
+    public LinnenNoteDailyGridColumn(string code, string title)
+    {
+        Code = code;
+        Title = title;
+    }
+
+    public string Code { get; set; }
+    public string Title { get; set; }
+}
+
+public class LinnenNoteDailyPantryDefinition
+{
+    public LinnenNoteDailyPantryDefinition(int pentryId, string displayName)
+    {
+        PentryId = pentryId;
+        DisplayName = displayName;
+    }
+
+    public int PentryId { get; set; }
+    public string DisplayName { get; set; }
 }
 
 public class LinnenReportPreviewRow

@@ -4,27 +4,20 @@
     ViewData["Title"] = "Pantry Linen Detail";
     var isView = Model.IsViewMode;
     var isBeginReadonly = isView || !Model.Header.Start;
-    var linenHeaders = Model.Details
-        .GroupBy(x => x.LinenCode)
-        .Select(x => x.First())
-        .ToList();
-    var pantryGroups = Model.Details
-        .GroupBy(x => new { x.Pentry, x.PentryName })
-        .ToList();
+    var detailLookup = Model.Details
+        .GroupBy(x => $"{x.Pentry}|{x.TimeSection}|{x.LinenCode}", StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
     string FormatQty(int value) => value == 0 ? string.Empty : value.ToString();
-    string LinenTitle(string code)
+
+    SmartSam.Pages.Inventory.LinnenNoteDaily.LinnenNoteDailyDetailRow? FindDetail(int pentryId, int timeSection, string linenCode)
     {
-        return code switch
+        var key = $"{pentryId}|{timeSection}|{linenCode}";
+        if (detailLookup.TryGetValue(key, out var row))
         {
-            "BATH-MAT" => "Bath mat",
-            "PILLOW-CASE" => "Pillow case",
-            "D-COVER-S" => "D Cover S",
-            "SHEET-K" => "Sheet K",
-            "D-COVER-K" => "D Cover K",
-            "K-CLOTH" => "K Cloth",
-            "D-CLOTH" => "D Cloth",
-            _ => code.Replace("-", " ")
-        };
+            return row;
+        }
+
+        return null;
     }
 }
 
@@ -210,13 +203,13 @@
                             <thead>
                                 <tr>
                                     <th colspan="2" rowspan="2" class="ln-pantry-title">Pantry<br />No</th>
-                                    @foreach (var linen in linenHeaders)
+                                    @foreach (var linen in Model.DetailColumns)
                                     {
-                                        <th colspan="3" class="ln-linen-title">@LinenTitle(linen.LinenCode)</th>
+                                        <th colspan="3" class="ln-linen-title">@linen.Title</th>
                                     }
                                 </tr>
                                 <tr>
-                                    @foreach (var linen in linenHeaders)
+                                    @foreach (var linen in Model.DetailColumns)
                                     {
                                         <th class="ln-sub-title">Be</th>
                                         <th class="ln-sub-title">De</th>
@@ -225,52 +218,43 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @if (Model.Details.Count == 0)
+                                @foreach (var pantry in Model.DetailPantries)
                                 {
-                                    <tr>
-                                        <td colspan="35" class="text-center text-muted py-3">No detail rows</td>
-                                    </tr>
-                                }
-                                else
-                                {
-                                    foreach (var pantry in pantryGroups)
+                                    for (var timeSection = 1; timeSection <= 2; timeSection++)
                                     {
-                                        for (var timeSection = 1; timeSection <= 2; timeSection++)
-                                        {
-                                            <tr>
-                                                @if (timeSection == 1)
+                                        <tr>
+                                            @if (timeSection == 1)
+                                            {
+                                                <td rowspan="2" class="ln-pantry-cell">@pantry.DisplayName</td>
+                                            }
+                                            <td class="ln-time-cell @(timeSection == 1 ? "ln-time-am" : "ln-time-pm")">@(timeSection == 1 ? "A" : "P")</td>
+                                            @foreach (var linen in Model.DetailColumns)
+                                            {
+                                                var row = FindDetail(pantry.PentryId, timeSection, linen.Code);
+                                                if (row == null)
                                                 {
-                                                    <td rowspan="2" class="ln-pantry-cell">@pantry.Key.PentryName</td>
+                                                    <td class="ln-qty-cell-be"></td>
+                                                    <td class="ln-qty-cell-de"></td>
+                                                    <td class="ln-qty-cell-re"></td>
                                                 }
-                                                <td class="ln-time-cell @(timeSection == 1 ? "ln-time-am" : "ln-time-pm")">@(timeSection == 1 ? "A" : "P")</td>
-                                                @foreach (var linen in linenHeaders)
+                                                else
                                                 {
-                                                    var row = pantry.FirstOrDefault(x => x.TimeSection == timeSection && x.LinenCode == linen.LinenCode);
-                                                    if (row == null)
-                                                    {
-                                                        <td class="ln-qty-cell-be"></td>
-                                                        <td class="ln-qty-cell-de"></td>
-                                                        <td class="ln-qty-cell-re"></td>
-                                                    }
-                                                    else
-                                                    {
-                                                        <td class="ln-qty-cell-be">
-                                                            <span class="linnen-note-detail-record d-none"
-                                                                  data-id="@row.Id"
-                                                                  data-header-id="@row.HeaderId"
-                                                                  data-pentry="@row.Pentry"
-                                                                  data-pentry-name="@row.PentryName"
-                                                                  data-time-section="@row.TimeSection"
-                                                                  data-linen-code="@row.LinenCode"
-                                                                  data-linen-name="@row.LinenName"></span>
-                                                            <input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="be" value="@FormatQty(row.Be)" readonly="@isBeginReadonly" />
-                                                        </td>
-                                                        <td class="ln-qty-cell-de"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="de" value="@FormatQty(row.De)" readonly="@isView" /></td>
-                                                        <td class="ln-qty-cell-re"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="re" value="@FormatQty(row.Re)" readonly="@isView" /></td>
-                                                    }
+                                                    <td class="ln-qty-cell-be">
+                                                        <span class="linnen-note-detail-record d-none"
+                                                              data-id="@row.Id"
+                                                              data-header-id="@row.HeaderId"
+                                                              data-pentry="@row.Pentry"
+                                                              data-pentry-name="@row.PentryName"
+                                                              data-time-section="@row.TimeSection"
+                                                              data-linen-code="@row.LinenCode"
+                                                              data-linen-name="@row.LinenName"></span>
+                                                        <input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="be" value="@FormatQty(row.Be)" readonly="@isBeginReadonly" />
+                                                    </td>
+                                                    <td class="ln-qty-cell-de"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="de" value="@FormatQty(row.De)" readonly="@isView" /></td>
+                                                    <td class="ln-qty-cell-re"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="re" value="@FormatQty(row.Re)" readonly="@isView" /></td>
                                                 }
-                                            </tr>
-                                        }
+                                            }
+                                        </tr>
                                     }
                                 }
                             </tbody>
