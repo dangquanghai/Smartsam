@@ -36,6 +36,11 @@
                     <div class="card-body">
                         <form method="get" id="linenListSearchForm">
                             <div class="form-group">
+                                <label for="Filter_LinenCode">Linen Code</label>
+                                <input type="text" class="form-control" id="Filter_LinenCode" asp-for="Filter.LinenCode" />
+                            </div>
+
+                            <div class="form-group">
                                 <div class="custom-control custom-checkbox">
                                     <input type="checkbox" class="custom-control-input" id="Filter_IsLinen" checked>
                                     <label class="custom-control-label" for="Filter_IsLinen">Is Linen</label>

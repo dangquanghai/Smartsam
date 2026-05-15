@@ -110,6 +110,7 @@ public class IndexModel : BasePageModel
 SELECT COUNT(1)
 FROM dbo.LN_Linnen
 WHERE {condition};", conn);
+        AddSearchParameters(countCmd, filter);
         var totalRecords = Convert.ToInt32(countCmd.ExecuteScalar() ?? 0);
 
         var pagingSql = pageSize == int.MaxValue
@@ -122,6 +123,7 @@ FROM dbo.LN_Linnen
 WHERE {condition}
 ORDER BY LinnenCode
 {pagingSql};", conn);
+        AddSearchParameters(cmd, filter);
 
         if (pageSize != int.MaxValue)
         {
@@ -203,7 +205,20 @@ ORDER BY LinnenCode
             conditions.Add("Regular = 0 AND IsLinen = 0");
         }
 
+        if (!string.IsNullOrWhiteSpace(filter.LinenCode))
+        {
+            conditions.Add("ISNULL(LinnenCode, '') LIKE @LinenCode");
+        }
+
         return string.Join(" AND ", conditions);
+    }
+
+    private static void AddSearchParameters(SqlCommand cmd, LinenListFilter filter)
+    {
+        if (!string.IsNullOrWhiteSpace(filter.LinenCode))
+        {
+            cmd.Parameters.Add("@LinenCode", SqlDbType.VarChar, 50).Value = "%" + filter.LinenCode.Trim() + "%";
+        }
     }
 
     private IActionResult ExportRows(IReadOnlyList<LinenListRow> rows)
@@ -279,6 +294,8 @@ ORDER BY LinnenCode
 
     private void NormalizeFilter(LinenListFilter filter)
     {
+        filter.LinenCode = (filter.LinenCode ?? string.Empty).Trim();
+
         if (filter.Page <= 0)
         {
             filter.Page = 1;
@@ -293,6 +310,7 @@ ORDER BY LinnenCode
 
 public class LinenListFilter
 {
+    public string LinenCode { get; set; } = string.Empty;
     public bool IsLinen { get; set; } = true;
     public bool IsUniform { get; set; }
     public bool IsRegular { get; set; }
