@@ -41,6 +41,7 @@
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
+    <None Update="WORK_LOG.md" Watch="false" />
   </ItemGroup>
 
 </Project>
