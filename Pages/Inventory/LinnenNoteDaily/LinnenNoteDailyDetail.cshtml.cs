@@ -171,6 +171,36 @@ public class LinnenNoteDailyDetailModel : BasePageModel
         }
     }
 
+    public IActionResult OnGetReportPdf(int id, bool download = false, string? linenCode = null)
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionView) && !PagePerm.HasPermission(PermissionUpdate))
+        {
+            return RedirectToPage("./Index");
+        }
+
+        if (id <= 0 || !LoadHeader(id))
+        {
+            TempData["SuccessMessage"] = "Pantry linen note not found.";
+            return RedirectToPage("./Index");
+        }
+
+        var report = new LinnenNoteDailyPdfReport
+        {
+            NoteId = Header.Id,
+            Description = Header.Description,
+            DateCreate = Header.DateCreate,
+            Columns = GetPreviewColumns(linenCode),
+            Rows = LoadPrintPreviewRows(id)
+        };
+
+        var pdf = LinnenNoteDailyQuestPdfReport.BuildPdf(report);
+        var fileName = $"PantryLinen_{Header.Id}.pdf";
+        return download
+            ? File(pdf, "application/pdf", fileName)
+            : File(pdf, "application/pdf");
+    }
+
     public IActionResult OnPost()
     {
         PagePerm = GetUserPermissions();

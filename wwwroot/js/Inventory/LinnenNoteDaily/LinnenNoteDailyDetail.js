@@ -4,6 +4,7 @@
     let initialState = "";
     let allowUnload = false;
     let pendingNavigationUrl = "";
+    let activeLinnenReportPreviewObjectUrl = "";
 
     function readInteger(input) {
         const rawValue = (input?.value || "").trim();
@@ -254,23 +255,78 @@
 
     function initPrintReport() {
         $("#btnPrintLinnenNoteDetail").off("click").on("click", function () {
-            const reportPageUrl = window.linnenNoteDailyDetail?.reportPageUrl || "";
-            const noteId = $("#Header_Id").val() || "";
-            if (!reportPageUrl || !noteId) {
+            const reportPdfUrl = window.linnenNoteDailyDetail?.reportPdfUrl || "";
+            if (!reportPdfUrl) {
                 alert("Report preview is not available.");
                 return;
             }
 
-            const popupUrl = `${reportPageUrl}?reportType=pantry&descriptionId=${encodeURIComponent(noteId)}&lockedReportType=pantry&popup=true`;
-            $("#linnenReportFrame").attr("src", popupUrl);
-            $("#linnenReportModal").modal("show");
+            const $modal = $("#linnenReportModal");
+            const $loading = $("#linnenReportLoading");
+            const frame = document.getElementById("linnenReportFrame");
+            if ($modal.length === 0 || !frame) {
+                alert("Report preview modal is not available.");
+                return;
+            }
+
+            $loading.show();
+            clearLinnenReportPreview(frame);
+            $modal.modal("show");
+
+            loadLinnenReportPdfPreview(frame, reportPdfUrl)
+                .then(function (objectUrl) {
+                    if (objectUrl) {
+                        activeLinnenReportPreviewObjectUrl = objectUrl;
+                    }
+                    $loading.hide();
+                })
+                .catch(function (error) {
+                    $loading.hide();
+                    $modal.modal("hide");
+                    alert(error?.message || "Cannot load PDF preview.");
+                });
         });
     }
 
     function initReportModal() {
         $("#linnenReportModal").off("hidden.bs.modal").on("hidden.bs.modal", function () {
-            $("#linnenReportFrame").attr("src", "about:blank");
+            const frame = document.getElementById("linnenReportFrame");
+            clearLinnenReportPreview(frame);
         });
+    }
+
+    async function loadLinnenReportPdfPreview(frame, url) {
+        const response = await fetch(url, {
+            method: "GET",
+            credentials: "same-origin",
+            headers: { "X-Requested-With": "XMLHttpRequest" }
+        });
+
+        if (!response.ok) {
+            throw new Error("Cannot load report preview.");
+        }
+
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        if (!contentType.includes("application/pdf")) {
+            const text = await response.text();
+            throw new Error(text || "Report preview did not return a PDF.");
+        }
+
+        const blob = await response.blob();
+        const previewUrl = URL.createObjectURL(blob);
+        frame.src = previewUrl;
+        return previewUrl;
+    }
+
+    function clearLinnenReportPreview(frame) {
+        if (frame) {
+            frame.removeAttribute("src");
+        }
+
+        if (activeLinnenReportPreviewObjectUrl) {
+            URL.revokeObjectURL(activeLinnenReportPreviewObjectUrl);
+            activeLinnenReportPreviewObjectUrl = "";
+        }
     }
 
     document.addEventListener("DOMContentLoaded", function () {

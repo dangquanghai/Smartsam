@@ -148,6 +148,15 @@
             border: 0;
             background: #fff;
         }
+
+        .linnen-report-loading {
+            display: none;
+            padding: 1rem;
+            text-align: center;
+            color: #6c757d;
+            border-bottom: 1px solid #dee2e6;
+            background: #f8f9fa;
+        }
     </style>
 }
 
@@ -291,6 +300,7 @@
                 </button>
             </div>
             <div class="modal-body p-0">
+                <div id="linnenReportLoading" class="linnen-report-loading">Loading PDF preview...</div>
                 <iframe id="linnenReportFrame"
                         class="linnen-report-iframe"
                         title="Linen Report"></iframe>
@@ -331,7 +341,7 @@
             isView: @(isView ? "true" : "false"),
             indexUrl: "@Url.Page("./Index")",
             printPreviewUrl: "@Url.Page("./LinnenNoteDailyDetail", "PrintPreview", new { id = Model.Header.Id })",
-            reportPageUrl: "@Url.Page("/Inventory/LinenReport/Index")"
+            reportPdfUrl: "@Url.Page("./LinnenNoteDailyDetail", "ReportPdf", new { id = Model.Header.Id, download = false })"
         };
     </script>
     <script src="~/js/Inventory/LinnenNoteDaily/LinnenNoteDailyDetail.js" asp-append-version="true"></script>
