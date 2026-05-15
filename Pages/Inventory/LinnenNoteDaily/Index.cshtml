@@ -1,0 +1,109 @@
+@page
+@model SmartSam.Pages.Inventory.LinnenNoteDaily.IndexModel
+@{
+    ViewData["Title"] = "Pantry Linen";
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <!-- SEARCH PANEL (LEFT) -->
+            <div class="col-md-2">
+                <div class="card card-info">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-search"></i> Search</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" id="linnenNoteSearchForm">
+                            @Html.AntiForgeryToken()
+
+                            <div class="form-group mb-2">
+                                <label>Note</label>
+                                <input asp-for="Filter.Description" class="form-control form-control-sm" />
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>From Date</label>
+                                <input asp-for="Filter.FromDate" type="date" class="form-control form-control-sm" />
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label>To Date</label>
+                                <input asp-for="Filter.ToDate" type="date" class="form-control form-control-sm" />
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-block btn-sm border">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RESULT + ACTION (RIGHT) -->
+            <div class="col-md-10">
+                <!-- RESULT GRID -->
+                <div class="card card-primary">
+                    <div class="card-header">
+                        <h3 class="card-title">Pantry Linen</h3>
+                        <span class="badge badge-light ml-2" id="total-records-badge">0 records</span>
+                        <div class="card-tools float-right app-paging-white">
+                            <nav aria-label="Page navigation">
+                                <div id="pagination-info" class="d-inline-block mr-2" style="padding-top: 0.3rem;">
+                                    <small>No records</small>
+                                </div>
+                                <ul class="pagination pagination-sm mb-0 d-inline-flex" id="pagination">
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-bordered mb-0 text-nowrap" id="linnenNoteTable">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th></th>
+                                        <th style="width: 90px;">ID</th>
+                                        <th style="width: 130px;">Date</th>
+                                        <th>Note</th>
+                                        <th style="width: 90px;" class="text-center">Close</th>
+                                        <th style="width: 90px;" class="text-center">Rent</th>
+                                        <th style="width: 90px;" class="text-center">Start</th>
+                                        <th style="width: 100px;" class="text-right">Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="8" class="text-center text-muted py-3">No data</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ACTION PANEL -->
+                <div class="card card-outline card-primary">
+                    <div class="card-footer p-2 text-center">
+                        @if (Model.CanAdd)
+                        {
+                            <button class="btn btn-success btn-sm" id="btnAdd" type="button">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        }
+                        <a class="btn btn-secondary btn-sm" href="/">
+                            <i class="fas fa-times"></i> Close
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        var defaultPageSize = @Model.DefaultPageSize;
+    </script>
+    <script src="~/js/Inventory/LinnenNoteDaily/index.js" asp-append-version="true"></script>
+}

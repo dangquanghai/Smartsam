@@ -1,0 +1,178 @@
+@page
+@model SmartSam.Pages.Inventory.LinenList.IndexModel
+@{
+    ViewData["Title"] = "Linen List - Price";
+}
+@section Styles {
+    <style>
+        .linen-row {
+            user-select: none;
+        }
+
+        .linen-list-table th,
+        .linen-list-table td {
+            vertical-align: middle;
+        }
+
+        .linen-check-cell {
+            text-align: center;
+            width: 90px;
+        }
+    </style>
+}
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+
+            <!-- SEARCH PANEL (LEFT) -->
+            <div class="col-md-2">
+                <div class="card card-info">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-search"></i> Search
+                        </h3>
+                    </div>
+
+                    <div class="card-body">
+                        <form method="get" id="linenListSearchForm">
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="Filter_IsLinen" checked>
+                                    <label class="custom-control-label" for="Filter_IsLinen">Is Linen</label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="Filter_IsUniform">
+                                    <label class="custom-control-label" for="Filter_IsUniform">Is Uniform</label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="Filter_IsRegular">
+                                    <label class="custom-control-label" for="Filter_IsRegular">Is regular</label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="Filter_IsService">
+                                    <label class="custom-control-label" for="Filter_IsService">Is Service</label>
+                                </div>
+                            </div>
+
+                            <button class="btn btn-primary btn-block">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RESULT + ACTION (RIGHT) -->
+            <div class="col-md-10">
+                <!-- RESULT GRID -->
+                <div class="card card-primary">
+                    <div class="card-header">
+                        <h3 class="card-title">Linen list</h3>
+                        <span class="badge badge-light ml-2" id="total-records-badge">0 records</span>
+                        <div class="card-tools float-right app-paging-white">
+                            <nav aria-label="Page navigation">
+                                <div id="pagination-info" class="d-inline-block mr-2" style="padding-top: 0.3rem;">
+                                    <small>No records</small>
+                                </div>
+                                <ul class="pagination pagination-sm mb-0 d-inline-flex" id="pagination">
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-bordered linen-list-table">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width: 32px;"></th>
+                                        <th>LinnenCode</th>
+                                        <th class="linen-check-cell">IsLinen</th>
+                                        <th class="linen-check-cell">IsUniform</th>
+                                        <th style="width: 180px;">EcoWash HCMC</th>
+                                        <th class="linen-check-cell">Regular</th>
+                                        <th class="linen-check-cell">IsOrder</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in Model.Rows)
+                                    {
+                                        <tr data-id="@row.ID">
+                                            <td>
+                                                <input type="radio" name="selectedLinen">
+                                            </td>
+                                            <td style="white-space: nowrap;">
+                                                <a href="javascript:void(0)" class="linen-code-link text-bold" style="text-decoration: underline;">
+                                                    @row.LinnenCode
+                                                </a>
+                                            </td>
+                                            <td class="linen-check-cell">
+                                                <input type="checkbox" disabled checked="@row.IsLinen" />
+                                            </td>
+                                            <td class="linen-check-cell">
+                                                <input type="checkbox" disabled checked="@row.IsUniform" />
+                                            </td>
+                                            <td>@row.EcoWashHcmc</td>
+                                            <td class="linen-check-cell">
+                                                <input type="checkbox" disabled checked="@row.Regular" />
+                                            </td>
+                                            <td class="linen-check-cell">
+                                                <input type="checkbox" disabled checked="@row.IsOrder" />
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <!-- ACTION PANEL -->
+                <div class="card card-outline card-primary">
+                    <div class="card-footer p-2 text-center">
+                        @if (Model.PagePerm.HasPermission(2))
+                        {
+                            <button class="btn btn-success btn-sm" id="btnAdd">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        }
+
+                        <button class="btn btn-primary btn-sm d-none" id="btnEdit">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+
+                        <button class="btn btn-outline-success btn-sm" id="btnExportExcel" type="button">
+                            <i class="fas fa-file-excel"></i> Excell
+                        </button>
+
+                        <a class="btn btn-secondary btn-sm" href="/">
+                            <i class="fas fa-times"></i> Close
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    @Html.AntiForgeryToken()
+    <script>
+        const defaultPageSize = @Model.DefaultPageSize;
+        window.linenListPage = {
+            detailUrl: '/Inventory/LinenList/LinenListDetail',
+            exportUrlBase: '/Inventory/LinenList/Index?handler=ExportExcel',
+            canUpdate: @(Model.PagePerm.HasPermission(2) ? "true" : "false")
+        };
+    </script>
+    <script src="~/js/Inventory/LinenList/index.js" asp-append-version="true"></script>
+}
