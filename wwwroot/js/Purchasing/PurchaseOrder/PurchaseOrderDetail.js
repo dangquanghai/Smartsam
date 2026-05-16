@@ -648,7 +648,7 @@ function bindMainEvents(mode) {
         $('#poBackToProcessingForm').submit();
     });
 
-    $(document).on('input', '.po-detail-qty, .po-detail-price, .po-detail-recqty', function () {
+    $(document).on('input', '.po-detail-qty, .po-detail-price, .po-detail-amount, .po-detail-recqty', function () {
         const $row = $(this).closest('tr');
         const rowKey = $(this).closest('tr').data('key');
         const row = purchaseOrderDetails.find(function (item) { return item.tempKey === rowKey; });
@@ -658,10 +658,14 @@ function bindMainEvents(mode) {
 
         row.quantity = toNumber($(this).closest('tr').find('.po-detail-qty').val());
         row.unitPrice = toNumber($(this).closest('tr').find('.po-detail-price').val());
-        row.poAmount = row.quantity * row.unitPrice;
+        if ($(this).hasClass('po-detail-amount')) {
+            row.poAmount = toNumber($(this).closest('tr').find('.po-detail-amount').val());
+        } else {
+            row.poAmount = row.quantity * row.unitPrice;
+            $row.find('.po-detail-amount').val(formatNumber(row.poAmount));
+        }
         row.recQty = toNumber($(this).closest('tr').find('.po-detail-recqty').val());
         row.recAmount = row.recQty * row.unitPrice;
-        $row.find('.po-detail-amount').val(formatNumber(row.poAmount));
         $row.find('.po-detail-recamount').val(formatNumber(row.recAmount));
         updateTotals();
     });
@@ -763,7 +767,7 @@ function renderDetailRows() {
                 <td>${escapeHtml(row.unit)}</td>
                 <td><input type="text" class="form-control form-control-sm text-right po-detail-qty" value="${formatNumber(row.quantity)}" ${canSave ? '' : 'readonly'} /></td>
                 <td><input type="text" class="form-control form-control-sm text-right po-detail-price" value="${formatNumber(row.unitPrice)}" ${canSave ? '' : 'readonly'} /></td>
-                <td><input type="text" class="form-control form-control-sm text-right po-detail-amount" value="${formatNumber(row.poAmount)}" readonly /></td>
+                <td><input type="text" class="form-control form-control-sm text-right po-detail-amount" value="${formatNumber(row.poAmount)}" ${canSave ? '' : 'readonly'} /></td>
                 <td>${canSave ? `<select class="form-control form-control-sm po-detail-dept">${deptOptions(row.recDept)}</select>` : escapeHtml(row.recDeptName)}</td>
                 <td>${canSave ? `<input type="text" class="form-control form-control-sm vni-font po-detail-note" value="${escapeAttribute(row.note)}" />` : escapeHtml(row.note)}</td>
                 <td><input type="text" class="form-control form-control-sm text-right po-detail-recqty" value="${formatNumber(row.recQty)}" ${canSave ? '' : 'readonly'} /></td>
@@ -940,7 +944,6 @@ function updateTotals() {
     let beforeVat = 0;
     for (let i = 0; i < purchaseOrderDetails.length; i += 1) {
         const row = purchaseOrderDetails[i];
-        row.poAmount = row.quantity * row.unitPrice;
         row.recAmount = row.recQty * row.unitPrice;
         beforeVat += row.poAmount;
     }
