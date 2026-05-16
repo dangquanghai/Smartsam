@@ -108,14 +108,128 @@
         .linen-delivery-report-modal-dialog {
             max-width: 90vw;
             width: 90vw;
+            margin: 0.5rem auto;
+        }
+
+        .linen-delivery-report-modal-dialog .modal-content {
+            height: 88vh;
+            max-height: 88vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+        }
+
+        .linen-delivery-report-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .linen-delivery-report-toolbar {
+            background: #efefef;
+            border-bottom: 1px solid #b8b8b8;
+            padding: 0.5rem 0.65rem 0.35rem;
+            flex: 0 0 auto;
+        }
+
+        .linen-delivery-report-mode-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem 1rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .linen-delivery-report-modes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.2rem 0.9rem;
+        }
+
+        .linen-delivery-report-mode-item,
+        .linen-delivery-report-inline-field,
+        .linen-delivery-report-chart,
+        .linen-delivery-report-chart .custom-control,
+        .linen-delivery-report-chart .custom-control-label {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+        }
+
+        .linen-delivery-report-mode-item {
+            gap: 0.2rem;
+            font-size: 12px;
+        }
+
+        .linen-delivery-report-mode-item input {
+            margin: 0;
+        }
+
+        .linen-delivery-report-toolbar label {
+            margin-bottom: 0;
+            white-space: nowrap;
+            font-weight: 400;
+            font-size: 12px;
+        }
+
+        .linen-delivery-report-toolbar .form-control-sm,
+        .linen-delivery-report-toolbar .custom-select-sm {
+            height: 26px;
+            padding-top: 1px;
+            padding-bottom: 1px;
+            border-radius: 0;
+            font-size: 12px;
+        }
+
+        .linen-delivery-report-inline-field {
+            gap: 0.45rem;
+        }
+
+        .linen-delivery-report-inline-label {
+            line-height: 26px;
+        }
+
+        .linen-delivery-report-inline-field .form-control {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .linen-delivery-report-status {
+            padding: 0.35rem 0.75rem 0;
+            color: #4a5560;
+            min-height: 22px;
+            font-size: 12px;
+            flex: 0 0 auto;
+        }
+
+        .linen-delivery-report-canvas {
+            background: #b8b8b8;
+            padding: 1rem;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
         }
 
         .linen-delivery-report-iframe {
             display: block;
             width: 100%;
-            height: calc(100vh - 150px);
-            border: 0;
+            height: 100%;
+            min-height: 0;
+            border: 1px solid #8c8c8c;
             background: #fff;
+        }
+
+        .linen-delivery-report-loading {
+            display: none;
+            padding: 1rem;
+            text-align: center;
+            color: #6c757d;
+            background: #f8f9fa;
+            margin-bottom: 0.5rem;
+            flex: 0 0 auto;
         }
     </style>
 }
@@ -379,7 +493,7 @@
 </section>
 
 <div class="modal fade" id="linenDeliveryReportModal" tabindex="-1" role="dialog" aria-labelledby="linenDeliveryReportModalLabel" aria-hidden="true">
-    <div class="modal-dialog linen-delivery-report-modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-dialog linen-delivery-report-modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header py-2">
                 <h5 class="modal-title" id="linenDeliveryReportModalLabel">Linen - Report</h5>
@@ -387,10 +501,93 @@
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="modal-body p-0">
-                <iframe id="linenDeliveryReportFrame"
-                        class="linen-delivery-report-iframe"
-                        title="Linen Delivery Report"></iframe>
+            <div class="modal-body p-0 linen-delivery-report-body">
+                <div class="linen-delivery-report-toolbar">
+                    <div class="linen-delivery-report-mode-row">
+                        <div class="linen-delivery-report-modes">
+                            <label class="linen-delivery-report-mode-item">
+                                <input type="radio" name="linenDeliveryReportType" value="pantry" disabled />
+                                <span>Pantry-Linen</span>
+                            </label>
+                            <label class="linen-delivery-report-mode-item">
+                                <input type="radio" name="linenDeliveryReportType" value="delivery" checked disabled />
+                                <span>Delivery</span>
+                            </label>
+                            <label class="linen-delivery-report-mode-item">
+                                <input type="radio" name="linenDeliveryReportType" value="receive" disabled />
+                                <span>Receive</span>
+                            </label>
+                            <label class="linen-delivery-report-mode-item">
+                                <input type="radio" name="linenDeliveryReportType" value="laundry-record" disabled />
+                                <span>Laudry Record</span>
+                            </label>
+                            <label class="linen-delivery-report-mode-item">
+                                <input type="radio" name="linenDeliveryReportType" value="not-receive" disabled />
+                                <span>Not Receive</span>
+                            </label>
+                            <label class="linen-delivery-report-mode-item">
+                                <input type="radio" name="linenDeliveryReportType" value="laundry-balance" disabled />
+                                <span>Laundry.U. Balance</span>
+                            </label>
+                            <label class="linen-delivery-report-mode-item">
+                                <input type="radio" name="linenDeliveryReportType" value="apmt-balance" disabled />
+                                <span>Apmt Balance</span>
+                            </label>
+                        </div>
+                        <div class="linen-delivery-report-chart">
+                            <div class="custom-control custom-checkbox mb-0">
+                                <input type="checkbox" class="custom-control-input" id="linenDeliveryReportChart" disabled />
+                                <label class="custom-control-label" for="linenDeliveryReportChart">Chart</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-4 col-md-6">
+                            <div class="linen-delivery-report-inline-field">
+                                <label for="linenDeliveryReportDescription" class="linen-delivery-report-inline-label">Des</label>
+                                <select class="form-control form-control-sm vni-font" id="linenDeliveryReportDescription" disabled>
+                                    <option value="@Model.Header.DeliveryID">@Model.Header.Description</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <div class="linen-delivery-report-inline-field">
+                                <label for="linenDeliveryReportLinenCode" class="linen-delivery-report-inline-label">Linnen</label>
+                                <select class="form-control form-control-sm vni-font" id="linenDeliveryReportLinenCode">
+                                    <option value="">All</option>
+                                    @foreach (var linenCode in reportLinenCodes)
+                                    {
+                                        <option value="@linenCode">@linenCode</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-lg-4 col-md-8">
+                            <div class="linen-delivery-report-inline-field">
+                                <label class="linen-delivery-report-inline-label">From - To</label>
+                                <input type="date"
+                                       class="form-control form-control-sm"
+                                       value="@Model.Header.DeliveryDate.ToString("yyyy-MM-dd")"
+                                       disabled />
+                                <input type="date"
+                                       class="form-control form-control-sm"
+                                       value="@Model.Header.DeliveryDate.ToString("yyyy-MM-dd")"
+                                       disabled />
+                            </div>
+                        </div>
+                        <div class="col-lg-1 col-md-4">
+                            <button type="button" class="btn btn-sm btn-secondary btn-block" id="btnPreviewLinenDeliveryReport">Preview</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="linen-delivery-report-status" id="linenDeliveryReportMeta">Delivery | @Model.Header.Description</div>
+                <div class="linen-delivery-report-canvas">
+                    <div id="linenDeliveryReportLoading" class="linen-delivery-report-loading">Loading PDF preview...</div>
+                    <iframe id="linenDeliveryReportFrame"
+                            class="linen-delivery-report-iframe"
+                            title="Linen Delivery Report"></iframe>
+                </div>
             </div>
             <div class="modal-footer py-2">
                 <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">
@@ -462,11 +659,12 @@
             isView: @Model.IsViewMode.ToString().ToLowerInvariant(),
             deliveryType: @(Model.Header.DeliveryType?.ToString() ?? "null"),
             supplierId: @(Model.Header.SupplierID?.ToString() ?? "null"),
+            noteId: @(Model.Header.NoteID?.ToString() ?? "null"),
             deliveryId: @Model.Header.DeliveryID,
             isSpecialLaundry: @Model.Header.IsSpecialLaundry.ToString().ToLowerInvariant(),
             canToBill: @Model.CanToBill.ToString().ToLowerInvariant(),
-            printPreviewUrl: '@Url.Page("./LinenDeliveryDetail", "PrintPreview", new { id = Model.Header.DeliveryID })',
-            reportPageUrl: '@Url.Page("/Inventory/LinenReport/Index")',
+            printPreviewUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("./LinenDeliveryDetail", "PrintPreview", new { id = Model.Header.DeliveryID }))),
+            reportPdfUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("/Inventory/LinenReport/Index", "Pdf", new { reportType = "delivery", descriptionId = Model.Header.DeliveryID, lockedReportType = "delivery", popup = true }))),
             rowTemplateOptions: {
                 locations: @Html.Raw(Model.LocationOptionsJson),
                 linens: @Html.Raw(Model.LinenOptionsJson)

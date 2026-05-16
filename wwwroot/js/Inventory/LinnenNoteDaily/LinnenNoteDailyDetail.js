@@ -255,36 +255,24 @@
 
     function initPrintReport() {
         $("#btnPrintLinnenNoteDetail").off("click").on("click", function () {
-            const reportPdfUrl = window.linnenNoteDailyDetail?.reportPdfUrl || "";
-            if (!reportPdfUrl) {
+            if (!(window.linnenNoteDailyDetail?.reportPdfUrl || "")) {
                 alert("Report preview is not available.");
                 return;
             }
 
             const $modal = $("#linnenReportModal");
-            const $loading = $("#linnenReportLoading");
             const frame = document.getElementById("linnenReportFrame");
             if ($modal.length === 0 || !frame) {
                 alert("Report preview modal is not available.");
                 return;
             }
 
-            $loading.show();
-            clearLinnenReportPreview(frame);
             $modal.modal("show");
+            previewLinnenReportPdf();
+        });
 
-            loadLinnenReportPdfPreview(frame, reportPdfUrl)
-                .then(function (objectUrl) {
-                    if (objectUrl) {
-                        activeLinnenReportPreviewObjectUrl = objectUrl;
-                    }
-                    $loading.hide();
-                })
-                .catch(function (error) {
-                    $loading.hide();
-                    $modal.modal("hide");
-                    alert(error?.message || "Cannot load PDF preview.");
-                });
+        $("#btnPreviewLinnenNoteReport").off("click").on("click", function () {
+            previewLinnenReportPdf();
         });
     }
 
@@ -293,6 +281,54 @@
             const frame = document.getElementById("linnenReportFrame");
             clearLinnenReportPreview(frame);
         });
+    }
+
+    function previewLinnenReportPdf() {
+        const reportPdfUrl = buildLinnenReportPdfUrl();
+        const $loading = $("#linnenReportLoading");
+        const $meta = $("#linnenReportMeta");
+        const frame = document.getElementById("linnenReportFrame");
+        const linenCode = ($("#linnenNoteReportLinenCode").val() || "").toString();
+        const description = ($("#linnenNoteReportDescription option:selected").text() || "").trim();
+        const linenLabel = ($("#linnenNoteReportLinenCode option:selected").text() || "All").trim();
+
+        if (!reportPdfUrl || !frame) {
+            alert("Report preview is not available.");
+            return;
+        }
+
+        $meta.text(`Pantry-Linen | ${description}${linenCode ? ` | ${linenLabel}` : ""}`);
+        $loading.show();
+        clearLinnenReportPreview(frame);
+
+        loadLinnenReportPdfPreview(frame, reportPdfUrl)
+            .then(function (objectUrl) {
+                if (objectUrl) {
+                    activeLinnenReportPreviewObjectUrl = objectUrl;
+                }
+                $loading.hide();
+            })
+            .catch(function (error) {
+                $loading.hide();
+                alert(error?.message || "Cannot load PDF preview.");
+            });
+    }
+
+    function buildLinnenReportPdfUrl() {
+        const baseUrl = window.linnenNoteDailyDetail?.reportPdfUrl || "";
+        if (!baseUrl) {
+            return "";
+        }
+
+        const url = new URL(baseUrl, window.location.origin);
+        const linenCode = ($("#linnenNoteReportLinenCode").val() || "").toString().trim();
+        if (linenCode) {
+            url.searchParams.set("linenCode", linenCode);
+        } else {
+            url.searchParams.delete("linenCode");
+        }
+
+        return `${url.pathname}${url.search}`;
     }
 
     async function loadLinnenReportPdfPreview(frame, url) {
@@ -308,8 +344,12 @@
 
         const contentType = String(response.headers.get("content-type") || "").toLowerCase();
         if (!contentType.includes("application/pdf")) {
-            const text = await response.text();
-            throw new Error(text || "Report preview did not return a PDF.");
+            if (contentType.includes("application/json")) {
+                const result = await response.json();
+                throw new Error(result?.message || "Cannot load report preview.");
+            }
+
+            throw new Error("Cannot load report preview.");
         }
 
         const blob = await response.blob();

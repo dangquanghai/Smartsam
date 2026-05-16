@@ -4,81 +4,45 @@
     const CONFIG = {
         pageSize: typeof defaultPageSize !== 'undefined' ? defaultPageSize : 13,
         selectors: {
-            tbody: '#linnenNoteTable tbody',
+            tbody: '#linenDeliveryTable tbody',
             pagination: '#pagination'
         }
     };
 
     let state = {
-        selectedNoteId: null,
+        selectedDeliveryId: null,
         currentPage: 1,
         currentDataRows: []
     };
-
-    function syncBrowserUrlToSearchState(page, filter) {
-        const currentFilter = filter || {};
-        const query = new URLSearchParams();
-
-        if (currentFilter.description) {
-            query.set('Filter.Description', currentFilter.description);
-        }
-        if (currentFilter.fromDate) {
-            query.set('Filter.FromDate', currentFilter.fromDate);
-        }
-        if (currentFilter.toDate) {
-            query.set('Filter.ToDate', currentFilter.toDate);
-        }
-        query.set('Filter.Page', String(page || 1));
-        query.set('Filter.PageSize', String(CONFIG.pageSize));
-
-        const nextUrl = `${window.location.pathname}${query.toString() ? `?${query.toString()}` : ''}`;
-        window.history.replaceState({}, document.title, nextUrl);
-    }
-
-    function buildCurrentReturnUrl() {
-        return `${window.location.pathname}${window.location.search || ''}`;
-    }
-
-    function buildDetailUrl(noteId, mode) {
-        const url = new URL('/Inventory/LinnenNoteDaily/LinnenNoteDailyDetail', window.location.origin);
-        if (noteId) {
-            url.searchParams.set('id', String(noteId));
-        }
-        url.searchParams.set('mode', mode || 'view');
-        url.searchParams.set('returnUrl', buildCurrentReturnUrl());
-        return url.toString();
-    }
-
-    function getInitialPage() {
-        const currentUrl = new URL(window.location.href);
-        const page = Number.parseInt(currentUrl.searchParams.get('Filter.Page') || '1', 10);
-        return Number.isFinite(page) && page > 0 ? page : 1;
-    }
 
     function initializeSearchDateRange() {
         if (typeof window.initSimpleDateRange !== 'function') {
             return;
         }
 
-        window.initSimpleDateRange('LinnenNoteDateRange', '#Filter_FromDate', '#Filter_ToDate', {
+        window.initSimpleDateRange('LinenDeliveryDateRange', '#Filter_FromDate', '#Filter_ToDate', {
             linkedCalendars: false
         });
 
         const fromDate = $('#Filter_FromDate').val();
         const toDate = $('#Filter_ToDate').val();
         if (fromDate && toDate && typeof window.setDateRangeValue === 'function') {
-            window.setDateRangeValue('LinnenNoteDateRange', fromDate, toDate);
+            window.setDateRangeValue('LinenDeliveryDateRange', fromDate, toDate);
         }
     }
 
     function performSearch(page = 1) {
         state.currentPage = page;
-        const token = $('input[name="__RequestVerificationToken"]').val();
 
+        const token = $('input[name="__RequestVerificationToken"]').val();
         const filter = {
-            description: $('#Filter_Description').val() || null,
             fromDate: $('#Filter_FromDate').val() || null,
             toDate: $('#Filter_ToDate').val() || null,
+            deliveryId: parseNullableInt($('#Filter_DeliveryId').val()),
+            deliveryTypeId: parseNullableInt($('#Filter_DeliveryTypeId').val()),
+            supplierId: parseNullableInt($('#Filter_SupplierId').val()),
+            closed: $('#Filter_Closed').is(':checked'),
+            isRent: $('#Filter_IsRent').is(':checked'),
             page: state.currentPage,
             pageSize: CONFIG.pageSize
         };
@@ -89,14 +53,13 @@
             url: '?handler=Search',
             type: 'POST',
             contentType: 'application/json',
-            headers: { 'RequestVerificationToken': token },
+            headers: { RequestVerificationToken: token },
             data: JSON.stringify(filter),
             success: function (response) {
                 if (response.success) {
                     state.currentDataRows = response.data || [];
-                    renderLinnenNotes(state.currentDataRows);
+                    renderRows(state.currentDataRows);
                     updatePagination(response.total, response.page, response.pageSize, response.totalPages);
-                    syncBrowserUrlToSearchState(response.page, filter);
                     resetActions();
                 } else {
                     showError('Search failed: ' + response.message);
@@ -111,39 +74,38 @@
         });
     }
 
-    function renderLinnenNotes(items) {
+    function renderRows(items) {
         const $tbody = $(CONFIG.selectors.tbody);
         $tbody.empty();
 
         if (!items || items.length === 0) {
-            $tbody.append('<tr><td colspan="8" class="text-center py-4">No data</td></tr>');
+            $tbody.append('<tr><td colspan="7" class="text-center py-4">No data</td></tr>');
             return;
         }
 
         const rows = items.map(function (item, index) {
             const row = item.data || {};
             const actions = item.actions || {};
-            const idText = encodeHtml(row.id || '');
-            const dateText = encodeHtml(row.dateCreateText || '');
+            const deliveryId = row.deliveryID || row.deliveryId || '';
+            const idText = encodeHtml(deliveryId);
+            const dateText = encodeHtml(row.deliveryDateText || '');
             const description = encodeHtml(row.description || '');
-            const closeChecked = row.isClose ? 'checked' : '';
-            const rentChecked = row.isRent ? 'checked' : '';
-            const startChecked = row.start ? 'checked' : '';
-            const detailCount = encodeHtml(row.detailCount || 0);
-            const linkClass = actions.canAccess ? 'linnen-note-link text-primary font-weight-bold' : 'linnen-note-link text-muted font-weight-bold';
+            const typeText = encodeHtml(row.deliveryTypeName || '');
+            const supplierText = encodeHtml(row.supplierName || '');
+            const closeChecked = row.closed ? 'checked' : '';
+            const linkClass = actions.canAccess ? 'linen-delivery-link text-primary font-weight-bold' : 'linen-delivery-link text-muted font-weight-bold';
 
             return `
-            <tr data-index="${index}" class="linnen-note-row">
-                <td><input type="radio" name="selectedLinnenNote" value="${index}"></td>
+            <tr data-index="${index}" class="linen-delivery-row">
+                <td style="width:32px;"><input type="radio" name="selectedLinenDelivery" value="${index}"></td>
                 <td style="white-space:nowrap">
                     <a href="javascript:void(0)" class="${linkClass}" style="text-decoration:underline">${idText}</a>
                 </td>
                 <td>${dateText}</td>
-                <td>${description}</td>
+                <td class="vni-font">${description}</td>
                 <td class="text-center"><input type="checkbox" disabled ${closeChecked}></td>
-                <td class="text-center"><input type="checkbox" disabled ${rentChecked}></td>
-                <td class="text-center"><input type="checkbox" disabled ${startChecked}></td>
-                <td class="text-right">${detailCount}</td>
+                <td class="vni-font">${typeText}</td>
+                <td class="vni-font">${supplierText}</td>
             </tr>`;
         });
 
@@ -151,32 +113,32 @@
     }
 
     function initEvents() {
-        $(document).off('click', '.linnen-note-row').on('click', '.linnen-note-row', function (e) {
-            const isControl = $(e.target).closest('.linnen-note-link, input, button').length > 0;
+        $(document).off('click', '.linen-delivery-row').on('click', '.linen-delivery-row', function (e) {
+            const isControl = $(e.target).closest('.linen-delivery-link, input, button').length > 0;
             if (isControl) {
                 return;
             }
 
-            const $radio = $(this).find('input[name="selectedLinnenNote"]');
+            const $radio = $(this).find('input[name="selectedLinenDelivery"]');
             if (!$radio.is(':checked')) {
                 $radio.prop('checked', true).trigger('change');
             }
         });
 
-        $(document).off('change', "input[name='selectedLinnenNote']").on('change', "input[name='selectedLinnenNote']", function (e) {
+        $(document).off('change', "input[name='selectedLinenDelivery']").on('change', "input[name='selectedLinenDelivery']", function (e) {
             e.stopPropagation();
             const index = $(this).val();
             const item = state.currentDataRows[index];
-            state.selectedNoteId = item?.data?.id || null;
+            state.selectedDeliveryId = item?.data?.deliveryID || item?.data?.deliveryId || null;
         });
 
-        $(document).off('click', '.linnen-note-link').on('click', '.linnen-note-link', function (e) {
+        $(document).off('click', '.linen-delivery-link').on('click', '.linen-delivery-link', function (e) {
             e.preventDefault();
             e.stopPropagation();
             openDetail($(this).closest('tr').data('index'));
         });
 
-        $(document).off('dblclick', '.linnen-note-row').on('dblclick', '.linnen-note-row', function (e) {
+        $(document).off('dblclick', '.linen-delivery-row').on('dblclick', '.linen-delivery-row', function (e) {
             e.preventDefault();
             openDetail($(this).data('index'));
         });
@@ -190,17 +152,17 @@
         });
 
         $('#btnAdd').off('click').on('click', function () {
-            window.location.href = buildDetailUrl('', 'add');
+            window.location.href = '/Inventory/LinenDelivery/LinenDeliveryDetail?mode=add';
         });
 
-        $('#linnenNoteSearchForm').off('submit').on('submit', function (e) {
+        $('#linenDeliverySearchForm').off('submit').on('submit', function (e) {
             e.preventDefault();
             performSearch(1);
         });
     }
 
     function resetActions() {
-        state.selectedNoteId = null;
+        state.selectedDeliveryId = null;
     }
 
     function updatePagination(total, page, pageSize, totalPages) {
@@ -234,17 +196,17 @@
     function initializePage() {
         initEvents();
         initializeSearchDateRange();
-        performSearch(getInitialPage());
+        performSearch(1);
     }
 
     function showLoading(show) {
         if (show) {
-            $(CONFIG.selectors.tbody).html('<tr><td colspan="8" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>');
+            $(CONFIG.selectors.tbody).html('<tr><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>');
         }
     }
 
     function showError(message) {
-        $(CONFIG.selectors.tbody).html(`<tr><td colspan="8" class="text-center text-danger py-4">${encodeHtml(message)}</td></tr>`);
+        $(CONFIG.selectors.tbody).html(`<tr><td colspan="7" class="text-center text-danger py-4">${encodeHtml(message)}</td></tr>`);
     }
 
     function openDetail(index) {
@@ -254,12 +216,21 @@
         }
 
         if (item.actions?.canAccess) {
-            const id = item.data.id;
+            const id = item.data.deliveryID || item.data.deliveryId;
             const mode = item.actions.accessMode || 'view';
-            window.location.href = buildDetailUrl(id, mode);
+            window.location.href = `/Inventory/LinenDelivery/LinenDeliveryDetail?id=${id}&mode=${mode}`;
         } else {
-            alert('You do not have permission to view this pantry linen note.');
+            alert('You do not have permission to view this linen delivery.');
         }
+    }
+
+    function parseNullableInt(value) {
+        if (value === null || value === undefined || value === '') {
+            return null;
+        }
+
+        const parsed = parseInt(value, 10);
+        return Number.isNaN(parsed) ? null : parsed;
     }
 
     function encodeHtml(value) {

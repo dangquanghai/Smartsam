@@ -77,20 +77,55 @@
             min-height: 26px;
         }
 
+        .linen-report-chart .custom-control {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+            padding-left: 1.45rem;
+        }
+
+        .linen-report-chart .custom-control-label {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+            line-height: 26px;
+        }
+
         .linen-report-chart .custom-control-label::before,
         .linen-report-chart .custom-control-label::after {
             top: 0.15rem;
         }
 
-        .linen-report-filter-row .form-group {
-            margin-bottom: 0.35rem;
+        .linen-report-inline-field {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            min-height: 26px;
+            margin-bottom: 0;
         }
 
-        .linen-report-filter-row .input-group-text {
-            min-width: 54px;
-            justify-content: center;
-            padding: 0.2rem 0.45rem;
-            border-radius: 0;
+        .linen-report-inline-label {
+            margin-bottom: 0;
+            white-space: nowrap;
+            font-weight: 400;
+            line-height: 26px;
+        }
+
+        .linen-report-inline-field .form-control {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .linen-report-date-range-control {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            width: 100%;
+        }
+
+        .linen-report-date-range-control > .form-control {
+            flex: 1 1 auto;
+            min-width: 0;
         }
 
         .linen-report-viewerbar {
@@ -133,6 +168,15 @@
             min-height: 76vh;
             padding: 1.1rem;
             overflow: auto;
+        }
+
+        .linen-report-pdf-frame {
+            display: block;
+            width: 100%;
+            height: calc(100vh - 190px);
+            min-height: 620px;
+            border: 1px solid #8c8c8c;
+            background: #fff;
         }
 
         .linen-report-paper {
@@ -296,6 +340,11 @@
         .linen-report-popup .linen-report-canvas {
             min-height: calc(100vh - 122px);
         }
+
+        .linen-report-popup .linen-report-pdf-frame {
+            height: calc(100vh - 132px);
+            min-height: 0;
+        }
     </style>
 }
 
@@ -353,10 +402,8 @@
 
                     <div class="row linen-report-filter-row">
                         <div class="col-lg-4 col-md-6">
-                            <div class="input-group input-group-sm">
-                                <div class="input-group-prepend">
-                                    <span class="input-group-text" id="linenReportDescriptionLabel">@Model.DescriptionLabel</span>
-                                </div>
+                            <div class="linen-report-inline-field">
+                                <label for="linenReportDescription" class="linen-report-inline-label" id="linenReportDescriptionLabel">@Model.DescriptionLabel</label>
                                 <select class="form-control form-control-sm vni-font"
                                         id="linenReportDescription"
                                         disabled="@(!Model.DescriptionEnabled)">
@@ -375,10 +422,8 @@
                             </div>
                         </div>
                         <div class="col-lg-3 col-md-6">
-                            <div class="input-group input-group-sm">
-                                <div class="input-group-prepend">
-                                    <span class="input-group-text">Linnen</span>
-                                </div>
+                            <div class="linen-report-inline-field">
+                                <label for="linenReportLinenCode" class="linen-report-inline-label">Linnen</label>
                                 <select class="form-control form-control-sm vni-font"
                                         id="linenReportLinenCode"
                                         disabled="@(!Model.LinenEnabled)">
@@ -396,28 +441,22 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-lg-2 col-md-4">
-                            <div class="input-group input-group-sm">
-                                <div class="input-group-prepend">
-                                    <span class="input-group-text">From</span>
+                        <div class="col-lg-4 col-md-8">
+                            <div class="linen-report-inline-field">
+                                <label for="linenReportDateRange" class="linen-report-inline-label">From - To</label>
+                                <div class="linen-report-date-range-control">
+                                    <input type="text"
+                                           class="form-control form-control-sm"
+                                           id="linenReportDateRange"
+                                           readonly
+                                           disabled="@(!(Model.FromEnabled || Model.ToEnabled))" />
                                 </div>
-                                <input type="date"
-                                       class="form-control form-control-sm"
+                                <input type="hidden"
                                        id="linenReportFromDate"
-                                       value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")"
-                                       disabled="@(!Model.FromEnabled)" />
-                            </div>
-                        </div>
-                        <div class="col-lg-2 col-md-4">
-                            <div class="input-group input-group-sm">
-                                <div class="input-group-prepend">
-                                    <span class="input-group-text">To</span>
-                                </div>
-                                <input type="date"
-                                       class="form-control form-control-sm"
+                                       value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" />
+                                <input type="hidden"
                                        id="linenReportToDate"
-                                       value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")"
-                                       disabled="@(!Model.ToEnabled)" />
+                                       value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" />
                             </div>
                         </div>
                         <div class="col-lg-1 col-md-4">
@@ -426,27 +465,10 @@
                     </div>
                 </div>
 
-                <div class="linen-report-viewerbar">
-                    <div class="linen-report-viewer-icons">
-                        <button type="button" class="btn btn-light btn-sm border" disabled><i class="fas fa-times"></i></button>
-                        <button type="button" class="btn btn-light btn-sm border" disabled><i class="fas fa-print"></i></button>
-                        <button type="button" class="btn btn-light btn-sm border" disabled><i class="fas fa-bolt"></i></button>
-                    </div>
-                    <div class="input-group input-group-sm" style="width: 86px;">
-                        <div class="input-group-prepend">
-                            <span class="input-group-text">%</span>
-                        </div>
-                        <input type="text" class="form-control form-control-sm text-center" value="75" readonly />
-                    </div>
-                    <div class="linen-report-viewer-page">1 of 1</div>
-                </div>
-
                 <div class="linen-report-status" id="linenReportPreviewMeta">Click Preview to load report data.</div>
                 <div class="linen-report-canvas">
                     <div id="linenReportPreviewContainer">
-                        <div class="linen-report-paper">
-                            <div class="linen-report-empty">Click Preview to load report data.</div>
-                        </div>
+                        <div class="linen-report-empty">Click Preview to load report data.</div>
                     </div>
                 </div>
             </div>
@@ -467,6 +489,7 @@
         window.linenReportPage = {
             modeOptionsUrl: '@Url.Page("./Index", "ModeOptions", new { lockedReportType = Model.LockedReportType, popup = Model.IsPopup })',
             previewUrl: '@Url.Page("./Index", "Preview", new { lockedReportType = Model.LockedReportType, popup = Model.IsPopup })',
+            pdfUrl: '@Url.Page("./Index", "Pdf", new { lockedReportType = Model.LockedReportType, popup = Model.IsPopup })',
             initialType: '@Model.Filter.ReportType',
             lockedType: '@Model.LockedReportType',
             isPopup: @(Model.IsPopup ? "true" : "false"),

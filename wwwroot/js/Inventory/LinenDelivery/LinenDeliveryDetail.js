@@ -2,6 +2,7 @@
     'use strict';
 
     let pageDirty = false;
+    let activeLinenDeliveryReportObjectUrl = '';
 
     function validateMainForm() {
         const typeValue = $('#Header_DeliveryType').val();
@@ -78,7 +79,7 @@
                 return;
             }
 
-            if (($('#Header_DeliveryType').val() || '') === '1') {
+            if (shouldConfirmPantrySelection()) {
                 if (!window.confirm('Are you sure to select this Pantry Linen !')) {
                     return;
                 }
@@ -87,6 +88,16 @@
             pageDirty = false;
             $(this).off('submit').submit();
         });
+    }
+
+    function shouldConfirmPantrySelection() {
+        if (($('#Header_DeliveryType').val() || '') !== '1') {
+            return false;
+        }
+
+        const currentNoteId = $('#Header_NoteID').val() || '';
+        const initialNoteId = (window.linenDeliveryPage?.noteId ?? '').toString();
+        return currentNoteId !== '' && currentNoteId !== initialNoteId;
     }
 
     function bindGridEvents() {
@@ -176,23 +187,110 @@
                 return;
             }
 
-            const reportPageUrl = window.linenDeliveryPage?.reportPageUrl || '';
+            const reportPdfUrl = window.linenDeliveryPage?.reportPdfUrl || '';
             const deliveryId = window.linenDeliveryPage?.deliveryId || 0;
-            if (!reportPageUrl || !deliveryId) {
+            if (!reportPdfUrl || !deliveryId) {
                 alert('Report preview is not available.');
                 return;
             }
 
-            const popupUrl = `${reportPageUrl}?reportType=delivery&descriptionId=${encodeURIComponent(deliveryId)}&lockedReportType=delivery&popup=true`;
-            $('#linenDeliveryReportFrame').attr('src', popupUrl);
             $('#linenDeliveryReportModal').modal('show');
+            previewLinenDeliveryReportPdf();
+        });
+
+        $('#btnPreviewLinenDeliveryReport').off('click').on('click', function () {
+            previewLinenDeliveryReportPdf();
         });
     }
 
     function initReportModal() {
         $('#linenDeliveryReportModal').off('hidden.bs.modal').on('hidden.bs.modal', function () {
-            $('#linenDeliveryReportFrame').attr('src', 'about:blank');
+            clearLinenDeliveryReportPreview(document.getElementById('linenDeliveryReportFrame'));
         });
+    }
+
+    function previewLinenDeliveryReportPdf() {
+        const reportPdfUrl = buildLinenDeliveryReportPdfUrl();
+        const frame = document.getElementById('linenDeliveryReportFrame');
+        const $loading = $('#linenDeliveryReportLoading');
+        const linenCode = ($('#linenDeliveryReportLinenCode').val() || '').toString();
+        const description = ($('#linenDeliveryReportDescription option:selected').text() || '').trim();
+        const linenLabel = ($('#linenDeliveryReportLinenCode option:selected').text() || 'All').trim();
+
+        if (!reportPdfUrl || !frame) {
+            alert('Report preview is not available.');
+            return;
+        }
+
+        $('#linenDeliveryReportMeta').text(`Delivery | ${description}${linenCode ? ` | ${linenLabel}` : ''}`);
+        $loading.show();
+        clearLinenDeliveryReportPreview(frame);
+
+        loadLinenDeliveryReportPdfPreview(frame, reportPdfUrl)
+            .then(function (objectUrl) {
+                activeLinenDeliveryReportObjectUrl = objectUrl;
+                $loading.hide();
+            })
+            .catch(function (error) {
+                $loading.hide();
+                alert(error?.message || 'Cannot load report preview.');
+            });
+    }
+
+    function buildLinenDeliveryReportPdfUrl() {
+        const baseUrl = window.linenDeliveryPage?.reportPdfUrl || '';
+        if (!baseUrl) {
+            return '';
+        }
+
+        const url = new URL(baseUrl, window.location.origin);
+        const linenCode = ($('#linenDeliveryReportLinenCode').val() || '').toString().trim();
+        if (linenCode) {
+            url.searchParams.set('linenCode', linenCode);
+        } else {
+            url.searchParams.delete('linenCode');
+        }
+
+        return `${url.pathname}${url.search}`;
+    }
+
+    async function loadLinenDeliveryReportPdfPreview(frame, url) {
+        const response = await fetch(url, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+
+        if (!response.ok) {
+            const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+            if (contentType.includes('application/json')) {
+                const result = await response.json();
+                throw new Error(result?.message || 'Cannot load report preview.');
+            }
+
+            throw new Error('Cannot load report preview.');
+        }
+
+        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        if (!contentType.includes('application/pdf')) {
+            throw new Error('Cannot load report preview.');
+        }
+
+        const blob = await response.blob();
+        const previewUrl = URL.createObjectURL(blob);
+        frame.src = previewUrl;
+        return previewUrl;
+    }
+
+    function clearLinenDeliveryReportPreview(frame) {
+        if (frame) {
+            frame.removeAttribute('src');
+        }
+
+        if (activeLinenDeliveryReportObjectUrl) {
+            URL.revokeObjectURL(activeLinenDeliveryReportObjectUrl);
+            activeLinenDeliveryReportObjectUrl = '';
+        }
     }
 
     function refreshHeaderSections() {

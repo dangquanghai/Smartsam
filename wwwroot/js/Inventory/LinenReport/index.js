@@ -1,10 +1,29 @@
 (function () {
     'use strict';
 
+    let activeReportPdfObjectUrl = '';
+
     function initializePage() {
+        initializeDateRange();
         bindEvents();
         if (window.linenReportPage?.autoPreview) {
             loadPreview();
+        }
+    }
+
+    function initializeDateRange() {
+        if (typeof window.initSimpleDateRange !== 'function') {
+            return;
+        }
+
+        window.initSimpleDateRange('linenReportDateRange', '#linenReportFromDate', '#linenReportToDate', {
+            linkedCalendars: false
+        });
+
+        const fromDate = $('#linenReportFromDate').val();
+        const toDate = $('#linenReportToDate').val();
+        if (fromDate && toDate && typeof window.setDateRangeValue === 'function') {
+            window.setDateRangeValue('linenReportDateRange', fromDate, toDate);
         }
     }
 
@@ -47,8 +66,7 @@
         rebuildSelect($('#linenReportDescription'), response.descriptions || [], response.selectedDescriptionId);
         $('#linenReportDescription').prop('disabled', response.descriptionEnabled !== true);
         $('#linenReportLinenCode').prop('disabled', response.linenEnabled !== true);
-        $('#linenReportFromDate').prop('disabled', response.fromEnabled !== true);
-        $('#linenReportToDate').prop('disabled', response.toEnabled !== true);
+        $('#linenReportDateRange').prop('disabled', !(response.fromEnabled === true || response.toEnabled === true));
         $('#linenReportChart').prop('disabled', response.chartEnabled !== true);
     }
 
@@ -79,37 +97,94 @@
         }
 
         $('#linenReportPreviewMeta').text('Loading report data...');
-        renderPaper('<div class="linen-report-empty">Loading report data...</div>');
+        renderPdfFrame();
 
-        $.ajax({
-            url: window.linenReportPage?.previewUrl || '',
-            type: 'GET',
-            data: {
-                reportType: getSelectedReportType(),
-                descriptionId: $('#linenReportDescription').prop('disabled') ? '' : ($('#linenReportDescription').val() || ''),
-                linenCode: $('#linenReportLinenCode').prop('disabled') ? '' : ($('#linenReportLinenCode').val() || ''),
-                fromDate: $('#linenReportFromDate').prop('disabled') ? '' : ($('#linenReportFromDate').val() || ''),
-                toDate: $('#linenReportToDate').prop('disabled') ? '' : ($('#linenReportToDate').val() || '')
-            },
-            success: function (response) {
-                if (!response || response.success !== true) {
-                    const message = response && response.message ? response.message : 'Cannot load report preview.';
-                    showPreviewMessage(message, message);
-                    return;
-                }
+        const frame = document.getElementById('linenReportPdfFrame');
+        const pdfUrl = buildPdfUrl();
+        if (!frame || !pdfUrl) {
+            showPreviewMessage('Cannot load report preview.', 'Cannot load report preview.');
+            return;
+        }
 
-                renderPreview(response);
-            },
-            error: function (xhr) {
-                const message = readAjaxError(xhr, 'Cannot load report preview.');
-                showPreviewMessage(message, message);
-            }
+        clearPdfPreview(frame);
+        loadReportPdfPreview(frame, pdfUrl)
+            .then(function (objectUrl) {
+                activeReportPdfObjectUrl = objectUrl;
+                $('#linenReportPreviewMeta').text(`${getReportTypeText(getSelectedReportType())} | PDF preview`);
+            })
+            .catch(function (error) {
+                showPreviewMessage(error?.message || 'Cannot load report preview.', error?.message || 'Cannot load report preview.');
+            });
+    }
+
+    function buildPdfUrl() {
+        const baseUrl = window.linenReportPage?.pdfUrl || '';
+        if (!baseUrl) {
+            return '';
+        }
+
+        const url = new URL(baseUrl, window.location.origin);
+        url.searchParams.set('reportType', getSelectedReportType());
+
+        if (!$('#linenReportDescription').prop('disabled')) {
+            url.searchParams.set('descriptionId', $('#linenReportDescription').val() || '');
+        }
+
+        if (!$('#linenReportLinenCode').prop('disabled')) {
+            url.searchParams.set('linenCode', $('#linenReportLinenCode').val() || '');
+        }
+
+        if (!$('#linenReportDateRange').prop('disabled')) {
+            url.searchParams.set('fromDate', $('#linenReportFromDate').val() || '');
+            url.searchParams.set('toDate', $('#linenReportToDate').val() || '');
+        }
+
+        return `${url.pathname}${url.search}`;
+    }
+
+    async function loadReportPdfPreview(frame, url) {
+        const response = await fetch(url, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
         });
+
+        if (!response.ok) {
+            const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+            if (contentType.includes('application/json')) {
+                const result = await response.json();
+                throw new Error(result?.message || 'Cannot load report preview.');
+            }
+
+            throw new Error('Cannot load report preview.');
+        }
+
+        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        if (!contentType.includes('application/pdf')) {
+            throw new Error('Cannot load report preview.');
+        }
+
+        const blob = await response.blob();
+        const previewUrl = URL.createObjectURL(blob);
+        frame.src = previewUrl;
+        return previewUrl;
+    }
+
+    function clearPdfPreview(frame) {
+        if (frame) {
+            frame.removeAttribute('src');
+        }
+
+        if (activeReportPdfObjectUrl) {
+            URL.revokeObjectURL(activeReportPdfObjectUrl);
+            activeReportPdfObjectUrl = '';
+        }
     }
 
     function showPreviewMessage(statusText, bodyText) {
         $('#linenReportPreviewMeta').text(statusText);
-        renderPaper(`<div class="linen-report-empty">${encodeHtml(bodyText)}</div>`);
+        clearPdfPreview(document.getElementById('linenReportPdfFrame'));
+        $('#linenReportPreviewContainer').html(`<div class="linen-report-empty">${encodeHtml(bodyText)}</div>`);
     }
 
     function validatePreviewFilter() {
@@ -117,11 +192,11 @@
             return 'Please select description/apartment.';
         }
 
-        if (!$('#linenReportFromDate').prop('disabled') && !$('#linenReportFromDate').val()) {
+        if (!$('#linenReportDateRange').prop('disabled') && !$('#linenReportFromDate').val()) {
             return 'Please select From Date.';
         }
 
-        if (!$('#linenReportToDate').prop('disabled') && !$('#linenReportToDate').val()) {
+        if (!$('#linenReportDateRange').prop('disabled') && !$('#linenReportToDate').val()) {
             return 'Please select To Date.';
         }
 
@@ -431,6 +506,10 @@
         $('#linenReportPreviewContainer').html(`<div class="linen-report-paper">${contentHtml}</div>`);
     }
 
+    function renderPdfFrame() {
+        $('#linenReportPreviewContainer').html('<iframe id="linenReportPdfFrame" class="linen-report-pdf-frame" title="Linen Report PDF"></iframe>');
+    }
+
     function buildHeader(title, rightDateText, extraRightHtml) {
         const titleHtml = title ? `<div class="linen-report-paper-title">${encodeHtml(title)}</div>` : '<div class="linen-report-paper-title">&nbsp;</div>';
         const rightHtml = extraRightHtml || (rightDateText ? encodeHtml(rightDateText) : '&nbsp;');
@@ -462,6 +541,27 @@
 
     function getSelectedReportType() {
         return $('input[name="linenReportType"]:checked').val() || window.linenReportPage?.initialType || 'laundry-record';
+    }
+
+    function getReportTypeText(reportType) {
+        switch (reportType) {
+            case 'pantry':
+                return 'Pantry-Linen';
+            case 'delivery':
+                return 'Delivery';
+            case 'receive':
+                return 'Receive';
+            case 'laundry-record':
+                return 'Laundry Record';
+            case 'not-receive':
+                return 'Not Receive';
+            case 'laundry-balance':
+                return 'Laundry.U. Balance';
+            case 'apmt-balance':
+                return 'Apmt Balance';
+            default:
+                return 'Linen Report';
+        }
     }
 
     function formatIntegerOrBlank(value) {

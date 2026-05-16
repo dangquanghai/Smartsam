@@ -139,13 +139,141 @@
         .linnen-report-modal-dialog {
             max-width: 90vw;
             width: 90vw;
+            margin: 0.5rem auto;
+        }
+
+        .linnen-report-modal-dialog .modal-content {
+            height: 88vh;
+            max-height: 88vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+        }
+
+        .linnen-report-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .linnen-report-toolbar {
+            background: #efefef;
+            border-bottom: 1px solid #b8b8b8;
+            padding: 0.5rem 0.65rem 0.35rem;
+            flex: 0 0 auto;
+        }
+
+        .linnen-report-toolbar .form-control-sm,
+        .linnen-report-toolbar .custom-select-sm,
+        .linnen-report-toolbar .input-group-text {
+            height: 26px;
+            padding-top: 1px;
+            padding-bottom: 1px;
+            border-radius: 0;
+            font-size: 12px;
+        }
+
+        .linnen-report-toolbar label {
+            margin-bottom: 0;
+            white-space: nowrap;
+            font-weight: 400;
+            font-size: 12px;
+        }
+
+        .linnen-report-mode-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem 1rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .linnen-report-modes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.2rem 0.9rem;
+        }
+
+        .linnen-report-mode-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2rem;
+            font-size: 12px;
+        }
+
+        .linnen-report-mode-item input {
+            margin: 0;
+        }
+
+        .linnen-report-chart {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+        }
+
+        .linnen-report-chart .custom-control {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+            padding-left: 1.45rem;
+        }
+
+        .linnen-report-chart .custom-control-label {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+            line-height: 26px;
+        }
+
+        .linnen-report-chart .custom-control-label::before,
+        .linnen-report-chart .custom-control-label::after {
+            top: 0.15rem;
+        }
+
+        .linnen-report-inline-field {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            min-height: 26px;
+        }
+
+        .linnen-report-inline-label {
+            margin-bottom: 0;
+            white-space: nowrap;
+            font-weight: 400;
+            line-height: 26px;
+        }
+
+        .linnen-report-inline-field .form-control {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .linnen-report-status {
+            padding: 0.35rem 0.75rem 0;
+            color: #4a5560;
+            min-height: 22px;
+            font-size: 12px;
+            flex: 0 0 auto;
+        }
+
+        .linnen-report-canvas {
+            background: #b8b8b8;
+            padding: 1rem;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
         }
 
         .linnen-report-iframe {
             display: block;
             width: 100%;
-            height: calc(100vh - 150px);
-            border: 0;
+            height: 100%;
+            min-height: 0;
+            border: 1px solid #8c8c8c;
             background: #fff;
         }
 
@@ -154,8 +282,9 @@
             padding: 1rem;
             text-align: center;
             color: #6c757d;
-            border-bottom: 1px solid #dee2e6;
             background: #f8f9fa;
+            margin-bottom: 0.5rem;
+            flex: 0 0 auto;
         }
     </style>
 }
@@ -183,6 +312,7 @@
             <input type="hidden" asp-for="DetailsJson" id="DetailsJson" />
             <input type="hidden" asp-for="ReturnToIndex" id="ReturnToIndex" />
             <input type="hidden" asp-for="RedirectUrl" id="RedirectUrl" />
+            <input type="hidden" asp-for="ReturnUrl" />
 
             <div class="card card-primary card-outline">
                 <div class="card-body p-2 linnen-note-vb-header">
@@ -281,7 +411,7 @@
                     <button type="button" class="btn btn-sm btn-secondary" id="btnPrintLinnenNoteDetail">
                         <i class="fas fa-print"></i> Print
                     </button>
-                    <button type="button" class="btn btn-sm btn-default" id="btnCloseLinnenNoteDetail" data-index-url="@Url.Page("./Index")">
+                    <button type="button" class="btn btn-sm btn-default" id="btnCloseLinnenNoteDetail" data-index-url="@(string.IsNullOrWhiteSpace(Model.ReturnUrl) ? Url.Page("./Index") : Model.ReturnUrl)">
                         <i class="fas fa-arrow-left"></i> Back to list
                     </button>
                 </div>
@@ -291,7 +421,7 @@
 </section>
 
 <div class="modal fade" id="linnenReportModal" tabindex="-1" role="dialog" aria-labelledby="linnenReportModalLabel" aria-hidden="true">
-    <div class="modal-dialog linnen-report-modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-dialog linnen-report-modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header py-2">
                 <h5 class="modal-title" id="linnenReportModalLabel">Linen - Report</h5>
@@ -299,11 +429,102 @@
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="modal-body p-0">
-                <div id="linnenReportLoading" class="linnen-report-loading">Loading PDF preview...</div>
-                <iframe id="linnenReportFrame"
-                        class="linnen-report-iframe"
-                        title="Linen Report"></iframe>
+            <div class="modal-body p-0 linnen-report-body">
+                <div class="linnen-report-toolbar">
+                    <div class="linnen-report-mode-row">
+                        <div class="linnen-report-modes">
+                            <label class="linnen-report-mode-item">
+                                <input type="radio" name="linnenNoteReportType" value="pantry" checked disabled />
+                                <span>Pantry-Linen</span>
+                            </label>
+                            <label class="linnen-report-mode-item">
+                                <input type="radio" name="linnenNoteReportType" value="delivery" disabled />
+                                <span>Delivery</span>
+                            </label>
+                            <label class="linnen-report-mode-item">
+                                <input type="radio" name="linnenNoteReportType" value="receive" disabled />
+                                <span>Receive</span>
+                            </label>
+                            <label class="linnen-report-mode-item">
+                                <input type="radio" name="linnenNoteReportType" value="laundry-record" disabled />
+                                <span>Laudry Record</span>
+                            </label>
+                            <label class="linnen-report-mode-item">
+                                <input type="radio" name="linnenNoteReportType" value="not-receive" disabled />
+                                <span>Not Receive</span>
+                            </label>
+                            <label class="linnen-report-mode-item">
+                                <input type="radio" name="linnenNoteReportType" value="laundry-balance" disabled />
+                                <span>Laundry.U. Balance</span>
+                            </label>
+                            <label class="linnen-report-mode-item">
+                                <input type="radio" name="linnenNoteReportType" value="apmt-balance" disabled />
+                                <span>Apmt Balance</span>
+                            </label>
+                        </div>
+                        <div class="linnen-report-chart">
+                            <div class="custom-control custom-checkbox mb-0">
+                                <input type="checkbox" class="custom-control-input" id="linnenNoteReportChart" disabled />
+                                <label class="custom-control-label" for="linnenNoteReportChart">Chart</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row linen-report-filter-row">
+                        <div class="col-lg-4 col-md-6">
+                            <div class="linnen-report-inline-field">
+                                <label for="linnenNoteReportDescription" class="linnen-report-inline-label">Des</label>
+                                <select class="form-control form-control-sm vni-font"
+                                        id="linnenNoteReportDescription"
+                                        disabled>
+                                    <option value="@Model.Header.Id">@Model.Header.Description</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <div class="linnen-report-inline-field">
+                                <label for="linnenNoteReportLinenCode" class="linnen-report-inline-label">Linnen</label>
+                                <select class="form-control form-control-sm vni-font"
+                                        id="linnenNoteReportLinenCode">
+                                    <option value="">All</option>
+                                    @foreach (var linen in Model.DetailColumns)
+                                    {
+                                        <option value="@linen.Code">@linen.Code</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-lg-2 col-md-4">
+                            <div class="linnen-report-inline-field">
+                                <label class="linnen-report-inline-label">From</label>
+                                <input type="date"
+                                       class="form-control form-control-sm"
+                                       value="@Model.Header.DateCreate.ToString("yyyy-MM-dd")"
+                                       disabled />
+                            </div>
+                        </div>
+                        <div class="col-lg-2 col-md-4">
+                            <div class="linnen-report-inline-field">
+                                <label class="linnen-report-inline-label">To</label>
+                                <input type="date"
+                                       class="form-control form-control-sm"
+                                       value="@Model.Header.DateCreate.ToString("yyyy-MM-dd")"
+                                       disabled />
+                            </div>
+                        </div>
+                        <div class="col-lg-1 col-md-4">
+                            <button type="button" class="btn btn-sm btn-secondary btn-block" id="btnPreviewLinnenNoteReport">Preview</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="linnen-report-status" id="linnenReportMeta">Pantry-Linen | @Model.Header.Description</div>
+                <div class="linnen-report-canvas">
+                    <div id="linnenReportLoading" class="linnen-report-loading">Loading PDF preview...</div>
+                    <iframe id="linnenReportFrame"
+                            class="linnen-report-iframe"
+                            title="Linen Report"></iframe>
+                </div>
             </div>
             <div class="modal-footer py-2">
                 <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">
@@ -339,9 +560,9 @@
     <script>
         window.linnenNoteDailyDetail = {
             isView: @(isView ? "true" : "false"),
-            indexUrl: "@Url.Page("./Index")",
-            printPreviewUrl: "@Url.Page("./LinnenNoteDailyDetail", "PrintPreview", new { id = Model.Header.Id })",
-            reportPdfUrl: "@Url.Page("./LinnenNoteDailyDetail", "ReportPdf", new { id = Model.Header.Id, download = false })"
+            indexUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(string.IsNullOrWhiteSpace(Model.ReturnUrl) ? Url.Page("./Index") : Model.ReturnUrl)),
+            printPreviewUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("./LinnenNoteDailyDetail", "PrintPreview", new { id = Model.Header.Id }))),
+            reportPdfUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("./LinnenNoteDailyDetail", "ReportPdf", new { id = Model.Header.Id, download = false })))
         };
     </script>
     <script src="~/js/Inventory/LinnenNoteDaily/LinnenNoteDailyDetail.js" asp-append-version="true"></script>

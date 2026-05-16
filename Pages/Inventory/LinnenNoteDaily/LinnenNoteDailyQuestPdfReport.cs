@@ -14,30 +14,54 @@ public static class LinnenNoteDailyQuestPdfReport
             {
                 page.Size(PageSizes.A4.Landscape());
                 page.Margin(18);
-                page.DefaultTextStyle(x => x.FontSize(8));
+                page.DefaultTextStyle(x => x.FontSize(7));
 
                 page.Content().Column(column =>
                 {
-                    column.Spacing(8);
-
-                    column.Item().AlignCenter().Text("DAILY NOTE LINEN CONTROL").Bold().FontSize(15);
-
-                    column.Item().Row(row =>
-                    {
-                        row.RelativeItem().Text($"Pickup ID: {report.NoteId}");
-                        row.RelativeItem().Text($"Date: {report.DateCreate:dd/MM/yyyy}").AlignRight();
-                    });
-
-                    column.Item().Text(text =>
-                    {
-                        text.Span("Des: ").Bold();
-                        text.Span(report.Description ?? string.Empty);
-                    });
-
+                    column.Spacing(6);
+                    column.Item().Element(x => ComposeHeader(x, report));
                     column.Item().Element(x => ComposeTable(x, report));
                 });
             });
         }).GeneratePdf();
+    }
+
+    private static void ComposeHeader(IContainer container, LinnenNoteDailyPdfReport report)
+    {
+        container.Column(column =>
+        {
+            column.Item().Row(row =>
+            {
+                row.ConstantItem(90).Element(left =>
+                {
+                    if (report.CompanyLogo != null && report.CompanyLogo.Length > 0)
+                    {
+                        left.Height(44).AlignLeft().AlignMiddle().Image(report.CompanyLogo).FitArea();
+                    }
+                    else
+                    {
+                        left.Column(textColumn =>
+                        {
+                            textColumn.Item().PaddingTop(10).Text("S A I G O N").FontSize(6).FontColor("#1b64a5");
+                            textColumn.Item().Text("SKYGARDEN").FontSize(9).Bold().FontColor("#1b64a5");
+                        });
+                    }
+                });
+
+                row.RelativeItem().Column(center =>
+                {
+                    center.Item().AlignCenter().PaddingTop(2).Text("DAILY NOTE LINEN CONTROL").Bold().FontSize(13);
+                    center.Item().PaddingTop(10).Row(info =>
+                    {
+                        info.RelativeItem().Text($"Pickup ID: {report.NoteId}");
+                        info.RelativeItem().Text($"Date: {report.DateCreate:MM/dd/yyyy}");
+                    });
+                    center.Item().PaddingTop(4).Text($"Des: {report.Description ?? string.Empty}");
+                });
+
+                row.ConstantItem(90).AlignRight().Text($"{report.DateCreate:MM/dd/yyyy}");
+            });
+        });
     }
 
     private static void ComposeTable(IContainer container, LinnenNoteDailyPdfReport report)
@@ -45,23 +69,25 @@ public static class LinnenNoteDailyQuestPdfReport
         var columns = report.Columns ?? new List<LinnenReportPreviewColumn>();
         var rows = report.Rows ?? new List<LinnenReportPreviewRow>();
 
-        container.Table(table =>
+        container.AlignCenter().Table(table =>
         {
             table.ColumnsDefinition(definition =>
             {
-                definition.ConstantColumn(52);
+                definition.ConstantColumn(42);
                 definition.ConstantColumn(18);
                 foreach (var _ in columns)
                 {
-                    definition.ConstantColumn(22);
-                    definition.ConstantColumn(22);
-                    definition.ConstantColumn(22);
+                    definition.ConstantColumn(20);
+                    definition.ConstantColumn(20);
+                    definition.ConstantColumn(20);
                 }
             });
 
             table.Header(header =>
             {
-                header.Cell().RowSpan(2).ColumnSpan(2).Element(HeaderCell).AlignCenter().Text("Pantry\nNo").Bold();
+                header.Cell().RowSpan(2).Element(HeaderCell).AlignLeft().Text("NAME").Bold();
+                header.Cell().RowSpan(2).Element(HeaderCell).Text(string.Empty);
+
                 foreach (var column in columns)
                 {
                     header.Cell().ColumnSpan(3).Element(HeaderCell).AlignCenter().Text(column.Title).Bold();
@@ -69,22 +95,39 @@ public static class LinnenNoteDailyQuestPdfReport
 
                 foreach (var _ in columns)
                 {
-                    header.Cell().Element(HeaderCell).AlignCenter().Text("Be").Bold();
-                    header.Cell().Element(HeaderCell).AlignCenter().Text("De").Bold();
-                    header.Cell().Element(HeaderCell).AlignCenter().Text("Re").Bold();
+                    header.Cell().Element(HeaderCell).AlignCenter().Text("B").Bold();
+                    header.Cell().Element(HeaderCell).AlignCenter().Text("R").Bold();
+                    header.Cell().Element(HeaderCell).AlignCenter().Text("D").Bold();
                 }
             });
 
-            foreach (var row in rows)
+            foreach (var pantryGroup in rows.OrderBy(x => x.Pentry).ThenBy(x => x.TimeSection).GroupBy(x => x.Pentry))
             {
-                table.Cell().Element(BodyCell).Text(row.PentryName).Bold();
-                table.Cell().Element(BodyCell).AlignCenter().Text(row.TimeSection == 1 ? "A" : "P").Bold();
-
-                foreach (var column in columns)
+                var groupRows = pantryGroup.OrderBy(x => x.TimeSection).ToList();
+                for (var rowIndex = 0; rowIndex < groupRows.Count; rowIndex++)
                 {
-                    table.Cell().Element(BodyCell).AlignRight().Text(FormatValue(GetValue(row, column.BeField)));
-                    table.Cell().Element(BodyCell).AlignRight().Text(FormatValue(GetValue(row, column.DeField)));
-                    table.Cell().Element(BodyCell).AlignRight().Text(FormatValue(GetValue(row, column.ReField)));
+                    var row = groupRows[rowIndex];
+
+                    if (rowIndex == 0)
+                    {
+                        table.Cell()
+                            .RowSpan((uint)groupRows.Count)
+                            .Element(x => BodyCell(x, Colors.White))
+                            .Text(row.PentryName);
+                    }
+
+                    table.Cell()
+                        .Element(x => BodyCell(x, row.TimeSection == 1 ? Colors.White : "#ececec"))
+                        .AlignCenter()
+                        .Text(row.TimeSection == 1 ? "A" : "P")
+                        .Bold();
+
+                    foreach (var column in columns)
+                    {
+                        table.Cell().Element(x => BodyCell(x, Colors.White)).AlignRight().Text(FormatValue(GetValue(row, column.BeField)));
+                        table.Cell().Element(x => BodyCell(x, Colors.White)).AlignRight().Text(FormatValue(GetValue(row, column.ReField)));
+                        table.Cell().Element(x => BodyCell(x, Colors.White)).AlignRight().Text(FormatValue(GetValue(row, column.DeField)));
+                    }
                 }
             }
         });
@@ -94,18 +137,18 @@ public static class LinnenNoteDailyQuestPdfReport
     {
         return container
             .Border(1)
-            .BorderColor(Colors.Grey.Darken1)
-            .Background(Colors.Grey.Lighten3)
-            .PaddingVertical(3)
+            .BorderColor("#555555")
+            .PaddingVertical(2)
             .PaddingHorizontal(2);
     }
 
-    private static IContainer BodyCell(IContainer container)
+    private static IContainer BodyCell(IContainer container, string backgroundColor)
     {
         return container
             .Border(1)
-            .BorderColor(Colors.Grey.Darken1)
-            .PaddingVertical(2)
+            .BorderColor("#555555")
+            .Background(backgroundColor)
+            .PaddingVertical(1)
             .PaddingHorizontal(2);
     }
 
@@ -137,6 +180,7 @@ public class LinnenNoteDailyPdfReport
     public int NoteId { get; set; }
     public string Description { get; set; } = string.Empty;
     public DateTime DateCreate { get; set; }
+    public byte[]? CompanyLogo { get; set; }
     public List<LinnenReportPreviewColumn> Columns { get; set; } = new List<LinnenReportPreviewColumn>();
     public List<LinnenReportPreviewRow> Rows { get; set; } = new List<LinnenReportPreviewRow>();
 }

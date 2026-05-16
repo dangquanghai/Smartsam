@@ -15,10 +15,12 @@ public class IndexModel : BasePageModel
     private const int LaundryBalanceSupplierId = 1636;
 
     private readonly PermissionService _permissionService;
+    private readonly IWebHostEnvironment _webHostEnvironment;
 
-    public IndexModel(IConfiguration config, PermissionService permissionService) : base(config)
+    public IndexModel(IConfiguration config, PermissionService permissionService, IWebHostEnvironment webHostEnvironment) : base(config)
     {
         _permissionService = permissionService;
+        _webHostEnvironment = webHostEnvironment;
     }
 
     [BindProperty(SupportsGet = true)]
@@ -142,6 +144,56 @@ public class IndexModel : BasePageModel
                     Response.StatusCode = StatusCodes.Status400BadRequest;
                     return new JsonResult(new { success = false, message = "Invalid report type." });
             }
+        }
+        catch (InvalidOperationException ex)
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return new JsonResult(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            Response.StatusCode = StatusCodes.Status500InternalServerError;
+            return new JsonResult(new { success = false, message = ex.Message });
+        }
+    }
+
+    public IActionResult OnGetPdf(string? reportType, int? descriptionId, string? linenCode, DateTime? fromDate, DateTime? toDate)
+    {
+        PagePerm = GetUserPermissions();
+        if (!HasPageAccess())
+        {
+            Response.StatusCode = StatusCodes.Status403Forbidden;
+            return new JsonResult(new { success = false, message = "Forbidden" });
+        }
+
+        var normalizedType = ResolveRequestedReportType(reportType);
+        var normalizedLinenCode = (linenCode ?? string.Empty).Trim();
+        var normalizedFromDate = (fromDate ?? DateTime.Today).Date;
+        var normalizedToDate = (toDate ?? DateTime.Today).Date;
+
+        if (normalizedFromDate > normalizedToDate)
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return new JsonResult(new { success = false, message = "From Date must be less than or equal to To Date." });
+        }
+
+        try
+        {
+            using var conn = OpenConnection();
+            var preview = normalizedType switch
+            {
+                LinenReportTypes.Pantry => BuildPantryPreview(conn, descriptionId, normalizedLinenCode),
+                LinenReportTypes.Delivery => BuildDeliveryPreview(conn, descriptionId, normalizedLinenCode),
+                LinenReportTypes.Receive => BuildReceivePreview(conn, descriptionId, normalizedLinenCode),
+                LinenReportTypes.LaundryRecord => BuildLaundryRecordPreview(conn, normalizedFromDate, normalizedToDate, normalizedLinenCode),
+                LinenReportTypes.NotReceive => BuildNotReceivePreview(conn, normalizedLinenCode),
+                LinenReportTypes.LaundryBalance => BuildLaundryBalancePreview(conn, normalizedFromDate, normalizedToDate),
+                LinenReportTypes.ApmtBalance => BuildApartmentBalancePreview(conn, descriptionId, normalizedFromDate, normalizedToDate),
+                _ => throw new InvalidOperationException("Invalid report type.")
+            };
+
+            var pdf = LinenReportQuestPdfReport.BuildPdf(preview.Value ?? new { reportType = normalizedType }, LoadCompanyLogoBytes(conn));
+            return File(pdf, "application/pdf");
         }
         catch (InvalidOperationException ex)
         {
@@ -286,16 +338,15 @@ ORDER BY IsOrder, TimeSection;", conn))
             throw new InvalidOperationException("Delivery description is required.");
         }
 
-        var rows = new List<LinenDeliveryPreviewRow>();
-        var preview = new LinenDeliveryPreviewHeader();
+        var preview = LoadDeliveryPreviewHeader(conn, descriptionId.Value);
+        if (preview == null)
+        {
+            throw new InvalidOperationException("Delivery not found.");
+        }
 
+        var rows = new List<LinenDeliveryPreviewRow>();
         using var cmd = new SqlCommand(@"
-SELECT SupplierName,
-       DeliveryID,
-       DeliveryDate,
-       Des,
-       LaundryTypeName,
-       Location,
+SELECT Location,
        LinnenCode AS LinenCode,
        Quantity,
        Price,
@@ -311,15 +362,6 @@ WHERE DeliveryID = @DeliveryID
         {
             while (rd.Read())
             {
-                if (preview.DeliveryId <= 0)
-                {
-                    preview.DeliveryId = ToInt(rd["DeliveryID"]);
-                    preview.DeliveryDate = rd["DeliveryDate"] == DBNull.Value ? DateTime.Today : Convert.ToDateTime(rd["DeliveryDate"]);
-                    preview.Description = Convert.ToString(rd["Des"]) ?? string.Empty;
-                    preview.SupplierName = Convert.ToString(rd["SupplierName"]) ?? string.Empty;
-                    preview.DeliveryTypeName = Convert.ToString(rd["LaundryTypeName"]) ?? string.Empty;
-                }
-
                 rows.Add(new LinenDeliveryPreviewRow
                 {
                     Location = Convert.ToString(rd["Location"]) ?? string.Empty,
@@ -330,11 +372,6 @@ WHERE DeliveryID = @DeliveryID
                     Note = Convert.ToString(rd["Note"]) ?? string.Empty
                 });
             }
-        }
-
-        if (preview.DeliveryId <= 0)
-        {
-            throw new InvalidOperationException("Delivery not found.");
         }
 
         return new JsonResult(new
@@ -348,6 +385,36 @@ WHERE DeliveryID = @DeliveryID
             deliveryTypeName = preview.DeliveryTypeName,
             rows
         });
+    }
+
+    private LinenDeliveryPreviewHeader? LoadDeliveryPreviewHeader(SqlConnection conn, int deliveryId)
+    {
+        using var cmd = new SqlCommand(@"
+SELECT mt.DeliveryID,
+       mt.DeliveryDate,
+       ISNULL(mt.Des, '') AS Des,
+       ISNULL(tp.LaundryTypeName, '') AS LaundryTypeName,
+       ISNULL(sp.SupplierName, '') AS SupplierName
+FROM dbo.LN_DeliveryMT mt
+LEFT JOIN dbo.LN_LaudryType tp ON tp.LaundryTypeID = mt.DeliveryType
+LEFT JOIN dbo.PC_Suppliers sp ON sp.SupplierID = mt.SupplierID
+WHERE mt.DeliveryID = @DeliveryID;", conn);
+        cmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = deliveryId;
+
+        using var rd = cmd.ExecuteReader();
+        if (!rd.Read())
+        {
+            return null;
+        }
+
+        return new LinenDeliveryPreviewHeader
+        {
+            DeliveryId = ToInt(rd["DeliveryID"]),
+            DeliveryDate = rd["DeliveryDate"] == DBNull.Value ? DateTime.Today : Convert.ToDateTime(rd["DeliveryDate"]),
+            Description = Convert.ToString(rd["Des"]) ?? string.Empty,
+            SupplierName = Convert.ToString(rd["SupplierName"]) ?? string.Empty,
+            DeliveryTypeName = Convert.ToString(rd["LaundryTypeName"]) ?? string.Empty
+        };
     }
 
     private JsonResult BuildReceivePreview(SqlConnection conn, int? descriptionId, string linenCode)
@@ -920,6 +987,67 @@ WHERE ID = @ID;", conn);
         return Convert.ToString(cmd.ExecuteScalar()) ?? string.Empty;
     }
 
+    private byte[]? LoadCompanyLogoBytes(SqlConnection conn)
+    {
+        using var cmd = new SqlCommand(@"
+SELECT TOP 1 ISNULL(CoLogo, '') AS CoLogo
+FROM dbo.MS_Parameters;", conn);
+        using var reader = cmd.ExecuteReader();
+        if (!reader.Read())
+        {
+            return null;
+        }
+
+        var logoPath = ResolveCompanyLogoPathValue(Convert.ToString(reader["CoLogo"]));
+        if (string.IsNullOrWhiteSpace(logoPath) || !System.IO.File.Exists(logoPath))
+        {
+            return null;
+        }
+
+        return System.IO.File.ReadAllBytes(logoPath);
+    }
+
+    private string ResolveCompanyLogoPathValue(string? logoFileName)
+    {
+        if (string.IsNullOrWhiteSpace(logoFileName))
+        {
+            return string.Empty;
+        }
+
+        var logoReference = logoFileName.Trim();
+        if (System.IO.File.Exists(logoReference))
+        {
+            return logoReference;
+        }
+
+        var logoSegments = logoReference
+            .Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (logoSegments.Length == 0 || logoSegments.Any(x => x == "." || x == ".."))
+        {
+            return string.Empty;
+        }
+
+        var contentRootCandidate = Path.Combine([_webHostEnvironment.ContentRootPath, .. logoSegments]);
+        if (System.IO.File.Exists(contentRootCandidate))
+        {
+            return contentRootCandidate;
+        }
+
+        var basePath = _config.GetValue<string>("FileUploads:BasePath");
+        if (string.IsNullOrWhiteSpace(basePath))
+        {
+            return string.Empty;
+        }
+
+        var rootPath = Path.IsPathRooted(basePath)
+            ? basePath
+            : Path.Combine(_webHostEnvironment.ContentRootPath, basePath);
+
+        var uploadRootCandidate = Path.Combine([rootPath, .. logoSegments]);
+        return System.IO.File.Exists(uploadRootCandidate) ? uploadRootCandidate : string.Empty;
+    }
+
     private string GetCurrentUserCode()
     {
         return User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "SYSTEM";
@@ -1261,3 +1389,4 @@ public class ApartmentBalancePreviewRow
     public decimal DeliveryApartment { get; set; }
     public decimal End { get; set; }
 }
+

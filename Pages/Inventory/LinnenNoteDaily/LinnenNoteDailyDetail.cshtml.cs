@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Hosting;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -42,10 +43,12 @@ public class LinnenNoteDailyDetailModel : BasePageModel
         new LinnenNoteDailyPantryDefinition(10, "GOLF")
     };
     private readonly PermissionService _permissionService;
+    private readonly IWebHostEnvironment _webHostEnvironment;
 
-    public LinnenNoteDailyDetailModel(IConfiguration config, PermissionService permissionService) : base(config)
+    public LinnenNoteDailyDetailModel(IConfiguration config, PermissionService permissionService, IWebHostEnvironment webHostEnvironment) : base(config)
     {
         _permissionService = permissionService;
+        _webHostEnvironment = webHostEnvironment;
     }
 
     [BindProperty(SupportsGet = true)]
@@ -63,6 +66,9 @@ public class LinnenNoteDailyDetailModel : BasePageModel
     [BindProperty]
     public string RedirectUrl { get; set; } = string.Empty;
 
+    [BindProperty(SupportsGet = true)]
+    public string ReturnUrl { get; set; } = string.Empty;
+
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
     public bool CanSave { get; private set; }
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
@@ -70,10 +76,11 @@ public class LinnenNoteDailyDetailModel : BasePageModel
     public IReadOnlyList<LinnenNoteDailyGridColumn> DetailColumns => FixedDetailColumns;
     public IReadOnlyList<LinnenNoteDailyPantryDefinition> DetailPantries => FixedPantries;
 
-    public IActionResult OnGet(int? id, string mode = "view")
+    public IActionResult OnGet(int? id, string mode = "view", string? returnUrl = null)
     {
         PagePerm = GetUserPermissions();
         Mode = NormalizeMode(mode);
+        ReturnUrl = !string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl) ? returnUrl : string.Empty;
 
         if (Mode == "add")
         {
@@ -102,7 +109,7 @@ public class LinnenNoteDailyDetailModel : BasePageModel
                 throw;
             }
 
-            return RedirectToPage("./LinnenNoteDailyDetail", new { id = Header.Id, mode = "edit" });
+            return RedirectToPage("./LinnenNoteDailyDetail", new { id = Header.Id, mode = "edit", returnUrl = ReturnUrl });
         }
 
         if (!id.HasValue || id.Value <= 0)
@@ -190,6 +197,7 @@ public class LinnenNoteDailyDetailModel : BasePageModel
             NoteId = Header.Id,
             Description = Header.Description,
             DateCreate = Header.DateCreate,
+            CompanyLogo = LoadCompanyLogoBytes(),
             Columns = GetPreviewColumns(linenCode),
             Rows = LoadPrintPreviewRows(id)
         };
@@ -266,7 +274,7 @@ public class LinnenNoteDailyDetailModel : BasePageModel
             return RedirectToPage("./Index");
         }
 
-        return RedirectToPage("./LinnenNoteDailyDetail", new { id = Header.Id, mode = "edit" });
+        return RedirectToPage("./LinnenNoteDailyDetail", new { id = Header.Id, mode = "edit", returnUrl = ReturnUrl });
     }
 
     private bool LoadHeader(int id)
@@ -636,6 +644,73 @@ ORDER BY ISNULL(p.IsOrder, t.Pentry), t.Pentry, t.TimeSection;", conn);
     private string GetCurrentUserCode()
     {
         return User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "SYSTEM";
+    }
+
+    private byte[]? LoadCompanyLogoBytes()
+    {
+        using var conn = OpenConnection();
+        using var cmd = new SqlCommand(@"
+SELECT TOP 1 ISNULL(CoLogo, '') AS CoLogo
+FROM dbo.MS_Parameters;", conn);
+        using var reader = cmd.ExecuteReader();
+        if (!reader.Read())
+        {
+            return null;
+        }
+
+        var logoPath = ResolveCompanyLogoPathValue(Convert.ToString(reader["CoLogo"]));
+        if (string.IsNullOrWhiteSpace(logoPath) || !System.IO.File.Exists(logoPath))
+        {
+            return null;
+        }
+
+        return System.IO.File.ReadAllBytes(logoPath);
+    }
+
+    private string ResolveCompanyLogoPathValue(string? logoFileName)
+    {
+        if (string.IsNullOrWhiteSpace(logoFileName))
+        {
+            return string.Empty;
+        }
+
+        var logoReference = logoFileName.Trim();
+        if (System.IO.File.Exists(logoReference))
+        {
+            return logoReference;
+        }
+
+        var logoSegments = logoReference
+            .Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (logoSegments.Length == 0 || logoSegments.Any(x => x == "." || x == ".."))
+        {
+            return string.Empty;
+        }
+
+        var contentRootCandidate = Path.Combine([_webHostEnvironment.ContentRootPath, .. logoSegments]);
+        if (System.IO.File.Exists(contentRootCandidate))
+        {
+            return contentRootCandidate;
+        }
+
+        var basePath = _config.GetValue<string>("FileUploads:BasePath");
+        if (string.IsNullOrWhiteSpace(basePath))
+        {
+            return string.Empty;
+        }
+
+        var rootPath = Path.IsPathRooted(basePath)
+            ? basePath
+            : Path.Combine(_webHostEnvironment.ContentRootPath, basePath);
+
+        var uploadRootCandidate = Path.Combine([rootPath, .. logoSegments]);
+        if (System.IO.File.Exists(uploadRootCandidate))
+        {
+            return uploadRootCandidate;
+        }
+
+        return string.Empty;
     }
 
     private SqlConnection OpenConnection()
