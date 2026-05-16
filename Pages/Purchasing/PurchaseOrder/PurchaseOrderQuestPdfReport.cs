@@ -76,7 +76,7 @@ internal static class PurchaseOrderQuestPdfReport
                 row.RelativeItem(1.65f).Row(item => ComposeInlineField(item, "Currency/Đơn vị tiền tệ:", model.CurrencyText, 132, VniPdfFontFamily));
             });
             column.Item().Row(row => ComposeInlineField(row, "Nhà cung cấp/Supplier:", model.SupplierDisplay, 132, VniPdfFontFamily));
-            column.Item().Row(row => ComposeInlineField(row, "Địa chỉ/Address:", model.SupplierAddress, 96, VniPdfFontFamily));
+            column.Item().Row(row => ComposeInlineField(row, "Địa chỉ/Address:", model.SupplierAddress, 132, VniPdfFontFamily));
             column.Item().Row(row =>
             {
                 row.Spacing(18);
