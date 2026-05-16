@@ -487,11 +487,11 @@
 @section Scripts {
     <script>
         window.linenReportPage = {
-            modeOptionsUrl: '@Url.Page("./Index", "ModeOptions", new { lockedReportType = Model.LockedReportType, popup = Model.IsPopup })',
-            previewUrl: '@Url.Page("./Index", "Preview", new { lockedReportType = Model.LockedReportType, popup = Model.IsPopup })',
-            pdfUrl: '@Url.Page("./Index", "Pdf", new { lockedReportType = Model.LockedReportType, popup = Model.IsPopup })',
-            initialType: '@Model.Filter.ReportType',
-            lockedType: '@Model.LockedReportType',
+            modeOptionsUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("./Index", "ModeOptions", new { lockedReportType = Model.LockedReportType, popup = Model.IsPopup }))),
+            previewUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("./Index", "Preview", new { lockedReportType = Model.LockedReportType, popup = Model.IsPopup }))),
+            pdfUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("./Index", "Pdf", new { lockedReportType = Model.LockedReportType, popup = Model.IsPopup }))),
+            initialType: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Filter.ReportType)),
+            lockedType: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.LockedReportType)),
             isPopup: @(Model.IsPopup ? "true" : "false"),
             autoPreview: true
         };

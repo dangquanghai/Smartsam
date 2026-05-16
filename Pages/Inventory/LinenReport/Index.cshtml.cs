@@ -27,7 +27,7 @@ public class IndexModel : BasePageModel
     public LinenReportFilter Filter { get; set; } = new LinenReportFilter();
 
     [BindProperty(SupportsGet = true)]
-    public string LockedReportType { get; set; } = string.Empty;
+    public string? LockedReportType { get; set; }
 
     [BindProperty(SupportsGet = true)]
     public bool Popup { get; set; }
@@ -1055,6 +1055,8 @@ FROM dbo.MS_Parameters;", conn);
 
     private void NormalizeFilter()
     {
+        ApplyFlatQueryFilterValues();
+
         Filter.ReportType = NormalizeReportType(Filter.ReportType);
         var lockedType = NormalizeLockedReportType(LockedReportType);
         if (!string.IsNullOrWhiteSpace(lockedType))
@@ -1075,6 +1077,38 @@ FROM dbo.MS_Parameters;", conn);
         if (Filter.FromDate > Filter.ToDate)
         {
             Filter.ToDate = Filter.FromDate;
+        }
+    }
+
+    private void ApplyFlatQueryFilterValues()
+    {
+        var query = Request.Query;
+
+        var reportType = Convert.ToString(query["reportType"]);
+        if (!string.IsNullOrWhiteSpace(reportType))
+        {
+            Filter.ReportType = reportType;
+        }
+
+        var linenCode = Convert.ToString(query["linenCode"]);
+        if (!string.IsNullOrWhiteSpace(linenCode))
+        {
+            Filter.LinenCode = linenCode;
+        }
+
+        if (int.TryParse(Convert.ToString(query["descriptionId"]), out var descriptionId))
+        {
+            Filter.DescriptionId = descriptionId;
+        }
+
+        if (DateTime.TryParse(Convert.ToString(query["fromDate"]), out var fromDate))
+        {
+            Filter.FromDate = fromDate;
+        }
+
+        if (DateTime.TryParse(Convert.ToString(query["toDate"]), out var toDate))
+        {
+            Filter.ToDate = toDate;
         }
     }
 

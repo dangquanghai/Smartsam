@@ -1,0 +1,516 @@
+@page
+@model SmartSam.Pages.Inventory.LinenReceiving.LinenReceivingDetailModel
+@{
+    ViewData["Title"] = "Linen Receiving Detail";
+    var isView = Model.IsViewMode;
+    var reportLinenCodes = Model.Details
+        .Select(x => (x.LinenCode ?? string.Empty).Trim())
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(x => x)
+        .ToList();
+}
+
+@section Styles {
+    <style>
+        .linen-receiving-header label {
+            font-size: 12px;
+            margin-bottom: 0;
+            white-space: nowrap;
+        }
+
+        .linen-receiving-header .form-control-sm {
+            height: 28px;
+            padding-top: 2px;
+            padding-bottom: 2px;
+        }
+
+        .linen-receiving-header-checks {
+            display: flex;
+            align-items: center;
+            min-height: 28px;
+            gap: 0.75rem;
+        }
+
+        .linen-receiving-header-checks .custom-control,
+        .linen-receiving-header-checks .custom-control-label {
+            display: inline-flex;
+            align-items: center;
+            min-height: 28px;
+            line-height: 1.2;
+        }
+
+        .linen-receiving-header-checks .custom-control-label::before,
+        .linen-receiving-header-checks .custom-control-label::after {
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .linen-receiving-grid th,
+        .linen-receiving-grid td {
+            vertical-align: middle !important;
+        }
+
+        .linen-receiving-action-cell {
+            width: 28px;
+            padding: 0 !important;
+            vertical-align: middle;
+        }
+
+        .linen-receiving-action-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        .linen-receiving-note-cell {
+            padding: 0.3rem !important;
+        }
+
+        .linen-receiving-report-modal-dialog {
+            max-width: 90vw;
+            width: 90vw;
+            margin: 0.5rem auto;
+        }
+
+        .linen-receiving-report-modal-dialog .modal-content {
+            height: 88vh;
+            max-height: 88vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+        }
+
+        .linen-receiving-report-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .linen-receiving-report-toolbar {
+            background: #efefef;
+            border-bottom: 1px solid #b8b8b8;
+            padding: 0.5rem 0.65rem 0.35rem;
+            flex: 0 0 auto;
+        }
+
+        .linen-receiving-report-mode-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem 1rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .linen-receiving-report-modes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.2rem 0.9rem;
+        }
+
+        .linen-receiving-report-mode-item,
+        .linen-receiving-report-inline-field,
+        .linen-receiving-report-chart,
+        .linen-receiving-report-chart .custom-control,
+        .linen-receiving-report-chart .custom-control-label {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+        }
+
+        .linen-receiving-report-mode-item {
+            gap: 0.2rem;
+            font-size: 12px;
+        }
+
+        .linen-receiving-report-mode-item input {
+            margin: 0;
+        }
+
+        .linen-receiving-report-toolbar label {
+            margin-bottom: 0;
+            white-space: nowrap;
+            font-weight: 400;
+            font-size: 12px;
+        }
+
+        .linen-receiving-report-toolbar .form-control-sm {
+            height: 26px;
+            padding-top: 1px;
+            padding-bottom: 1px;
+            border-radius: 0;
+            font-size: 12px;
+        }
+
+        .linen-receiving-report-inline-field {
+            gap: 0.45rem;
+        }
+
+        .linen-receiving-report-inline-field .form-control {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .linen-receiving-report-status {
+            padding: 0.35rem 0.75rem 0;
+            color: #4a5560;
+            min-height: 22px;
+            font-size: 12px;
+            flex: 0 0 auto;
+        }
+
+        .linen-receiving-report-canvas {
+            background: #b8b8b8;
+            padding: 1rem;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
+        }
+
+        .linen-receiving-report-iframe {
+            display: block;
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+            border: 1px solid #8c8c8c;
+            background: #fff;
+        }
+
+        .linen-receiving-report-loading {
+            display: none;
+            padding: 1rem;
+            text-align: center;
+            color: #6c757d;
+            background: #f8f9fa;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+}
+
+<section class="content">
+    <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show py-2" role="alert">
+                <i class="fas fa-check-circle"></i> @TempData["SuccessMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="alert alert-danger py-2" asp-validation-summary="All"></div>
+        }
+
+        <form method="post" id="linenReceivingDetailForm">
+            <input type="hidden" asp-for="Mode" />
+            <input type="hidden" asp-for="ReturnUrl" />
+            <input type="hidden" asp-for="DetailsJson" id="DetailsJson" />
+
+            <div class="card card-primary card-outline">
+                <div class="card-body p-2 linen-receiving-header">
+                    <div class="row">
+                        <div class="col-lg-6">
+                            <div class="form-group row mb-2 align-items-center">
+                                <label class="col-sm-3 col-form-label col-form-label-sm">Receive ID</label>
+                                <div class="col-sm-4">
+                                    <input asp-for="Header.ReceiveID" class="form-control form-control-sm" readonly />
+                                </div>
+                                <label class="col-sm-1 col-form-label col-form-label-sm">Date</label>
+                                <div class="col-sm-4">
+                                    <input asp-for="Header.ReceiveDate" type="date" class="form-control form-control-sm" readonly="@isView" />
+                                </div>
+                            </div>
+
+                            <div class="form-group row mb-2 align-items-center">
+                                <label class="col-sm-3 col-form-label col-form-label-sm">Description</label>
+                                <div class="col-sm-9">
+                                    <input asp-for="Header.Description" class="form-control form-control-sm vni-font" maxlength="100" readonly="@isView" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-6">
+                            <div class="form-group row mb-2 align-items-center">
+                                <label class="col-sm-3 col-form-label col-form-label-sm">Delivery(*)</label>
+                                <div class="col-sm-7">
+                                    <select asp-for="Header.SendID"
+                                            asp-items="Model.DeliveryOptions"
+                                            class="form-control form-control-sm vni-font"
+                                            id="Header_SendID"
+                                            disabled="@Model.IsDeliveryLocked">
+                                    </select>
+                                    @if (Model.IsDeliveryLocked)
+                                    {
+                                        <input type="hidden" asp-for="Header.SendID" />
+                                    }
+                                </div>
+                                <div class="col-sm-2">
+                                    @if (Model.Header.SendID.HasValue && Model.Header.SendID.Value > 0)
+                                    {
+                                        <a class="btn btn-info btn-sm btn-block"
+                                           href="/Inventory/LinenDelivery/LinenDeliveryDetail?id=@Model.Header.SendID.Value&mode=view">
+                                            View
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-info btn-sm btn-block" disabled>View</button>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="form-group row mb-0 align-items-center">
+                                <label class="col-sm-3 col-form-label col-form-label-sm">Options</label>
+                                <div class="col-sm-9 linen-receiving-header-checks">
+                                    <div class="custom-control custom-checkbox">
+                                        <input asp-for="Header.IsRent" class="custom-control-input" disabled="@isView" />
+                                        <label asp-for="Header.IsRent" class="custom-control-label">Rent</label>
+                                    </div>
+                                    <div class="custom-control custom-checkbox">
+                                        <input asp-for="Header.IsLocked" class="custom-control-input" disabled="@isView" />
+                                        <label asp-for="Header.IsLocked" class="custom-control-label">Lock</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card card-primary">
+                <div class="card-header py-2">
+                    <h3 class="card-title">Detail</h3>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm mb-0 linen-receiving-grid" id="linenReceivingDetailTable">
+                            <colgroup>
+                                <col style="width: 28px;" />
+                                <col style="min-width: 180px;" />
+                                <col style="min-width: 160px;" />
+                                <col style="min-width: 160px;" />
+                                <col style="width: 70px;" />
+                                <col style="width: 70px;" />
+                                <col style="width: 50px;" />
+                                <col style="width: 110px;" />
+                                <col style="width: 120px;" />
+                                <col style="min-width: 180px;" />
+                            </colgroup>
+                            <thead class="thead-light">
+                                <tr>
+                                    <th class="linen-receiving-action-cell"></th>
+                                    <th>Delivery</th>
+                                    <th>Location</th>
+                                    <th>Linen</th>
+                                    <th>Express</th>
+                                    <th>Child</th>
+                                    <th>Qty</th>
+                                    <th>Price</th>
+                                    <th>Amount</th>
+                                    <th>Note</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (Model.Details.Count == 0)
+                                {
+                                    <tr class="linen-receiving-empty-row">
+                                        <td colspan="10" class="text-center text-muted py-3">No detail rows</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    foreach (var row in Model.Details)
+                                    {
+                                        <tr class="linen-receiving-detail-row" data-id="@row.ID">
+                                            <td class="linen-receiving-action-cell">
+                                                @if (!isView)
+                                                {
+                                                    <div class="linen-receiving-action-wrap">
+                                                        <button type="button" class="btn btn-xs btn-outline-danger border js-remove-row" title="Remove">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                }
+                                            </td>
+                                            <td>
+                                                <select class="form-control form-control-sm lr-delivery vni-font" @(isView ? "disabled" : null)>
+                                                    @foreach (var option in Model.DeliveryOptions)
+                                                    {
+                                                        if (option.Value == Convert.ToString(row.SendID))
+                                                        {
+                                                            <option value="@option.Value" selected>@option.Text</option>
+                                                        }
+                                                        else
+                                                        {
+                                                            <option value="@option.Value">@option.Text</option>
+                                                        }
+                                                    }
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select class="form-control form-control-sm lr-location vni-font" @(isView ? "disabled" : null)>
+                                                    @foreach (var option in Model.LocationOptions)
+                                                    {
+                                                        if (option.Value == Convert.ToString(row.LocationID))
+                                                        {
+                                                            <option value="@option.Value" selected>@option.Text</option>
+                                                        }
+                                                        else
+                                                        {
+                                                            <option value="@option.Value">@option.Text</option>
+                                                        }
+                                                    }
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select class="form-control form-control-sm lr-linen vni-font" @(isView ? "disabled" : null)>
+                                                    @foreach (var option in Model.LinenOptions)
+                                                    {
+                                                        var price = option.Group?.Name ?? string.Empty;
+                                                        if (option.Value == Convert.ToString(row.LinnenID))
+                                                        {
+                                                            <option value="@option.Value" data-price="@price" selected>@option.Text</option>
+                                                        }
+                                                        else
+                                                        {
+                                                            <option value="@option.Value" data-price="@price">@option.Text</option>
+                                                        }
+                                                    }
+                                                </select>
+                                            </td>
+                                            <td class="text-center"><input type="checkbox" class="lr-express" @(row.Express ? "checked" : null) @(isView ? "disabled" : null) /></td>
+                                            <td class="text-center"><input type="checkbox" class="lr-child" @(row.IsChild ? "checked" : null) @(isView ? "disabled" : null) /></td>
+                                            <td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-right lr-quantity" value="@row.Quantity.ToString("0.##")" @(isView ? "readonly" : null) /></td>
+                                            <td><input type="number" step="0.01" class="form-control form-control-sm text-right lr-price" value="@row.Price.ToString("0.##")" @(isView ? "readonly" : null) /></td>
+                                            <td><input type="number" step="0.01" class="form-control form-control-sm text-right lr-amount" value="@row.Amount.ToString("0.##")" readonly /></td>
+                                            <td class="linen-receiving-note-cell"><input type="text" maxlength="100" class="form-control form-control-sm lr-note vni-font" value="@row.Note" @(isView ? "readonly" : null) /></td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer p-2 text-center">
+                    @if (Model.CanSave)
+                    {
+                        <button type="button" class="btn btn-success btn-sm mr-1" id="btnAddDetailRow">
+                            <i class="fas fa-plus"></i> Add Detail
+                        </button>
+                        <button type="submit" class="btn btn-primary btn-sm mr-1">
+                            <i class="fas fa-save"></i> Save
+                        </button>
+                    }
+                    <button type="button" class="btn btn-info btn-sm mr-1" id="btnPrintLinenReceivingDetail">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                    <a class="btn btn-secondary btn-sm" href="@Model.BackUrl">
+                        <i class="fas fa-arrow-left"></i> Back to list
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+
+<div class="modal fade" id="linenReceivingReportModal" tabindex="-1" role="dialog" aria-labelledby="linenReceivingReportModalLabel" aria-hidden="true">
+    <div class="modal-dialog linen-receiving-report-modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="linenReceivingReportModalLabel">Linen - Report</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body p-0 linen-receiving-report-body">
+                <div class="linen-receiving-report-toolbar">
+                    <div class="linen-receiving-report-mode-row">
+                        <div class="linen-receiving-report-modes">
+                            <label class="linen-receiving-report-mode-item"><input type="radio" name="linenReceivingReportType" value="pantry" disabled /><span>Pantry-Linen</span></label>
+                            <label class="linen-receiving-report-mode-item"><input type="radio" name="linenReceivingReportType" value="delivery" disabled /><span>Delivery</span></label>
+                            <label class="linen-receiving-report-mode-item"><input type="radio" name="linenReceivingReportType" value="receive" checked disabled /><span>Receive</span></label>
+                            <label class="linen-receiving-report-mode-item"><input type="radio" name="linenReceivingReportType" value="laundry-record" disabled /><span>Laudry Record</span></label>
+                            <label class="linen-receiving-report-mode-item"><input type="radio" name="linenReceivingReportType" value="not-receive" disabled /><span>Not Receive</span></label>
+                            <label class="linen-receiving-report-mode-item"><input type="radio" name="linenReceivingReportType" value="laundry-balance" disabled /><span>Laundry.U. Balance</span></label>
+                            <label class="linen-receiving-report-mode-item"><input type="radio" name="linenReceivingReportType" value="apmt-balance" disabled /><span>Apmt Balance</span></label>
+                        </div>
+                        <div class="linen-receiving-report-chart">
+                            <div class="custom-control custom-checkbox mb-0">
+                                <input type="checkbox" class="custom-control-input" id="linenReceivingReportChart" disabled />
+                                <label class="custom-control-label" for="linenReceivingReportChart">Chart</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-4 col-md-6">
+                            <div class="linen-receiving-report-inline-field">
+                                <label for="linenReceivingReportDescription">Des</label>
+                                <select class="form-control form-control-sm vni-font" id="linenReceivingReportDescription" disabled>
+                                    <option value="@Model.Header.ReceiveID">@Model.Header.Description</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <div class="linen-receiving-report-inline-field">
+                                <label for="linenReceivingReportLinenCode">Linnen</label>
+                                <select class="form-control form-control-sm vni-font" id="linenReceivingReportLinenCode">
+                                    <option value="">All</option>
+                                    @foreach (var linenCode in reportLinenCodes)
+                                    {
+                                        <option value="@linenCode">@linenCode</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-lg-4 col-md-8">
+                            <div class="linen-receiving-report-inline-field">
+                                <label>From - To</label>
+                                <input type="date" class="form-control form-control-sm" value="@Model.Header.ReceiveDate.ToString("yyyy-MM-dd")" disabled />
+                                <input type="date" class="form-control form-control-sm" value="@Model.Header.ReceiveDate.ToString("yyyy-MM-dd")" disabled />
+                            </div>
+                        </div>
+                        <div class="col-lg-1 col-md-4">
+                            <button type="button" class="btn btn-sm btn-secondary btn-block" id="btnPreviewLinenReceivingReport">Preview</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="linen-receiving-report-status" id="linenReceivingReportMeta">Receive | @Model.Header.Description</div>
+                <div class="linen-receiving-report-canvas">
+                    <div id="linenReceivingReportLoading" class="linen-receiving-report-loading">Loading PDF preview...</div>
+                    <iframe id="linenReceivingReportFrame" class="linen-receiving-report-iframe" title="Linen Receiving Report"></iframe>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        window.linenReceivingPage = {
+            isView: @Model.IsViewMode.ToString().ToLowerInvariant(),
+            receiveId: @Model.Header.ReceiveID,
+            sendId: @(Model.Header.SendID?.ToString() ?? "null"),
+            reportPdfUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("/Inventory/LinenReport/Index", "Pdf", new { reportType = "receive", descriptionId = Model.Header.ReceiveID, lockedReportType = "receive", popup = true }))),
+            rowTemplateOptions: {
+                deliveries: @Html.Raw(Model.DeliveryOptionsJson),
+                locations: @Html.Raw(Model.LocationOptionsJson),
+                linens: @Html.Raw(Model.LinenOptionsJson)
+            }
+        };
+    </script>
+    <script src="~/js/Inventory/LinenReceiving/LinenReceivingDetail.js" asp-append-version="true"></script>
+}
