@@ -54,7 +54,7 @@ internal static class PurchaseOrderQuestPdfReport
                 text.Span(model.CoAddress);
             });
             column.Item().AlignCenter().Text($"Tel: {model.CoPhone} Email: {model.CoEmail} VAT Code: {model.CoVATCode}").FontSize(10);
-            column.Item().AlignCenter().Text("-").FontSize(10);
+            column.Item().AlignCenter().Text("----o0o---").FontSize(10);
             column.Item().PaddingTop(18).AlignCenter().Text(text =>
             {
                 text.Span("ĐƠN ĐẶT HÀNG/PURCHASE ORDER").Bold().FontSize(20);
