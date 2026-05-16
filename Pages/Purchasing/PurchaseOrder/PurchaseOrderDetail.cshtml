@@ -50,9 +50,17 @@
                             <div class="row no-gutters align-items-center mb-2">
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">PR No</label></div>
                                 <div class="col-4">
-                                    <select asp-for="Header.PRID" asp-items="Model.PrOptions" id="PRID" class="form-control form-control-sm" disabled="@Model.IsViewMode" style="width: 100%;">
-                                        <option value="">-- Select PR --</option>
-                                    </select>
+                                    @if (Model.IsViewMode)
+                                    {
+                                        <input asp-for="Header.PRID" id="PRID_Post" type="hidden" />
+                                        <input type="text" class="form-control form-control-sm" value="@Model.CurrentPrText" readonly />
+                                    }
+                                    else
+                                    {
+                                        <select asp-for="Header.PRID" asp-items="Model.PrOptions" id="PRID" class="form-control form-control-sm" style="width: 100%;">
+                                            <option value="">-- Select PR --</option>
+                                        </select>
+                                    }
                                 </div>
                                 <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Currency</label></div>
                                 <div class="col-4">
@@ -64,13 +72,21 @@
                             <div class="row no-gutters align-items-center mb-2">
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">Supplier</label></div>
                                 <div class="col-4">
-                                    <select asp-for="Header.SupplierID" id="SupplierID" class="form-control form-control-sm" disabled="@Model.IsViewMode" style="width: 100%;">
-                                        <option value="">-- Type supplier code or name --</option>
-                                        @if (Model.Header.SupplierID.HasValue && !string.IsNullOrWhiteSpace(Model.CurrentSupplierText))
-                                        {
-                                            <option value="@Model.Header.SupplierID" selected>@Model.CurrentSupplierText</option>
-                                        }
-                                    </select>
+                                    @if (Model.IsViewMode)
+                                    {
+                                        <input asp-for="Header.SupplierID" id="SupplierID_Post" type="hidden" />
+                                        <input type="text" class="form-control form-control-sm" value="@Model.CurrentSupplierText" readonly />
+                                    }
+                                    else
+                                    {
+                                        <select asp-for="Header.SupplierID" id="SupplierID" class="form-control form-control-sm" style="width: 100%;">
+                                            <option value="">-- Type supplier code or name --</option>
+                                            @if (Model.Header.SupplierID.HasValue && !string.IsNullOrWhiteSpace(Model.CurrentSupplierText))
+                                            {
+                                                <option value="@Model.Header.SupplierID" selected>@Model.CurrentSupplierText</option>
+                                            }
+                                        </select>
+                                    }
                                 </div>
                                 <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Ass. Level</label></div>
                                 <div class="col-4">
