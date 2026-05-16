@@ -75,12 +75,12 @@ internal static class PurchaseOrderQuestPdfReport
                 row.RelativeItem(1).Row(item => ComposeInlineField(item, "PR No:", model.RequestNo, 40));
                 row.RelativeItem(1.65f).Row(item => ComposeInlineField(item, "Currency/Đơn vị tiền tệ:", model.CurrencyText, 132, VniPdfFontFamily));
             });
-            column.Item().Row(row => ComposeInlineField(row, "Nhà cung cấp/Supplier:", model.SupplierDisplay, 132, VniPdfFontFamily));
-            column.Item().Row(row => ComposeInlineField(row, "Địa chỉ/Address:", model.SupplierAddress, 132, VniPdfFontFamily));
+            column.Item().Row(row => ComposeInlineField(row, "Nhà cung cấp/Supplier:", model.SupplierDisplay, 123, VniPdfFontFamily));
+            column.Item().Row(row => ComposeInlineField(row, "Địa chỉ/Address:", model.SupplierAddress, 123, VniPdfFontFamily));
             column.Item().Row(row =>
             {
                 row.Spacing(18);
-                row.RelativeItem(1).Row(item => ComposeInlineField(item, "Người liên hệ/Contact:", model.SupplierContact, 132, VniPdfFontFamily));
+                row.RelativeItem(1).Row(item => ComposeInlineField(item, "Người liên hệ/Contact:", model.SupplierContact, 123, VniPdfFontFamily));
                 row.RelativeItem(1.2f).Row(item => ComposeInlineField(item, "Phone/Mail:", BuildPhoneMailText(model), 58));
             });
         });
