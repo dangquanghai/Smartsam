@@ -69,7 +69,7 @@
 
                             <div class="form-group mb-2">
                                 <label>Item Name</label>
-                                <input id="Filter_ItemName" name="ItemName" value="@Model.Filter.ItemName" class="form-control form-control-sm vni-font" maxlength="150" />
+                                <input id="Filter_ItemName" name="ItemName" value="@Model.Filter.ItemName" class="form-control form-control-sm tcvn3-font" maxlength="150" />
                             </div>
 
                             <div class="form-group mb-2">
@@ -259,7 +259,7 @@
                                                 </td>
                                                 <td>@row.ItemCode</td>
                                                 <td class="iil-col-name">
-                                                    <span class="iil-ellipsis vni-font" title="@row.ItemName">@row.ItemName</span>
+                                                    <span class="iil-ellipsis tcvn3-font" title="@row.ItemName">@row.ItemName</span>
                                                 </td>
                                                 <td title="@row.CatgName">@row.CategoryText</td>
                                                 <td>@row.Unit</td>
@@ -365,32 +365,32 @@
                         </div>
                         <div class="form-group col-md-9 mb-2">
                             <label>Item Name<span class="text-danger">*</span></label>
-                            <input asp-for="ItemInput.ItemName" class="form-control form-control-sm vni-font" maxlength="150" required />
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group col-md-4 mb-2">
-                            <label>Catg</label>
-                            <select asp-for="ItemInput.ItemCatg" asp-items="Model.CategoryInputList" class="form-control form-control-sm select2 vni-font" data-placeholder="---"></select>
-                        </div>
-                        <div class="form-group col-md-4 mb-2">
-                            <label>INV Group</label>
-                            <select asp-for="ItemInput.KPGroupItem" asp-items="Model.KpGroupList" class="form-control form-control-sm select2 vni-font" data-placeholder="---"></select>
-                        </div>
-                        <div class="form-group col-md-4 mb-2">
-                            <label>Currency</label>
-                            <select asp-for="ItemInput.Currency" asp-items="Model.CurrencyList" class="form-control form-control-sm select2 vni-font" data-placeholder="---">
-                                <option value="">---</option>
-                            </select>
+                            <input asp-for="ItemInput.ItemName" class="form-control form-control-sm tcvn3-font" maxlength="150" required />
                         </div>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group col-md-3 mb-2">
+                            <label>Catg</label>
+                            <select asp-for="ItemInput.ItemCatg" asp-items="Model.CategoryInputList" class="form-control form-control-sm select2 vni-font" data-placeholder="---"></select>
+                        </div>
+                        <div class="form-group col-md-3 mb-2">
+                            <label>INV Group</label>
+                            <select asp-for="ItemInput.KPGroupItem" asp-items="Model.KpGroupList" class="form-control form-control-sm select2 vni-font" data-placeholder="---"></select>
+                        </div>
+                        <div class="form-group col-md-3 mb-2">
+                            <label>Currency</label>
+                            <select asp-for="ItemInput.Currency" asp-items="Model.CurrencyList" class="form-control form-control-sm select2 vni-font" data-placeholder="---">
+                                <option value="">---</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-3 mb-2">
                             <label>Unit</label>
                             <input asp-for="ItemInput.Unit" class="form-control form-control-sm vni-font" maxlength="10" />
                         </div>
+                    </div>
+
+                    <div class="form-row">
                         <div class="form-group col-md-3 mb-2">
                             <label>Unit Price</label>
                             <input asp-for="ItemInput.UnitPrice" type="number" min="0" step="0.0001" class="form-control form-control-sm text-right" />
@@ -403,23 +403,16 @@
                             <label>Parent Item Code</label>
                             <input asp-for="ItemInput.ParentItemCode" class="form-control form-control-sm vni-font" maxlength="20" />
                         </div>
+                        <div class="form-group col-md-3 mb-2">
+                            <label>Replace For Item Code</label>
+                            <input asp-for="ItemInput.ReplaceForItemCode" class="form-control form-control-sm vni-font" maxlength="20" />
+                        </div>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group col-md-12 mb-2">
                             <label>Specification</label>
                             <input asp-for="ItemInput.Specification" class="form-control form-control-sm vni-font" maxlength="50" />
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group col-md-8 mb-2">
-                            <label>Item Name New</label>
-                            <input asp-for="ItemInput.ItemNameNew" class="form-control form-control-sm vni-font" maxlength="150" />
-                        </div>
-                        <div class="form-group col-md-4 mb-2">
-                            <label>Replace For Item Code</label>
-                            <input asp-for="ItemInput.ReplaceForItemCode" class="form-control form-control-sm vni-font" maxlength="20" />
                         </div>
                     </div>
 
@@ -478,7 +471,7 @@
                         </button>
                     }
                     <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">
-                        <i class="fas fa-arrow-left"></i> Back to list
+                        <i class="fas fa-times"></i> Close
                     </button>
                 </div>
             </form>
@@ -593,7 +586,7 @@
                                                 </td>
                                                 <td>@candidate.ItemCode</td>
                                                 <td>
-                                                    <span class="iil-ellipsis vni-font" title="@candidate.ItemName">@candidate.ItemName</span>
+                                                    <span class="iil-ellipsis tcvn3-font" title="@candidate.ItemName">@candidate.ItemName</span>
                                                 </td>
                                                 <td title="@candidate.CatgName">@candidate.CatgCode</td>
                                                 <td>@candidate.Unit</td>
@@ -645,7 +638,7 @@
                     <div class="mb-2">
                         <div>
                             <strong id="inventoryItemStockCode"></strong>
-                            <span id="inventoryItemStockName"></span>
+                            <span id="inventoryItemStockName" class="tcvn3-font"></span>
                         </div>
                         <div>
                             Main inventory:
@@ -658,7 +651,6 @@
                         <table class="table table-sm table-bordered mb-0">
                             <thead class="thead-light">
                                 <tr>
-                                    <th style="width: 80px;">Year</th>
                                     <th>Store</th>
                                     <th style="width: 130px;" class="text-right">BG Quantity</th>
                                     <th style="width: 130px;" class="text-right">BG Amount</th>
@@ -667,7 +659,7 @@
                             </thead>
                             <tbody id="inventoryItemStockStoreBody">
                                 <tr>
-                                    <td colspan="5" class="text-center text-muted">No store balance data</td>
+                                    <td colspan="4" class="text-center text-muted">No store balance data</td>
                                 </tr>
                             </tbody>
                         </table>

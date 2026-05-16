@@ -1,0 +1,171 @@
+@page
+@model SmartSam.Pages.Inventory.ItemChecking.IndexModel
+@{
+    ViewData["Title"] = "Inventory Item Checking";
+    var currentPage = Model.Filter.Page <= 0 ? 1 : Model.Filter.Page;
+    var totalPages = Model.TotalPages <= 0 ? 1 : Model.TotalPages;
+    var pageItems = new List<int?>();
+    for (var p = 1; p <= totalPages; p++)
+    {
+        if (p == 1 || p == totalPages || (p >= currentPage - 2 && p <= currentPage + 2))
+        {
+            pageItems.Add(p);
+        }
+        else if (pageItems.Count == 0 || pageItems[^1].HasValue)
+        {
+            pageItems.Add(null);
+        }
+    }
+    Func<int, string> pageUrl = (page) => Url.Page("./Index", new
+    {
+        DeptId = Model.Filter.DeptId,
+        StatusId = Model.Filter.StatusId,
+        UseCheckedDate = Model.Filter.UseCheckedDate,
+        CheckedFrom = Model.Filter.CheckedFrom?.ToString("yyyy-MM-dd"),
+        CheckedTo = Model.Filter.CheckedTo?.ToString("yyyy-MM-dd"),
+        UseApprovedDate = Model.Filter.UseApprovedDate,
+        ApprovedFrom = Model.Filter.ApprovedFrom?.ToString("yyyy-MM-dd"),
+        ApprovedTo = Model.Filter.ApprovedTo?.ToString("yyyy-MM-dd"),
+        LateChecking = Model.Filter.LateChecking,
+        Page = page,
+        PageSize = Model.Filter.PageSize
+    }) ?? "#";
+}
+
+<section class="content vni-font inventory-item-checking-page">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-2">
+                <div class="card card-info">
+                    <div class="card-header"><h3 class="card-title"><i class="fas fa-search"></i> Search</h3></div>
+                    <div class="card-body">
+                        <form method="get">
+                            <div class="form-group mb-2"><label>Department</label><select asp-for="Filter.DeptId" asp-items="Model.Departments" class="form-control form-control-sm select2 vni-font" data-placeholder="--- All ---"></select></div>
+                            <div class="form-group mb-2"><label>Status</label><select asp-for="Filter.StatusId" asp-items="Model.Statuses" class="form-control form-control-sm select2 vni-font" data-placeholder="--- All ---"></select></div>
+                            <div class="form-group mb-1"><div class="custom-control custom-checkbox"><input asp-for="Filter.UseCheckedDate" class="custom-control-input" /><label asp-for="Filter.UseCheckedDate" class="custom-control-label">Checked Date</label></div></div>
+                            <div class="form-group mb-2"><label>From</label><input asp-for="Filter.CheckedFrom" type="date" class="form-control form-control-sm" /></div>
+                            <div class="form-group mb-2"><label>To</label><input asp-for="Filter.CheckedTo" type="date" class="form-control form-control-sm" /></div>
+                            <div class="form-group mb-1"><div class="custom-control custom-checkbox"><input asp-for="Filter.UseApprovedDate" class="custom-control-input" /><label asp-for="Filter.UseApprovedDate" class="custom-control-label">Approved Date</label></div></div>
+                            <div class="form-group mb-2"><label>From</label><input asp-for="Filter.ApprovedFrom" type="date" class="form-control form-control-sm" /></div>
+                            <div class="form-group mb-2"><label>To</label><input asp-for="Filter.ApprovedTo" type="date" class="form-control form-control-sm" /></div>
+                            <div class="form-group mb-2"><div class="custom-control custom-checkbox"><input asp-for="Filter.LateChecking" class="custom-control-input" /><label asp-for="Filter.LateChecking" class="custom-control-label">Late Checking</label></div></div>
+                            <button type="submit" class="btn btn-sm btn-primary btn-block"><i class="fas fa-search"></i> Search</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-10">
+                <div class="card card-primary inventory-item-checking-list-card">
+                    <div class="card-header p-2 inventory-item-checking-list-header vni-font">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap">
+                            <div class="inventory-item-checking-title">
+                                Inventory Item Checking
+                                <span class="badge badge-light ml-1">@Model.TotalRecords records</span>
+                            </div>
+                            <div class="d-flex align-items-center inventory-item-checking-header-tools app-paging-white">
+                                <span class="small mr-3">Showing @Model.PageStart to @Model.PageEnd of @Model.TotalRecords entries</span>
+                                <label class="mb-0 mr-2 small font-weight-bold">Show</label>
+                                <select id="inventoryItemCheckingPageSize" class="form-control form-control-sm inventory-item-checking-page-size mr-2">
+                                    @foreach (var pageSizeOption in Model.PageSizeOptions)
+                                    {
+                                        <option value="@pageSizeOption" selected="@(Model.Filter.PageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                    }
+                                </select>
+                                <ul class="pagination pagination-sm mb-0">
+                                    <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+                                        <a class="page-link prq-pager-link" href="@(Model.HasPreviousPage ? pageUrl(currentPage - 1) : "#")">Prev</a>
+                                    </li>
+                                    @foreach (var pageItem in pageItems)
+                                    {
+                                        if (pageItem.HasValue)
+                                        {
+                                            <li class="page-item @(pageItem.Value == currentPage ? "active" : "")">
+                                                <a class="page-link prq-pager-link" href="@pageUrl(pageItem.Value)">@pageItem.Value</a>
+                                            </li>
+                                        }
+                                        else
+                                        {
+                                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                                        }
+                                    }
+                                    <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+                                        <a class="page-link prq-pager-link" href="@(Model.HasNextPage ? pageUrl(currentPage + 1) : "#")">Next</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive inventory-item-checking-table-wrap">
+                            <table class="table table-hover table-bordered mb-0 text-nowrap inventory-item-checking-table vni-font" id="itemCheckingTable">
+                                <thead class="thead-light"><tr><th style="width:60px;"></th><th style="width:180px;">Status</th><th style="width:220px;">Checked By</th><th style="width:200px;">Checked Date</th><th style="width:230px;">Approved By</th><th style="width:210px;">Approved Date</th><th>Receiving NO</th></tr></thead>
+                                <tbody>
+                                @if (Model.Rows.Count == 0)
+                                { <tr><td colspan="7" class="text-center text-muted">No data</td></tr> }
+                                else
+                                {
+                                    foreach (var row in Model.Rows)
+                                    {
+                                        var statusBadgeClass = row.StatusId switch
+                                        {
+                                            1 => "badge-info",
+                                            2 => "badge-primary",
+                                            3 => "badge-success",
+                                            4 => "badge-warning",
+                                            5 => "badge-danger",
+                                            _ => "badge-secondary"
+                                        };
+                                        <tr class="inventory-item-checking-row" data-id="@row.CheckingId" data-status-id="@row.StatusId" data-can-edit="@(Model.CanEditRow(row.StatusId) ? "true" : "false")"><td class="text-center"><input type="radio" name="selectedChecking" /></td><td><span class="badge @statusBadgeClass">@row.StatusName</span></td><td>@row.CheckedBy</td><td>@(row.CheckedDate?.ToString("dd/MM/yyyy"))</td><td>@row.ApprovedBy</td><td>@(row.ApprovedDate?.ToString("dd/MM/yyyy"))</td><td>@row.ReceiveNo</td></tr>
+                                    }
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-outline card-primary inventory-item-checking-action-card">
+                    <div class="card-footer p-2 text-center module-action-bar ip-action-bar inventory-item-checking-action-bar vni-font">
+                        @if (Model.CanAdd)
+                        {
+                            <button type="button" id="iicAddBtn" class="btn btn-sm btn-action-add border mx-1 my-1">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        }
+                        @if (Model.CanEdit)
+                        {
+                            <button type="button" id="btnEdit" class="btn btn-sm btn-action-save border mx-1 my-1" disabled>
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                        }
+                        @if (Model.CanView)
+                        {
+                            <button type="button" id="btnView" class="btn btn-sm btn-action-close border mx-1 my-1" disabled>
+                                <i class="fas fa-eye"></i> View
+                            </button>
+                        }
+                        <button type="button" id="btnExportExcel" class="btn btn-sm btn-action-export border mx-1 my-1">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        window.inventoryItemCheckingPage = {
+            detailUrlBase: '@Url.Page("./ItemCheckingDetail")',
+            exportUrl: '@Url.Page("./Index", "ExportExcel")'
+        };
+    </script>
+    <script src="~/js/Inventory/InventoryItemChecking/index.js" asp-append-version="true"></script>
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Inventory/InventoryItemChecking/index.css" asp-append-version="true" />
+}

@@ -1,0 +1,456 @@
+﻿@page
+@model SmartSam.Pages.Inventory.ItemChecking.ItemCheckingDetailModel
+@{
+    ViewData["Title"] = "Receiving Checking Voucher";
+}
+
+<section class="content vni-font inventory-item-checking-page">
+    <div class="container-fluid">
+        <form method="post" id="detailForm">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="Header.CheckingId" />
+            <input type="hidden" asp-for="Mode" />
+            <input type="hidden" asp-for="StagedItemsJson" id="StagedItemsJson" />
+            @if (Model.Header.CheckingId > 0 || Model.IsReadOnly)
+            {
+                <input type="hidden" asp-for="Header.POID" />
+            }
+            @if (!string.IsNullOrWhiteSpace(Model.Message))
+            {
+                var alertClass = Model.MessageType switch
+                {
+                    "success" => "alert-success",
+                    "warning" => "alert-warning",
+                    "error" => "alert-danger",
+                    _ => "alert-info"
+                };
+                <div class="alert @alertClass alert-dismissible fade show mb-2 inventory-item-checking-server-alert" role="alert">
+                    @Model.Message
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+            }
+            <div class="card card-primary card-outline">
+                <div class="card-header py-2"><h3 class="card-title">Receiving Checking Voucher</h3></div>
+                <div class="card-body pb-2">
+                    <div class="form-row">
+                        <div class="form-group col-md-4 mb-2"><label>Created Date</label><input class="form-control form-control-sm" value="@Model.Header.CreatedDate.ToString("dd/MM/yyyy")" readonly /></div>
+                        <div class="form-group col-md-4 mb-2"><label>Created By</label><select asp-for="Header.CreatedBy" asp-items="Model.Employees" class="form-control form-control-sm select2 vni-font" disabled></select></div>
+                        <div class="form-group col-md-4 mb-2"><label>Status</label><select asp-for="Header.StatusId" asp-items="Model.Statuses" class="form-control form-control-sm select2 vni-font" disabled></select></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4 mb-2"><label>PO No<span class="text-danger">*</span></label><select asp-for="Header.POID" asp-items="Model.Pos" class="form-control form-control-sm select2 vni-font" data-placeholder="--- Select ---" disabled="@(Model.Header.CheckingId > 0 || Model.IsReadOnly)"></select></div>
+                        <div class="form-group col-md-4 mb-2"><label>Expect Date<span class="text-danger">*</span></label><input asp-for="Header.ExpectDate" type="date" class="form-control form-control-sm" readonly="@Model.IsReadOnly" /></div>
+                        <div class="form-group col-md-4 mb-2"><label>Dept Check<span class="text-danger">*</span></label><select asp-for="Header.DeptChecked" asp-items="Model.Departments" class="form-control form-control-sm select2 vni-font" data-placeholder="--- Select ---" disabled="@Model.IsReadOnly"></select></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4 mb-2"><label>Flow No</label><input asp-for="Header.FlowNo" class="form-control form-control-sm" readonly="@Model.IsReadOnly" /></div>
+                        <div class="form-group col-md-4 mb-2"><label>MR Infor</label><input asp-for="Header.MRInfor" class="form-control form-control-sm" readonly="@Model.IsReadOnly" /></div>
+                        <div class="form-group col-md-4 mb-2"><label>Checking Method</label><input asp-for="Header.CheckingMethod" class="form-control form-control-sm" readonly="@Model.IsReadOnly" /></div>
+                    </div>
+                    <div class="form-row mb-0">
+                        <div class="form-group col-md-12 mb-2"><label>Result</label><input asp-for="Header.Result" class="form-control form-control-sm" readonly="@Model.IsReadOnly" /></div>
+                    </div>
+                    @if (!string.Equals(Model.Mode, "add", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <div class="form-row mt-2">
+                            <div class="form-group col-md-3 mb-2"><label>Checked By</label><input class="form-control form-control-sm" value="@Model.Employees.FirstOrDefault(x => x.Value == (Model.Header.CheckedBy?.ToString() ?? string.Empty))?.Text" readonly /></div>
+                            <div class="form-group col-md-3 mb-2"><label>Checked Date</label><input class="form-control form-control-sm" value="@(Model.Header.CheckedDate?.ToString("dd/MM/yyyy") ?? string.Empty)" readonly /></div>
+                            <div class="form-group col-md-3 mb-2"><label>Approved By</label><input class="form-control form-control-sm" value="@Model.Employees.FirstOrDefault(x => x.Value == (Model.Header.ApprovedBy?.ToString() ?? string.Empty))?.Text" readonly /></div>
+                            <div class="form-group col-md-3 mb-2"><label>Approved Date</label><input class="form-control form-control-sm" value="@(Model.Header.ApprovedDate?.ToString("dd/MM/yyyy") ?? string.Empty)" readonly /></div>
+                        </div>
+                    }
+                    <div class="d-flex align-items-center flex-wrap">
+                    @if (Model.CanSaveDraft)
+                    {
+                        <button type="button" class="btn btn-sm btn-default border mr-2 mb-2" id="btnShowPoItems"><i class="fas fa-plus"></i> Add Item From PO</button>
+                    }
+                    </div>
+                    <div class="inventory-item-checking-detail-wrap">
+                        <table class="table table-bordered table-sm mb-0 inventory-item-checking-detail-table" id="detailTable">
+                            <colgroup>
+                                <col class="col-action" />
+                                <col class="col-item" />
+                                <col class="col-qlt" />
+                                <col class="col-qtypassed" />
+                                <col class="col-price" />
+                                <col class="col-amount" />
+                                <col class="col-notes" />
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th style="width:70px;" class="text-center">Action</th>
+                                    <th class="text-left">Item</th>
+                                    <th class="text-right item-checking-qlt-col">Qlt</th>
+                                    <th class="text-right item-checking-qtypassed-col">QltPassed</th>
+                                    <th class="text-right item-checking-price-col">Price</th>
+                                    <th class="text-right item-checking-amount-col">Amount</th>
+                                    <th class="text-left">Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            @if (Model.DetailRows.Count == 0)
+                            {
+                                <tr><td colspan="7" class="text-center text-muted">No data</td></tr>
+                            }
+                            else
+                            {
+                                foreach (var row in Model.DetailRows)
+                                {
+                                    <tr data-existing-row="true">
+                                        <td class="text-center">-</td>
+                                        <td class="text-left inventory-item-ellipsis tcvn3-font" title="@row.ItemName">
+                                            @row.ItemName
+                                            <input type="hidden" name="DetailRows[@(Model.DetailRows.IndexOf(row))].ChekingDTID" value="@row.ChekingDTID" />
+                                            <input type="hidden" name="DetailRows[@(Model.DetailRows.IndexOf(row))].ItemID" value="@row.ItemID" />
+                                            <input type="hidden" name="DetailRows[@(Model.DetailRows.IndexOf(row))].ItemName" value="@row.ItemName" />
+                                            <input type="hidden" name="DetailRows[@(Model.DetailRows.IndexOf(row))].QuantityCheck" value="@row.QuantityCheck" />
+                                            <input type="hidden" name="DetailRows[@(Model.DetailRows.IndexOf(row))].MRDetailID" value="@row.MRDetailID" />
+                                        </td>
+                                        <td class="text-right item-checking-qlt-col">@row.QuantityCheck.ToString("N0")</td>
+                                        <td class="text-right item-checking-qtypassed-col">
+                                            @if (Model.CanSaveDraft && row.ChekingDTID > 0)
+                                            {
+                                                <input type="text" inputmode="numeric" class="form-control form-control-sm text-right stage-qty-passed" name="DetailRows[@(Model.DetailRows.IndexOf(row))].QuantityPassed" value="@row.QuantityPassed.ToString("N0")" data-max="@Math.Round(row.QuantityCheck, 0)" />
+                                            }
+                                            else
+                                            {
+                                                @row.QuantityPassed.ToString("N0")
+                                            }
+                                        </td>
+                                        <td class="text-right item-checking-price-col">
+                                            @if (Model.CanSaveDraft && row.ChekingDTID > 0)
+                                            {
+                                                <input type="text" inputmode="numeric" class="form-control form-control-sm text-right existing-price" name="DetailRows[@(Model.DetailRows.IndexOf(row))].Price" value="@row.Price.ToString("N0")" />
+                                            }
+                                            else
+                                            {
+                                                @row.Price.ToString("N0")
+                                            }
+                                        </td>
+                                        <td class="text-right item-checking-amount-col">@row.Amount.ToString("N0")</td>
+                                        <td class="text-left item-checking-notes-cell" title="@row.Notes">
+                                            @if (Model.CanSaveDraft && row.ChekingDTID > 0)
+                                            {
+                                                <input type="text" class="form-control form-control-sm" name="DetailRows[@(Model.DetailRows.IndexOf(row))].Notes" value="@row.Notes" />
+                                            }
+                                            else
+                                            {
+                                                @row.Notes
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-2 text-center module-action-bar ip-action-bar d-flex flex-wrap">
+                        @if (Model.CanSaveDraft)
+                        {
+                            <button type="submit" asp-page-handler="Save" class="btn btn-sm btn-action-save border mr-2 mb-2"><i class="fas fa-save"></i> Save</button>
+                        }
+                        @if (Model.CanCheckAction)
+                        {
+                            <button type="submit" asp-page-handler="Action" class="btn btn-sm btn-success border btn-require-confirm mr-2 mb-2" data-confirm-title="Check Confirmation" data-confirm-message="Confirm check this voucher?" data-confirm-kind="primary"><i class="fas fa-check"></i> Checked</button>
+                        }
+                        @if (Model.CanApproveAction)
+                        {
+                            <button type="submit" asp-page-handler="Action" class="btn btn-sm btn-action-save border btn-require-confirm mr-2 mb-2" data-confirm-title="Approve Confirmation" data-confirm-message="Confirm approve this voucher?" data-confirm-kind="primary"><i class="fas fa-check-double"></i> Approve</button>
+                        }
+                        @if (Model.CanDisapprove)
+                        {
+                            <button type="submit" asp-page-handler="Disapprove" class="btn btn-sm btn-danger border btn-require-confirm mr-2 mb-2" data-confirm-title="Disapprove Confirmation" data-confirm-message="Confirm disapprove/cancel this voucher?" data-confirm-kind="danger"><i class="fas fa-ban"></i> Disapprove</button>
+                        }
+                        <a class="btn btn-sm btn-action-close border mr-2 mb-2" href="@Url.Page("./Index")"><i class="fas fa-arrow-left"></i> Back to List</a>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+
+<div class="modal fade vni-font" id="poItemsModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog inventory-item-checking-po-modal" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2 bg-primary text-white">
+                <h5 class="modal-title">Select Items From PO</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm mb-0" id="poItemsTable">
+                        <thead>
+                            <tr>
+                                <th style="width:60px;">Select</th>
+                                <th>Item</th>
+                                <th class="text-right">Quantity</th>
+                                <th class="text-right po-checkqty-col">CheckQ.ty</th>
+                                <th class="text-right">Price</th>
+                                <th>Note</th>
+                            </tr>
+                        </thead>
+                        <tbody><tr><td colspan="6" class="text-center text-muted">No data</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-action-save border btn-primary" id="btnConfirmPoItems" disabled><i class="fas fa-check"></i> OK</button>
+                <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal"><i class="fas fa-times"></i> Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade vni-font" id="confirmActionModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content iic-confirm-modal-content">
+            <div class="modal-header py-2 bg-primary text-white iic-confirm-modal-header" id="confirmActionHeader">
+                <h5 class="modal-title" id="confirmActionTitle">Confirm</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body iic-confirm-modal-body" id="confirmActionBody"></div>
+            <div class="modal-footer py-2 iic-confirm-modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary" id="btnConfirmActionOk">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade vni-font" id="notifyModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2" id="notifyModalHeader">
+                <h5 class="modal-title" id="notifyModalTitle">Notification</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body" id="notifyModalBody"></div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-action-save border" data-dismiss="modal">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function(){
+            const poSelect = document.getElementById('Header_POID');
+            const showBtn = document.getElementById('btnShowPoItems');
+            const modal = $('#poItemsModal');
+            const notifyModal = $('#notifyModal');
+            const confirmActionModal = $('#confirmActionModal');
+            let pendingSubmitButton = null;
+            let confirmBypass = false;
+            const tbody = document.querySelector('#poItemsTable tbody');
+            const confirmBtn = document.getElementById('btnConfirmPoItems');
+            const detailBody = document.querySelector('#detailTable tbody');
+            const existingDetailHtml = detailBody.innerHTML;
+            const stagedInput = document.getElementById('StagedItemsJson');
+            let stagedRows = [];
+            let basePoRows = [];
+
+            if (window.location.search.indexOf('handler=Action') >= 0) {
+                const cleanUrl = '@Url.Page("./ItemCheckingDetail")' + '?mode=@Model.Mode' + '@(Model.Header.CheckingId > 0 ? "&id=" + Model.Header.CheckingId : string.Empty)';
+                window.history.replaceState({}, document.title, cleanUrl);
+            }
+
+            function refreshConfirmButtonState() {
+                const hasChecked = [...tbody.querySelectorAll('.po-select')].some(x => x.checked);
+                if (confirmBtn) confirmBtn.disabled = !hasChecked;
+            }
+            function showNotify(type, message) {
+                const header = document.getElementById('notifyModalHeader');
+                const title = document.getElementById('notifyModalTitle');
+                const body = document.getElementById('notifyModalBody');
+                header.classList.remove('bg-success', 'bg-danger', 'bg-warning', 'bg-info', 'text-white');
+                if (type === 'error') { header.classList.add('bg-danger', 'text-white'); title.textContent = 'Error'; }
+                else if (type === 'warning') { header.classList.add('bg-danger', 'text-white'); title.textContent = 'Warning'; }
+                else if (type === 'success') { header.classList.add('bg-success', 'text-white'); title.textContent = 'Success'; }
+                else { header.classList.add('bg-info', 'text-white'); title.textContent = 'Information'; }
+                body.textContent = message || '';
+                if (modal.hasClass('show')) {
+                    $('#poItemsModal').css('z-index', 1050);
+                    $('.modal-backdrop').last().css('z-index', 1040);
+                    $('#notifyModal').css('z-index', 1080);
+                    setTimeout(function(){ $('.modal-backdrop').last().css('z-index', 1070); }, 0);
+                }
+                notifyModal.modal('show');
+            }
+            const detailForm = document.getElementById('detailForm');
+            function toNumber(v) { const n = parseFloat((v || '').toString().replace(/,/g, '')); return Number.isFinite(n) ? n : 0; }
+            function formatInt(v) { return Math.round(toNumber(v)).toLocaleString('en-US'); }
+            function normalizeRow(r) { return { itemId: parseInt(r.itemId || '0'), itemText: (r.itemText || '').toString(), quantity: toNumber(r.quantity), quantityPassed: toNumber(r.quantityPassed), price: toNumber(r.price), note: (r.note || '').toString(), mrDetailId: parseInt(r.mrDetailId || '0') }; }
+            function getStageKey(row) { return `${row.itemId}|${row.mrDetailId || 0}`; }
+            function escapeAttr(v) { return (v || '').toString().replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+            function syncStagedInput() { stagedInput.value = JSON.stringify(stagedRows.map(r => ({ itemId: r.itemId, quantityPassed: r.quantityPassed, price: r.price, note: r.note, mrDetailId: r.mrDetailId }))); }
+            function renderStagedRows() {
+                const stagedHtml = stagedRows.map((r, idx) => `<tr data-stage-index="${idx}">
+                    <td class="text-center"><button type="button" class="btn btn-xs btn-danger stage-remove" title="Remove"><i class="fas fa-trash"></i></button></td>
+                    <td class="text-left inventory-item-ellipsis tcvn3-font" title="${escapeAttr(r.itemText)}">${escapeAttr(r.itemText)}</td>
+                    <td class="text-right item-checking-qlt-col" title="${formatInt(r.quantity)}">${formatInt(r.quantity)}</td>
+                    <td class="text-right item-checking-qtypassed-col"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right stage-qty-passed" value="${formatInt(r.quantityPassed)}" title="${formatInt(r.quantityPassed)}" maxlength="6" /></td>
+                    <td class="text-right item-checking-price-col"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right stage-price" value="${formatInt(r.price)}" title="${formatInt(r.price)}" /></td>
+                    <td class="text-right item-checking-amount-col" title="${formatInt(r.quantityPassed * r.price)}">${formatInt(r.quantityPassed * r.price)}</td>
+                    <td class="text-left item-checking-notes-cell"><input type="text" class="form-control form-control-sm stage-note" value="${escapeAttr(r.note)}" title="${escapeAttr(r.note)}" /></td>
+                </tr>`).join('');
+                if (!stagedRows.length && existingDetailHtml.indexOf('data-existing-row') < 0) {
+                    detailBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No data</td></tr>';
+                    syncStagedInput();
+                    return;
+                }
+                detailBody.innerHTML = (existingDetailHtml.indexOf('data-existing-row') >= 0 ? existingDetailHtml : '') + stagedHtml;
+                syncStagedInput();
+            }
+            function getReservedQtyMap() { const map = {}; stagedRows.forEach(r => { const key = getStageKey(r); map[key] = (map[key] || 0) + r.quantityPassed; }); return map; }
+            function initSelect2(scope) {
+                if (!window.jQuery || !window.jQuery.fn || !window.jQuery.fn.select2) return;
+                window.jQuery(scope || document).find('select.select2').each(function () {
+                    const $el = window.jQuery(this);
+                    if ($el.hasClass('select2-hidden-accessible')) $el.select2('destroy');
+                    const insideModal = $el.closest('.modal').length > 0;
+                    $el.select2({ width: '100%', placeholder: $el.data('placeholder') || '', allowClear: true, dropdownParent: insideModal ? $el.closest('.modal') : $(document.body) });
+                });
+            }
+            async function loadPoItems() {
+                const poid = parseInt(poSelect?.value || '0');
+                if (!poid) { showNotify('warning', 'Please select a PO.'); return; }
+                const url = `@Url.Page("./ItemCheckingDetail", "PoItems")&poid=${encodeURIComponent(poid)}`.replace('?&', '?');
+                const res = await fetch(url);
+                const rows = await res.json();
+                basePoRows = (rows || []).map(normalizeRow);
+                const reserved = getReservedQtyMap();
+                const showRows = [];
+                for (const row of basePoRows) {
+                    const key = getStageKey(row);
+                    const remain = Math.max(0, toNumber(row.quantity) - toNumber(reserved[key] || 0));
+                    if (remain <= 0) continue;
+                    showRows.push({ ...row, quantity: remain, quantityPassed: remain });
+                }
+                if (!showRows.length) tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No data</td></tr>';
+                else tbody.innerHTML = showRows.map(r => `<tr data-item-id="${r.itemId}" data-mr-detail-id="${r.mrDetailId}" data-item-text="${escapeAttr(r.itemText)}" data-remain-qty="${r.quantity}" data-price="${r.price}" data-note="${escapeAttr(r.note)}">
+                    <td class="text-center"><input type="checkbox" class="po-select" /></td>
+                    <td class="tcvn3-font" title="${escapeAttr(r.itemText)}">${escapeAttr(r.itemText)}</td>
+                    <td class="text-right" title="${formatInt(r.quantity)}">${formatInt(r.quantity)}</td>
+                    <td class="po-checkqty-col"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right po-qty-passed" value="${formatInt(r.quantity)}" maxlength="6" disabled /></td>
+                    <td class="text-right" title="${formatInt(r.price)}">${formatInt(r.price)}</td>
+                    <td title="${escapeAttr(r.note)}">${escapeAttr(r.note)}</td>
+                </tr>`).join('');
+                if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
+                    const $allSelect2 = window.jQuery('select.select2');
+                    $allSelect2.select2('close');
+                    $allSelect2.not('#poItemsModal select.select2').each(function () { const $el = window.jQuery(this); $el.data('prevDisabled', $el.prop('disabled')); $el.prop('disabled', true).trigger('change.select2'); });
+                }
+                refreshConfirmButtonState();
+                modal.modal('show');
+            }
+            async function saveSelectedItems() {
+                const selected = [...tbody.querySelectorAll('tr')].filter(r => r.querySelector('.po-select')?.checked).map(r => ({ itemId: parseInt(r.dataset.itemId || '0'), itemText: r.dataset.itemText || '', quantity: toNumber(r.dataset.remainQty || '0'), quantityPassed: toNumber(r.querySelector('.po-qty-passed')?.value || '0'), price: toNumber(r.dataset.price || '0'), note: r.dataset.note || '', mrDetailId: parseInt(r.dataset.mrDetailId || '0') }));
+                if (!selected.length) { showNotify('warning', 'Please select at least one item.'); return; }
+                if (selected.find(x => x.quantityPassed <= 0 || x.quantityPassed > x.quantity)) { showNotify('warning', 'Quantity Passed must be greater than 0 and smaller or equal Quantity.'); return; }
+                const body = { poid: parseInt(poSelect.value || '0'), deptChecked: parseInt(document.getElementById('Header_DeptChecked')?.value || '0') || null, expectDate: document.getElementById('Header_ExpectDate')?.value || null, mrInfor: document.getElementById('Header_MRInfor')?.value || '', checkingMethod: document.getElementById('Header_CheckingMethod')?.value || '', result: document.getElementById('Header_Result')?.value || '', selectedItems: selected };
+                const res = await fetch('@Url.Page("./ItemCheckingDetail", "SaveSelectedItems")', { method: 'POST', headers: { 'Content-Type': 'application/json', 'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value || '' }, body: JSON.stringify(body) });
+                const result = await res.json();
+                if (!result.success) { showNotify('error', result.message || 'Cannot validate items.'); return; }
+                (result.rows || []).map(normalizeRow).forEach(row => { const key = getStageKey(row); const index = stagedRows.findIndex(x => getStageKey(x) === key); if (index >= 0) stagedRows[index].quantityPassed += row.quantityPassed; else stagedRows.push(row); });
+                renderStagedRows();
+                modal.modal('hide');
+            }
+            detailBody.addEventListener('click', function (e) { const btn = e.target.closest('.stage-remove'); if (!btn) return; const index = parseInt(btn.closest('tr')?.dataset.stageIndex || '-1'); if (index < 0 || index >= stagedRows.length) return; stagedRows.splice(index, 1); renderStagedRows(); });
+            detailBody.addEventListener('change', function (e) {
+                const tr = e.target.closest('tr');
+                const index = parseInt(tr?.dataset.stageIndex || '-1');
+                if (index < 0 || index >= stagedRows.length) return;
+                const row = stagedRows[index];
+                const qtyInput = e.target.closest('.stage-qty-passed');
+                const priceInput = e.target.closest('.stage-price');
+                const noteInput = e.target.closest('.stage-note');
+                if (qtyInput) {
+                    const newQty = toNumber(qtyInput.value);
+                    if (newQty <= 0 || newQty > row.quantity) { showNotify('warning', `Quantity Passed must be > 0 and <= ${row.quantity}.`); qtyInput.value = formatInt(row.quantityPassed); return; }
+                    row.quantityPassed = newQty;
+                    renderStagedRows();
+                    return;
+                }
+                if (priceInput) {
+                    const newPrice = toNumber(priceInput.value);
+                    if (newPrice < 0) { showNotify('warning', 'Price cannot be negative.'); priceInput.value = formatInt(row.price); return; }
+                    row.price = newPrice;
+                    renderStagedRows();
+                    return;
+                }
+                if (noteInput) {
+                    row.note = noteInput.value || '';
+                    syncStagedInput();
+                }
+            });
+            detailBody.addEventListener('input', function (e) {
+                const tr = e.target.closest('tr[data-existing-row="true"]');
+                if (!tr) return;
+                const qtyInput = tr.querySelector('input[name*=".QuantityPassed"]');
+                const priceInput = tr.querySelector('input[name*=".Price"]');
+                const amountCell = tr.querySelector('.item-checking-amount-col');
+                if (!qtyInput || !priceInput || !amountCell) return;
+                const qty = Math.round(toNumber(qtyInput.value || '0'));
+                const price = toNumber(priceInput.value || '0');
+                const maxQty = Math.round(toNumber(qtyInput.dataset.max || '0'));
+                if (maxQty > 0 && qty > maxQty) {
+                    showNotify('warning', `QltPassed cannot exceed Qlt (${maxQty.toLocaleString('en-US')}).`);
+                    qtyInput.value = formatInt(maxQty);
+                }
+                const normalizedQty = Math.round(toNumber(qtyInput.value || '0'));
+                qtyInput.value = formatInt(normalizedQty);
+                priceInput.value = formatInt(price);
+                const amount = normalizedQty * price;
+                amountCell.textContent = formatInt(amount);
+            });
+            detailForm?.addEventListener('submit', function () {
+                detailBody.querySelectorAll('.stage-qty-passed, .stage-price, .po-qty-passed, .existing-price').forEach(function (input) {
+                    input.value = Math.round(toNumber(input.value || '0')).toString();
+                });
+            });
+            if (showBtn) showBtn.addEventListener('click', loadPoItems);
+            if (confirmBtn) confirmBtn.addEventListener('click', saveSelectedItems);
+            document.querySelectorAll('.btn-require-confirm').forEach(function(btn){
+                btn.addEventListener('click', function(e){
+                    if (confirmBypass) { confirmBypass = false; return; }
+                    e.preventDefault();
+                    pendingSubmitButton = btn;
+                    const header = document.getElementById('confirmActionHeader');
+                    header.classList.remove('bg-danger','bg-warning');
+                    header.classList.add('bg-primary', 'text-white');
+                    document.getElementById('confirmActionTitle').textContent = btn.dataset.confirmTitle || 'Confirm';
+                    document.getElementById('confirmActionBody').textContent = btn.dataset.confirmMessage || 'Are you sure?';
+                    confirmActionModal.modal('show');
+                    $('#confirmActionModal').css('z-index', 1090);
+                    setTimeout(function(){ $('.modal-backdrop').last().css('z-index', 1085); }, 0);
+                });
+            });
+            document.getElementById('btnConfirmActionOk')?.addEventListener('click', function(){
+                if (!pendingSubmitButton) return;
+                confirmBypass = true;
+                confirmActionModal.modal('hide');
+                pendingSubmitButton.click();
+            });
+            tbody.addEventListener('change', function (e) {
+                const checkbox = e.target.closest('.po-select');
+                if (checkbox) {
+                    const row = checkbox.closest('tr');
+                    const qtyInput = row?.querySelector('.po-qty-passed');
+                    if (qtyInput) qtyInput.disabled = !checkbox.checked;
+                    refreshConfirmButtonState();
+                }
+            });
+            modal.on('shown.bs.modal', function () { if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) window.jQuery('select.select2').not('#poItemsModal select.select2').select2('close'); });
+            modal.on('hidden.bs.modal', function () { if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) window.jQuery('select.select2').not('#poItemsModal select.select2').each(function () { const $el = window.jQuery(this); const prevDisabled = $el.data('prevDisabled'); if (typeof prevDisabled !== 'undefined') { $el.prop('disabled', !!prevDisabled).trigger('change.select2'); $el.removeData('prevDisabled'); } }); if (notifyModal.hasClass('show')) { notifyModal.modal('hide'); } $('.modal-backdrop').css('z-index', ''); $('#poItemsModal').css('z-index', ''); $('#notifyModal').css('z-index', ''); refreshConfirmButtonState(); });
+            notifyModal.on('hidden.bs.modal', function () { $('.modal-backdrop').css('z-index', ''); $('#poItemsModal').css('z-index', ''); $('#notifyModal').css('z-index', ''); if (modal.hasClass('show')) { $('body').addClass('modal-open'); } });
+            if (stagedInput.value) { try { stagedRows = JSON.parse(stagedInput.value).map(normalizeRow); } catch { stagedRows = []; } if (stagedRows.length) renderStagedRows(); }
+            initSelect2(document);
+        })();
+    </script>
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Inventory/InventoryItemChecking/index.css" asp-append-version="true" />
+}

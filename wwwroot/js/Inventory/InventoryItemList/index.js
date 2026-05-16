@@ -450,7 +450,7 @@
             if (!storeBalances.length) {
                 const row = document.createElement("tr");
                 const cell = document.createElement("td");
-                cell.colSpan = 5;
+                cell.colSpan = 4;
                 cell.className = "text-center text-muted";
                 cell.textContent = "No store balance data";
                 row.appendChild(cell);
@@ -458,7 +458,6 @@
             } else {
                 storeBalances.forEach((balance) => {
                     const row = document.createElement("tr");
-                    appendStockCell(row, getValue(balance, "year", "Year"));
                     appendStockCell(row, getValue(balance, "storeName", "StoreName"));
                     appendStockCell(row, formatStockNumber(getValue(balance, "bgQuantity", "BGQuantity")), "text-right");
                     appendStockCell(row, formatStockNumber(getValue(balance, "bgAmount", "BGAmount")), "text-right");
