@@ -14,19 +14,6 @@
     padding: 12px;
 }
 
-.special-laundry-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    height: 30px;
-    font-size: 17px;
-    font-weight: 600;
-}
-
-.special-laundry-title i {
-    color: #0f6b80;
-}
-
 .special-laundry-grid {
     display: grid;
     grid-template-columns: 350px 1fr;
