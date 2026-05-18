@@ -34,6 +34,7 @@ namespace SmartSam.Services.Implementations
             117, // Laundry Linen Receiving
             118, // Laundry Linen Report
             148, // Special Laudry Report
+            149, // Post Invoice to Vinhy
         };
 
         public List<int> GetEffectivePermissions(int functionId, int roleId, int objectStatus)
