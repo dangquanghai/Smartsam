@@ -165,14 +165,16 @@
 
 .special-laundry-option-date {
     margin-top: 18px;
-    margin-left: 82px;
+    margin-left: 28px;
     width: 128px;
 }
 
 .special-laundry-between-date {
     margin-top: 14px;
+    margin-left: 28px;
     display: grid;
     gap: 8px;
+    width: 128px;
 }
 
 .special-laundry-excel-action {
