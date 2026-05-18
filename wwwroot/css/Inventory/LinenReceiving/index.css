@@ -118,7 +118,7 @@
 
 #linenReceivingTable {
     table-layout: fixed;
-    width: max-content;
+    width: 100%;
 }
 
 #linenReceivingTable thead th {

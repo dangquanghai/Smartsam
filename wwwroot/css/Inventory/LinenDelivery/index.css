@@ -118,7 +118,7 @@
 
 #linenDeliveryTable {
     table-layout: fixed;
-    width: max-content;
+    width: 100%;
 }
 
 #linenDeliveryTable thead th {
