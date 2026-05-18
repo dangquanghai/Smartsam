@@ -206,6 +206,11 @@ WHERE ID = @ID;", conn);
         {
             ModelState.AddModelError("Linen.EcoWashHcmc", "EcoWash HCMC cannot exceed 10 characters.");
         }
+
+        if (!string.IsNullOrWhiteSpace(Linen.EcoWashHcmc) && !Linen.EcoWashHcmc.All(char.IsDigit))
+        {
+            ModelState.AddModelError("Linen.EcoWashHcmc", "EcoWash HCMC must be numeric.");
+        }
     }
 
     private void BindSaveParameters(SqlCommand cmd)

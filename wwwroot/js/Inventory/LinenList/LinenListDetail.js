@@ -29,6 +29,9 @@ function initializePage(mode) {
     $('#EcoWashHcmc').off('focus.linenPrice').on('focus.linenPrice', function () {
         $(this).val(unformatNumberText($(this).val()));
     });
+    $('#EcoWashHcmc').off('input.linenPrice').on('input.linenPrice', function () {
+        $(this).val(unformatNumberText($(this).val()).replace(/\D/g, ''));
+    });
 }
 
 function validateMainForm() {
@@ -51,8 +54,15 @@ function validateMainForm() {
         return false;
     }
 
-    if (unformatNumberText($('#EcoWashHcmc').val()).trim().length > 10) {
+    const ecoWashValue = unformatNumberText($('#EcoWashHcmc').val()).trim();
+    if (ecoWashValue.length > 10) {
         alert("EcoWash HCMC cannot exceed 10 characters.");
+        focusErrorField($('#EcoWashHcmc'));
+        return false;
+    }
+
+    if (ecoWashValue && !/^\d+$/.test(ecoWashValue)) {
+        alert("EcoWash HCMC must be numeric.");
         focusErrorField($('#EcoWashHcmc'));
         return false;
     }
