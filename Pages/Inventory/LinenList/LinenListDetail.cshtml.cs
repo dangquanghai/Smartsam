@@ -187,7 +187,7 @@ WHERE ID = @ID;", conn);
     private void NormalizeInput()
     {
         Linen.LinnenCode = (Linen.LinnenCode ?? string.Empty).Trim();
-        Linen.EcoWashHcmc = (Linen.EcoWashHcmc ?? string.Empty).Trim();
+        Linen.EcoWashHcmc = (Linen.EcoWashHcmc ?? string.Empty).Trim().Replace(",", string.Empty);
     }
 
     private void ValidateInput()

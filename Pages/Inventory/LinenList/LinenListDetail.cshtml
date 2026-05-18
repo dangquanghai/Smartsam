@@ -3,6 +3,14 @@
 @{
     ViewData["Title"] = "Linen List - Price";
     var isViewMode = string.Equals(Model.Mode, "view", StringComparison.OrdinalIgnoreCase);
+
+    string FormatNumberText(string value)
+    {
+        var raw = (value ?? string.Empty).Trim().Replace(",", string.Empty);
+        return decimal.TryParse(raw, out var number)
+            ? number.ToString("#,##0")
+            : value ?? string.Empty;
+    }
 }
 
 <section class="content">
@@ -49,7 +57,7 @@
                                     <label class="col-form-label-sm mb-0">EcoWash HCMC</label>
                                 </div>
                                 <div class="col-9">
-                                    <input type="text" asp-for="Linen.EcoWashHcmc" id="EcoWashHcmc" class="form-control form-control-sm" maxlength="10" readonly="@isViewMode" tabindex="2">
+                                    <input type="text" asp-for="Linen.EcoWashHcmc" id="EcoWashHcmc" class="form-control form-control-sm text-right" maxlength="13" readonly="@isViewMode" tabindex="2">
                                 </div>
                             </div>
 
@@ -122,7 +130,7 @@
                                         </tr>
                                         <tr>
                                             <td>EcoWash HCMC</td>
-                                            <td>@Model.Linen.EcoWashHcmc</td>
+                                            <td class="text-right">@FormatNumberText(Model.Linen.EcoWashHcmc)</td>
                                         </tr>
                                         <tr>
                                             <td>IsLinen</td>
