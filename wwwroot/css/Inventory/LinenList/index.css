@@ -102,7 +102,7 @@
 
 #linenListTable {
     table-layout: fixed;
-    width: 100%;
+    width: max-content;
 }
 
 #linenListTable thead th {
@@ -124,9 +124,10 @@
 
 #linenListTable > thead > tr > th:first-child,
 #linenListTable > tbody > tr > td:first-child {
-    width: 32px;
-    min-width: 32px;
-    max-width: 32px;
+    width: 32px !important;
+    min-width: 32px !important;
+    max-width: 32px !important;
+    box-sizing: border-box;
     padding-left: 0 !important;
     padding-right: 0 !important;
     text-align: center;
