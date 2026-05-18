@@ -12,6 +12,7 @@ public class IndexModel : BasePageModel
 {
     private const int FunctionId = 161;
     private const int PermissionView = 1;
+    private static readonly DateTime DefaultFromDate = new DateTime(2019, 4, 1);
 
     private readonly PermissionService _permissionService;
 
@@ -53,25 +54,21 @@ public class IndexModel : BasePageModel
 
     public bool HasData { get; set; }
 
-    public void OnGet()
+    public IActionResult OnGet()
     {
         PagePerm = GetUserPermissions();
         if (!HasPageAccess())
         {
-            RedirectToPage("/Index");
-            return;
+            return RedirectToPage("/Index");
         }
 
-        // Set default dates
-        FromDate ??= new DateTime(DateTime.Today.Year, 1, 4);
-        ToDate ??= DateTime.Today;
-        MonthDate ??= new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-        BetweenFrom ??= DateTime.Today.AddDays(-30);
-        BetweenTo ??= DateTime.Today;
-        ReportMode ??= "TotalInMonth";
-        SortBy ??= "Apartment";
+        ApplyDefaultValues();
+        var fromDate = FromDate ?? DefaultFromDate;
+        var toDate = ToDate ?? DateTime.Today;
+        LoadApartments(fromDate, toDate);
+        SelectedApartments = ApartmentOptions.Select(x => x.Value).ToList();
 
-        LoadApartments(FromDate.Value, ToDate.Value);
+        return Page();
     }
 
     public IActionResult OnPostPreview(
@@ -90,19 +87,14 @@ public class IndexModel : BasePageModel
             return Redirect("/");
         }
 
-        ReportMode = reportMode ?? "Total";
+        ReportMode = reportMode ?? "TotalInMonth";
         SortBy = sortBy ?? "Apartment";
-        FromDate = fromDate ?? new DateTime(DateTime.Today.Year, 1, 4);
+        FromDate = fromDate ?? DefaultFromDate;
         ToDate = toDate ?? DateTime.Today;
         MonthDate = monthDate ?? new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-        BetweenFrom = betweenFrom ?? DateTime.Today.AddDays(-30);
+        BetweenFrom = betweenFrom ?? MonthDate;
         BetweenTo = betweenTo ?? DateTime.Today;
-
-        if (!string.IsNullOrEmpty(selectedApartments))
-        {
-            SelectedApartments = selectedApartments.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim()).ToList();
-        }
+        SelectedApartments = ParseSelectedApartments(selectedApartments);
 
         using var conn = OpenConnection();
 
@@ -150,7 +142,7 @@ public class IndexModel : BasePageModel
         return Page();
     }
 
-    public FileResult OnPostExport(
+    public IActionResult OnPostExport(
         [FromForm] string reportMode,
         [FromForm] string sortBy,
         [FromForm] string? selectedApartments,
@@ -161,21 +153,28 @@ public class IndexModel : BasePageModel
         [FromForm] DateTime? betweenTo)
     {
         PagePerm = GetUserPermissions();
+        if (!HasPageAccess())
+        {
+            return RedirectToPage("/Index");
+        }
 
-        var effReportMode = reportMode ?? "Total";
+        var effReportMode = reportMode ?? "TotalInMonth";
         var effSortBy = sortBy ?? "Apartment";
-        var effFromDate = fromDate ?? new DateTime(DateTime.Today.Year, 1, 4);
+        var effFromDate = fromDate ?? DefaultFromDate;
         var effToDate = toDate ?? DateTime.Today;
         var effMonthDate = monthDate ?? new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-        var effBetweenFrom = betweenFrom ?? DateTime.Today.AddDays(-30);
+        var effBetweenFrom = betweenFrom ?? effMonthDate;
         var effBetweenTo = betweenTo ?? DateTime.Today;
+        var apartments = ParseSelectedApartments(selectedApartments);
 
-        var apartments = new List<string>();
-        if (!string.IsNullOrEmpty(selectedApartments))
-        {
-            apartments = selectedApartments.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim()).ToList();
-        }
+        ReportMode = effReportMode;
+        SortBy = effSortBy;
+        FromDate = effFromDate;
+        ToDate = effToDate;
+        MonthDate = effMonthDate;
+        BetweenFrom = effBetweenFrom;
+        BetweenTo = effBetweenTo;
+        SelectedApartments = apartments;
 
         using var conn = OpenConnection();
 
@@ -212,59 +211,28 @@ public class IndexModel : BasePageModel
             }
         }
 
-        // Build Excel file
         using var workbook = new XLWorkbook();
         var worksheet = workbook.Worksheets.Add("Special Laundry Report");
 
-        // Title
-        string dateRangeText;
-        if (effReportMode == "Total")
-        {
-            dateRangeText = $"Special Laundry Report ({effFromDate:dd/MM/yyyy} - {effToDate:dd/MM/yyyy})";
-        }
-        else if (effReportMode == "TotalInMonth")
-        {
-            dateRangeText = $"Special Laundry Report - Total in {effMonthDate:MM/yyyy}";
-        }
-        else
-        {
-            dateRangeText = $"Special Laundry Report - Between {effBetweenFrom:dd/MM/yyyy} and {effBetweenTo:dd/MM/yyyy}";
-        }
-
-        worksheet.Cell(1, 1).Value = dateRangeText;
-        worksheet.Cell(1, 1).Style.Font.FontSize = 14;
-        worksheet.Cell(1, 1).Style.Font.Bold = true;
+        worksheet.Cell(1, 1).Value = $"Special Laundry Report ({effFromDate:dd/MM/yyyy} - {effToDate:dd/MM/yyyy})";
         worksheet.Range(1, 1, 1, 10).Merge();
+        worksheet.Cell(1, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        worksheet.Cell(1, 1).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        worksheet.Cell(1, 1).Style.Font.FontSize = 20;
+        worksheet.Cell(1, 1).Style.Font.Bold = true;
+        worksheet.Cell(1, 1).Style.Font.FontColor = XLColor.Blue;
+        worksheet.Row(1).Height = 50;
 
-        // Contract section header
-        int currentRow = 3;
-        worksheet.Cell(currentRow, 1).Value = "Contract Information";
-        worksheet.Cell(currentRow, 1).Style.Font.FontSize = 12;
-        worksheet.Cell(currentRow, 1).Style.Font.Bold = true;
-        worksheet.Cell(currentRow, 1).Style.Font.FontColor = XLColor.Blue;
-        worksheet.Range(currentRow, 1, currentRow, 10).Merge();
-
-        // Contract columns
-        currentRow = 4;
+        int currentRow = 2;
         string[] contractHeaders = {
-            "Contract No", "Apartment", "Contract From", "Contract To",
-            "Status", "Service From", "Service To", "Charge Type",
-            "Max Quantity", "Notes"
+            "ContractNo", "AmptNo", "Con.From", "Con.To",
+            "Con.Status", "Service From", "Ser.To", "Ser.Charge",
+            "MaxQuantity", "Ser.Notes"
         };
 
-        for (int i = 0; i < contractHeaders.Length; i++)
-        {
-            var cell = worksheet.Cell(currentRow, i + 1);
-            cell.Value = contractHeaders[i];
-            cell.Style.Font.FontSize = 10;
-            cell.Style.Font.Bold = true;
-            cell.Style.Font.FontColor = XLColor.Blue;
-            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            cell.Style.Fill.BackgroundColor = XLColor.LightGray;
-        }
+        WriteHeaderRow(worksheet, currentRow, contractHeaders);
+        currentRow++;
 
-        // Contract data
-        currentRow = 5;
         foreach (var contract in contracts)
         {
             worksheet.Cell(currentRow, 1).Value = contract.ContractNo;
@@ -291,32 +259,21 @@ public class IndexModel : BasePageModel
             currentRow++;
         }
 
-        // Delivery section header
         currentRow += 2;
-        worksheet.Cell(currentRow, 1).Value = "Delivery Details";
+        worksheet.Cell(currentRow, 1).Value = BuildOptionText(effReportMode, effMonthDate, effBetweenFrom, effBetweenTo);
+        worksheet.Range(currentRow, 1, currentRow, 10).Merge();
+        worksheet.Cell(currentRow, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+        worksheet.Cell(currentRow, 1).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
         worksheet.Cell(currentRow, 1).Style.Font.FontSize = 12;
         worksheet.Cell(currentRow, 1).Style.Font.Bold = true;
-        worksheet.Cell(currentRow, 1).Style.Font.FontColor = XLColor.Blue;
-        worksheet.Range(currentRow, 1, currentRow, 7).Merge();
+        worksheet.Cell(currentRow, 1).Style.Font.FontColor = XLColor.Red;
 
         if (effReportMode == "TotalInMonth")
         {
-            // Aggregated delivery columns
             currentRow++;
-            worksheet.Cell(currentRow, 1).Value = "Apartment";
-            worksheet.Cell(currentRow, 2).Value = "Total Items";
-
-            for (int i = 1; i <= 2; i++)
-            {
-                worksheet.Cell(currentRow, i).Style.Font.FontSize = 10;
-                worksheet.Cell(currentRow, i).Style.Font.Bold = true;
-                worksheet.Cell(currentRow, i).Style.Font.FontColor = XLColor.Blue;
-                worksheet.Cell(currentRow, i).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-                worksheet.Cell(currentRow, i).Style.Fill.BackgroundColor = XLColor.LightGray;
-            }
-
+            WriteHeaderRow(worksheet, currentRow, new[] { "Location", "Total item(s)" });
             currentRow++;
-            int dataStartRow = currentRow;
+
             foreach (var agg in deliveryAggRows)
             {
                 worksheet.Cell(currentRow, 1).Value = agg.ApartmentNo;
@@ -331,39 +288,18 @@ public class IndexModel : BasePageModel
 
                 currentRow++;
             }
-
-            // Total row
-            if (deliveryAggRows.Count > 0)
-            {
-                worksheet.Cell(currentRow, 1).Value = "Total";
-                worksheet.Cell(currentRow, 1).Style.Font.Bold = true;
-                worksheet.Cell(currentRow, 2).Value = deliveryAggRows.Sum(a => a.TotalQuantity);
-                worksheet.Cell(currentRow, 2).Style.NumberFormat.Format = "#,##0";
-                worksheet.Cell(currentRow, 2).Style.Font.Bold = true;
-            }
         }
         else
         {
-            // Individual delivery columns
             currentRow++;
             string[] deliveryHeaders = {
-                "Delivery ID", "Apartment", "Linen Code", "Quantity",
-                "Price", "Amount", "Delivery Date"
+                "DeliveryID", "Location", "LinnenCode", "Quantity",
+                "Price", "Amount", "DeliveryDate"
             };
 
-            for (int i = 0; i < deliveryHeaders.Length; i++)
-            {
-                var cell = worksheet.Cell(currentRow, i + 1);
-                cell.Value = deliveryHeaders[i];
-                cell.Style.Font.FontSize = 10;
-                cell.Style.Font.Bold = true;
-                cell.Style.Font.FontColor = XLColor.Blue;
-                cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-                cell.Style.Fill.BackgroundColor = XLColor.LightGray;
-            }
-
+            WriteHeaderRow(worksheet, currentRow, deliveryHeaders);
             currentRow++;
-            int dataStartRow = currentRow;
+
             foreach (var delivery in deliveryRows)
             {
                 worksheet.Cell(currentRow, 1).Value = delivery.DeliveryId;
@@ -387,11 +323,8 @@ public class IndexModel : BasePageModel
                 currentRow++;
             }
 
-            // Total row
             if (deliveryRows.Count > 0)
             {
-                worksheet.Cell(currentRow, 1).Value = "Total";
-                worksheet.Cell(currentRow, 1).Style.Font.Bold = true;
                 worksheet.Cell(currentRow, 4).Value = deliveryRows.Sum(d => d.Quantity);
                 worksheet.Cell(currentRow, 4).Style.NumberFormat.Format = "#,##0";
                 worksheet.Cell(currentRow, 4).Style.Font.Bold = true;
@@ -404,10 +337,9 @@ public class IndexModel : BasePageModel
             }
         }
 
-        // Auto-fit columns
         worksheet.Columns().AdjustToContents();
+        worksheet.Row(2).Height = 22;
 
-        // Return as Excel file
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
         stream.Position = 0;
@@ -416,6 +348,59 @@ public class IndexModel : BasePageModel
         return File(stream.ToArray(),
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             fileName);
+    }
+
+    private void ApplyDefaultValues()
+    {
+        FromDate ??= DefaultFromDate;
+        ToDate ??= DateTime.Today;
+        MonthDate ??= new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        BetweenFrom ??= MonthDate;
+        BetweenTo ??= DateTime.Today;
+        ReportMode ??= "TotalInMonth";
+        SortBy ??= "Apartment";
+    }
+
+    private static List<string> ParseSelectedApartments(string? selectedApartments)
+    {
+        if (string.IsNullOrWhiteSpace(selectedApartments))
+        {
+            return new List<string>();
+        }
+
+        return selectedApartments.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => !string.IsNullOrEmpty(s))
+            .ToList();
+    }
+
+    private static string BuildOptionText(string reportMode, DateTime monthDate, DateTime betweenFrom, DateTime betweenTo)
+    {
+        if (reportMode == "Total")
+        {
+            return $"Special Laundry option: Total from 04/01/2019 to {DateTime.Now:dd/MM/yyyy}";
+        }
+
+        if (reportMode == "TotalInMonth")
+        {
+            return $"Special Laundry option: Total in {monthDate.Month}/{monthDate.Year}";
+        }
+
+        return $"Special Laundry option: Between date from {betweenFrom:dd/MM/yyyy} to {betweenTo:dd/MM/yyyy}";
+    }
+
+    private static void WriteHeaderRow(IXLWorksheet worksheet, int row, IReadOnlyList<string> headers)
+    {
+        for (int i = 0; i < headers.Count; i++)
+        {
+            var cell = worksheet.Cell(row, i + 1);
+            cell.Value = headers[i];
+            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+            cell.Style.Font.FontSize = 12;
+            cell.Style.Font.Bold = true;
+            cell.Style.Font.FontColor = XLColor.Blue;
+        }
     }
 
     private void LoadApartments(SqlConnection conn, DateTime fromDate, DateTime toDate)
