@@ -1,56 +1,40 @@
-.linnen-note-search-panel .card-body {
+.linen-list-search-panel .card-body {
     padding: 10px;
 }
 
-.linnen-note-search-panel .form-group {
+.linen-list-search-panel .form-group {
     margin-bottom: 0.75rem;
 }
 
-.linnen-note-search-panel .form-group > label {
+.linen-list-search-panel .form-group > label {
     margin-bottom: 0.25rem;
     font-weight: 600;
 }
 
-.linnen-note-date-range-control {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-}
-
-.linnen-note-date-range-control > .form-control {
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
-.linnen-note-date-range-control .date-clear-btn {
-    flex: 0 0 auto;
-    margin-left: 0;
-}
-
-.linnen-note-result-column {
+.linen-list-result-column {
     min-width: 0;
 }
 
 @media (min-width: 768px) {
-    .linnen-note-layout-row {
+    .linen-list-layout-row {
         flex-wrap: nowrap;
     }
 
-    .linnen-note-layout-row > .linnen-note-search-column {
+    .linen-list-layout-row > .linen-list-search-column {
         flex: 0 0 clamp(190px, 18vw, 239px);
         width: clamp(190px, 18vw, 320px);
         max-width: clamp(190px, 18vw, 320px);
         min-width: 190px;
     }
 
-    .linnen-note-layout-row > .linnen-note-result-column {
+    .linen-list-layout-row > .linen-list-result-column {
         flex: 1 1 0;
         max-width: none;
         min-width: 0;
     }
 }
 
-#linnenNoteResultPanelContainer {
+#linenListResultPanelContainer {
     display: flex;
     flex-direction: column;
     height: calc(100vh - 100px);
@@ -58,31 +42,31 @@
     overflow: visible;
 }
 
-#linnenNoteResultPanelContainer > .card.card-primary:not(.linnen-note-action-panel) {
+#linenListResultPanelContainer > .card.card-primary:not(.linen-list-action-panel) {
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     min-height: 0;
 }
 
-#linnenNoteResultPanelContainer > .linnen-note-action-panel {
+#linenListResultPanelContainer > .linen-list-action-panel {
     flex: 0 0 auto;
 }
 
-#linnenNoteResultPanelContainer > .card.card-primary:not(.linnen-note-action-panel) > .card-body {
+#linenListResultPanelContainer > .card.card-primary:not(.linen-list-action-panel) > .card-body {
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     min-height: 0;
 }
 
-#linnenNoteResultPanelContainer > .card.card-primary:not(.linnen-note-action-panel) > .card-body > .table-responsive {
+#linenListResultPanelContainer > .card.card-primary:not(.linen-list-action-panel) > .card-body > .table-responsive {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
 }
 
-.linnen-note-table-header {
+.linen-list-table-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -90,13 +74,13 @@
     flex-wrap: wrap;
 }
 
-.linnen-note-table-header-left {
+.linen-list-table-header-left {
     display: flex;
     align-items: center;
     min-width: 0;
 }
 
-.linnen-note-table-header-right {
+.linen-list-table-header-right {
     margin-left: auto;
     display: flex;
     align-items: center;
@@ -105,7 +89,7 @@
     justify-content: flex-end;
 }
 
-.linnen-note-table-paging-info {
+.linen-list-table-paging-info {
     display: inline-flex;
     align-items: center;
     padding: 0.25rem 0.55rem;
@@ -116,12 +100,12 @@
     font-weight: 600;
 }
 
-#linnenNoteTable {
+#linenListTable {
     table-layout: fixed;
     width: 100%;
 }
 
-#linnenNoteTable thead th {
+#linenListTable thead th {
     position: sticky;
     top: 0;
     z-index: 3;
@@ -131,15 +115,15 @@
     padding-bottom: 0.65rem;
 }
 
-#linnenNoteTable tbody td {
+#linenListTable tbody td {
     vertical-align: middle;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-#linnenNoteTable > thead > tr > th:first-child,
-#linnenNoteTable > tbody > tr > td:first-child {
+#linenListTable > thead > tr > th:first-child,
+#linenListTable > tbody > tr > td:first-child {
     width: 32px;
     min-width: 32px;
     max-width: 32px;

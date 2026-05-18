@@ -2,31 +2,22 @@
 @model SmartSam.Pages.Inventory.LinenList.IndexModel
 @{
     ViewData["Title"] = "Linen List - Price";
-}
-@section Styles {
-    <style>
-        .linen-row {
-            user-select: none;
-        }
 
-        .linen-list-table th,
-        .linen-list-table td {
-            vertical-align: middle;
-        }
-
-        .linen-check-cell {
-            text-align: center;
-            width: 90px;
-        }
-    </style>
+    string FormatNumberText(string value)
+    {
+        var raw = (value ?? string.Empty).Trim().Replace(",", string.Empty);
+        return decimal.TryParse(raw, out var number)
+            ? number.ToString("#,##0")
+            : value ?? string.Empty;
+    }
 }
 <section class="content">
     <div class="container-fluid">
-        <div class="row">
+        <div class="row linen-list-layout-row">
 
             <!-- SEARCH PANEL (LEFT) -->
-            <div class="col-md-2">
-                <div class="card card-info">
+            <div class="col-md-2 linen-list-search-column">
+                <div class="card card-info linen-list-search-panel">
                     <div class="card-header">
                         <h3 class="card-title">
                             <i class="fas fa-search"></i> Search
@@ -37,7 +28,7 @@
                         <form method="get" id="linenListSearchForm">
                             <div class="form-group">
                                 <label for="Filter_LinenCode">Linen Code</label>
-                                <input type="text" class="form-control" id="Filter_LinenCode" asp-for="Filter.LinenCode" />
+                                <input type="text" class="form-control form-control-sm" id="Filter_LinenCode" asp-for="Filter.LinenCode" />
                             </div>
 
                             <div class="form-group">
@@ -68,7 +59,7 @@
                                 </div>
                             </div>
 
-                            <button class="btn btn-primary btn-block">
+                            <button class="btn btn-primary btn-block btn-sm">
                                 <i class="fas fa-search"></i> Search
                             </button>
                         </form>
@@ -77,15 +68,17 @@
             </div>
 
             <!-- RESULT + ACTION (RIGHT) -->
-            <div class="col-md-10">
+            <div class="col-md-10 linen-list-result-column" id="linenListResultPanelContainer">
                 <!-- RESULT GRID -->
                 <div class="card card-primary">
-                    <div class="card-header">
-                        <h3 class="card-title">Linen list</h3>
-                        <span class="badge badge-light ml-2" id="total-records-badge">0 records</span>
-                        <div class="card-tools float-right app-paging-white">
+                    <div class="card-header linen-list-table-header">
+                        <div class="linen-list-table-header-left">
+                            <h3 class="card-title">Linen list</h3>
+                            <span class="badge badge-light ml-2" id="total-records-badge">0 records</span>
+                        </div>
+                        <div class="linen-list-table-header-right app-paging-white">
                             <nav aria-label="Page navigation">
-                                <div id="pagination-info" class="d-inline-block mr-2" style="padding-top: 0.3rem;">
+                                <div id="pagination-info" class="d-inline-block mr-2 linen-list-table-paging-info">
                                     <small>No records</small>
                                 </div>
                                 <ul class="pagination pagination-sm mb-0 d-inline-flex" id="pagination">
@@ -96,23 +89,32 @@
 
                     <div class="card-body p-0">
                         <div class="table-responsive">
-                            <table class="table table-hover table-bordered linen-list-table">
+                            <table class="table table-hover table-bordered mb-0 text-nowrap" id="linenListTable">
+                                <colgroup>
+                                    <col style="width: 32px;" />
+                                    <col style="width: 220px;" />
+                                    <col style="width: 90px;" />
+                                    <col style="width: 90px;" />
+                                    <col style="width: 180px;" />
+                                    <col style="width: 90px;" />
+                                    <col style="width: 90px;" />
+                                </colgroup>
                                 <thead class="thead-light">
                                     <tr>
                                         <th style="width: 32px;"></th>
-                                        <th>LinnenCode</th>
-                                        <th class="linen-check-cell">IsLinen</th>
-                                        <th class="linen-check-cell">IsUniform</th>
+                                        <th style="width: 220px;">LinnenCode</th>
+                                        <th style="width: 90px;" class="text-center">IsLinen</th>
+                                        <th style="width: 90px;" class="text-center">IsUniform</th>
                                         <th style="width: 180px;">Price (EcoWash HCMC)</th>
-                                        <th class="linen-check-cell">Regular</th>
-                                        <th class="linen-check-cell">IsOrder</th>
+                                        <th style="width: 90px;" class="text-center">Regular</th>
+                                        <th style="width: 90px;" class="text-center">IsOrder</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach (var row in Model.Rows)
                                     {
                                         <tr data-id="@row.ID">
-                                            <td>
+                                            <td style="width:32px;">
                                                 <input type="radio" name="selectedLinen">
                                             </td>
                                             <td style="white-space: nowrap;">
@@ -120,17 +122,17 @@
                                                     @row.LinnenCode
                                                 </a>
                                             </td>
-                                            <td class="linen-check-cell">
+                                            <td class="text-center">
                                                 <input type="checkbox" disabled checked="@row.IsLinen" />
                                             </td>
-                                            <td class="linen-check-cell">
+                                            <td class="text-center">
                                                 <input type="checkbox" disabled checked="@row.IsUniform" />
                                             </td>
-                                            <td>@row.EcoWashHcmc</td>
-                                            <td class="linen-check-cell">
+                                            <td>@FormatNumberText(row.EcoWashHcmc)</td>
+                                            <td class="text-center">
                                                 <input type="checkbox" disabled checked="@row.Regular" />
                                             </td>
-                                            <td class="linen-check-cell">
+                                            <td class="text-center">
                                                 <input type="checkbox" disabled checked="@row.IsOrder" />
                                             </td>
                                         </tr>
@@ -141,7 +143,7 @@
                     </div>
                 </div>
                 <!-- ACTION PANEL -->
-                <div class="card card-outline card-primary">
+                <div class="card card-outline card-primary linen-list-action-panel">
                     <div class="card-footer p-2 text-center">
                         @if (Model.PagePerm.HasPermission(2))
                         {
@@ -168,6 +170,10 @@
         </div>
     </div>
 </section>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Inventory/LinenList/index.css" asp-append-version="true" />
+}
 
 @section Scripts {
     @Html.AntiForgeryToken()

@@ -4,7 +4,7 @@
     const CONFIG = {
         pageSize: typeof defaultPageSize !== 'undefined' ? defaultPageSize : 13,
         selectors: {
-            tbody: 'table tbody',
+            tbody: '#linenListTable tbody',
             pagination: '#pagination',
             actionBtns: '#btnEdit'
         }
@@ -67,17 +67,17 @@
             const row = item.data;
             return `
             <tr data-index="${index}" class="linen-row">
-                <td><input type="radio" name="selectedLinen" value="${index}"></td>
+                <td style="width:32px;"><input type="radio" name="selectedLinen" value="${index}"></td>
                 <td style="white-space:nowrap">
                     <a href="javascript:void(0)" class="linen-link text-primary font-weight-bold" style="text-decoration:underline">
                         ${escapeHtml(row.linnenCode)}
                     </a>
                 </td>
-                <td class="linen-check-cell"><input type="checkbox" disabled ${row.isLinen ? 'checked' : ''}></td>
-                <td class="linen-check-cell"><input type="checkbox" disabled ${row.isUniform ? 'checked' : ''}></td>
-                <td>${escapeHtml(row.ecoWashHcmc || '')}</td>
-                <td class="linen-check-cell"><input type="checkbox" disabled ${row.regular ? 'checked' : ''}></td>
-                <td class="linen-check-cell"><input type="checkbox" disabled ${row.isOrder ? 'checked' : ''}></td>
+                <td class="text-center"><input type="checkbox" disabled ${row.isLinen ? 'checked' : ''}></td>
+                <td class="text-center"><input type="checkbox" disabled ${row.isUniform ? 'checked' : ''}></td>
+                <td>${escapeHtml(formatNumberText(row.ecoWashHcmc || ''))}</td>
+                <td class="text-center"><input type="checkbox" disabled ${row.regular ? 'checked' : ''}></td>
+                <td class="text-center"><input type="checkbox" disabled ${row.isOrder ? 'checked' : ''}></td>
             </tr>`;
         });
         $tbody.html(rows.join(''));
@@ -235,6 +235,15 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    function formatNumberText(value) {
+        const rawValue = String(value ?? '').replace(/,/g, '').trim();
+        if (!rawValue || !/^\d+$/.test(rawValue)) {
+            return value || '';
+        }
+
+        return Number(rawValue).toLocaleString('en-US');
     }
 
     $(document).ready(initializePage);
