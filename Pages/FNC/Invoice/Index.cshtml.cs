@@ -122,8 +122,35 @@ namespace SmartSam.Pages.FNC.Invoice
                         // Nối các dòng lại bằng dấu #
                         chiTiet = string.Join("#", lines);
                     }
+                    /*
+                    string user,
+                    string pwd,
+                    string key,
+                    System.DateTime ngay_ct,
+                    string ky_hieu_mau,
+                    string so_seri,
+                    string so_hd,
+                    string mst,
+                    string ten_cty,
+                    string dia_chi,
+                    string email,
+                    string tel,
+                    string so_tk,
+                    string nguoi_mua_hang,
+                    string hinh_thuc_thanh_toan,
+
+                    string ma_khach_hang,
+                    string so_chung_tu,
+                    double tratruoc,
+                    double conlai,
+                    string chitiethoadon0)
+                        */
                     // ĐẶT BREAKPOINT TẠI ĐÂY: Để xem giá trị biến 'chiTiet' và 'row.A_so_serial' trước khi gửi
-                    string result = await service.importHoadonAsync(
+                    //importHoadon_sky
+                    //importHoadon_skyAsync
+                    //string result = await service.importHoadon_sky(
+
+                   string result = await service.importHoadon_skyAsync(
                         "0300713227_import",
                         "Import@435466",
                         "",
@@ -139,8 +166,14 @@ namespace SmartSam.Pages.FNC.Invoice
                         "0",
                         nguoiMua,
                         "TM/CK",
+                        "",
+                        "0",
+                        0,
+                        0,
                         chiTiet
                     );
+
+
 
                     if (result.Contains("thành công") || result.ToLower() == "ok")
                     {
