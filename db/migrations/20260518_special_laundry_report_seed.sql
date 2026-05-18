@@ -2,7 +2,7 @@ SET NOCOUNT ON;
 
 DECLARE @FunctionID int = 161;
 DECLARE @ModuleID int = 6;
-DECLARE @FunctionName varchar(50) = 'SpecialLaundryReport';
+DECLARE @FunctionName varchar(50) = 'Special Laundry Report';
 DECLARE @FormName varchar(50) = 'frmSpecialLaundryReport';
 DECLARE @IndexUrl varchar(100) = '/Inventory/SpecialLaundryReport/Index';
 
@@ -51,6 +51,10 @@ END;
     WHERE FunctionID IN (116, 118)
       AND ISNULL(IsActive, 1) = 1
       AND (',' + ISNULL(Permission, '') + ',') LIKE '%,1,%'
+    UNION
+    SELECT RoleID
+    FROM dbo.SYS_Role
+    WHERE IsAdminRole = 1
 )
 INSERT INTO dbo.SYS_RolePermission (RoleID, FunctionID, Permission, IsActive)
 SELECT RoleID, @FunctionID, '1', 1
