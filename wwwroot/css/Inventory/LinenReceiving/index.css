@@ -50,7 +50,7 @@
     }
 }
 
-#LinenReceivingResultPanelContainer {
+#linenReceivingResultPanelContainer {
     display: flex;
     flex-direction: column;
     height: calc(100vh - 100px);
@@ -58,25 +58,25 @@
     overflow: visible;
 }
 
-#LinenReceivingResultPanelContainer > .card.card-primary:not(.linen-receiving-action-panel) {
+#linenReceivingResultPanelContainer > .card.card-primary:not(.linen-receiving-action-panel) {
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     min-height: 0;
 }
 
-#LinenReceivingResultPanelContainer > .linen-receiving-action-panel {
+#linenReceivingResultPanelContainer > .linen-receiving-action-panel {
     flex: 0 0 auto;
 }
 
-#LinenReceivingResultPanelContainer > .card.card-primary:not(.linen-receiving-action-panel) > .card-body {
+#linenReceivingResultPanelContainer > .card.card-primary:not(.linen-receiving-action-panel) > .card-body {
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     min-height: 0;
 }
 
-#LinenReceivingResultPanelContainer > .card.card-primary:not(.linen-receiving-action-panel) > .card-body > .table-responsive {
+#linenReceivingResultPanelContainer > .card.card-primary:not(.linen-receiving-action-panel) > .card-body > .table-responsive {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
@@ -116,12 +116,12 @@
     font-weight: 600;
 }
 
-#LinenReceivingTable {
+#linenReceivingTable {
     table-layout: fixed;
     width: 100%;
 }
 
-#LinenReceivingTable thead th {
+#linenReceivingTable thead th {
     position: sticky;
     top: 0;
     z-index: 3;
@@ -131,15 +131,15 @@
     padding-bottom: 0.65rem;
 }
 
-#LinenReceivingTable tbody td {
+#linenReceivingTable tbody td {
     vertical-align: middle;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-#LinenReceivingTable > thead > tr > th:first-child,
-#LinenReceivingTable > tbody > tr > td:first-child {
+#linenReceivingTable > thead > tr > th:first-child,
+#linenReceivingTable > tbody > tr > td:first-child {
     width: 32px;
     min-width: 32px;
     max-width: 32px;
