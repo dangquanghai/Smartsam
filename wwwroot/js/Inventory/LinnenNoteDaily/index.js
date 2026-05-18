@@ -95,6 +95,7 @@
                 if (response.success) {
                     state.currentDataRows = response.data || [];
                     renderLinnenNotes(state.currentDataRows);
+                    initializeLegacyTooltips(CONFIG.selectors.tbody);
                     updatePagination(response.total, response.page, response.pageSize, response.totalPages);
                     syncBrowserUrlToSearchState(response.page, filter);
                     resetActions();
@@ -125,7 +126,6 @@
             const actions = item.actions || {};
             const idText = encodeHtml(row.id || '');
             const dateText = encodeHtml(row.dateCreateText || '');
-            const description = encodeHtml(row.description || '');
             const closeChecked = row.isClose ? 'checked' : '';
             const rentChecked = row.isRent ? 'checked' : '';
             const startChecked = row.start ? 'checked' : '';
@@ -139,7 +139,7 @@
                     <a href="javascript:void(0)" class="${linkClass}" style="text-decoration:underline">${idText}</a>
                 </td>
                 <td>${dateText}</td>
-                <td class="vni-font">${description}</td>
+                <td class="vni-font">${buildEllipsisCell(row.description || '', 'vni-font')}</td>
                 <td class="text-center"><input type="checkbox" disabled ${closeChecked}></td>
                 <td class="text-center"><input type="checkbox" disabled ${rentChecked}></td>
                 <td class="text-center"><input type="checkbox" disabled ${startChecked}></td>
@@ -264,6 +264,39 @@
 
     function encodeHtml(value) {
         return $('<div>').text(value).html();
+    }
+
+    function buildEllipsisCell(input, extraClass) {
+        const raw = (input || '').toString();
+        const className = extraClass ? `app-table-ellipsis ${extraClass}` : 'app-table-ellipsis';
+        const tooltipFont = extraClass ? ` data-tooltip-font="${encodeHtml(extraClass)}"` : '';
+        return `<span class="${className}" data-toggle="tooltip"${tooltipFont} title="${encodeHtml(raw)}">${encodeHtml(raw)}</span>`;
+    }
+
+    function initializeLegacyTooltips(container) {
+        const $container = $(container || document);
+        const $tooltips = $container.find('[data-toggle="tooltip"]');
+        if (!$tooltips.length || typeof $tooltips.tooltip !== 'function') {
+            return;
+        }
+
+        $tooltips.tooltip('dispose').tooltip({
+            container: 'body',
+            trigger: 'hover',
+            boundary: 'window'
+        });
+
+        $tooltips.off('inserted.bs.tooltip.linnenNoteFont').on('inserted.bs.tooltip.linnenNoteFont', function () {
+            const fontClass = ($(this).data('tooltip-font') || '').toString().trim();
+            if (!fontClass) {
+                return;
+            }
+
+            const tooltipId = $(this).attr('aria-describedby');
+            if (tooltipId) {
+                $(`#${tooltipId}`).find('.tooltip-inner').addClass(fontClass);
+            }
+        });
     }
 
     $(document).ready(initializePage);
