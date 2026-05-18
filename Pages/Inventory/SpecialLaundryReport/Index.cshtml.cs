@@ -530,7 +530,6 @@ INNER JOIN dbo.LN_DeliveryDT b ON a.DeliveryID = b.DeliveryID
 INNER JOIN dbo.AM_Apmt p ON b.LocationID = p.ApmtID
 INNER JOIN dbo.LN_Linnen l ON b.LinnenID = l.ID
 WHERE a.IsSpecialLaundry = 1
-  AND a.DeliveryType = 3
   {BuildApartmentFilterSql("p.ApartmentNo")}
   {dateFilter}
 ORDER BY {orderBy};";
@@ -581,7 +580,6 @@ FROM dbo.LN_DeliveryMT a
 INNER JOIN dbo.LN_DeliveryDT b ON a.DeliveryID = b.DeliveryID
 INNER JOIN dbo.AM_Apmt p ON b.LocationID = p.ApmtID
 WHERE a.IsSpecialLaundry = 1
-  AND a.DeliveryType = 3
   AND a.DeliveryDate >= @MonthStart
   AND a.DeliveryDate < @MonthEnd
   {BuildApartmentFilterSql("p.ApartmentNo")}
