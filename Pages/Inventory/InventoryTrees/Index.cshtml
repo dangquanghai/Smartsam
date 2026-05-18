@@ -89,7 +89,7 @@
                                     <thead class="thead-light"><tr><th style="width:32px;"></th><th>Item Code</th><th class="iil-col-name">Item Name</th><th style="width:90px;">Unit</th><th style="width:110px;" class="text-right">U.Price</th><th style="width:70px;">Curr</th></tr></thead>
                                     <tbody>
                                     @if(Model.Items.Count==0){<tr><td colspan="6" class="text-center text-muted">No data</td></tr>}
-                                    else{foreach(var item in Model.Items){<tr><td><input type="checkbox" name="selectedItemIds" value="@item.ItemID" /></td><td>@item.ItemCode</td><td class="iil-col-name"><span class="iil-ellipsis vni-font" title="@item.ItemName">@item.ItemName</span></td><td>@item.Unit</td><td class="text-right">@item.UnitPriceText</td><td>@item.CurrencyName</td></tr>}}
+                                    else{foreach(var item in Model.Items){<tr><td><input type="checkbox" name="selectedItemIds" value="@item.ItemID" /></td><td>@item.ItemCode</td><td class="iil-col-name"><span class="iil-ellipsis tcvn3-font" title="@item.ItemName">@item.ItemName</span></td><td>@item.Unit</td><td class="text-right">@item.UnitPriceText</td><td>@item.CurrencyName</td></tr>}}
                                     </tbody>
                                 </table>
                             </div>

@@ -319,3 +319,16 @@ body.modal-open #inventoryItemListSearchForm .select2-container {
 .modal.vni-font .select2-container .select2-selection__rendered {
     font-family: "VNI-Times", "VNI-Helve", sans-serif !important;
 }
+
+.content.vni-font .tcvn3-font,
+.modal.vni-font .tcvn3-font,
+.content.vni-font input.tcvn3-font,
+.modal.vni-font input.tcvn3-font,
+.content.vni-font .form-control.tcvn3-font,
+.modal.vni-font .form-control.tcvn3-font,
+.content.vni-font .select2-container.tcvn3-font .select2-selection,
+.modal.vni-font .select2-container.tcvn3-font .select2-selection,
+.content.vni-font .select2-container.tcvn3-font .select2-selection__rendered,
+.modal.vni-font .select2-container.tcvn3-font .select2-selection__rendered {
+    font-family: "TCVN3", ".VnTime", ".VnArial", ".VnHelvetica", sans-serif !important;
+}

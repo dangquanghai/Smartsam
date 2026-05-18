@@ -1,0 +1,147 @@
+@page
+@model SmartSam.Pages.Inventory.LinenDelivery.IndexModel
+@{
+    ViewData["Title"] = "Linen Delivery";
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row linen-delivery-layout-row">
+            <div class="col-md-2 linen-delivery-search-column">
+                <div class="card card-info linen-delivery-search-panel">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-search"></i> Search</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" id="linenDeliverySearchForm">
+                            @Html.AntiForgeryToken()
+
+                            <div class="form-group">
+                                <label>From Date - To Date</label>
+                                <div class="linen-delivery-date-range-control">
+                                    <input type="text"
+                                           id="LinenDeliveryDateRange"
+                                           class="form-control form-control-sm"
+                                           readonly />
+                                </div>
+                                <input asp-for="Filter.FromDate" type="hidden" />
+                                <input asp-for="Filter.ToDate" type="hidden" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Delivery ID</label>
+                                <input asp-for="Filter.DeliveryId" class="form-control form-control-sm" inputmode="numeric" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Type</label>
+                                <select asp-for="Filter.DeliveryTypeId" asp-items="Model.DeliveryTypeOptions" class="form-control form-control-sm vni-font">
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Supplier</label>
+                                <select asp-for="Filter.SupplierId" asp-items="Model.SupplierOptions" class="form-control form-control-sm vni-font">
+                                </select>
+                            </div>
+
+                            <div class="form-group mb-1">
+                                <div class="custom-control custom-checkbox">
+                                    <input asp-for="Filter.Closed" class="custom-control-input" />
+                                    <label asp-for="Filter.Closed" class="custom-control-label">Closed</label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input asp-for="Filter.IsRent" class="custom-control-input" />
+                                    <label asp-for="Filter.IsRent" class="custom-control-label">Is Rent</label>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-block btn-sm">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-10 linen-delivery-result-column" id="linenDeliveryResultPanelContainer">
+                <div class="card card-primary">
+                    <div class="card-header linen-delivery-table-header">
+                        <div class="linen-delivery-table-header-left">
+                            <h3 class="card-title">Linen Delivery</h3>
+                            <span class="badge badge-light ml-2" id="total-records-badge">0 records</span>
+                        </div>
+                        <div class="linen-delivery-table-header-right app-paging-white">
+                            <nav aria-label="Page navigation">
+                                <div id="pagination-info" class="d-inline-block mr-2 linen-delivery-table-paging-info">
+                                    <small>No records</small>
+                                </div>
+                                <ul class="pagination pagination-sm mb-0 d-inline-flex" id="pagination">
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-bordered mb-0 text-nowrap" id="linenDeliveryTable">
+                                <colgroup>
+                                    <col style="width: 32px;" />
+                                    <col style="width: 110px;" />
+                                    <col style="width: 120px;" />
+                                    <col style="width: 420px;" />
+                                    <col style="width: 80px;" />
+                                    <col style="width: 180px;" />
+                                    <col style="width: 260px;" />
+                                </colgroup>
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width: 32px;"></th>
+                                        <th style="width: 110px;">ID</th>
+                                        <th style="width: 120px;">Date</th>
+                                        <th>Description</th>
+                                        <th style="width: 80px;" class="text-center">Close</th>
+                                        <th style="width: 180px;">Type</th>
+                                        <th style="width: 260px;">Supplier</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted py-3">No data</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-outline card-primary linen-delivery-action-panel">
+                    <div class="card-footer p-2 text-center">
+                        @if (Model.CanAdd)
+                        {
+                            <button class="btn btn-success btn-sm" id="btnAdd" type="button">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        }
+                        <a class="btn btn-secondary btn-sm" href="/">
+                            <i class="fas fa-times"></i> Close
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Inventory/LinenDelivery/index.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script>
+        var defaultPageSize = @Model.DefaultPageSize;
+    </script>
+    <script src="~/js/Inventory/LinenDelivery/index.js" asp-append-version="true"></script>
+}

@@ -133,7 +133,6 @@ public class IndexModel : BasePageModel
                 stockInfo.MainInventory,
                 StoreBalances = stockInfo.StoreBalances.Select(balance => new
                 {
-                    balance.Year,
                     balance.StoreID,
                     balance.StoreName,
                     balance.BGQuantity,
@@ -829,17 +828,17 @@ WHERE ItemID = @ItemID;", conn);
 
         using var storeCmd = new SqlCommand(@"
 SELECT TOP (200)
-    bg.Year,
     bg.StoreID,
     ISNULL(store.StoreName, CONCAT('Store #', bg.StoreID)) AS StoreName,
-    CAST(ISNULL(bg.BGQuantity, 0) AS decimal(18,2)) AS BGQuantity,
-    CAST(ISNULL(bg.BGAmount, 0) AS decimal(18,2)) AS BGAmount,
+    CAST(SUM(ISNULL(bg.BGQuantity, 0)) AS decimal(18,2)) AS BGQuantity,
+    CAST(SUM(ISNULL(bg.BGAmount, 0)) AS decimal(18,2)) AS BGAmount,
     ISNULL(curr.CurrencyName, '') AS CurrencyName
 FROM dbo.INV_ItemStoreBG bg
 LEFT JOIN dbo.INV_StoreList store ON store.StoreID = bg.StoreID
 LEFT JOIN dbo.MS_CurrencyFL curr ON curr.CurrencyID = bg.Currency
 WHERE bg.ItemID = @ItemID
-ORDER BY bg.Year DESC, store.StoreName;", conn);
+GROUP BY bg.StoreID, store.StoreName, curr.CurrencyName
+ORDER BY store.StoreName;", conn);
         storeCmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = itemId;
 
         using var storeReader = storeCmd.ExecuteReader();
@@ -847,7 +846,6 @@ ORDER BY bg.Year DESC, store.StoreName;", conn);
         {
             stockInfo.StoreBalances.Add(new InventoryItemStoreBalance
             {
-                Year = Convert.ToInt32(storeReader["Year"]),
                 StoreID = Convert.ToInt32(storeReader["StoreID"]),
                 StoreName = Convert.ToString(storeReader["StoreName"]) ?? string.Empty,
                 BGQuantity = ReadNullableDecimal(storeReader["BGQuantity"]) ?? 0m,
@@ -1549,7 +1547,6 @@ public class InventoryItemStockInfo
 
 public class InventoryItemStoreBalance
 {
-    public int Year { get; set; }
     public int StoreID { get; set; }
     public string StoreName { get; set; } = string.Empty;
     public decimal BGQuantity { get; set; }

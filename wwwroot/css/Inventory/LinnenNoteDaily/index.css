@@ -1,0 +1,144 @@
+.linnen-note-search-panel .card-body {
+    padding: 10px;
+}
+
+.linnen-note-search-panel .form-group {
+    margin-bottom: 0.75rem;
+}
+
+.linnen-note-search-panel .form-group > label {
+    margin-bottom: 0.25rem;
+    font-weight: 600;
+}
+
+.linnen-note-date-range-control {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.linnen-note-date-range-control > .form-control {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.linnen-note-result-column {
+    min-width: 0;
+}
+
+@media (min-width: 768px) {
+    .linnen-note-layout-row {
+        flex-wrap: nowrap;
+    }
+
+    .linnen-note-layout-row > .linnen-note-search-column {
+        flex: 0 0 clamp(190px, 18vw, 239px);
+        width: clamp(190px, 18vw, 320px);
+        max-width: clamp(190px, 18vw, 320px);
+        min-width: 190px;
+    }
+
+    .linnen-note-layout-row > .linnen-note-result-column {
+        flex: 1 1 0;
+        max-width: none;
+        min-width: 0;
+    }
+}
+
+#linnenNoteResultPanelContainer {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 100px);
+    min-height: 520px;
+    overflow: visible;
+}
+
+#linnenNoteResultPanelContainer > .card.card-primary:not(.linnen-note-action-panel) {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#linnenNoteResultPanelContainer > .linnen-note-action-panel {
+    flex: 0 0 auto;
+}
+
+#linnenNoteResultPanelContainer > .card.card-primary:not(.linnen-note-action-panel) > .card-body {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#linnenNoteResultPanelContainer > .card.card-primary:not(.linnen-note-action-panel) > .card-body > .table-responsive {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+.linnen-note-table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.linnen-note-table-header-left {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.linnen-note-table-header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.linnen-note-table-paging-info {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.55rem;
+    border-radius: 0.25rem;
+    background: transparent;
+    white-space: nowrap;
+    color: inherit;
+    font-weight: 600;
+}
+
+#linnenNoteTable {
+    table-layout: fixed;
+    width: 100%;
+}
+
+#linnenNoteTable thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #f8f9fa;
+    box-shadow: inset 0 -1px 0 #dee2e6;
+    padding-top: 0.65rem;
+    padding-bottom: 0.65rem;
+}
+
+#linnenNoteTable tbody td {
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#linnenNoteTable > thead > tr > th:first-child,
+#linnenNoteTable > tbody > tr > td:first-child {
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    text-align: center;
+}

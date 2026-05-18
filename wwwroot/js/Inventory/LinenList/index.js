@@ -22,6 +22,7 @@
         const token = $('input[name="__RequestVerificationToken"]').val();
 
         const filter = {
+            linenCode: $('#Filter_LinenCode').val(),
             isLinen: $('#Filter_IsLinen').is(':checked'),
             isUniform: $('#Filter_IsUniform').is(':checked'),
             isRegular: $('#Filter_IsRegular').is(':checked'),
@@ -218,6 +219,7 @@
     function buildExportExcelUrl() {
         const base = window.linenListPage?.exportUrlBase || '?handler=ExportExcel';
         const query = new URLSearchParams();
+        query.set('LinenCode', $('#Filter_LinenCode').val() || '');
         query.set('IsLinen', $('#Filter_IsLinen').is(':checked'));
         query.set('IsUniform', $('#Filter_IsUniform').is(':checked'));
         query.set('IsRegular', $('#Filter_IsRegular').is(':checked'));

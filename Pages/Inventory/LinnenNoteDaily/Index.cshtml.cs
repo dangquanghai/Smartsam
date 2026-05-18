@@ -178,11 +178,32 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;", conn))
     private void NormalizeFilter()
     {
         Filter.Description = (Filter.Description ?? string.Empty).Trim();
+
+        if (!Filter.FromDate.HasValue)
+        {
+            Filter.FromDate = DateTime.Today;
+        }
+
+        if (!Filter.ToDate.HasValue)
+        {
+            Filter.ToDate = DateTime.Today;
+        }
     }
 
     private void NormalizeSearchRequest(LinnenNoteDailySearchRequest request)
     {
         request.Description = (request.Description ?? string.Empty).Trim();
+
+        if (!request.FromDate.HasValue)
+        {
+            request.FromDate = DateTime.Today;
+        }
+
+        if (!request.ToDate.HasValue)
+        {
+            request.ToDate = DateTime.Today;
+        }
+
         request.Page = request.Page <= 0 ? 1 : request.Page;
         request.PageSize = NormalizePageSize(request.PageSize);
     }

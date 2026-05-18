@@ -4,27 +4,20 @@
     ViewData["Title"] = "Pantry Linen Detail";
     var isView = Model.IsViewMode;
     var isBeginReadonly = isView || !Model.Header.Start;
-    var linenHeaders = Model.Details
-        .GroupBy(x => x.LinenCode)
-        .Select(x => x.First())
-        .ToList();
-    var pantryGroups = Model.Details
-        .GroupBy(x => new { x.Pentry, x.PentryName })
-        .ToList();
+    var detailLookup = Model.Details
+        .GroupBy(x => $"{x.Pentry}|{x.TimeSection}|{x.LinenCode}", StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
     string FormatQty(int value) => value == 0 ? string.Empty : value.ToString();
-    string LinenTitle(string code)
+
+    SmartSam.Pages.Inventory.LinnenNoteDaily.LinnenNoteDailyDetailRow? FindDetail(int pentryId, int timeSection, string linenCode)
     {
-        return code switch
+        var key = $"{pentryId}|{timeSection}|{linenCode}";
+        if (detailLookup.TryGetValue(key, out var row))
         {
-            "BATH-MAT" => "Bath mat",
-            "PILLOW-CASE" => "Pillow case",
-            "D-COVER-S" => "D Cover S",
-            "SHEET-K" => "Sheet K",
-            "D-COVER-K" => "D Cover K",
-            "K-CLOTH" => "K Cloth",
-            "D-CLOTH" => "D Cloth",
-            _ => code.Replace("-", " ")
-        };
+            return row;
+        }
+
+        return null;
     }
 }
 
@@ -144,88 +137,154 @@
         }
 
         .linnen-report-modal-dialog {
-            max-width: 94%;
+            max-width: 90vw;
+            width: 90vw;
+            margin: 0.5rem auto;
+        }
+
+        .linnen-report-modal-dialog .modal-content {
+            height: 88vh;
+            max-height: 88vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+        }
+
+        .linnen-report-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
         }
 
         .linnen-report-toolbar {
-            border-bottom: 1px solid #d7d7d7;
-            background: #f8f9fa;
+            background: #efefef;
+            border-bottom: 1px solid #b8b8b8;
+            padding: 0.5rem 0.65rem 0.35rem;
+            flex: 0 0 auto;
         }
 
         .linnen-report-toolbar .form-control-sm,
-        .linnen-report-toolbar .custom-select-sm {
-            height: 28px;
-            padding-top: 2px;
-            padding-bottom: 2px;
+        .linnen-report-toolbar .custom-select-sm,
+        .linnen-report-toolbar .input-group-text {
+            height: 26px;
+            padding-top: 1px;
+            padding-bottom: 1px;
+            border-radius: 0;
+            font-size: 12px;
         }
 
         .linnen-report-toolbar label {
-            font-size: 12px;
             margin-bottom: 0;
             white-space: nowrap;
-        }
-
-        .linnen-report-choice {
-            display: inline-flex;
-            align-items: center;
-            margin-right: 10px;
-            margin-bottom: 4px;
+            font-weight: 400;
             font-size: 12px;
         }
 
-        .linnen-report-choice input {
-            margin-right: 4px;
+        .linnen-report-mode-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem 1rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .linnen-report-modes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.2rem 0.9rem;
+        }
+
+        .linnen-report-mode-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2rem;
+            font-size: 12px;
+        }
+
+        .linnen-report-mode-item input {
+            margin: 0;
         }
 
         .linnen-report-chart {
             display: inline-flex;
             align-items: center;
-            margin-bottom: 4px;
-            font-size: 12px;
+            min-height: 26px;
+        }
+
+        .linnen-report-chart .custom-control {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+            padding-left: 1.45rem;
         }
 
         .linnen-report-chart .custom-control-label {
-            padding-top: 1px;
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+            line-height: 26px;
         }
 
-        .linnen-report-preview-wrap {
-            min-height: 420px;
+        .linnen-report-chart .custom-control-label::before,
+        .linnen-report-chart .custom-control-label::after {
+            top: 0.15rem;
+        }
+
+        .linnen-report-inline-field {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            min-height: 26px;
+        }
+
+        .linnen-report-inline-label {
+            margin-bottom: 0;
+            white-space: nowrap;
+            font-weight: 400;
+            line-height: 26px;
+        }
+
+        .linnen-report-inline-field .form-control {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .linnen-report-status {
+            padding: 0.35rem 0.75rem 0;
+            color: #4a5560;
+            min-height: 22px;
+            font-size: 12px;
+            flex: 0 0 auto;
+        }
+
+        .linnen-report-canvas {
+            background: #b8b8b8;
+            padding: 1rem;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
+        }
+
+        .linnen-report-iframe {
+            display: block;
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+            border: 1px solid #8c8c8c;
             background: #fff;
         }
 
-        .linnen-report-preview-table {
-            min-width: 1560px;
-            border-collapse: collapse;
-        }
-
-        .linnen-report-preview-table th,
-        .linnen-report-preview-table td {
-            border: 1px solid #cfcfcf !important;
-            padding: 3px 4px !important;
-            font-size: 12px;
-            vertical-align: middle !important;
-            white-space: nowrap;
-        }
-
-        .linnen-report-preview-table thead th {
-            background: #eef2f7;
+        .linnen-report-loading {
+            display: none;
+            padding: 1rem;
             text-align: center;
-        }
-
-        .linnen-report-preview-table .ln-report-pantry {
-            background: #fff4df;
-            font-weight: 700;
-        }
-
-        .linnen-report-preview-table .ln-report-time {
-            text-align: center;
-            width: 32px;
-            font-weight: 700;
-        }
-
-        .linnen-report-preview-meta {
-            font-size: 12px;
-            color: #495057;
+            color: #6c757d;
+            background: #f8f9fa;
+            margin-bottom: 0.5rem;
+            flex: 0 0 auto;
         }
     </style>
 }
@@ -253,6 +312,7 @@
             <input type="hidden" asp-for="DetailsJson" id="DetailsJson" />
             <input type="hidden" asp-for="ReturnToIndex" id="ReturnToIndex" />
             <input type="hidden" asp-for="RedirectUrl" id="RedirectUrl" />
+            <input type="hidden" asp-for="ReturnUrl" />
 
             <div class="card card-primary card-outline">
                 <div class="card-body p-2 linnen-note-vb-header">
@@ -282,13 +342,13 @@
                             <thead>
                                 <tr>
                                     <th colspan="2" rowspan="2" class="ln-pantry-title">Pantry<br />No</th>
-                                    @foreach (var linen in linenHeaders)
+                                    @foreach (var linen in Model.DetailColumns)
                                     {
-                                        <th colspan="3" class="ln-linen-title">@LinenTitle(linen.LinenCode)</th>
+                                        <th colspan="3" class="ln-linen-title">@linen.Title</th>
                                     }
                                 </tr>
                                 <tr>
-                                    @foreach (var linen in linenHeaders)
+                                    @foreach (var linen in Model.DetailColumns)
                                     {
                                         <th class="ln-sub-title">Be</th>
                                         <th class="ln-sub-title">De</th>
@@ -297,52 +357,43 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @if (Model.Details.Count == 0)
+                                @foreach (var pantry in Model.DetailPantries)
                                 {
-                                    <tr>
-                                        <td colspan="35" class="text-center text-muted py-3">No detail rows</td>
-                                    </tr>
-                                }
-                                else
-                                {
-                                    foreach (var pantry in pantryGroups)
+                                    for (var timeSection = 1; timeSection <= 2; timeSection++)
                                     {
-                                        for (var timeSection = 1; timeSection <= 2; timeSection++)
-                                        {
-                                            <tr>
-                                                @if (timeSection == 1)
+                                        <tr>
+                                            @if (timeSection == 1)
+                                            {
+                                                <td rowspan="2" class="ln-pantry-cell">@pantry.DisplayName</td>
+                                            }
+                                            <td class="ln-time-cell @(timeSection == 1 ? "ln-time-am" : "ln-time-pm")">@(timeSection == 1 ? "A" : "P")</td>
+                                            @foreach (var linen in Model.DetailColumns)
+                                            {
+                                                var row = FindDetail(pantry.PentryId, timeSection, linen.Code);
+                                                if (row == null)
                                                 {
-                                                    <td rowspan="2" class="ln-pantry-cell">@pantry.Key.PentryName</td>
+                                                    <td class="ln-qty-cell-be"></td>
+                                                    <td class="ln-qty-cell-de"></td>
+                                                    <td class="ln-qty-cell-re"></td>
                                                 }
-                                                <td class="ln-time-cell @(timeSection == 1 ? "ln-time-am" : "ln-time-pm")">@(timeSection == 1 ? "A" : "P")</td>
-                                                @foreach (var linen in linenHeaders)
+                                                else
                                                 {
-                                                    var row = pantry.FirstOrDefault(x => x.TimeSection == timeSection && x.LinenCode == linen.LinenCode);
-                                                    if (row == null)
-                                                    {
-                                                        <td class="ln-qty-cell-be"></td>
-                                                        <td class="ln-qty-cell-de"></td>
-                                                        <td class="ln-qty-cell-re"></td>
-                                                    }
-                                                    else
-                                                    {
-                                                        <td class="ln-qty-cell-be">
-                                                            <span class="linnen-note-detail-record d-none"
-                                                                  data-id="@row.Id"
-                                                                  data-header-id="@row.HeaderId"
-                                                                  data-pentry="@row.Pentry"
-                                                                  data-pentry-name="@row.PentryName"
-                                                                  data-time-section="@row.TimeSection"
-                                                                  data-linen-code="@row.LinenCode"
-                                                                  data-linen-name="@row.LinenName"></span>
-                                                            <input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="be" value="@FormatQty(row.Be)" readonly="@isBeginReadonly" />
-                                                        </td>
-                                                        <td class="ln-qty-cell-de"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="de" value="@FormatQty(row.De)" readonly="@isView" /></td>
-                                                        <td class="ln-qty-cell-re"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="re" value="@FormatQty(row.Re)" readonly="@isView" /></td>
-                                                    }
+                                                    <td class="ln-qty-cell-be">
+                                                        <span class="linnen-note-detail-record d-none"
+                                                              data-id="@row.Id"
+                                                              data-header-id="@row.HeaderId"
+                                                              data-pentry="@row.Pentry"
+                                                              data-pentry-name="@row.PentryName"
+                                                              data-time-section="@row.TimeSection"
+                                                              data-linen-code="@row.LinenCode"
+                                                              data-linen-name="@row.LinenName"></span>
+                                                        <input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="be" value="@FormatQty(row.Be)" readonly="@isBeginReadonly" />
+                                                    </td>
+                                                    <td class="ln-qty-cell-de"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="de" value="@FormatQty(row.De)" readonly="@isView" /></td>
+                                                    <td class="ln-qty-cell-re"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="re" value="@FormatQty(row.Re)" readonly="@isView" /></td>
                                                 }
-                                            </tr>
-                                        }
+                                            }
+                                        </tr>
                                     }
                                 }
                             </tbody>
@@ -360,7 +411,7 @@
                     <button type="button" class="btn btn-sm btn-secondary" id="btnPrintLinnenNoteDetail">
                         <i class="fas fa-print"></i> Print
                     </button>
-                    <button type="button" class="btn btn-sm btn-default" id="btnCloseLinnenNoteDetail" data-index-url="@Url.Page("./Index")">
+                    <button type="button" class="btn btn-sm btn-default" id="btnCloseLinnenNoteDetail" data-index-url="@(string.IsNullOrWhiteSpace(Model.ReturnUrl) ? Url.Page("./Index") : Model.ReturnUrl)">
                         <i class="fas fa-arrow-left"></i> Back to list
                     </button>
                 </div>
@@ -370,7 +421,7 @@
 </section>
 
 <div class="modal fade" id="linnenReportModal" tabindex="-1" role="dialog" aria-labelledby="linnenReportModalLabel" aria-hidden="true">
-    <div class="modal-dialog linnen-report-modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-dialog linnen-report-modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header py-2">
                 <h5 class="modal-title" id="linnenReportModalLabel">Linen - Report</h5>
@@ -378,72 +429,101 @@
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="modal-body p-0">
-                <div class="p-2 linnen-report-toolbar">
-                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
-                        <div class="d-flex flex-wrap align-items-center">
-                            <label class="linnen-report-choice"><input type="radio" name="linnenReportType" value="pantry" checked />Pantry-Linen</label>
-                            <label class="linnen-report-choice"><input type="radio" name="linnenReportType" value="delivery" disabled />Delivery</label>
-                            <label class="linnen-report-choice"><input type="radio" name="linnenReportType" value="receive" disabled />Receive</label>
-                            <label class="linnen-report-choice"><input type="radio" name="linnenReportType" value="laundry-record" disabled />Laundry Record</label>
-                            <label class="linnen-report-choice"><input type="radio" name="linnenReportType" value="not-receive" disabled />Not Receive</label>
-                            <label class="linnen-report-choice"><input type="radio" name="linnenReportType" value="laundry-balance" disabled />Laundry.U. Balance</label>
-                            <label class="linnen-report-choice"><input type="radio" name="linnenReportType" value="apmt-balance" disabled />Apmt Balance</label>
+            <div class="modal-body p-0 linnen-report-body">
+                <div class="linnen-report-toolbar">
+                    <div class="linnen-report-mode-row">
+                        <div class="linnen-report-modes">
+                            <label class="linnen-report-mode-item">
+                                <input type="radio" name="linnenNoteReportType" value="pantry" checked disabled />
+                                <span>Pantry-Linen</span>
+                            </label>
+                            <label class="linnen-report-mode-item">
+                                <input type="radio" name="linnenNoteReportType" value="delivery" disabled />
+                                <span>Delivery</span>
+                            </label>
+                            <label class="linnen-report-mode-item">
+                                <input type="radio" name="linnenNoteReportType" value="receive" disabled />
+                                <span>Receive</span>
+                            </label>
+                            <label class="linnen-report-mode-item">
+                                <input type="radio" name="linnenNoteReportType" value="laundry-record" disabled />
+                                <span>Laudry Record</span>
+                            </label>
+                            <label class="linnen-report-mode-item">
+                                <input type="radio" name="linnenNoteReportType" value="not-receive" disabled />
+                                <span>Not Receive</span>
+                            </label>
+                            <label class="linnen-report-mode-item">
+                                <input type="radio" name="linnenNoteReportType" value="laundry-balance" disabled />
+                                <span>Laundry.U. Balance</span>
+                            </label>
+                            <label class="linnen-report-mode-item">
+                                <input type="radio" name="linnenNoteReportType" value="apmt-balance" disabled />
+                                <span>Apmt Balance</span>
+                            </label>
                         </div>
                         <div class="linnen-report-chart">
                             <div class="custom-control custom-checkbox mb-0">
-                                <input type="checkbox" class="custom-control-input" id="linnenReportChart" disabled />
-                                <label class="custom-control-label" for="linnenReportChart">Chart</label>
+                                <input type="checkbox" class="custom-control-input" id="linnenNoteReportChart" disabled />
+                                <label class="custom-control-label" for="linnenNoteReportChart">Chart</label>
                             </div>
                         </div>
                     </div>
 
-                    <div class="form-row align-items-center">
-                        <div class="col-md-4 mb-2">
-                            <div class="d-flex align-items-center">
-                                <label class="mr-2">Des</label>
-                                <select class="form-control form-control-sm" id="linnenReportDescription">
+                    <div class="row linen-report-filter-row">
+                        <div class="col-lg-4 col-md-6">
+                            <div class="linnen-report-inline-field">
+                                <label for="linnenNoteReportDescription" class="linnen-report-inline-label">Des</label>
+                                <select class="form-control form-control-sm vni-font"
+                                        id="linnenNoteReportDescription"
+                                        disabled>
                                     <option value="@Model.Header.Id">@Model.Header.Description</option>
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-3 mb-2">
-                            <div class="d-flex align-items-center">
-                                <label class="mr-2">Linnen</label>
-                                <select class="form-control form-control-sm" id="linnenReportLinenCode">
-                                    <option value="">ALL</option>
-                                    @foreach (var linen in linenHeaders)
+                        <div class="col-lg-3 col-md-6">
+                            <div class="linnen-report-inline-field">
+                                <label for="linnenNoteReportLinenCode" class="linnen-report-inline-label">Linnen</label>
+                                <select class="form-control form-control-sm vni-font"
+                                        id="linnenNoteReportLinenCode">
+                                    <option value="">All</option>
+                                    @foreach (var linen in Model.DetailColumns)
                                     {
-                                        <option value="@linen.LinenCode">@LinenTitle(linen.LinenCode)</option>
+                                        <option value="@linen.Code">@linen.Code</option>
                                     }
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-2 mb-2">
-                            <div class="d-flex align-items-center">
-                                <label class="mr-2">From</label>
-                                <input type="date" class="form-control form-control-sm" id="linnenReportFromDate" value="@Model.Header.DateCreate.ToString("yyyy-MM-dd")" readonly />
+                        <div class="col-lg-2 col-md-4">
+                            <div class="linnen-report-inline-field">
+                                <label class="linnen-report-inline-label">From</label>
+                                <input type="date"
+                                       class="form-control form-control-sm"
+                                       value="@Model.Header.DateCreate.ToString("yyyy-MM-dd")"
+                                       disabled />
                             </div>
                         </div>
-                        <div class="col-md-2 mb-2">
-                            <div class="d-flex align-items-center">
-                                <label class="mr-2">To</label>
-                                <input type="date" class="form-control form-control-sm" id="linnenReportToDate" value="@Model.Header.DateCreate.ToString("yyyy-MM-dd")" readonly />
+                        <div class="col-lg-2 col-md-4">
+                            <div class="linnen-report-inline-field">
+                                <label class="linnen-report-inline-label">To</label>
+                                <input type="date"
+                                       class="form-control form-control-sm"
+                                       value="@Model.Header.DateCreate.ToString("yyyy-MM-dd")"
+                                       disabled />
                             </div>
                         </div>
-                        <div class="col-md-1 mb-2">
-                            <button type="button" class="btn btn-sm btn-primary btn-block" id="btnPreviewLinnenReport">Preview</button>
+                        <div class="col-lg-1 col-md-4">
+                            <button type="button" class="btn btn-sm btn-secondary btn-block" id="btnPreviewLinnenNoteReport">Preview</button>
                         </div>
                     </div>
                 </div>
 
-                <div class="px-2 pt-2 linnen-report-preview-meta" id="linnenReportPreviewMeta">
-                    Note: @Model.Header.Description
-                </div>
-                <div class="p-2 linnen-report-preview-wrap">
-                    <div class="table-responsive" id="linnenReportPreviewContainer">
-                        <div class="text-center text-muted py-5">Click Preview to load report data.</div>
-                    </div>
+                <div class="linnen-report-status" id="linnenReportMeta">Pantry-Linen | @Model.Header.Description</div>
+                <div class="linnen-report-canvas">
+                    <div id="linnenReportLoading" class="linnen-report-loading">Loading PDF preview...</div>
+                    <iframe id="linnenReportFrame"
+                            class="linnen-report-iframe"
+                            title="Linen Report"></iframe>
                 </div>
             </div>
             <div class="modal-footer py-2">
@@ -480,8 +560,9 @@
     <script>
         window.linnenNoteDailyDetail = {
             isView: @(isView ? "true" : "false"),
-            indexUrl: "@Url.Page("./Index")",
-            printPreviewUrl: "@Url.Page("./LinnenNoteDailyDetail", "PrintPreview", new { id = Model.Header.Id })"
+            indexUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(string.IsNullOrWhiteSpace(Model.ReturnUrl) ? Url.Page("./Index") : Model.ReturnUrl)),
+            printPreviewUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("./LinnenNoteDailyDetail", "PrintPreview", new { id = Model.Header.Id }))),
+            reportPdfUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("./LinnenNoteDailyDetail", "ReportPdf", new { id = Model.Header.Id, download = false })))
         };
     </script>
     <script src="~/js/Inventory/LinnenNoteDaily/LinnenNoteDailyDetail.js" asp-append-version="true"></script>

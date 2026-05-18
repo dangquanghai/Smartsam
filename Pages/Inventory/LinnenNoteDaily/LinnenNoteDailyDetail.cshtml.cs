@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Hosting;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -14,11 +15,40 @@ public class LinnenNoteDailyDetailModel : BasePageModel
     private const int FunctionId = 115;
     private const int PermissionView = 1;
     private const int PermissionUpdate = 2;
+    private static readonly IReadOnlyList<LinnenNoteDailyGridColumn> FixedDetailColumns = new List<LinnenNoteDailyGridColumn>
+    {
+        new LinnenNoteDailyGridColumn("BATH", "Bath"),
+        new LinnenNoteDailyGridColumn("HAND", "Hand"),
+        new LinnenNoteDailyGridColumn("FACE", "Face"),
+        new LinnenNoteDailyGridColumn("BATH-MAT", "Bath mat"),
+        new LinnenNoteDailyGridColumn("PILLOW-CASE", "Pillow case"),
+        new LinnenNoteDailyGridColumn("SHEET-S", "Sheet S"),
+        new LinnenNoteDailyGridColumn("D-COVER-S", "D Cover S"),
+        new LinnenNoteDailyGridColumn("SHEET-K", "Sheet K"),
+        new LinnenNoteDailyGridColumn("D-COVER-K", "D Cover K"),
+        new LinnenNoteDailyGridColumn("K-CLOTH", "K Cloth"),
+        new LinnenNoteDailyGridColumn("D-CLOTH", "D Cloth")
+    };
+    private static readonly IReadOnlyList<LinnenNoteDailyPantryDefinition> FixedPantries = new List<LinnenNoteDailyPantryDefinition>
+    {
+        new LinnenNoteDailyPantryDefinition(1, "03"),
+        new LinnenNoteDailyPantryDefinition(2, "05"),
+        new LinnenNoteDailyPantryDefinition(3, "06"),
+        new LinnenNoteDailyPantryDefinition(4, "07"),
+        new LinnenNoteDailyPantryDefinition(5, "08"),
+        new LinnenNoteDailyPantryDefinition(6, "09"),
+        new LinnenNoteDailyPantryDefinition(7, "11"),
+        new LinnenNoteDailyPantryDefinition(8, "12"),
+        new LinnenNoteDailyPantryDefinition(9, "14"),
+        new LinnenNoteDailyPantryDefinition(10, "GOLF")
+    };
     private readonly PermissionService _permissionService;
+    private readonly IWebHostEnvironment _webHostEnvironment;
 
-    public LinnenNoteDailyDetailModel(IConfiguration config, PermissionService permissionService) : base(config)
+    public LinnenNoteDailyDetailModel(IConfiguration config, PermissionService permissionService, IWebHostEnvironment webHostEnvironment) : base(config)
     {
         _permissionService = permissionService;
+        _webHostEnvironment = webHostEnvironment;
     }
 
     [BindProperty(SupportsGet = true)]
@@ -36,15 +66,21 @@ public class LinnenNoteDailyDetailModel : BasePageModel
     [BindProperty]
     public string RedirectUrl { get; set; } = string.Empty;
 
+    [BindProperty(SupportsGet = true)]
+    public string ReturnUrl { get; set; } = string.Empty;
+
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
     public bool CanSave { get; private set; }
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
     public List<LinnenNoteDailyDetailRow> Details { get; set; } = new List<LinnenNoteDailyDetailRow>();
+    public IReadOnlyList<LinnenNoteDailyGridColumn> DetailColumns => FixedDetailColumns;
+    public IReadOnlyList<LinnenNoteDailyPantryDefinition> DetailPantries => FixedPantries;
 
-    public IActionResult OnGet(int? id, string mode = "view")
+    public IActionResult OnGet(int? id, string mode = "view", string? returnUrl = null)
     {
         PagePerm = GetUserPermissions();
         Mode = NormalizeMode(mode);
+        ReturnUrl = !string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl) ? returnUrl : string.Empty;
 
         if (Mode == "add")
         {
@@ -73,7 +109,7 @@ public class LinnenNoteDailyDetailModel : BasePageModel
                 throw;
             }
 
-            return RedirectToPage("./LinnenNoteDailyDetail", new { id = Header.Id, mode = "edit" });
+            return RedirectToPage("./LinnenNoteDailyDetail", new { id = Header.Id, mode = "edit", returnUrl = ReturnUrl });
         }
 
         if (!id.HasValue || id.Value <= 0)
@@ -142,6 +178,37 @@ public class LinnenNoteDailyDetailModel : BasePageModel
         }
     }
 
+    public IActionResult OnGetReportPdf(int id, bool download = false, string? linenCode = null)
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionView) && !PagePerm.HasPermission(PermissionUpdate))
+        {
+            return RedirectToPage("./Index");
+        }
+
+        if (id <= 0 || !LoadHeader(id))
+        {
+            TempData["SuccessMessage"] = "Pantry linen note not found.";
+            return RedirectToPage("./Index");
+        }
+
+        var report = new LinnenNoteDailyPdfReport
+        {
+            NoteId = Header.Id,
+            Description = Header.Description,
+            DateCreate = Header.DateCreate,
+            CompanyLogo = LoadCompanyLogoBytes(),
+            Columns = GetPreviewColumns(linenCode),
+            Rows = LoadPrintPreviewRows(id)
+        };
+
+        var pdf = LinnenNoteDailyQuestPdfReport.BuildPdf(report);
+        var fileName = $"PantryLinen_{Header.Id}.pdf";
+        return download
+            ? File(pdf, "application/pdf", fileName)
+            : File(pdf, "application/pdf");
+    }
+
     public IActionResult OnPost()
     {
         PagePerm = GetUserPermissions();
@@ -207,7 +274,7 @@ public class LinnenNoteDailyDetailModel : BasePageModel
             return RedirectToPage("./Index");
         }
 
-        return RedirectToPage("./LinnenNoteDailyDetail", new { id = Header.Id, mode = "edit" });
+        return RedirectToPage("./LinnenNoteDailyDetail", new { id = Header.Id, mode = "edit", returnUrl = ReturnUrl });
     }
 
     private bool LoadHeader(int id)
@@ -267,7 +334,7 @@ ORDER BY ISNULL(p.IsOrder, dt.Pentry), dt.Pentry, dt.TimeSection, ISNULL(l.IsOrd
                 Id = Convert.ToInt32(rd["ID"]),
                 HeaderId = Convert.ToInt32(rd["IDDeAndRe"]),
                 Pentry = Convert.ToInt32(rd["Pentry"]),
-                PentryName = Convert.ToString(rd["PentryName"]) ?? string.Empty,
+                PentryName = GetPantryDisplayName(Convert.ToInt32(rd["Pentry"]), Convert.ToString(rd["PentryName"])),
                 TimeSection = Convert.ToInt32(rd["TimeSection"]),
                 LinenCode = Convert.ToString(rd["LinenCode"]) ?? string.Empty,
                 LinenName = Convert.ToString(rd["LinenName"]) ?? string.Empty,
@@ -494,7 +561,7 @@ ORDER BY ISNULL(p.IsOrder, t.Pentry), t.Pentry, t.TimeSection;", conn);
             rows.Add(new LinnenReportPreviewRow
             {
                 Pentry = ToInt(rd["Pentry"]),
-                PentryName = Convert.ToString(rd["PentryName"]) ?? string.Empty,
+                PentryName = GetPantryDisplayName(ToInt(rd["Pentry"]), Convert.ToString(rd["PentryName"])),
                 TimeSection = ToInt(rd["TimeSection"]),
                 BathBe = ToInt(rd["BathBe"]),
                 BathDe = ToInt(rd["BathDe"]),
@@ -561,9 +628,89 @@ ORDER BY ISNULL(p.IsOrder, t.Pentry), t.Pentry, t.TimeSection;", conn);
         return columns.Where(x => x.Code == code).ToList();
     }
 
+    private static string GetPantryDisplayName(int pentryId, string? fallbackName)
+    {
+        foreach (var pantry in FixedPantries)
+        {
+            if (pantry.PentryId == pentryId)
+            {
+                return pantry.DisplayName;
+            }
+        }
+
+        return (fallbackName ?? string.Empty).Trim();
+    }
+
     private string GetCurrentUserCode()
     {
         return User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "SYSTEM";
+    }
+
+    private byte[]? LoadCompanyLogoBytes()
+    {
+        using var conn = OpenConnection();
+        using var cmd = new SqlCommand(@"
+SELECT TOP 1 ISNULL(CoLogo, '') AS CoLogo
+FROM dbo.MS_Parameters;", conn);
+        using var reader = cmd.ExecuteReader();
+        if (!reader.Read())
+        {
+            return null;
+        }
+
+        var logoPath = ResolveCompanyLogoPathValue(Convert.ToString(reader["CoLogo"]));
+        if (string.IsNullOrWhiteSpace(logoPath) || !System.IO.File.Exists(logoPath))
+        {
+            return null;
+        }
+
+        return System.IO.File.ReadAllBytes(logoPath);
+    }
+
+    private string ResolveCompanyLogoPathValue(string? logoFileName)
+    {
+        if (string.IsNullOrWhiteSpace(logoFileName))
+        {
+            return string.Empty;
+        }
+
+        var logoReference = logoFileName.Trim();
+        if (System.IO.File.Exists(logoReference))
+        {
+            return logoReference;
+        }
+
+        var logoSegments = logoReference
+            .Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (logoSegments.Length == 0 || logoSegments.Any(x => x == "." || x == ".."))
+        {
+            return string.Empty;
+        }
+
+        var contentRootCandidate = Path.Combine([_webHostEnvironment.ContentRootPath, .. logoSegments]);
+        if (System.IO.File.Exists(contentRootCandidate))
+        {
+            return contentRootCandidate;
+        }
+
+        var basePath = _config.GetValue<string>("FileUploads:BasePath");
+        if (string.IsNullOrWhiteSpace(basePath))
+        {
+            return string.Empty;
+        }
+
+        var rootPath = Path.IsPathRooted(basePath)
+            ? basePath
+            : Path.Combine(_webHostEnvironment.ContentRootPath, basePath);
+
+        var uploadRootCandidate = Path.Combine([rootPath, .. logoSegments]);
+        if (System.IO.File.Exists(uploadRootCandidate))
+        {
+            return uploadRootCandidate;
+        }
+
+        return string.Empty;
     }
 
     private SqlConnection OpenConnection()
@@ -634,6 +781,30 @@ public class LinnenNoteDailyDetailRow
     public int Be { get; set; }
     public int De { get; set; }
     public int Re { get; set; }
+}
+
+public class LinnenNoteDailyGridColumn
+{
+    public LinnenNoteDailyGridColumn(string code, string title)
+    {
+        Code = code;
+        Title = title;
+    }
+
+    public string Code { get; set; }
+    public string Title { get; set; }
+}
+
+public class LinnenNoteDailyPantryDefinition
+{
+    public LinnenNoteDailyPantryDefinition(int pentryId, string displayName)
+    {
+        PentryId = pentryId;
+        DisplayName = displayName;
+    }
+
+    public int PentryId { get; set; }
+    public string DisplayName { get; set; }
 }
 
 public class LinnenReportPreviewRow

@@ -4,6 +4,7 @@
     let initialState = "";
     let allowUnload = false;
     let pendingNavigationUrl = "";
+    let activeLinnenReportPreviewObjectUrl = "";
 
     function readInteger(input) {
         const rawValue = (input?.value || "").trim();
@@ -254,97 +255,118 @@
 
     function initPrintReport() {
         $("#btnPrintLinnenNoteDetail").off("click").on("click", function () {
-            $("#linnenReportModal").modal("show");
-            loadPrintPreview();
+            if (!(window.linnenNoteDailyDetail?.reportPdfUrl || "")) {
+                alert("Report preview is not available.");
+                return;
+            }
+
+            const $modal = $("#linnenReportModal");
+            const frame = document.getElementById("linnenReportFrame");
+            if ($modal.length === 0 || !frame) {
+                alert("Report preview modal is not available.");
+                return;
+            }
+
+            $modal.modal("show");
+            previewLinnenReportPdf();
         });
 
-        $("#btnPreviewLinnenReport").off("click").on("click", function () {
-            loadPrintPreview();
+        $("#btnPreviewLinnenNoteReport").off("click").on("click", function () {
+            previewLinnenReportPdf();
         });
     }
 
-    function loadPrintPreview() {
-        const previewUrl = window.linnenNoteDailyDetail?.printPreviewUrl || "";
-        if (!previewUrl) {
+    function initReportModal() {
+        $("#linnenReportModal").off("hidden.bs.modal").on("hidden.bs.modal", function () {
+            const frame = document.getElementById("linnenReportFrame");
+            clearLinnenReportPreview(frame);
+        });
+    }
+
+    function previewLinnenReportPdf() {
+        const reportPdfUrl = buildLinnenReportPdfUrl();
+        const $loading = $("#linnenReportLoading");
+        const $meta = $("#linnenReportMeta");
+        const frame = document.getElementById("linnenReportFrame");
+        const linenCode = ($("#linnenNoteReportLinenCode").val() || "").toString();
+        const description = ($("#linnenNoteReportDescription option:selected").text() || "").trim();
+        const linenLabel = ($("#linnenNoteReportLinenCode option:selected").text() || "All").trim();
+
+        if (!reportPdfUrl || !frame) {
             alert("Report preview is not available.");
             return;
         }
 
-        const linenCode = ($("#linnenReportLinenCode").val() || "").toString().trim();
-        const requestUrl = new URL(previewUrl, window.location.origin);
-        if (linenCode) {
-            requestUrl.searchParams.set("linenCode", linenCode);
-        }
+        $meta.text(`Pantry-Linen | ${description}${linenCode ? ` | ${linenLabel}` : ""}`);
+        $loading.show();
+        clearLinnenReportPreview(frame);
 
-        $("#linnenReportPreviewContainer").html('<div class="text-center text-muted py-5">Loading report data...</div>');
-
-        $.ajax({
-            url: requestUrl.toString(),
-            type: "GET",
-            success: function (response) {
-                if (!response || response.success !== true) {
-                    const message = response && response.message ? response.message : "Cannot load report preview.";
-                    $("#linnenReportPreviewContainer").html(`<div class="alert alert-danger mb-0">${escapeHtml(message)}</div>`);
-                    return;
+        loadLinnenReportPdfPreview(frame, reportPdfUrl)
+            .then(function (objectUrl) {
+                if (objectUrl) {
+                    activeLinnenReportPreviewObjectUrl = objectUrl;
                 }
-
-                renderPrintPreview(response);
-            },
-            error: function (xhr) {
-                const message = xhr && xhr.responseText ? xhr.responseText : "Cannot load report preview.";
-                $("#linnenReportPreviewContainer").html(`<div class="alert alert-danger mb-0">${escapeHtml(message)}</div>`);
-            }
-        });
+                $loading.hide();
+            })
+            .catch(function (error) {
+                $loading.hide();
+                alert(error?.message || "Cannot load PDF preview.");
+            });
     }
 
-    function renderPrintPreview(response) {
-        const columns = Array.isArray(response.columns) ? response.columns : [];
-        const rows = Array.isArray(response.rows) ? response.rows : [];
-        const noteText = response.description || "";
-        const dateText = response.dateCreate || "";
-
-        $("#linnenReportPreviewMeta").text(`Note: ${noteText} | Date: ${dateText}`);
-
-        if (columns.length === 0 || rows.length === 0) {
-            $("#linnenReportPreviewContainer").html('<div class="text-center text-muted py-5">No preview data.</div>');
-            return;
+    function buildLinnenReportPdfUrl() {
+        const baseUrl = window.linnenNoteDailyDetail?.reportPdfUrl || "";
+        if (!baseUrl) {
+            return "";
         }
 
-        let html = '<table class="table table-bordered table-sm mb-0 linnen-report-preview-table"><thead><tr>';
-        html += '<th rowspan="2">Pantry</th><th rowspan="2">A/P</th>';
-        columns.forEach(function (column) {
-            html += `<th colspan="3">${escapeHtml(column.title || "")}</th>`;
-        });
-        html += '</tr><tr>';
-        columns.forEach(function () {
-            html += '<th>Be</th><th>De</th><th>Re</th>';
-        });
-        html += '</tr></thead><tbody>';
+        const url = new URL(baseUrl, window.location.origin);
+        const linenCode = ($("#linnenNoteReportLinenCode").val() || "").toString().trim();
+        if (linenCode) {
+            url.searchParams.set("linenCode", linenCode);
+        } else {
+            url.searchParams.delete("linenCode");
+        }
 
-        rows.forEach(function (row) {
-            html += '<tr>';
-            html += `<td class="ln-report-pantry">${escapeHtml(row.pentryName || "")}</td>`;
-            html += `<td class="ln-report-time">${row.timeSection === 1 ? "A" : "P"}</td>`;
-            columns.forEach(function (column) {
-                html += `<td class="text-right">${formatPreviewNumber(row[column.beField])}</td>`;
-                html += `<td class="text-right">${formatPreviewNumber(row[column.deField])}</td>`;
-                html += `<td class="text-right">${formatPreviewNumber(row[column.reField])}</td>`;
-            });
-            html += '</tr>';
-        });
-
-        html += '</tbody></table>';
-        $("#linnenReportPreviewContainer").html(html);
+        return `${url.pathname}${url.search}`;
     }
 
-    function formatPreviewNumber(value) {
-        const numeric = Number.parseInt(value, 10);
-        if (!Number.isFinite(numeric) || numeric === 0) return "";
-        return numeric.toString();
+    async function loadLinnenReportPdfPreview(frame, url) {
+        const response = await fetch(url, {
+            method: "GET",
+            credentials: "same-origin",
+            headers: { "X-Requested-With": "XMLHttpRequest" }
+        });
+
+        if (!response.ok) {
+            throw new Error("Cannot load report preview.");
+        }
+
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        if (!contentType.includes("application/pdf")) {
+            if (contentType.includes("application/json")) {
+                const result = await response.json();
+                throw new Error(result?.message || "Cannot load report preview.");
+            }
+
+            throw new Error("Cannot load report preview.");
+        }
+
+        const blob = await response.blob();
+        const previewUrl = URL.createObjectURL(blob);
+        frame.src = previewUrl;
+        return previewUrl;
     }
 
-    function escapeHtml(value) {
-        return $("<div>").text(value || "").html();
+    function clearLinnenReportPreview(frame) {
+        if (frame) {
+            frame.removeAttribute("src");
+        }
+
+        if (activeLinnenReportPreviewObjectUrl) {
+            URL.revokeObjectURL(activeLinnenReportPreviewObjectUrl);
+            activeLinnenReportPreviewObjectUrl = "";
+        }
     }
 
     document.addEventListener("DOMContentLoaded", function () {
@@ -354,5 +376,6 @@
         initCloseButton();
         initUnsavedChangeGuard();
         initPrintReport();
+        initReportModal();
     });
 })();

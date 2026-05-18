@@ -54,7 +54,7 @@ internal static class PurchaseOrderQuestPdfReport
                 text.Span(model.CoAddress);
             });
             column.Item().AlignCenter().Text($"Tel: {model.CoPhone} Email: {model.CoEmail} VAT Code: {model.CoVATCode}").FontSize(10);
-            column.Item().AlignCenter().Text("-").FontSize(10);
+            column.Item().AlignCenter().Text("----o0o---").FontSize(10);
             column.Item().PaddingTop(18).AlignCenter().Text(text =>
             {
                 text.Span("ĐƠN ĐẶT HÀNG/PURCHASE ORDER").Bold().FontSize(20);
@@ -75,12 +75,12 @@ internal static class PurchaseOrderQuestPdfReport
                 row.RelativeItem(1).Row(item => ComposeInlineField(item, "PR No:", model.RequestNo, 40));
                 row.RelativeItem(1.65f).Row(item => ComposeInlineField(item, "Currency/Đơn vị tiền tệ:", model.CurrencyText, 132, VniPdfFontFamily));
             });
-            column.Item().Row(row => ComposeInlineField(row, "Nhà cung cấp/Supplier:", model.SupplierDisplay, 132, VniPdfFontFamily));
-            column.Item().Row(row => ComposeInlineField(row, "Địa chỉ/Address:", model.SupplierAddress, 96, VniPdfFontFamily));
+            column.Item().Row(row => ComposeInlineField(row, "Nhà cung cấp/Supplier:", model.SupplierDisplay, 123, VniPdfFontFamily));
+            column.Item().Row(row => ComposeInlineField(row, "Địa chỉ/Address:", model.SupplierAddress, 123, VniPdfFontFamily));
             column.Item().Row(row =>
             {
                 row.Spacing(18);
-                row.RelativeItem(1).Row(item => ComposeInlineField(item, "Người liên hệ/Contact:", model.SupplierContact, 132, VniPdfFontFamily));
+                row.RelativeItem(1).Row(item => ComposeInlineField(item, "Người liên hệ/Contact:", model.SupplierContact, 123, VniPdfFontFamily));
                 row.RelativeItem(1.2f).Row(item => ComposeInlineField(item, "Phone/Mail:", BuildPhoneMailText(model), 58));
             });
         });
