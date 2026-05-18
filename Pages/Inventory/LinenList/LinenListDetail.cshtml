@@ -3,6 +3,14 @@
 @{
     ViewData["Title"] = "Linen List - Price";
     var isViewMode = string.Equals(Model.Mode, "view", StringComparison.OrdinalIgnoreCase);
+
+    string FormatNumberText(string value)
+    {
+        var raw = (value ?? string.Empty).Trim().Replace(",", string.Empty);
+        return decimal.TryParse(raw, out var number)
+            ? number.ToString("#,##0")
+            : value ?? string.Empty;
+    }
 }
 
 <section class="content">
@@ -46,10 +54,10 @@
 
                             <div class="row no-gutters align-items-center mb-2">
                                 <div class="col-3 text-left pr-2">
-                                    <label class="col-form-label-sm mb-0">EcoWash HCMC</label>
+                                    <label class="col-form-label-sm mb-0">Price (EcoWash HCMC)</label>
                                 </div>
                                 <div class="col-9">
-                                    <input type="text" asp-for="Linen.EcoWashHcmc" id="EcoWashHcmc" class="form-control form-control-sm" maxlength="10" readonly="@isViewMode" tabindex="2">
+                                    <input type="text" name="Linen.EcoWashHcmc" id="EcoWashHcmc" class="form-control form-control-sm" maxlength="13" value="@FormatNumberText(Model.Linen.EcoWashHcmc)" readonly="@isViewMode" tabindex="2">
                                 </div>
                             </div>
 
@@ -121,8 +129,8 @@
                                             <td>@Model.Linen.LinnenCode</td>
                                         </tr>
                                         <tr>
-                                            <td>EcoWash HCMC</td>
-                                            <td>@Model.Linen.EcoWashHcmc</td>
+                                            <td>Price (EcoWash HCMC)</td>
+                                            <td class="text-right">@FormatNumberText(Model.Linen.EcoWashHcmc)</td>
                                         </tr>
                                         <tr>
                                             <td>IsLinen</td>

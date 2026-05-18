@@ -187,7 +187,7 @@ WHERE ID = @ID;", conn);
     private void NormalizeInput()
     {
         Linen.LinnenCode = (Linen.LinnenCode ?? string.Empty).Trim();
-        Linen.EcoWashHcmc = (Linen.EcoWashHcmc ?? string.Empty).Trim();
+        Linen.EcoWashHcmc = (Linen.EcoWashHcmc ?? string.Empty).Trim().Replace(",", string.Empty);
     }
 
     private void ValidateInput()
@@ -204,7 +204,12 @@ WHERE ID = @ID;", conn);
 
         if (Linen.EcoWashHcmc.Length > 10)
         {
-            ModelState.AddModelError("Linen.EcoWashHcmc", "EcoWash HCMC cannot exceed 10 characters.");
+            ModelState.AddModelError("Linen.EcoWashHcmc", "Price (EcoWash HCMC) cannot exceed 10 characters.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(Linen.EcoWashHcmc) && !Linen.EcoWashHcmc.All(char.IsDigit))
+        {
+            ModelState.AddModelError("Linen.EcoWashHcmc", "Price (EcoWash HCMC) must be numeric.");
         }
     }
 

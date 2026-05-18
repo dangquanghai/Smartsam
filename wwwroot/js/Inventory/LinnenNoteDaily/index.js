@@ -134,12 +134,12 @@
 
             return `
             <tr data-index="${index}" class="linnen-note-row">
-                <td><input type="radio" name="selectedLinnenNote" value="${index}"></td>
+                <td style="width:32px;"><input type="radio" name="selectedLinnenNote" value="${index}"></td>
                 <td style="white-space:nowrap">
                     <a href="javascript:void(0)" class="${linkClass}" style="text-decoration:underline">${idText}</a>
                 </td>
                 <td>${dateText}</td>
-                <td>${description}</td>
+                <td class="vni-font">${description}</td>
                 <td class="text-center"><input type="checkbox" disabled ${closeChecked}></td>
                 <td class="text-center"><input type="checkbox" disabled ${rentChecked}></td>
                 <td class="text-center"><input type="checkbox" disabled ${startChecked}></td>

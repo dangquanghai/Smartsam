@@ -10,16 +10,28 @@ $(document).ready(function () {
         e.preventDefault();
 
         if (validateMainForm()) {
+            normalizeEcoWashForPost();
             $(this).off('submit').submit();
         }
     });
 });
 
 function initializePage(mode) {
+    formatEcoWashDisplay();
+
     if (mode === 'view') {
         $('input, select, textarea').prop('disabled', true);
         $('#btnSave').hide();
+        return;
     }
+
+    $('#EcoWashHcmc').off('blur.linenPrice').on('blur.linenPrice', formatEcoWashDisplay);
+    $('#EcoWashHcmc').off('focus.linenPrice').on('focus.linenPrice', function () {
+        $(this).val(unformatNumberText($(this).val()));
+    });
+    $('#EcoWashHcmc').off('input.linenPrice').on('input.linenPrice', function () {
+        $(this).val(unformatNumberText($(this).val()).replace(/\D/g, ''));
+    });
 }
 
 function validateMainForm() {
@@ -42,13 +54,40 @@ function validateMainForm() {
         return false;
     }
 
-    if ($('#EcoWashHcmc').val().trim().length > 10) {
-        alert("EcoWash HCMC cannot exceed 10 characters.");
+    const ecoWashValue = unformatNumberText($('#EcoWashHcmc').val()).trim();
+    if (ecoWashValue.length > 10) {
+        alert("Price (EcoWash HCMC) cannot exceed 10 characters.");
+        focusErrorField($('#EcoWashHcmc'));
+        return false;
+    }
+
+    if (ecoWashValue && !/^\d+$/.test(ecoWashValue)) {
+        alert("Price (EcoWash HCMC) must be numeric.");
         focusErrorField($('#EcoWashHcmc'));
         return false;
     }
 
     return true;
+}
+
+function formatEcoWashDisplay() {
+    const $field = $('#EcoWashHcmc');
+    const rawValue = unformatNumberText($field.val());
+    if (!rawValue || isNaN(Number(rawValue))) {
+        $field.val(rawValue);
+        return;
+    }
+
+    $field.val(Number(rawValue).toLocaleString('en-US'));
+}
+
+function normalizeEcoWashForPost() {
+    const $field = $('#EcoWashHcmc');
+    $field.val(unformatNumberText($field.val()));
+}
+
+function unformatNumberText(value) {
+    return (value || '').toString().replace(/,/g, '').trim();
 }
 
 function focusErrorField($el) {
