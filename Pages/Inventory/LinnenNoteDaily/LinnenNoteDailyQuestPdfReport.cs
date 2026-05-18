@@ -6,6 +6,11 @@ namespace SmartSam.Pages.Inventory.LinnenNoteDaily;
 
 public static class LinnenNoteDailyQuestPdfReport
 {
+    private const string DefaultPdfFontFamily = "VNI-Times";
+    private const float PantryColumnWidth = 42;
+    private const float ShiftColumnWidth = 18;
+    private const float LinenValueColumnWidth = 20;
+
     public static byte[] BuildPdf(LinnenNoteDailyPdfReport report)
     {
         return Document.Create(container =>
@@ -14,7 +19,7 @@ public static class LinnenNoteDailyQuestPdfReport
             {
                 page.Size(PageSizes.A4.Landscape());
                 page.Margin(18);
-                page.DefaultTextStyle(x => x.FontSize(7));
+                page.DefaultTextStyle(x => x.FontFamily(DefaultPdfFontFamily).FontSize(7));
 
                 page.Content().Column(column =>
                 {
@@ -28,15 +33,17 @@ public static class LinnenNoteDailyQuestPdfReport
 
     private static void ComposeHeader(IContainer container, LinnenNoteDailyPdfReport report)
     {
-        container.Column(column =>
+        var tableWidth = GetTableWidth(report.Columns);
+
+        container.AlignCenter().Width(tableWidth).Column(column =>
         {
             column.Item().Row(row =>
             {
-                row.ConstantItem(90).Element(left =>
+                row.ConstantItem(86).Element(left =>
                 {
                     if (report.CompanyLogo != null && report.CompanyLogo.Length > 0)
                     {
-                        left.Height(44).AlignLeft().AlignMiddle().Image(report.CompanyLogo).FitArea();
+                        left.PaddingLeft(2).Height(44).AlignLeft().AlignMiddle().Image(report.CompanyLogo).FitArea();
                     }
                     else
                     {
@@ -53,7 +60,7 @@ public static class LinnenNoteDailyQuestPdfReport
                     center.Item().AlignCenter().PaddingTop(2).Text("DAILY NOTE LINEN CONTROL").Bold().FontSize(13);
                     center.Item().PaddingTop(10).Row(info =>
                     {
-                        info.RelativeItem().Text($"Pickup ID: {report.NoteId}");
+                        info.ConstantItem(220).Text($"Pickup ID: {report.NoteId}");
                         info.RelativeItem().Text($"Date: {report.DateCreate:MM/dd/yyyy}");
                     });
                     center.Item().PaddingTop(4).Text($"Des: {report.Description ?? string.Empty}");
@@ -68,18 +75,19 @@ public static class LinnenNoteDailyQuestPdfReport
     {
         var columns = report.Columns ?? new List<LinnenReportPreviewColumn>();
         var rows = report.Rows ?? new List<LinnenReportPreviewRow>();
+        var tableWidth = GetTableWidth(columns);
 
-        container.AlignCenter().Table(table =>
+        container.AlignCenter().Width(tableWidth).Table(table =>
         {
             table.ColumnsDefinition(definition =>
             {
-                definition.ConstantColumn(42);
-                definition.ConstantColumn(18);
+                definition.ConstantColumn(PantryColumnWidth);
+                definition.ConstantColumn(ShiftColumnWidth);
                 foreach (var _ in columns)
                 {
-                    definition.ConstantColumn(20);
-                    definition.ConstantColumn(20);
-                    definition.ConstantColumn(20);
+                    definition.ConstantColumn(LinenValueColumnWidth);
+                    definition.ConstantColumn(LinenValueColumnWidth);
+                    definition.ConstantColumn(LinenValueColumnWidth);
                 }
             });
 
@@ -172,6 +180,11 @@ public static class LinnenNoteDailyQuestPdfReport
     private static string FormatValue(int value)
     {
         return value == 0 ? string.Empty : value.ToString();
+    }
+
+    private static float GetTableWidth(IReadOnlyCollection<LinnenReportPreviewColumn>? columns)
+    {
+        return PantryColumnWidth + ShiftColumnWidth + ((columns?.Count ?? 0) * LinenValueColumnWidth * 3);
     }
 }
 

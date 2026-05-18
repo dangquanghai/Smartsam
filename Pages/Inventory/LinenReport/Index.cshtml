@@ -13,11 +13,18 @@
         .linen-report-shell {
             border: 1px solid #9ea7b3;
             box-shadow: none;
+            height: calc(100vh - 150px);
+            max-height: calc(100vh - 150px);
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
 
         .linen-report-shell .card-header {
             background: #e7edf4;
             border-bottom: 1px solid #9ea7b3;
+            flex: 0 0 auto;
         }
 
         .linen-report-shell .card-title {
@@ -29,6 +36,18 @@
             background: #efefef;
             border-bottom: 1px solid #b8b8b8;
             padding: 0.5rem 0.65rem 0.35rem;
+            flex: 0 0 auto;
+        }
+
+        .linen-report-shell .card-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .linen-report-shell .card-footer {
+            flex: 0 0 auto;
         }
 
         .linen-report-toolbar .form-control-sm,
@@ -161,20 +180,27 @@
             padding: 0.35rem 0.75rem 0;
             color: #4a5560;
             min-height: 22px;
+            flex: 0 0 auto;
         }
 
         .linen-report-canvas {
             background: #b8b8b8;
-            min-height: 76vh;
             padding: 1.1rem;
+            flex: 1 1 auto;
+            min-height: 0;
             overflow: auto;
+        }
+
+        #linenReportPreviewContainer {
+            height: 100%;
+            min-height: 0;
         }
 
         .linen-report-pdf-frame {
             display: block;
             width: 100%;
-            height: calc(100vh - 190px);
-            min-height: 620px;
+            height: 100%;
+            min-height: 0;
             border: 1px solid #8c8c8c;
             background: #fff;
         }
@@ -337,12 +363,18 @@
             margin-bottom: 0;
         }
 
+        .linen-report-popup .linen-report-shell {
+            height: calc(100vh - 20px);
+            max-height: calc(100vh - 20px);
+            min-height: 0;
+        }
+
         .linen-report-popup .linen-report-canvas {
-            min-height: calc(100vh - 122px);
+            min-height: 0;
         }
 
         .linen-report-popup .linen-report-pdf-frame {
-            height: calc(100vh - 132px);
+            height: 100%;
             min-height: 0;
         }
     </style>

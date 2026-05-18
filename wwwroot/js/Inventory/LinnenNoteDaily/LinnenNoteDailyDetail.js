@@ -369,7 +369,14 @@
         }
     }
 
+    function initPopupMode() {
+        if (window.linnenNoteDailyDetail?.isPopup) {
+            document.body.classList.add("linnen-note-popup-body");
+        }
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
+        initPopupMode();
         initSubmit();
         initRentNote();
         initQuantityInputs();

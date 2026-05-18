@@ -69,9 +69,13 @@ public class LinnenNoteDailyDetailModel : BasePageModel
     [BindProperty(SupportsGet = true)]
     public string ReturnUrl { get; set; } = string.Empty;
 
+    [BindProperty(SupportsGet = true)]
+    public bool Popup { get; set; }
+
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
     public bool CanSave { get; private set; }
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
+    public bool IsPopup => Popup;
     public List<LinnenNoteDailyDetailRow> Details { get; set; } = new List<LinnenNoteDailyDetailRow>();
     public IReadOnlyList<LinnenNoteDailyGridColumn> DetailColumns => FixedDetailColumns;
     public IReadOnlyList<LinnenNoteDailyPantryDefinition> DetailPantries => FixedPantries;
