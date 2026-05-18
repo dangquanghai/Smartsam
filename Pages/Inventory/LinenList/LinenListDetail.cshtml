@@ -57,7 +57,7 @@
                                     <label class="col-form-label-sm mb-0">EcoWash HCMC</label>
                                 </div>
                                 <div class="col-9">
-                                    <input type="text" asp-for="Linen.EcoWashHcmc" id="EcoWashHcmc" class="form-control form-control-sm text-right" maxlength="13" readonly="@isViewMode" tabindex="2">
+                                    <input type="text" name="Linen.EcoWashHcmc" id="EcoWashHcmc" class="form-control form-control-sm text-right" maxlength="13" value="@FormatNumberText(Model.Linen.EcoWashHcmc)" readonly="@isViewMode" tabindex="2">
                                 </div>
                             </div>
 
