@@ -56,13 +56,13 @@ function validateMainForm() {
 
     const ecoWashValue = unformatNumberText($('#EcoWashHcmc').val()).trim();
     if (ecoWashValue.length > 10) {
-        alert("EcoWash HCMC cannot exceed 10 characters.");
+        alert("Price (EcoWash HCMC) cannot exceed 10 characters.");
         focusErrorField($('#EcoWashHcmc'));
         return false;
     }
 
     if (ecoWashValue && !/^\d+$/.test(ecoWashValue)) {
-        alert("EcoWash HCMC must be numeric.");
+        alert("Price (EcoWash HCMC) must be numeric.");
         focusErrorField($('#EcoWashHcmc'));
         return false;
     }

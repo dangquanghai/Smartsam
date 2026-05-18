@@ -204,12 +204,12 @@ WHERE ID = @ID;", conn);
 
         if (Linen.EcoWashHcmc.Length > 10)
         {
-            ModelState.AddModelError("Linen.EcoWashHcmc", "EcoWash HCMC cannot exceed 10 characters.");
+            ModelState.AddModelError("Linen.EcoWashHcmc", "Price (EcoWash HCMC) cannot exceed 10 characters.");
         }
 
         if (!string.IsNullOrWhiteSpace(Linen.EcoWashHcmc) && !Linen.EcoWashHcmc.All(char.IsDigit))
         {
-            ModelState.AddModelError("Linen.EcoWashHcmc", "EcoWash HCMC must be numeric.");
+            ModelState.AddModelError("Linen.EcoWashHcmc", "Price (EcoWash HCMC) must be numeric.");
         }
     }
 
