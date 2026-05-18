@@ -119,7 +119,7 @@
 #linnenNoteTable {
     table-layout: fixed;
     width: 100%;
-    min-width: 1120px;
+    min-width: 880px;
 }
 
 #linnenNoteTable thead th {
@@ -141,9 +141,9 @@
 
 #linnenNoteTable > thead > tr > th:nth-child(4),
 #linnenNoteTable > tbody > tr > td:nth-child(4) {
-    width: 480px;
-    min-width: 480px;
-    max-width: 480px;
+    width: 240px;
+    min-width: 240px;
+    max-width: 240px;
 }
 
 .app-table-ellipsis {

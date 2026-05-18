@@ -119,6 +119,7 @@
 #linenReceivingTable {
     table-layout: fixed;
     width: 100%;
+    min-width: 882px;
 }
 
 #linenReceivingTable thead th {
@@ -133,6 +134,28 @@
 
 #linenReceivingTable tbody td {
     vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#linenReceivingTable > thead > tr > th:nth-child(4),
+#linenReceivingTable > tbody > tr > td:nth-child(4) {
+    width: 260px;
+    min-width: 260px;
+    max-width: 260px;
+}
+
+#linenReceivingTable > thead > tr > th:nth-child(5),
+#linenReceivingTable > tbody > tr > td:nth-child(5) {
+    width: 360px;
+    min-width: 360px;
+    max-width: 360px;
+}
+
+.app-table-ellipsis {
+    display: block;
+    width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

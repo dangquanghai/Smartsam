@@ -58,6 +58,7 @@
                 if (response.success) {
                     state.currentDataRows = response.data || [];
                     renderRows(state.currentDataRows);
+                    initializeLegacyTooltips(CONFIG.selectors.tbody);
                     updatePagination(response.total, response.page, response.pageSize, response.totalPages);
                     resetActions();
                 } else {
@@ -95,8 +96,8 @@
                     <a href="javascript:void(0)" class="${linkClass}" style="text-decoration:underline">${encodeHtml(receiveId)}</a>
                 </td>
                 <td>${encodeHtml(row.receiveDateText || '')}</td>
-                <td class="vni-font">${encodeHtml(row.description || '')}</td>
-                <td class="vni-font">${encodeHtml(row.deliveryInfor || '')}</td>
+                <td class="vni-font">${buildEllipsisCell(row.description || '', 'vni-font')}</td>
+                <td class="vni-font">${buildEllipsisCell(row.deliveryInfor || '', 'vni-font')}</td>
             </tr>`;
         });
 
@@ -304,6 +305,39 @@
 
     function encodeHtml(value) {
         return $('<div>').text(value).html();
+    }
+
+    function buildEllipsisCell(input, extraClass) {
+        const raw = (input || '').toString();
+        const className = extraClass ? `app-table-ellipsis ${extraClass}` : 'app-table-ellipsis';
+        const tooltipFont = extraClass ? ` data-tooltip-font="${encodeHtml(extraClass)}"` : '';
+        return `<span class="${className}" data-toggle="tooltip"${tooltipFont} title="${encodeHtml(raw)}">${encodeHtml(raw)}</span>`;
+    }
+
+    function initializeLegacyTooltips(container) {
+        const $container = $(container || document);
+        const $tooltips = $container.find('[data-toggle="tooltip"]');
+        if (!$tooltips.length || typeof $tooltips.tooltip !== 'function') {
+            return;
+        }
+
+        $tooltips.tooltip('dispose').tooltip({
+            container: 'body',
+            trigger: 'hover',
+            boundary: 'window'
+        });
+
+        $tooltips.off('inserted.bs.tooltip.linenReceivingFont').on('inserted.bs.tooltip.linenReceivingFont', function () {
+            const fontClass = ($(this).data('tooltip-font') || '').toString().trim();
+            if (!fontClass) {
+                return;
+            }
+
+            const tooltipId = $(this).attr('aria-describedby');
+            if (tooltipId) {
+                $(`#${tooltipId}`).find('.tooltip-inner').addClass(fontClass);
+            }
+        });
     }
 
     $(document).ready(initializePage);
