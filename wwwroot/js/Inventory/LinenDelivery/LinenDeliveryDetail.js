@@ -65,9 +65,12 @@
         bindHeaderState();
         bindPrintEvents();
         bindBillEvents();
+        bindPantryNoteViewEvents();
         bindDirtyTracking();
         initReportModal();
+        initPantryNoteModal();
         refreshHeaderSections();
+        updatePantryNoteViewButton();
         recalcAllRows();
         pageDirty = false;
     }
@@ -203,10 +206,45 @@
         });
     }
 
+    function bindPantryNoteViewEvents() {
+        $('.js-view-pantry-note').off('click').on('click', function () {
+            openPantryNoteModal();
+        });
+    }
+
     function initReportModal() {
         $('#linenDeliveryReportModal').off('hidden.bs.modal').on('hidden.bs.modal', function () {
             clearLinenDeliveryReportPreview(document.getElementById('linenDeliveryReportFrame'));
         });
+    }
+
+    function initPantryNoteModal() {
+        $('#linenDeliveryPantryNoteModal').off('hidden.bs.modal').on('hidden.bs.modal', function () {
+            const frame = document.getElementById('linenDeliveryPantryNoteFrame');
+            if (frame) {
+                frame.removeAttribute('src');
+            }
+        });
+    }
+
+    function openPantryNoteModal() {
+        const noteId = ($('#Header_NoteID').val() || $('.js-view-pantry-note').data('note-id') || '').toString();
+        const frame = document.getElementById('linenDeliveryPantryNoteFrame');
+        if (!noteId || !frame) {
+            alert('Pantry Linen is required.');
+            focusErrorField('#Header_NoteID');
+            return;
+        }
+
+        const baseUrl = window.linenDeliveryPage?.pantryNoteDetailUrl || '/Inventory/LinnenNoteDaily/LinnenNoteDailyDetail?mode=view&popup=true';
+        const url = new URL(baseUrl, window.location.origin);
+        url.searchParams.set('id', noteId);
+        url.searchParams.set('mode', 'view');
+        url.searchParams.set('popup', 'true');
+
+        frame.src = `${url.pathname}${url.search}`;
+        $('#linenDeliveryPantryNoteModalLabel').text(`Pantry Linen Detail - ${noteId}`);
+        $('#linenDeliveryPantryNoteModal').modal('show');
     }
 
     function previewLinenDeliveryReportPdf() {
@@ -308,6 +346,7 @@
         }
 
         syncToBillButtonState(typeValue);
+        updatePantryNoteViewButton();
     }
 
     function syncToBillButtonState(typeValue) {
@@ -616,6 +655,7 @@
 
     function syncPantryNoteState() {
         const noteId = $('#Header_NoteID').val() || '';
+        updatePantryNoteViewButton();
         if (!noteId) {
             applyPantryRent(false);
             return;
@@ -635,6 +675,15 @@
                 applyPantryRent(response.isRent === true);
             }
         });
+    }
+
+    function updatePantryNoteViewButton() {
+        const typeValue = $('#Header_DeliveryType').val() || '';
+        const noteId = ($('#Header_NoteID').val() || '').toString();
+        const canView = typeValue === '1' && noteId !== '';
+        $('.js-view-pantry-note')
+            .prop('disabled', !canView)
+            .attr('data-note-id', noteId);
     }
 
     function applyPantryRent(isRent) {

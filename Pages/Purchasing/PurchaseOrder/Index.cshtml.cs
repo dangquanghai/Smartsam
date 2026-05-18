@@ -76,14 +76,15 @@ public class IndexModel : BasePageModel
             var data = rows.Select(row =>
             {
                 var effectivePermissions = GetEffectivePermissionsByStatus(roleId, row.StatusId);
+                var canEdit = CanEditPurchaseOrderRow(row, userInfo);
                 return new
                 {
                     data = row,
                     actions = new
                     {
                         canAccess = effectivePermissions.Contains(PermissionView),
-                        accessMode = row.StatusId == 1 && effectivePermissions.Contains(PermissionEdit) ? "edit" : "view",
-                        canEdit = row.StatusId == 1 && effectivePermissions.Contains(PermissionEdit),
+                        accessMode = canEdit ? "edit" : "view",
+                        canEdit,
                         canView = effectivePermissions.Contains(PermissionView),
                         canBackToProcessing = effectivePermissions.Contains(PermissionBackToProcessing)
                             && row.StatusId == 2
@@ -1064,6 +1065,21 @@ public class IndexModel : BasePageModel
     private bool CanHandleWaitingForApproval(PurchaseOrderWorkflowUser user)
     {
         return user.IsPurchaser || user.IsCFO || user.IsBOD || IsAdminRole();
+    }
+
+    private bool CanEditPurchaseOrderRow(PurchaseOrderRow row, PurchaseOrderWorkflowUser user)
+    {
+        if (!PagePerm.HasPermission(PermissionEdit))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(row.GDirectorCode))
+        {
+            return false;
+        }
+
+        return IsAdminRole() || user.IsPurchaser;
     }
 
     private int GetCurrentRoleId()

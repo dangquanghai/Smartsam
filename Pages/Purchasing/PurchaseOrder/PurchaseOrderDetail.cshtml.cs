@@ -122,11 +122,7 @@ public class PurchaseOrderDetailModel : BasePageModel
                 return RedirectToPage("./Index");
             }
 
-            if (Header.StatusId != 1)
-            {
-                Mode = "view";
-            }
-            if (Mode == "edit" && !effectivePermissions.Contains(PermissionEdit))
+            if (Mode == "edit" && !CanEditCurrentPurchaseOrder())
             {
                 Mode = "view";
             }
@@ -181,7 +177,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         var effectivePermissions = GetEffectivePermissionsByStatus(isNew ? 1 : Header.StatusId);
         var canSaveCurrent = isNew
             ? effectivePermissions.Contains(PermissionAdd)
-            : Header.StatusId == 1 && effectivePermissions.Contains(PermissionEdit);
+            : CanEditCurrentPurchaseOrder();
         if (!canSaveCurrent)
         {
             ModelState.AddModelError(string.Empty, "You have no permission to save purchase order.");
@@ -1813,6 +1809,26 @@ public class PurchaseOrderDetailModel : BasePageModel
         return _securityService.GetEffectivePermissions(FUNCTION_ID, GetCurrentRoleId(), status);
     }
 
+    private bool CanEditCurrentPurchaseOrder()
+    {
+        if (Header.Id <= 0)
+        {
+            return false;
+        }
+
+        if (!PagePerm.HasPermission(PermissionEdit))
+        {
+            return false;
+        }
+
+        if (Header.GDId.HasValue && Header.GDId.Value > 0)
+        {
+            return false;
+        }
+
+        return IsAdminRole() || _workflowUser.IsPurchaser;
+    }
+
     private void LoadWorkflowUser()
     {
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -1852,7 +1868,7 @@ public class PurchaseOrderDetailModel : BasePageModel
             && PagePerm.HasPermission(PermissionManageAttachment);
         CanSave = !IsViewMode && (Mode == "add"
             ? effectivePermissions.Contains(PermissionAdd)
-            : effectivePermissions.Contains(PermissionEdit));
+            : CanEditCurrentPurchaseOrder());
         CanPurchaserApprove = Header.Id > 0
             && Header.StatusId == 1
             && (IsAdminRole() || _workflowUser.IsPurchaser);

@@ -3,6 +3,7 @@
 @{
     ViewData["Title"] = "Pantry Linen Detail";
     var isView = Model.IsViewMode;
+    var isPopup = Model.IsPopup;
     var isBeginReadonly = isView || !Model.Header.Start;
     var detailLookup = Model.Details
         .GroupBy(x => $"{x.Pentry}|{x.TimeSection}|{x.LinenCode}", StringComparer.OrdinalIgnoreCase)
@@ -286,10 +287,42 @@
             margin-bottom: 0.5rem;
             flex: 0 0 auto;
         }
+
+        .linnen-note-popup-body .main-header,
+        .linnen-note-popup-body .main-sidebar,
+        .linnen-note-popup-body .main-footer,
+        .linnen-note-popup-body .content-header {
+            display: none !important;
+        }
+
+        .linnen-note-popup-body .content-wrapper {
+            margin-left: 0 !important;
+            padding: 0 !important;
+            min-height: 100vh !important;
+        }
+
+        .linnen-note-popup-body .content-wrapper > .content,
+        .linnen-note-popup-body .content-wrapper > .content > .container-fluid {
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+
+        .linnen-note-popup .container-fluid {
+            padding: 0 !important;
+        }
+
+        .linnen-note-popup .card {
+            margin-bottom: 0;
+            border-radius: 0;
+        }
+
+        .linnen-note-popup .linnen-note-detail-footer {
+            display: none;
+        }
     </style>
 }
 
-<section class="content">
+<section class="content @(isPopup ? "linnen-note-popup" : string.Empty)">
     <div class="container-fluid">
         @if (TempData["SuccessMessage"] != null)
         {
@@ -400,7 +433,7 @@
                         </table>
                     </div>
                 </div>
-                <div class="card-footer p-2 text-center">
+                <div class="card-footer p-2 text-center linnen-note-detail-footer">
                     <div class="linnen-note-legend text-left mb-2">Be : Begin Quantity, De : Delivery Quantity, Re : Receive Quantity , A : AM , P : PM</div>
                     @if (Model.CanSave)
                     {
@@ -560,6 +593,7 @@
     <script>
         window.linnenNoteDailyDetail = {
             isView: @(isView ? "true" : "false"),
+            isPopup: @(isPopup ? "true" : "false"),
             indexUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(string.IsNullOrWhiteSpace(Model.ReturnUrl) ? Url.Page("./Index") : Model.ReturnUrl)),
             printPreviewUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("./LinnenNoteDailyDetail", "PrintPreview", new { id = Model.Header.Id }))),
             reportPdfUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("./LinnenNoteDailyDetail", "ReportPdf", new { id = Model.Header.Id, download = false })))

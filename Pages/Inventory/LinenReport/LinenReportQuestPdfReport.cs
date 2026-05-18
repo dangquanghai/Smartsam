@@ -9,6 +9,11 @@ namespace SmartSam.Pages.Inventory.LinenReport;
 
 public static class LinenReportQuestPdfReport
 {
+    private const string DefaultPdfFontFamily = "VNI-Times";
+    private const float PantryNameColumnWidth = 42;
+    private const float PantryShiftColumnWidth = 18;
+    private const float PantryValueColumnWidth = 20;
+
     public static byte[] BuildPdf(object preview, byte[]? companyLogo)
     {
         var reportType = GetString(preview, "reportType");
@@ -20,7 +25,7 @@ public static class LinenReportQuestPdfReport
             {
                 page.Size(isLandscape ? PageSizes.A4.Landscape() : PageSizes.A4);
                 page.Margin(18);
-                page.DefaultTextStyle(x => x.FontFamily("Times New Roman").FontSize(8));
+                page.DefaultTextStyle(x => x.FontFamily(DefaultPdfFontFamily).FontSize(8));
 
                 page.Content().Column(column =>
                 {
@@ -61,6 +66,8 @@ public static class LinenReportQuestPdfReport
 
     private static void ComposeHeader(IContainer container, object preview, byte[]? companyLogo, string reportType)
     {
+        var columns = GetItems(GetValue(preview, "columns")).ToList();
+        var headerWidth = reportType == LinenReportTypes.Pantry ? GetPantryTableWidth(columns.Count) : (float?)null;
         var title = reportType switch
         {
             LinenReportTypes.Pantry => "DAILY NOTE LINEN CONTROL",
@@ -81,7 +88,11 @@ public static class LinenReportQuestPdfReport
             _ => string.Empty
         };
 
-        container.Row(row =>
+        var headerContainer = headerWidth.HasValue
+            ? container.AlignCenter().Width(headerWidth.Value)
+            : container;
+
+        headerContainer.Row(row =>
         {
             row.ConstantItem(90).Element(left =>
             {
@@ -107,11 +118,12 @@ public static class LinenReportQuestPdfReport
     {
         var columns = GetItems(GetValue(preview, "columns")).ToList();
         var rows = GetItems(GetValue(preview, "rows")).ToList();
+        var tableWidth = GetPantryTableWidth(columns.Count);
 
         container.Column(column =>
         {
             column.Spacing(6);
-            column.Item().Table(info =>
+            column.Item().AlignCenter().Width(tableWidth).Table(info =>
             {
                 info.ColumnsDefinition(def =>
                 {
@@ -128,17 +140,17 @@ public static class LinenReportQuestPdfReport
                 info.Cell().ColumnSpan(3).Text(GetString(preview, "description"));
             });
 
-            column.Item().AlignCenter().Table(table =>
+            column.Item().AlignCenter().Width(tableWidth).Table(table =>
             {
                 table.ColumnsDefinition(def =>
                 {
-                    def.ConstantColumn(42);
-                    def.ConstantColumn(18);
+                    def.ConstantColumn(PantryNameColumnWidth);
+                    def.ConstantColumn(PantryShiftColumnWidth);
                     foreach (var _ in columns)
                     {
-                        def.ConstantColumn(20);
-                        def.ConstantColumn(20);
-                        def.ConstantColumn(20);
+                        def.ConstantColumn(PantryValueColumnWidth);
+                        def.ConstantColumn(PantryValueColumnWidth);
+                        def.ConstantColumn(PantryValueColumnWidth);
                     }
                 });
 
@@ -523,6 +535,11 @@ public static class LinenReportQuestPdfReport
     private static string FormatBlankZero(decimal value)
     {
         return value == 0 ? string.Empty : FormatNumber(value);
+    }
+
+    private static float GetPantryTableWidth(int columnCount)
+    {
+        return PantryNameColumnWidth + PantryShiftColumnWidth + (columnCount * PantryValueColumnWidth * 3);
     }
 
     private static string FormatShortDate(string value)
