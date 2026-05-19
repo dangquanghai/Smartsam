@@ -1127,7 +1127,7 @@ FROM dbo.MS_Parameters;", conn);
             LinenReportTypes.NotReceive => LinenReportTypes.NotReceive,
             LinenReportTypes.LaundryBalance => LinenReportTypes.LaundryBalance,
             LinenReportTypes.ApmtBalance => LinenReportTypes.ApmtBalance,
-            _ => LinenReportTypes.LaundryRecord
+            _ => LinenReportTypes.Pantry
         };
     }
 
@@ -1367,7 +1367,7 @@ FROM dbo.MS_Parameters;", conn);
 
 public class LinenReportFilter
 {
-    public string ReportType { get; set; } = LinenReportTypes.LaundryRecord;
+    public string ReportType { get; set; } = LinenReportTypes.Pantry;
     public int? DescriptionId { get; set; }
     public string LinenCode { get; set; } = string.Empty;
     public DateTime? FromDate { get; set; }
