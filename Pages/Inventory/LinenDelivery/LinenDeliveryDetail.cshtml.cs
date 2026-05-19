@@ -295,7 +295,10 @@ public class LinenDeliveryDetailModel : BasePageModel
                 billDate = x.BillDateText,
                 apartmentNo = x.ApartmentNo,
                 customer = x.Customer,
-                usdAmount = x.USDAmount.ToString("0.##"),
+                vndAmountBefVat = x.VNDAmountBefVAT.ToString("0.##"),
+                pctTax = x.PctTax.ToString("0.##"),
+                vndAmountVat = x.VNDAmountVAT.ToString("0.##"),
+                vndAmount = x.VNDAmount.ToString("0.##"),
                 billStatus = x.BillStatus,
                 billStatusText = x.BillStatusText
             })
@@ -415,7 +418,10 @@ public class LinenDeliveryDetailModel : BasePageModel
                         billDate = x.BillDateText,
                         apartmentNo = x.ApartmentNo,
                         customer = x.Customer,
-                        usdAmount = x.USDAmount.ToString("0.##"),
+                        vndAmountBefVat = x.VNDAmountBefVAT.ToString("0.##"),
+                        pctTax = x.PctTax.ToString("0.##"),
+                        vndAmountVat = x.VNDAmountVAT.ToString("0.##"),
+                        vndAmount = x.VNDAmount.ToString("0.##"),
                         billStatus = x.BillStatus,
                         billStatusText = x.BillStatusText
                     })
@@ -448,7 +454,10 @@ public class LinenDeliveryDetailModel : BasePageModel
                     billDate = x.BillDateText,
                     apartmentNo = x.ApartmentNo,
                     customer = x.Customer,
-                    usdAmount = x.USDAmount.ToString("0.##"),
+                    vndAmountBefVat = x.VNDAmountBefVAT.ToString("0.##"),
+                    pctTax = x.PctTax.ToString("0.##"),
+                    vndAmountVat = x.VNDAmountVAT.ToString("0.##"),
+                    vndAmount = x.VNDAmount.ToString("0.##"),
                     billStatus = x.BillStatus,
                     billStatusText = x.BillStatusText
                 })
@@ -917,7 +926,10 @@ SELECT dbo.SV_Bill.BillID,
        dbo.SV_Bill.BillDate,
        ISNULL(dbo.SV_Bill.ApartmentNo, '') AS ApartmentNo,
        ISNULL(dbo.CM_Customer.CustomerName, '') + '(' + CAST(dbo.CM_Customer.CustomerID AS varchar(10)) + ')' AS Customer,
-       ISNULL(dbo.SV_Bill.USDAmount, 0) AS USDAmount,
+       ISNULL(dbo.SV_Bill.VNDAmountBefVAT, 0) AS VNDAmountBefVAT,
+       ISNULL(dbo.SV_Bill.PctTax, 0) AS PctTax,
+       ISNULL(dbo.SV_Bill.VNDAmountVAT, 0) AS VNDAmountVAT,
+       ISNULL(dbo.SV_Bill.VNDAmount, 0) AS VNDAmount,
        ISNULL(dbo.SV_Bill.BillStatus, 0) AS BillStatus,
        ISNULL(dbo.SV_BillStatus.StatusName, '') AS BillStatusName
 FROM dbo.SV_Bill
@@ -935,7 +947,10 @@ ORDER BY dbo.SV_Bill.BillDate DESC, dbo.SV_Bill.BillID DESC;", conn, trans);
                 BillDate = rd["BillDate"] == DBNull.Value ? null : Convert.ToDateTime(rd["BillDate"]),
                 ApartmentNo = Convert.ToString(rd["ApartmentNo"]) ?? string.Empty,
                 Customer = Convert.ToString(rd["Customer"]) ?? string.Empty,
-                USDAmount = ToDecimal(rd["USDAmount"]),
+                VNDAmountBefVAT = ToDecimal(rd["VNDAmountBefVAT"]),
+                PctTax = ToDecimal(rd["PctTax"]),
+                VNDAmountVAT = ToDecimal(rd["VNDAmountVAT"]),
+                VNDAmount = ToDecimal(rd["VNDAmount"]),
                 BillStatus = Convert.ToInt32(rd["BillStatus"]),
                 BillStatusName = Convert.ToString(rd["BillStatusName"]) ?? string.Empty
             });
@@ -1394,7 +1409,10 @@ public class LinenDeliveryBillRow
     public DateTime? BillDate { get; set; }
     public string ApartmentNo { get; set; } = string.Empty;
     public string Customer { get; set; } = string.Empty;
-    public decimal USDAmount { get; set; }
+    public decimal VNDAmountBefVAT { get; set; }
+    public decimal PctTax { get; set; }
+    public decimal VNDAmountVAT { get; set; }
+    public decimal VNDAmount { get; set; }
     public int BillStatus { get; set; }
     public string BillStatusName { get; set; } = string.Empty;
     public string BillDateText => BillDate.HasValue ? BillDate.Value.ToString("dd/MM/yyyy") : string.Empty;

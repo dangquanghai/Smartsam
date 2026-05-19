@@ -459,13 +459,13 @@
         if (hasCreatedBill || hasBills) {
             renderBillRows(bills || []);
         } else {
-            $('#linenDeliveryBillTableBody').html('<tr><td colspan="6" class="text-center text-muted py-3">No bills</td></tr>');
+            $('#linenDeliveryBillTableBody').html('<tr><td colspan="9" class="text-center text-muted py-3">No bills</td></tr>');
         }
     }
 
     function renderBillRows(bills) {
         if (!bills || bills.length === 0) {
-            $('#linenDeliveryBillTableBody').html('<tr><td colspan="6" class="text-center text-muted py-3">No bills</td></tr>');
+            $('#linenDeliveryBillTableBody').html('<tr><td colspan="9" class="text-center text-muted py-3">No bills</td></tr>');
             $('#linenDeliveryBillListWrap').removeClass('d-none');
             return;
         }
@@ -476,7 +476,10 @@
                 <td class="text-center">${encodeHtml(item.billDate || '')}</td>
                 <td>${encodeHtml(item.apartmentNo || '')}</td>
                 <td>${encodeHtml(item.customer || '')}</td>
-                <td class="text-right">${encodeHtml(item.usdAmount || '0')}</td>
+                <td class="text-right">${encodeHtml(item.vndAmountBefVat || '0')}</td>
+                <td class="text-right">${encodeHtml(item.pctTax || '0')}</td>
+                <td class="text-right">${encodeHtml(item.vndAmountVat || '0')}</td>
+                <td class="text-right">${encodeHtml(item.vndAmount || '0')}</td>
                 <td class="text-center">${encodeHtml(item.billStatusText || '')}</td>
             </tr>`;
         }).join('');
