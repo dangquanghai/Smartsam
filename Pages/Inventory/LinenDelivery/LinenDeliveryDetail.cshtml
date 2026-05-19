@@ -715,6 +715,7 @@
             isSpecialLaundry: @Model.Header.IsSpecialLaundry.ToString().ToLowerInvariant(),
             canToBill: @Model.CanToBill.ToString().ToLowerInvariant(),
             pantryNoteDetailUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("/Inventory/LinnenNoteDaily/LinnenNoteDailyDetail", new { mode = "view", popup = true }))),
+            billDetailUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("/Cus/DailyServiceBill/DailyServiceBillDetail"))),
             printPreviewUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("./LinenDeliveryDetail", "PrintPreview", new { id = Model.Header.DeliveryID }))),
             reportPdfUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("/Inventory/LinenReport/Index", "Pdf", new { reportType = "delivery", descriptionId = Model.Header.DeliveryID, lockedReportType = "delivery", popup = true }))),
             rowTemplateOptions: {

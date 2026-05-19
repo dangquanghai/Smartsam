@@ -1,0 +1,214 @@
+@page
+@model SmartSam.Pages.Cus.DailyServiceBill.DailyServiceBillDetailModel
+@{
+    ViewData["Title"] = "Daily Service Bill Detail";
+    var isView = Model.IsViewMode;
+}
+
+<section class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">Daily Service Bill Detail</h1>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-right">
+                    <li class="breadcrumb-item"><a asp-page="/Index">Home</a></li>
+                    <li class="breadcrumb-item active">Daily Service Bill Detail</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="content">
+    <div class="container-fluid">
+        <form method="post" id="dailyServiceBillDetailForm">
+            <input type="hidden" asp-for="Bill.BillID" />
+            <input type="hidden" asp-for="ReturnUrl" />
+            <input type="hidden" asp-for="Mode" />
+
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+
+            <div class="card card-outline card-primary">
+                <div class="card-header py-2">
+                    <h3 class="card-title">Add/Edit Service Bill</h3>
+                </div>
+                <div class="card-body py-2">
+                    <div class="form-row">
+                        <div class="form-group col-md-2">
+                            <label>Bill ID</label>
+                            <input class="form-control form-control-sm" value="@Model.Bill.BillID" readonly />
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label>Bill Date</label>
+                            <input class="form-control form-control-sm" value="@Model.Bill.BillDate.ToString("MM/dd/yyyy")" readonly />
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label>Sale Point</label>
+                            <input class="form-control form-control-sm vni-font" value="@Model.Bill.SalePointName" readonly />
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label>Status</label>
+                            <input class="form-control form-control-sm" value="@Model.Bill.BillStatusName" readonly />
+                        </div>
+                        <div class="form-group col-md-1">
+                            <label>%VAT</label>
+                            <input class="form-control form-control-sm text-right" value="@Model.Bill.PctTax.ToString("0.##")" readonly />
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label>Ex. Rate</label>
+                            <input class="form-control form-control-sm text-right" value="@Model.Bill.ExRate.ToString("0.##")" readonly />
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col-md-2">
+                            <label>Cust ID</label>
+                            <input class="form-control form-control-sm" value="@Model.Bill.CustomerID" readonly />
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label>Apmt No.</label>
+                            <input class="form-control form-control-sm" value="@Model.Bill.ApartmentNo" readonly />
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label>Cust Name</label>
+                            <input class="form-control form-control-sm vni-font" value="@Model.Bill.CustomerName" readonly />
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label>Company</label>
+                            <input class="form-control form-control-sm vni-font" value="@Model.Bill.CompanyName" readonly />
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label>Description</label>
+                            <input asp-for="Bill.Description" class="form-control form-control-sm vni-font" readonly="@isView" />
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label>Note</label>
+                            <input asp-for="Bill.Note" class="form-control form-control-sm vni-font" readonly="@isView" />
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label>For From</label>
+                            <input asp-for="Bill.ForFromDate" type="date" class="form-control form-control-sm" readonly="@isView" />
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label>To Date</label>
+                            <input asp-for="Bill.ForToDate" type="date" class="form-control form-control-sm" readonly="@isView" />
+                        </div>
+                    </div>
+
+                    <div class="form-row align-items-end">
+                        <div class="form-group col-md-2">
+                            <label>Before VAT</label>
+                            <input id="billBeforeVat" class="form-control form-control-sm text-right" value="@Model.Bill.VNDAmountBefVAT.ToString("0.##")" readonly />
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label>VAT</label>
+                            <input id="billVat" class="form-control form-control-sm text-right" value="@Model.Bill.VNDAmountVAT.ToString("0.##")" readonly />
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label>After VAT</label>
+                            <input id="billAfterVat" class="form-control form-control-sm text-right" value="@Model.Bill.VNDAmount.ToString("0.##")" readonly />
+                        </div>
+                        <div class="form-group col-md-3">
+                            <div class="custom-control custom-checkbox mt-4">
+                                <input asp-for="Bill.IsPersonalPayment" class="custom-control-input" disabled="@isView" />
+                                <label class="custom-control-label" asp-for="Bill.IsPersonalPayment">Is Personal</label>
+                            </div>
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label>Created Operator</label>
+                            <input class="form-control form-control-sm" value="@($"{Model.Bill.CreatedOperatorCode} ({Model.Bill.CreatedOperatorName})")" readonly />
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer py-2">
+                    @if (!isView)
+                    {
+                        <button type="submit" asp-page-handler="Save" class="btn btn-primary btn-sm">
+                            <i class="fas fa-save"></i> Save
+                        </button>
+                    }
+                    <a class="btn btn-secondary btn-sm" href="@Model.SafeReturnUrl">
+                        <i class="fas fa-arrow-left"></i> Back
+                    </a>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header py-2">
+                    <h3 class="card-title">Service Bill Detail</h3>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm mb-0" id="dailyServiceBillDetailTable">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th style="width: 36px;"></th>
+                                    <th>Item Name</th>
+                                    <th style="width: 100px;">Unit</th>
+                                    <th style="width: 100px;">Quantity</th>
+                                    <th style="width: 110px;">Price</th>
+                                    <th style="width: 120px;">Amount</th>
+                                    <th style="width: 220px;">Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (var i = 0; i < Model.DetailRows.Count; i++)
+                                {
+                                    <tr>
+                                        <td class="text-center">@(i + 1)</td>
+                                        <td class="vni-font">
+                                            @Model.DetailRows[i].ServiceName
+                                            <input type="hidden" asp-for="DetailRows[i].DetailID" />
+                                            <input type="hidden" asp-for="DetailRows[i].BillNumber" />
+                                            <input type="hidden" asp-for="DetailRows[i].ServiceItem" />
+                                        </td>
+                                        <td>
+                                            @Model.DetailRows[i].Unit
+                                            <input type="hidden" asp-for="DetailRows[i].Unit" />
+                                        </td>
+                                        <td>
+                                            <input asp-for="DetailRows[i].Quantity" class="form-control form-control-sm text-right js-bill-qty" readonly="@isView" />
+                                        </td>
+                                        <td>
+                                            <input asp-for="DetailRows[i].Price" class="form-control form-control-sm text-right js-bill-price" readonly="@isView" />
+                                        </td>
+                                        <td>
+                                            <input asp-for="DetailRows[i].Amount" class="form-control form-control-sm text-right js-bill-amount" readonly />
+                                        </td>
+                                        <td>
+                                            <input asp-for="DetailRows[i].Notes" class="form-control form-control-sm vni-font" readonly="@isView" />
+                                        </td>
+                                    </tr>
+                                }
+                                @if (Model.DetailRows.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted py-3">No detail</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer py-2 text-right">
+                    Total Record(s): @Model.DetailRows.Count
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        window.dailyServiceBillPage = {
+            pctTax: @Model.Bill.PctTax.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            isView: @Model.IsViewMode.ToString().ToLowerInvariant()
+        };
+    </script>
+    <script src="~/js/Cus/DailyServiceBill/DailyServiceBillDetail.js" asp-append-version="true"></script>
+}

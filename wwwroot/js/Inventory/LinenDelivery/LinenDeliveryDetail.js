@@ -181,6 +181,10 @@
         $('#btnCreateLinenDeliveryBill').off('click').on('click', function () {
             createBill();
         });
+
+        $(document).off('dblclick', '#linenDeliveryBillTableBody tr[data-bill-id]').on('dblclick', '#linenDeliveryBillTableBody tr[data-bill-id]', function () {
+            openBillDetail($(this));
+        });
     }
 
     function bindPrintEvents() {
@@ -470,7 +474,8 @@
         }
 
         const html = bills.map(function (item) {
-            return `<tr>
+            const mode = Number(item.billStatus) === 1 ? 'edit' : 'view';
+            return `<tr class="js-bill-row" data-bill-id="${encodeHtml(item.billId)}" data-mode="${mode}">
                 <td>${encodeHtml(item.billId)}</td>
                 <td class="text-center">${encodeHtml(item.billDate || '')}</td>
                 <td>${encodeHtml(item.apartmentNo || '')}</td>
@@ -485,6 +490,19 @@
 
         $('#linenDeliveryBillTableBody').html(html);
         $('#linenDeliveryBillListWrap').removeClass('d-none');
+    }
+
+    function openBillDetail($row) {
+        const billId = $row.data('bill-id');
+        const mode = $row.data('mode') || 'view';
+        const detailUrl = window.linenDeliveryPage?.billDetailUrl || '';
+        if (!billId || !detailUrl) {
+            return;
+        }
+
+        const returnUrl = `${window.location.pathname}${window.location.search || ''}`;
+        const separator = detailUrl.indexOf('?') >= 0 ? '&' : '?';
+        window.location.href = `${detailUrl}${separator}id=${encodeURIComponent(billId)}&mode=${encodeURIComponent(mode)}&returnUrl=${encodeURIComponent(returnUrl)}`;
     }
 
     function loadPrintPreview() {
