@@ -105,6 +105,24 @@
             vertical-align: middle !important;
         }
 
+        .linen-delivery-bill-modal-dialog {
+            max-width: 98vw;
+            width: 98vw;
+        }
+
+        .linen-delivery-bill-table {
+            min-width: 1180px;
+        }
+
+        .linen-delivery-bill-table th,
+        .linen-delivery-bill-table td {
+            white-space: nowrap;
+        }
+
+        .linen-delivery-bill-table .bill-status-cell {
+            min-width: 170px;
+        }
+
         .linen-delivery-report-modal-dialog {
             max-width: 90vw;
             width: 90vw;
@@ -647,7 +665,7 @@
 </div>
 
 <div class="modal fade" id="linenDeliveryBillModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-xl" role="document">
+    <div class="modal-dialog modal-xl linen-delivery-bill-modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header py-2">
                 <h5 class="modal-title">Linen Delivery Bill</h5>
@@ -685,7 +703,7 @@
                                     <th style="width: 90px;">PctTax</th>
                                     <th style="width: 120px;">VNDAmountVAT</th>
                                     <th style="width: 120px;">VNDAmount</th>
-                                    <th style="width: 100px;">Status</th>
+                                    <th style="width: 170px;">Status</th>
                                 </tr>
                             </thead>
                             <tbody id="linenDeliveryBillTableBody">

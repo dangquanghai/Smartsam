@@ -477,14 +477,14 @@
             const mode = Number(item.billStatus) === 1 ? 'edit' : 'view';
             return `<tr class="js-bill-row" data-bill-id="${encodeHtml(item.billId)}" data-mode="${mode}">
                 <td>${encodeHtml(item.billId)}</td>
-                <td class="text-center">${encodeHtml(item.billDate || '')}</td>
+                <td>${encodeHtml(item.billDate || '')}</td>
                 <td>${encodeHtml(item.apartmentNo || '')}</td>
                 <td>${encodeHtml(item.customer || '')}</td>
-                <td class="text-right">${encodeHtml(item.vndAmountBefVat || '0')}</td>
-                <td class="text-right">${encodeHtml(item.pctTax || '0')}</td>
-                <td class="text-right">${encodeHtml(item.vndAmountVat || '0')}</td>
-                <td class="text-right">${encodeHtml(item.vndAmount || '0')}</td>
-                <td class="text-center">${encodeHtml(item.billStatusText || '')}</td>
+                <td class="text-right">${encodeHtml(formatDisplayNumber(item.vndAmountBefVat))}</td>
+                <td class="text-right">${encodeHtml(formatDisplayNumber(item.pctTax))}</td>
+                <td class="text-right">${encodeHtml(formatDisplayNumber(item.vndAmountVat))}</td>
+                <td class="text-right">${encodeHtml(formatDisplayNumber(item.vndAmount))}</td>
+                <td class="bill-status-cell">${encodeHtml(item.billStatusText || '')}</td>
             </tr>`;
         }).join('');
 
@@ -503,6 +503,19 @@
         const returnUrl = `${window.location.pathname}${window.location.search || ''}`;
         const separator = detailUrl.indexOf('?') >= 0 ? '&' : '?';
         window.location.href = `${detailUrl}${separator}id=${encodeURIComponent(billId)}&mode=${encodeURIComponent(mode)}&returnUrl=${encodeURIComponent(returnUrl)}`;
+    }
+
+    function formatDisplayNumber(value) {
+        const text = (value || '0').toString().replace(/,/g, '').trim();
+        const number = Number(text);
+        if (!Number.isFinite(number)) {
+            return value || '0';
+        }
+
+        return number.toLocaleString('en-US', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+        });
     }
 
     function loadPrintPreview() {
