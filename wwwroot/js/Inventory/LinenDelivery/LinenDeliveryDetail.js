@@ -354,7 +354,8 @@
     }
 
     function syncToBillButtonState(typeValue) {
-        const canToBill = typeValue === '5' || typeValue === '3';
+        const isSpecialLaundry = $('#Header_IsSpecialLaundry').is(':checked');
+        const canToBill = typeValue === '5' || (typeValue === '3' && !isSpecialLaundry);
         $('#btnToBill').prop('disabled', !canToBill);
     }
 

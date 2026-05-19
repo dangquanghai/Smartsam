@@ -45,7 +45,7 @@ public class LinenDeliveryDetailModel : BasePageModel
     public List<SelectListItem> LinenOptions { get; set; } = new List<SelectListItem>();
     public string LocationOptionsJson { get; set; } = "[]";
     public string LinenOptionsJson { get; set; } = "[]";
-    public bool CanToBill => Header.DeliveryID > 0 && CanHeaderCreateBill(Header);
+    public bool CanToBill => Header.DeliveryID > 0 && CanHeaderCreateBill(Header) && !Header.IsSpecialLaundry;
 
     public IActionResult OnGet(int? id, string mode = "view")
     {
