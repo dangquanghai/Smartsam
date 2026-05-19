@@ -1333,7 +1333,7 @@ VALUES
             return true;
         }
 
-        if (header.DeliveryType == 3 && !header.IsSpecialLaundry)
+        if (header.DeliveryType == 3)
         {
             return true;
         }
