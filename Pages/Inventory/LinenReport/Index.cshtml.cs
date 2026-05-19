@@ -1,5 +1,6 @@
 using System.Data;
 using System.Security.Claims;
+using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
@@ -193,6 +194,8 @@ public class IndexModel : BasePageModel
             };
 
             var pdf = LinenReportQuestPdfReport.BuildPdf(preview.Value ?? new { reportType = normalizedType }, LoadCompanyLogoBytes(conn));
+            var fileName = BuildPdfFileName(normalizedType, descriptionId, normalizedLinenCode, normalizedFromDate, normalizedToDate);
+            Response.Headers["Content-Disposition"] = BuildInlinePdfContentDisposition(fileName);
             return File(pdf, "application/pdf");
         }
         catch (InvalidOperationException ex)
@@ -1239,6 +1242,87 @@ FROM dbo.MS_Parameters;", conn);
             5 => "Apartment",
             _ => "Group " + groupId
         };
+    }
+
+    private static string BuildPdfFileName(string reportType, int? descriptionId, string linenCode, DateTime fromDate, DateTime toDate)
+    {
+        var parts = new List<string>
+        {
+            "LinenReport",
+            GetPdfReportName(reportType)
+        };
+
+        if (descriptionId.HasValue && descriptionId.Value > 0)
+        {
+            parts.Add(descriptionId.Value.ToString());
+        }
+
+        if (!string.IsNullOrWhiteSpace(linenCode))
+        {
+            parts.Add(linenCode.Trim());
+        }
+
+        if (reportType == LinenReportTypes.LaundryRecord ||
+            reportType == LinenReportTypes.LaundryBalance ||
+            reportType == LinenReportTypes.ApmtBalance)
+        {
+            parts.Add(fromDate.ToString("yyyyMMdd"));
+            parts.Add(toDate.ToString("yyyyMMdd"));
+        }
+
+        return SanitizeFileName(string.Join("_", parts) + ".pdf");
+    }
+
+    private static string GetPdfReportName(string reportType)
+    {
+        return reportType switch
+        {
+            LinenReportTypes.Pantry => "Pantry",
+            LinenReportTypes.Delivery => "Delivery",
+            LinenReportTypes.Receive => "Receive",
+            LinenReportTypes.LaundryRecord => "LaundryRecord",
+            LinenReportTypes.NotReceive => "NotReceive",
+            LinenReportTypes.LaundryBalance => "LaundryBalance",
+            LinenReportTypes.ApmtBalance => "ApartmentBalance",
+            _ => "Report"
+        };
+    }
+
+    private static string SanitizeFileName(string fileName)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var builder = new StringBuilder(fileName.Length);
+
+        foreach (var ch in fileName)
+        {
+            if (invalidChars.Contains(ch))
+            {
+                builder.Append('_');
+                continue;
+            }
+
+            if (char.IsLetterOrDigit(ch) || ch == '.' || ch == '_' || ch == '-')
+            {
+                builder.Append(ch);
+                continue;
+            }
+
+            builder.Append('_');
+        }
+
+        var sanitized = builder.ToString().Trim('_', '.');
+        if (string.IsNullOrWhiteSpace(sanitized))
+        {
+            return "LinenReport.pdf";
+        }
+
+        return sanitized;
+    }
+
+    private static string BuildInlinePdfContentDisposition(string fileName)
+    {
+        var escapedFileName = Uri.EscapeDataString(fileName);
+        return $"inline; filename=\"{fileName}\"; filename*=UTF-8''{escapedFileName}";
     }
 }
 

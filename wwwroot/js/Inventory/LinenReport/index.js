@@ -1,8 +1,6 @@
 (function () {
     'use strict';
 
-    let activeReportPdfObjectUrl = '';
-
     function initializePage() {
         initializeDateRange();
         bindEvents();
@@ -108,8 +106,7 @@
 
         clearPdfPreview(frame);
         loadReportPdfPreview(frame, pdfUrl)
-            .then(function (objectUrl) {
-                activeReportPdfObjectUrl = objectUrl;
+            .then(function () {
                 $('#linenReportPreviewMeta').text(`${getReportTypeText(getSelectedReportType())} | PDF preview`);
             })
             .catch(function (error) {
@@ -164,20 +161,12 @@
             throw new Error('Cannot load report preview.');
         }
 
-        const blob = await response.blob();
-        const previewUrl = URL.createObjectURL(blob);
-        frame.src = previewUrl;
-        return previewUrl;
+        frame.src = url;
     }
 
     function clearPdfPreview(frame) {
         if (frame) {
             frame.removeAttribute('src');
-        }
-
-        if (activeReportPdfObjectUrl) {
-            URL.revokeObjectURL(activeReportPdfObjectUrl);
-            activeReportPdfObjectUrl = '';
         }
     }
 
