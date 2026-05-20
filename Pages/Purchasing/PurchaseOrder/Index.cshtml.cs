@@ -550,6 +550,7 @@ public class IndexModel : BasePageModel
     {
         var rows = new List<PurchaseOrderRow>();
         var whereParts = new List<string>();
+        var workflowUser = LoadWorkflowUser();
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         using var cmd = conn.CreateCommand();
 
@@ -589,6 +590,7 @@ public class IndexModel : BasePageModel
             }
 
             whereParts.Add($"p.StatusID IN ({string.Join(", ", statusParams)})");
+            ApplyWaitingForApprovalScope(effectiveStatusIds, workflowUser, whereParts);
         }
 
         if (filter.AssessLevelId.HasValue)
@@ -680,6 +682,35 @@ public class IndexModel : BasePageModel
         }
 
         return (rows, total);
+    }
+
+    private static void ApplyWaitingForApprovalScope(List<int> statusIds, PurchaseOrderWorkflowUser workflowUser, List<string> whereParts)
+    {
+        if (!statusIds.Contains(2))
+        {
+            return;
+        }
+
+        if (workflowUser.IsPurchaser)
+        {
+            return;
+        }
+
+        var stepParts = new List<string>();
+        if (workflowUser.IsCFO)
+        {
+            stepParts.Add("(p.PurId IS NOT NULL AND p.CAId IS NULL)");
+        }
+
+        if (workflowUser.IsBOD)
+        {
+            stepParts.Add("(p.CAId IS NOT NULL AND p.GDId IS NULL)");
+        }
+
+        if (stepParts.Count > 0)
+        {
+            whereParts.Add($"(p.StatusID <> 2 OR ({string.Join(" OR ", stepParts)}))");
+        }
     }
 
     private static List<int> GetEffectiveStatusIds(PurchaseOrderSearchRequest filter)
