@@ -59,6 +59,7 @@ public class PurchaseOrderDetailModel : BasePageModel
     public bool OpenConvertModal { get; private set; }
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
     public string BackToListUrl => string.IsNullOrWhiteSpace(ReturnUrl) ? Url.Page("./Index") ?? "./Index" : ReturnUrl;
+    public bool ShouldCloseDetailAfterWorkflow => string.Equals(CloseDetailAfterWorkflow, "true", StringComparison.OrdinalIgnoreCase);
     public string DepartmentOptionsJson => JsonSerializer.Serialize(DepartmentOptions.Select(x => new LookupOptionDto
     {
         Value = x.Value,
@@ -74,6 +75,9 @@ public class PurchaseOrderDetailModel : BasePageModel
 
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }
+
+    [TempData]
+    public string? CloseDetailAfterWorkflow { get; set; }
 
     [BindProperty]
     public PurchaseOrderHeader Header { get; set; } = new PurchaseOrderHeader();
@@ -277,6 +281,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         }
 
         TempData["SuccessMessage"] = "Purchase order sent to approval successfully.";
+        CloseDetailAfterWorkflow = "true";
         return RedirectToCurrentDetail("view");
     }
 
@@ -702,6 +707,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         }
 
         TempData["SuccessMessage"] = "Purchase order approved successfully.";
+        CloseDetailAfterWorkflow = "true";
         return RedirectToCurrentDetail("view");
     }
 

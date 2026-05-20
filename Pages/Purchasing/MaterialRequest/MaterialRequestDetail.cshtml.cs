@@ -88,6 +88,9 @@ public class MaterialRequestDetailModel : BasePageModel
     [TempData]
     public string? ErrorMessage { get; set; }
 
+    [TempData]
+    public string? CloseDetailAfterWorkflow { get; set; }
+
     [BindProperty]
     public PagePermissions PagePerm { get; set; } = new PagePermissions();
     public List<SelectListItem> StoreGroups { get; set; } = new List<SelectListItem>();
@@ -192,6 +195,11 @@ public class MaterialRequestDetailModel : BasePageModel
     public string BackToListUrl
     {
         get { return ResolveBackToListUrl(); }
+    }
+
+    public bool ShouldCloseDetailAfterWorkflow
+    {
+        get { return string.Equals(CloseDetailAfterWorkflow, "true", StringComparison.OrdinalIgnoreCase); }
     }
 
     // ==========================================
@@ -682,6 +690,7 @@ public class MaterialRequestDetailModel : BasePageModel
                 await WriteWorkflowHistoryAsync(action, currentStatus, transition, Id.Value, cancellationToken, autoHeadApproveOnSubmit);
                 TryQueueWorkflowNotifyEmail(action, currentStatus, existing, isAuto, Array.Empty<MaterialRequestLineDto>(), autoHeadApproveOnSubmit);
                 SuccessMessage = transition.SuccessMessage;
+                CloseDetailAfterWorkflow = "true";
                 return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
             }
 
@@ -702,6 +711,7 @@ public class MaterialRequestDetailModel : BasePageModel
             await WriteWorkflowHistoryAsync(action, currentStatus, transition, Id.Value, cancellationToken, autoHeadApproveOnSubmit);
             TryQueueWorkflowNotifyEmail(action, currentStatus, existing, isAuto, purchaserLines, autoHeadApproveOnSubmit);
             SuccessMessage = transition.SuccessMessage;
+            CloseDetailAfterWorkflow = "true";
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
         }
         catch (Exception ex)

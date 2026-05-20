@@ -18,6 +18,8 @@
     mrShowAdvancedColumns = toBoolData($form.data('show-advanced-columns'));
     mrLineColspan = mrShowAdvancedColumns ? 14 : 10;
 
+    closeDetailAfterWorkflowIfNeeded($form);
+
     // Start page
     initializePage(mode, currentStatusId, actionPerm);
     syncNoIssueInput();
@@ -185,6 +187,22 @@
         window.print();
     });
 });
+
+function closeDetailAfterWorkflowIfNeeded($form) {
+    if (!toBoolData($form.data('close-after-workflow'))) {
+        return;
+    }
+
+    const backToListUrl = ($form.data('back-to-list-url') || '/Purchasing/MaterialRequest').toString();
+    setTimeout(function () {
+        window.open('', '_self');
+        window.close();
+
+        setTimeout(function () {
+            window.location.href = backToListUrl;
+        }, 300);
+    }, 300);
+}
 
 // Validation helpers
 function initializePage(mode, currentStatusId, actionPerm) {
