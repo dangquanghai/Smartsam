@@ -28,6 +28,9 @@ public class PurchaseOrderDetailModel : BasePageModel
     private const int PermissionEdit = 4;
     private const int PermissionBackToProcessing = 6;
     private const int PermissionManageAttachment = 8;
+    private const int StatusProcessing = 1;
+    private const int StatusWaitingForApproval = 2;
+    private const int StatusBodApproved = 3;
     private readonly PermissionService _permissionService;
     private readonly ISecurityService _securityService;
     private readonly ILogger<PurchaseOrderDetailModel> _logger;
@@ -129,7 +132,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         }
         else
         {
-            var effectivePermissions = GetEffectivePermissionsByStatus(1);
+        var effectivePermissions = GetEffectivePermissionsByStatus(StatusProcessing);
             if (!effectivePermissions.Contains(PermissionAdd))
             {
                 TempData["SuccessMessage"] = "You have no permission to add purchase order.";
@@ -141,7 +144,7 @@ public class PurchaseOrderDetailModel : BasePageModel
             {
                 PONo = GetSuggestedPONo(),
                 PODate = DateTime.Today,
-                StatusId = 1,
+                StatusId = StatusProcessing,
                 Currency = 1,
                 ExRate = GetDefaultExchangeRate(),
                 PerVAT = 10,
@@ -174,7 +177,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         PrOptions = LoadPrOptions(Header.PRID);
         LoadSelectedLookupTexts();
 
-        var effectivePermissions = GetEffectivePermissionsByStatus(isNew ? 1 : Header.StatusId);
+        var effectivePermissions = GetEffectivePermissionsByStatus(isNew ? StatusProcessing : Header.StatusId);
         var canSaveCurrent = isNew
             ? effectivePermissions.Contains(PermissionAdd)
             : CanEditCurrentPurchaseOrder();
@@ -240,13 +243,15 @@ public class PurchaseOrderDetailModel : BasePageModel
             UPDATE dbo.PC_PO
             SET PurId = @EmployeeID,
                 PurApproDate = @ApproveDate,
-                StatusID = 2,
+                StatusID = @WaitingForApprovalStatus,
                 noted = ''
             WHERE POID = @POID
-            AND ISNULL(StatusID, 0) = 1", conn, trans);
+            AND ISNULL(StatusID, 0) = @ProcessingStatus", conn, trans);
             cmd.Parameters.Add("@POID", SqlDbType.Int).Value = Header.Id;
             cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = _workflowUser.EmployeeId;
             cmd.Parameters.Add("@ApproveDate", SqlDbType.VarChar, 12).Value = DateTime.Now.ToString("dd/MM/yyyy");
+            cmd.Parameters.Add("@ProcessingStatus", SqlDbType.Int).Value = StatusProcessing;
+            cmd.Parameters.Add("@WaitingForApprovalStatus", SqlDbType.Int).Value = StatusWaitingForApproval;
 
             if (cmd.ExecuteNonQuery() <= 0)
             {
@@ -553,6 +558,12 @@ public class PurchaseOrderDetailModel : BasePageModel
             return RedirectToCurrentDetail();
         }
 
+        if (Header.StatusId != StatusProcessing)
+        {
+            TempData["SuccessMessage"] = "Purchase order can be evaluated only when status is Processing.";
+            return RedirectToCurrentDetail("view");
+        }
+
         if (EstimatePoint < 1 || EstimatePoint > 4)
         {
             TempData["SuccessMessage"] = "Please select estimate point from 1 to 4.";
@@ -631,11 +642,12 @@ public class PurchaseOrderDetailModel : BasePageModel
                 SET CAId = @EmployeeID,
                     CAApproDate = @ApproveDate
                 WHERE POID = @POID
-                AND ISNULL(StatusID, 0) = 2
+                AND ISNULL(StatusID, 0) = @WaitingForApprovalStatus
                 AND CAId IS NULL", conn, trans);
                 cmd.Parameters.Add("@POID", SqlDbType.Int).Value = Header.Id;
                 cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = _workflowUser.EmployeeId;
                 cmd.Parameters.Add("@ApproveDate", SqlDbType.VarChar, 12).Value = DateTime.Now.ToString("dd/MM/yyyy");
+                cmd.Parameters.Add("@WaitingForApprovalStatus", SqlDbType.Int).Value = StatusWaitingForApproval;
                 if (cmd.ExecuteNonQuery() <= 0)
                 {
                     throw new InvalidOperationException("Approve failed because CFO step was already processed.");
@@ -650,14 +662,17 @@ public class PurchaseOrderDetailModel : BasePageModel
                 using var cmd = new SqlCommand(@"
                 UPDATE dbo.PC_PO
                 SET GDId = @EmployeeID,
-                    GDApproDate = @ApproveDate
+                    GDApproDate = @ApproveDate,
+                    StatusID = @BodApprovedStatus
                 WHERE POID = @POID
-                AND ISNULL(StatusID, 0) = 2
+                AND ISNULL(StatusID, 0) = @WaitingForApprovalStatus
                 AND CAId IS NOT NULL
                 AND GDId IS NULL", conn, trans);
                 cmd.Parameters.Add("@POID", SqlDbType.Int).Value = Header.Id;
                 cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = _workflowUser.EmployeeId;
                 cmd.Parameters.Add("@ApproveDate", SqlDbType.VarChar, 12).Value = DateTime.Now.ToString("dd/MM/yyyy");
+                cmd.Parameters.Add("@WaitingForApprovalStatus", SqlDbType.Int).Value = StatusWaitingForApproval;
+                cmd.Parameters.Add("@BodApprovedStatus", SqlDbType.Int).Value = StatusBodApproved;
                 if (cmd.ExecuteNonQuery() <= 0)
                 {
                     throw new InvalidOperationException("Approve failed because BOD step was already processed.");
@@ -733,13 +748,14 @@ public class PurchaseOrderDetailModel : BasePageModel
                 CAApproDate = NULL,
                 GDId = NULL,
                 GDApproDate = NULL,
-                StatusID = 1,
+                StatusID = @ProcessingStatus,
                 edited = 1,
                 KeepStatus = @KeepStatus
             WHERE POID = @POID", conn, trans))
             {
                 updateCmd.Parameters.Add("@POID", SqlDbType.Int).Value = Header.Id;
                 updateCmd.Parameters.Add("@KeepStatus", SqlDbType.Int).Value = Header.StatusId;
+                updateCmd.Parameters.Add("@ProcessingStatus", SqlDbType.Int).Value = StatusProcessing;
                 updateCmd.ExecuteNonQuery();
             }
 
@@ -1863,20 +1879,20 @@ public class PurchaseOrderDetailModel : BasePageModel
 
     private void SetActionFlags()
     {
-        var effectivePermissions = GetEffectivePermissionsByStatus(Header.StatusId <= 0 ? 1 : Header.StatusId);
+        var effectivePermissions = GetEffectivePermissionsByStatus(Header.StatusId <= 0 ? StatusProcessing : Header.StatusId);
         var canManageAttachmentsByPermission = Header.Id > 0
             && PagePerm.HasPermission(PermissionManageAttachment);
         CanSave = !IsViewMode && (Mode == "add"
             ? effectivePermissions.Contains(PermissionAdd)
             : CanEditCurrentPurchaseOrder());
         CanPurchaserApprove = Header.Id > 0
-            && Header.StatusId == 1
+            && Header.StatusId == StatusProcessing
             && (IsAdminRole() || _workflowUser.IsPurchaser);
-        CanEvaluate = Header.Id > 0;
-        CanEditEvaluate = Header.Id > 0 && _workflowUser.IsPurchaser;
-        CanApprove = Header.Id > 0 && Header.StatusId == 2 && (CanApproveAsCfo() || CanApproveAsBod());
+        CanEvaluate = Header.Id > 0 && Header.StatusId == StatusProcessing;
+        CanEditEvaluate = Header.Id > 0 && Header.StatusId == StatusProcessing && _workflowUser.IsPurchaser;
+        CanApprove = Header.Id > 0 && Header.StatusId == StatusWaitingForApproval && (CanApproveAsCfo() || CanApproveAsBod());
         CanBackToProcessing = Header.Id > 0
-            && Header.StatusId == 2
+            && Header.StatusId == StatusWaitingForApproval
             && effectivePermissions.Contains(PermissionBackToProcessing)
             && (_workflowUser.IsPurchaser || _workflowUser.IsCFO || _workflowUser.IsBOD || IsAdminRole());
         CanUploadAttachments = canManageAttachmentsByPermission;
@@ -1886,12 +1902,12 @@ public class PurchaseOrderDetailModel : BasePageModel
 
     private bool CanApproveAsCfo()
     {
-        return Header.Id > 0 && Header.StatusId == 2 && !Header.CAId.HasValue && (_workflowUser.IsCFO || IsAdminRole());
+        return Header.Id > 0 && Header.StatusId == StatusWaitingForApproval && !Header.CAId.HasValue && (_workflowUser.IsCFO || IsAdminRole());
     }
 
     private bool CanApproveAsBod()
     {
-        return Header.Id > 0 && Header.StatusId == 2 && Header.CAId.HasValue && !Header.GDId.HasValue && (_workflowUser.IsBOD || IsAdminRole());
+        return Header.Id > 0 && Header.StatusId == StatusWaitingForApproval && Header.CAId.HasValue && !Header.GDId.HasValue && (_workflowUser.IsBOD || IsAdminRole());
     }
 
     private static List<PurchaseOrderNotifyRecipientViewModel> GetWorkflowRecipientsByFlag(SqlConnection conn, SqlTransaction trans, string flagColumn)
