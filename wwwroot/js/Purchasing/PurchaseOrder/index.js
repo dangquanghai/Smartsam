@@ -643,6 +643,24 @@ async function downloadPurchaseOrderPdf(reportUrl, fileName) {
 
         state.currentPage = queryPage;
         performSearch(queryPage);
+        bindRefreshOnPageShow();
+    }
+
+    function bindRefreshOnPageShow() {
+        if (window.purchaseOrderPage?.pageShowRefreshBound) {
+            return;
+        }
+
+        window.purchaseOrderPage = window.purchaseOrderPage || {};
+        window.purchaseOrderPage.pageShowRefreshBound = true;
+        window.addEventListener('pageshow', function (event) {
+            if (!event.persisted) {
+                return;
+            }
+
+            const page = getQueryInt('Filter.Page') || state.currentPage || 1;
+            performSearch(page);
+        });
     }
 
     // Hien dong loading don gian trong luc dang search.
