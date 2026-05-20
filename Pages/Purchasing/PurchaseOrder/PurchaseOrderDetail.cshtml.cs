@@ -2010,7 +2010,7 @@ WHERE EmployeeID = @EmployeeID
   <li>Remark: <b>{WrapNotifyValue(remarkText)}</b></li>
   <li>Total Amount: <b>{FormatAmountForView(totalAmount)} {WebUtility.HtmlEncode(GetCurrencyDisplayText(Header.Currency))}</b></li>
 </ul>
-{(showApproveLink && !string.IsNullOrWhiteSpace(absoluteUrl) ? $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Purchase Order Approve</a></p>" : string.Empty)}
+{(showApproveLink && !string.IsNullOrWhiteSpace(absoluteUrl) ? $"<p>Open Approval Page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Purchase Order Approve</a></p>" : string.Empty)}
 <p>SmartSam System</p>";
 
         return EmailTemplateHelper.WrapInNotifyTemplate(title, color, DateTime.Now, WrapNotifyMessageBody(body));

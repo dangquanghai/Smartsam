@@ -1210,7 +1210,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
   <li>Submitted by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
   <li>Submit time: <b>{submitTimeText}</b></li>
 </ul>
-{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Approve Supplier New</a></p>")}
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open Approval Page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Approve Supplier New</a></p>")}
 <p>SmartSam System</p>";
             body = WrapNotifyMessageBody(body);
 

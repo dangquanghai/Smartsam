@@ -2006,7 +2006,7 @@ WHERE PRID = @PRID", conn, trans);
   <li>Description: <b>{WebUtility.HtmlEncode(Requisition.Description ?? string.Empty)}</b></li>
   <li>Total Amount: <b>{FormatAmountForView(totalAmount)} {WebUtility.HtmlEncode(GetCurrencyDisplayText(Requisition.Currency))}</b></li>
 </ul>
-{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Purchase Requisition Approve</a></p>")}
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open Approval Page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Purchase Requisition Approve</a></p>")}
 <p>SmartSam System</p>";
 
         return EmailTemplateHelper.WrapInNotifyTemplate(title, color, DateTime.Now, body);

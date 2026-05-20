@@ -1578,7 +1578,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
   <li>Action by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
   <li>Action time: <b>{actionTimeText}</b></li>
 </ul>
-{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">{WebUtility.HtmlEncode(PageTitle)}</a></p>")}
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open Approval Page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">{WebUtility.HtmlEncode(PageTitle)}</a></p>")}
 <p>SmartSam System</p>"
                 : $@"
 <p>Dear {{RECIPIENT_LABEL}},</p>
@@ -1588,7 +1588,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
   <li>Action by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
   <li>Action time: <b>{actionTimeText}</b></li>
 </ul>
-{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">{WebUtility.HtmlEncode(PageTitle)}</a></p>")}
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open Approval Page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">{WebUtility.HtmlEncode(PageTitle)}</a></p>")}
 <p>SmartSam System</p>";
             body = WrapNotifyMessageBody(body);
             var htmlBody = IsApproveSupplierNewMode
@@ -1680,7 +1680,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
   <li>Action by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
   <li>Action time: <b>{actionTimeText}</b></li>
 </ul>
-{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Review: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">{WebUtility.HtmlEncode(IsApproveSupplierNewMode ? "Supplier Detail" : "Supplier List")}</a></p>")}
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open Review Page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">{WebUtility.HtmlEncode(IsApproveSupplierNewMode ? "Supplier Detail" : "Supplier List")}</a></p>")}
 <p>SmartSam System</p>"
                 : $@"
 <p>Dear {{RECIPIENT_LABEL}},</p>
@@ -1690,7 +1690,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
   <li>Action by: <b>{WebUtility.HtmlEncode(operatorCode)}</b></li>
   <li>Action time: <b>{actionTimeText}</b></li>
 </ul>
-{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Review: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Supplier List</a></p>")}
+{(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open Review Page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Supplier List</a></p>")}
 <p>SmartSam System</p>";
             body = WrapNotifyMessageBody(body);
 
