@@ -259,7 +259,7 @@ namespace SmartSam.Pages.FNC.Invoice
             using var cmd = new SqlCommand(sql.ToString(), conn);
 
             // Sửa lỗi logic đặt tên tham số cũ: SQL khai báo @userCode nhưng truyền @UserId
-            cmd.Parameters.AddWithValue("@userCode", userId);
+           // cmd.Parameters.AddWithValue("@userCode", userId);
             cmd.Parameters.AddWithValue("@status", statusParam);
 
             if (!string.IsNullOrEmpty(Filter.ObjectId))

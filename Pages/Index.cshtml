@@ -3,9 +3,247 @@
 @{
     ViewData["Title"] = "Dashboard";
 }
-<h1>Dashboard</h1>
-<div class="card">
-    <div class="card-body">
-        AdminLTE đã chạy trong Razor Pages 🎉
+
+<!-- CSS Cấu hình giao diện Light Mode 3 tầng hoàn chỉnh -->
+<style>
+    /* 1. Đè màu nền gốc của AdminLTE */
+    body,
+    .content-wrapper,
+    .main-footer,
+    .wrapper {
+        background-color: #F4F6F9 !important;
+        color: #1F2D3D !important;
+    }
+
+    html, body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+    }
+
+    /* Thẻ chứa chính toàn màn hình */
+    .dashboard-container {
+        background-color: #F4F6F9 !important;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        padding: 0px 15px 15px 15px;
+        box-sizing: border-box;
+    }
+
+    /* VÙNG 1: Chiều cao tự động */
+    .section-top {
+        height: auto;
+        padding-bottom: 10px;
+        margin-top: 0 !important;
+    }
+
+    /* VÙNG 3: Vùng thông số mới - Chiều cao gấp đôi vùng 1 (~85px) */
+    .section-kpi {
+        height: 85px;
+        margin-bottom: 10px;
+    }
+
+    /* VÙNG 2: Chiếm trọn không gian còn lại đáy màn hình */
+    .section-bottom {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    /* Khung chứa các thẻ tóm tắt số liệu Vùng 3 */
+    .kpi-card {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E2E8F0;
+        border-radius: 6px;
+        height: 100%;
+        padding: 10px 15px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center; /* Căn giữa 2 dòng theo chiều dọc */
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+    }
+
+    .kpi-title {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        font-weight: 700;
+        color: #718096;
+        margin-bottom: 2px;
+    }
+
+    .kpi-value {
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: #1A202C;
+        line-height: 1.1;
+    }
+
+    /* Tạo lưới 2x2 cho vùng biểu đồ */
+    .grid-charts {
+        flex: 1;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    /* Mỗi ô biểu đồ chiếm 50% rộng và 50% cao */
+    .chart-box {
+        width: 50%;
+        height: 50%;
+        padding: 6px;
+        box-sizing: border-box;
+    }
+
+    /* Định dạng thẻ Card chứa biểu đồ */
+    .dashboard-card {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E2E8F0;
+        border-radius: 8px;
+        color: #1F2D3D;
+        height: 100%;
+        margin: 0;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+
+    .chart-title {
+        color: #4A5568;
+        font-size: 0.85rem;
+        letter-spacing: 0.5px;
+    }
+
+    .flex-align-center {
+        display: flex;
+        align-items: center;
+    }
+</style>
+
+<div class="dashboard-container">
+
+    <!-- ================= VÙNG 1 (Phần Trên - Bộ lọc & Tiêu đề) ================= -->
+    <div class="section-top row g-3 m-0 pt-0">
+        <!-- Phần 1.1: Tiêu đề Dashboard -->
+        <div class="col-md-6 flex-align-center p-0 align-items-start">
+            <h4 class="text-uppercase m-0 font-weight-bold" style="letter-spacing: 1px; font-size: 1.3rem; line-height: 1.0;">
+                APARTMENT MANAGEMENT BOD DASHBOARD<br>
+            </h4>
+        </div>
+
+        <!-- Phần 1.2: Bộ lọc -->
+        <div class="col-md-6 flex-align-center p-0 align-items-start">
+            <div class="row w-100 g-2 align-items-center m-0">
+                <div class="col-auto p-1">
+                    <span class="text-muted small font-weight-bold">From</span>
+                </div>
+                <div class="col p-1">
+                    <input type="month" class="form-control form-control-sm bg-white text-dark border-secondary" value="2026-01">
+                </div>
+                <div class="col-auto p-1">
+                    <span class="text-muted small font-weight-bold">To</span>
+                </div>
+                <div class="col p-1">
+                    <input type="month" class="form-control form-control-sm bg-white text-dark border-secondary" value="2026-05">
+                </div>
+
+                <!-- Checkbox Unit/Area -->
+                <div class="col-auto p-1 d-flex align-items-center">
+                    <div class="custom-control custom-checkbox">
+                        <input type="checkbox" class="custom-control-input" id="chkUnitArea">
+                        <label class="custom-control-label small font-weight-bold text-muted" for="chkUnitArea" style="cursor: pointer; user-select: none;">
+                            Unit/Area
+                        </label>
+                    </div>
+                </div>
+
+                <div class="col-auto p-1">
+                    <button class="btn btn-sm btn-info px-4 font-weight-bold text-white">
+                        <i class="fas fa-eye mr-1"></i> View
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
+
+    <!-- ================= VÙNG 3 (MỚI THÊM - Nằm giữa Vùng 1 và Vùng 2, chia làm 4 phần) ================= -->
+    <div class="section-kpi row m-0 g-2">
+        <!-- Vùng 3.1: Total Revenue -->
+        <div class="col-md-3 p-1">
+            <div class="kpi-card">
+                <div class="kpi-title">Total Revenue</div>
+                <div class="kpi-value text-success">1,850M VND</div>
+            </div>
+        </div>
+
+        <!-- Vùng 3.2: Cost -->
+        <div class="col-md-3 p-1">
+            <div class="kpi-card">
+                <div class="kpi-title">Cost</div>
+                <div class="kpi-value text-danger">980M VND</div>
+            </div>
+        </div>
+
+        <!-- Vùng 3.3: NET Profit -->
+        <div class="col-md-3 p-1">
+            <div class="kpi-card">
+                <div class="kpi-title">NET Profit</div>
+                <div class="kpi-value text-info">870M VND</div>
+            </div>
+        </div>
+
+        <!-- Vùng 3.4: Average Occupancy -->
+        <div class="col-md-3 p-1">
+            <div class="kpi-card">
+                <div class="kpi-title">Average Occupancy</div>
+                <div class="kpi-value text-warning">88.5%</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= VÙNG 2 (Chiếm toàn bộ diện tích còn lại bên dưới) ================= -->
+    <div class="section-bottom">
+        <div class="grid-charts">
+
+            <!-- Block 1: Cost vs Revenue -->
+            <div class="chart-box">
+                <div class="card dashboard-card">
+                    <div class="card-body">
+                        <h6 class="chart-title font-weight-bold mb-0"><i class="fas fa-chart-bar text-primary mr-2"></i> COST VS REVENUE OVER TIME</h6>
+                        <div class="text-center text-muted mt-4 small">Biểu đồ Doanh thu & Chi phí (Đặt code chart vào đây)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Block 2: Competitor Sentiment & Rating -->
+            <div class="chart-box">
+                <div class="card dashboard-card">
+                    <div class="card-body">
+                        <h6 class="chart-title font-weight-bold mb-0"><i class="fas fa-star text-warning mr-2"></i> COMPETITOR BRAND SENTIMENT & RATING</h6>
+                        <div class="text-center text-muted mt-4 small">Biểu đồ Dòng Rating đối thủ (Đặt code chart vào đây)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Block 3: Occupancy Rate Trend -->
+            <div class="chart-box">
+                <div class="card dashboard-card">
+                    <div class="card-body">
+                        <h6 class="chart-title font-weight-bold mb-0"><i class="fas fa-chart-line text-success mr-2"></i> OCCUPANCY RATE TREND</h6>
+                        <div class="text-center text-muted mt-4 small">Biểu đồ Công suất phòng (Đặt code chart vào đây)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Block 4: Long-term Guest Arrivals vs Departures -->
+            <div class="chart-box">
+                <div class="card dashboard-card">
+                    <div class="card-body">
+                        <h6 class="chart-title font-weight-bold mb-0"><i class="fas fa-users text-info mr-2"></i> LONG-TERM GUEST ARRIVALS VS DEPARTURES</h6>
+                        <div class="text-center text-muted mt-4 small">Biểu đồ Khách dài hạn Vào/Ra (Đặt code chart vào đây)</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
 </div>
