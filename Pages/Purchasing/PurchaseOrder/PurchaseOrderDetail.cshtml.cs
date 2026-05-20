@@ -1887,7 +1887,7 @@ public class PurchaseOrderDetailModel : BasePageModel
             : CanEditCurrentPurchaseOrder());
         CanPurchaserApprove = Header.Id > 0
             && Header.StatusId == StatusProcessing
-            && (IsAdminRole() || _workflowUser.IsPurchaser);
+            && _workflowUser.IsPurchaser;
         CanEvaluate = Header.Id > 0 && Header.StatusId == StatusProcessing;
         CanEditEvaluate = Header.Id > 0 && Header.StatusId == StatusProcessing && _workflowUser.IsPurchaser;
         CanApprove = Header.Id > 0 && Header.StatusId == StatusWaitingForApproval && (CanApproveAsCfo() || CanApproveAsBod());
@@ -1902,12 +1902,12 @@ public class PurchaseOrderDetailModel : BasePageModel
 
     private bool CanApproveAsCfo()
     {
-        return Header.Id > 0 && Header.StatusId == StatusWaitingForApproval && !Header.CAId.HasValue && (_workflowUser.IsCFO || IsAdminRole());
+        return Header.Id > 0 && Header.StatusId == StatusWaitingForApproval && !Header.CAId.HasValue && _workflowUser.IsCFO;
     }
 
     private bool CanApproveAsBod()
     {
-        return Header.Id > 0 && Header.StatusId == StatusWaitingForApproval && Header.CAId.HasValue && !Header.GDId.HasValue && (_workflowUser.IsBOD || IsAdminRole());
+        return Header.Id > 0 && Header.StatusId == StatusWaitingForApproval && Header.CAId.HasValue && !Header.GDId.HasValue && _workflowUser.IsBOD;
     }
 
     private static List<PurchaseOrderNotifyRecipientViewModel> GetWorkflowRecipientsByFlag(SqlConnection conn, SqlTransaction trans, string flagColumn)
