@@ -1,0 +1,172 @@
+@page
+@model SmartSam.Pages.Inventory.SpecialLaundryReport.IndexModel
+@{
+    ViewData["Title"] = "Special Laundry Report";
+    var selectedApartments = Model.SelectedApartments.Count > 0
+        ? Model.SelectedApartments
+        : Model.ApartmentOptions.Select(x => x.Value).ToList();
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Inventory/SpecialLaundryReport/index.css" asp-append-version="true" />
+}
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="special-laundry-form-shell">
+            <form method="post" asp-page-handler="Export" id="specialLaundryReportForm" class="special-laundry-vb-form">
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="selectedApartments" name="selectedApartments" />
+
+                <div class="special-laundry-grid">
+                    <fieldset class="special-laundry-fieldset special-laundry-report-month">
+                        <legend>Report Month</legend>
+                        <div class="special-laundry-field-row">
+                            <label for="serviceFrom">ServiceFrom</label>
+                            <input id="serviceFrom"
+                                   name="fromDate"
+                                   type="date"
+                                   class="form-control form-control-sm"
+                                   value="@Model.FromDate?.ToString("yyyy-MM-dd")" />
+                        </div>
+                        <div class="special-laundry-field-row">
+                            <label for="serviceTo">ServiceTo</label>
+                            <input id="serviceTo"
+                                   name="toDate"
+                                   type="date"
+                                   class="form-control form-control-sm"
+                                   value="@Model.ToDate?.ToString("yyyy-MM-dd")" />
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="special-laundry-fieldset special-laundry-order">
+                        <legend>Order by</legend>
+                        <div class="special-laundry-radio-list">
+                            <div class="custom-control custom-radio">
+                                <input type="radio"
+                                       id="sortByApartment"
+                                       name="sortBy"
+                                       value="Apartment"
+                                       class="custom-control-input"
+                                       checked="@(Model.SortBy != "Date")" />
+                                <label class="custom-control-label" for="sortByApartment">Ampt</label>
+                            </div>
+                            <div class="custom-control custom-radio">
+                                <input type="radio"
+                                       id="sortByDate"
+                                       name="sortBy"
+                                       value="Date"
+                                       class="custom-control-input"
+                                       checked="@(Model.SortBy == "Date")" />
+                                <label class="custom-control-label" for="sortByDate">Date</label>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="special-laundry-fieldset special-laundry-apartments">
+                        <legend>Detail parameters</legend>
+                        <div class="special-laundry-apartment-body">
+                            <label class="special-laundry-apartment-label">Apartment:</label>
+                            <div class="special-laundry-apartment-list" id="apartmentList">
+                                @if (Model.ApartmentOptions.Count == 0)
+                                {
+                                    <div class="special-laundry-empty">No apartment</div>
+                                }
+                                else
+                                {
+                                    @foreach (var apt in Model.ApartmentOptions)
+                                    {
+                                        var isChecked = selectedApartments.Contains(apt.Value);
+                                        <label class="special-laundry-apartment-item">
+                                            <input type="checkbox"
+                                                   class="special-laundry-apartment-check"
+                                                   value="@apt.Value"
+                                                   checked="@isChecked" />
+                                            <span>@apt.Text</span>
+                                        </label>
+                                    }
+                                }
+                            </div>
+                        </div>
+                        <div class="custom-control custom-checkbox special-laundry-check-all">
+                            <input type="checkbox" class="custom-control-input" id="chkSelectAll" />
+                            <label class="custom-control-label" for="chkSelectAll">Check all</label>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="special-laundry-fieldset special-laundry-excel">
+                        <legend>Excel Option</legend>
+                        <fieldset class="special-laundry-inner-fieldset">
+                            <legend>Special Laundry option</legend>
+                            <div class="special-laundry-radio-list special-laundry-option-list">
+                                <div class="custom-control custom-radio">
+                                    <input type="radio"
+                                           id="modeTotal"
+                                           name="reportMode"
+                                           value="Total"
+                                           class="custom-control-input"
+                                           checked="@(Model.ReportMode == "Total")" />
+                                    <label class="custom-control-label" for="modeTotal">Total</label>
+                                </div>
+                                <div class="custom-control custom-radio">
+                                    <input type="radio"
+                                           id="modeTotalInMonth"
+                                           name="reportMode"
+                                           value="TotalInMonth"
+                                           class="custom-control-input"
+                                           checked="@(Model.ReportMode != "Total" && Model.ReportMode != "Between")" />
+                                    <label class="custom-control-label" for="modeTotalInMonth">Total in a month</label>
+                                </div>
+                                <div class="custom-control custom-radio">
+                                    <input type="radio"
+                                           id="modeBetween"
+                                           name="reportMode"
+                                           value="Between"
+                                           class="custom-control-input"
+                                           checked="@(Model.ReportMode == "Between")" />
+                                    <label class="custom-control-label" for="modeBetween">Between date</label>
+                                </div>
+                            </div>
+
+                            <div class="special-laundry-option-date" id="monthDateGroup">
+                                <input id="monthDateInput"
+                                       name="monthDate"
+                                       type="date"
+                                       class="form-control form-control-sm"
+                                       value="@Model.MonthDate?.ToString("yyyy-MM-dd")" />
+                            </div>
+
+                            <div class="special-laundry-between-date d-none" id="betweenDateGroup">
+                                <input id="betweenFromDate"
+                                       name="betweenFrom"
+                                       type="date"
+                                       class="form-control form-control-sm"
+                                       value="@Model.BetweenFrom?.ToString("yyyy-MM-dd")" />
+                                <input id="betweenToDate"
+                                       name="betweenTo"
+                                       type="date"
+                                       class="form-control form-control-sm"
+                                       value="@Model.BetweenTo?.ToString("yyyy-MM-dd")" />
+                            </div>
+                        </fieldset>
+
+                        <div class="special-laundry-excel-action">
+                            <button type="submit" class="btn btn-light btn-sm special-laundry-excel-button" id="btnExport">
+                                Excel
+                            </button>
+                        </div>
+                    </fieldset>
+                </div>
+            </form>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        window.specialLaundryReport = {
+            initialMode: '@Model.ReportMode'
+        };
+    </script>
+    <script src="~/js/Inventory/SpecialLaundryReport/index.js" asp-append-version="true"></script>
+}

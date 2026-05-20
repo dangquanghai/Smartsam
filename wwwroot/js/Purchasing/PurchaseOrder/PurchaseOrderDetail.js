@@ -1,6 +1,7 @@
 $(document).ready(function () {
     const mode = ($('#Mode').val() || 'add').toLowerCase();
     initializePage(mode);
+    syncBackToListUrl();
 
     $('#purchaseOrderDetailForm').on('submit', function (e) {
         if (mode === 'view') {
@@ -24,6 +25,36 @@ let purchaseOrderDetails = [];
 let purchaseOrderPrLines = [];
 const TCVN3_WEB_LOWER_U = '\uE001';
 const TCVN3_WEB_UPPER_U = '\uE002';
+
+function syncBackToListUrl() {
+    const fallbackUrl = window.purchaseOrderDetailPage?.returnUrl || '/Purchasing/PurchaseOrder';
+    let returnUrl = fallbackUrl;
+
+    try {
+        const storedUrl = window.sessionStorage.getItem('purchaseOrder.returnUrl') || '';
+        if (isPurchaseOrderIndexUrl(storedUrl)) {
+            returnUrl = storedUrl;
+        }
+    } catch (e) {
+        returnUrl = fallbackUrl;
+    }
+
+    if (!isPurchaseOrderIndexUrl(returnUrl)) {
+        returnUrl = '/Purchasing/PurchaseOrder';
+    }
+
+    $('#btnBackToPurchaseOrderList').attr('href', returnUrl);
+}
+
+function isPurchaseOrderIndexUrl(url) {
+    if (!url || url.indexOf('/') !== 0 || url.indexOf('//') === 0) {
+        return false;
+    }
+
+    const path = url.split(/[?#]/)[0];
+    return path.toLowerCase() === '/purchasing/purchaseorder'
+        || path.toLowerCase() === '/purchasing/purchaseorder/index';
+}
 
 function toTcvn3WebText(value) {
     return String(value || '')

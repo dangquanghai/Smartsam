@@ -181,6 +181,10 @@
         $('#btnCreateLinenDeliveryBill').off('click').on('click', function () {
             createBill();
         });
+
+        $(document).off('dblclick', '#linenDeliveryBillTableBody tr[data-bill-id]').on('dblclick', '#linenDeliveryBillTableBody tr[data-bill-id]', function () {
+            openBillDetail($(this));
+        });
     }
 
     function bindPrintEvents() {
@@ -459,30 +463,60 @@
         if (hasCreatedBill || hasBills) {
             renderBillRows(bills || []);
         } else {
-            $('#linenDeliveryBillTableBody').html('<tr><td colspan="6" class="text-center text-muted py-3">No bills</td></tr>');
+            $('#linenDeliveryBillTableBody').html('<tr><td colspan="9" class="text-center text-muted py-3">No bills</td></tr>');
         }
     }
 
     function renderBillRows(bills) {
         if (!bills || bills.length === 0) {
-            $('#linenDeliveryBillTableBody').html('<tr><td colspan="6" class="text-center text-muted py-3">No bills</td></tr>');
+            $('#linenDeliveryBillTableBody').html('<tr><td colspan="9" class="text-center text-muted py-3">No bills</td></tr>');
             $('#linenDeliveryBillListWrap').removeClass('d-none');
             return;
         }
 
         const html = bills.map(function (item) {
-            return `<tr>
+            const mode = Number(item.billStatus) === 1 ? 'edit' : 'view';
+            return `<tr class="js-bill-row" data-bill-id="${encodeHtml(item.billId)}" data-mode="${mode}">
                 <td>${encodeHtml(item.billId)}</td>
-                <td class="text-center">${encodeHtml(item.billDate || '')}</td>
+                <td>${encodeHtml(item.billDate || '')}</td>
                 <td>${encodeHtml(item.apartmentNo || '')}</td>
                 <td>${encodeHtml(item.customer || '')}</td>
-                <td class="text-right">${encodeHtml(item.usdAmount || '0')}</td>
-                <td class="text-center">${encodeHtml(item.billStatusText || '')}</td>
+                <td class="text-right">${encodeHtml(formatDisplayNumber(item.vndAmountBefVat))}</td>
+                <td class="text-right">${encodeHtml(formatDisplayNumber(item.pctTax))}</td>
+                <td class="text-right">${encodeHtml(formatDisplayNumber(item.vndAmountVat))}</td>
+                <td class="text-right">${encodeHtml(formatDisplayNumber(item.vndAmount))}</td>
+                <td class="bill-status-cell">${encodeHtml(item.billStatusText || '')}</td>
             </tr>`;
         }).join('');
 
         $('#linenDeliveryBillTableBody').html(html);
         $('#linenDeliveryBillListWrap').removeClass('d-none');
+    }
+
+    function openBillDetail($row) {
+        const billId = $row.data('bill-id');
+        const mode = $row.data('mode') || 'view';
+        const detailUrl = window.linenDeliveryPage?.billDetailUrl || '';
+        if (!billId || !detailUrl) {
+            return;
+        }
+
+        const returnUrl = `${window.location.pathname}${window.location.search || ''}`;
+        const separator = detailUrl.indexOf('?') >= 0 ? '&' : '?';
+        window.location.href = `${detailUrl}${separator}id=${encodeURIComponent(billId)}&mode=${encodeURIComponent(mode)}&returnUrl=${encodeURIComponent(returnUrl)}`;
+    }
+
+    function formatDisplayNumber(value) {
+        const text = (value || '0').toString().replace(/,/g, '').trim();
+        const number = Number(text);
+        if (!Number.isFinite(number)) {
+            return value || '0';
+        }
+
+        return number.toLocaleString('en-US', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+        });
     }
 
     function loadPrintPreview() {

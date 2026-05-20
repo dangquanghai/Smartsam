@@ -1,5 +1,6 @@
 using System.Data;
 using System.Security.Claims;
+using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
@@ -193,6 +194,8 @@ public class IndexModel : BasePageModel
             };
 
             var pdf = LinenReportQuestPdfReport.BuildPdf(preview.Value ?? new { reportType = normalizedType }, LoadCompanyLogoBytes(conn));
+            var fileName = BuildPdfFileName(normalizedType, descriptionId, normalizedLinenCode, normalizedFromDate, normalizedToDate, preview.Value);
+            Response.Headers["Content-Disposition"] = BuildInlinePdfContentDisposition(fileName);
             return File(pdf, "application/pdf");
         }
         catch (InvalidOperationException ex)
@@ -1124,7 +1127,7 @@ FROM dbo.MS_Parameters;", conn);
             LinenReportTypes.NotReceive => LinenReportTypes.NotReceive,
             LinenReportTypes.LaundryBalance => LinenReportTypes.LaundryBalance,
             LinenReportTypes.ApmtBalance => LinenReportTypes.ApmtBalance,
-            _ => LinenReportTypes.LaundryRecord
+            _ => LinenReportTypes.Pantry
         };
     }
 
@@ -1240,11 +1243,131 @@ FROM dbo.MS_Parameters;", conn);
             _ => "Group " + groupId
         };
     }
+
+    private static string BuildPdfFileName(string reportType, int? descriptionId, string linenCode, DateTime fromDate, DateTime toDate, object? previewValue)
+    {
+        var parts = new List<string>
+        {
+            "LinenReport",
+            GetPdfReportName(reportType)
+        };
+
+        if (descriptionId.HasValue && descriptionId.Value > 0)
+        {
+            parts.Add(descriptionId.Value.ToString());
+        }
+
+        var dateText = GetPreviewStringValue(previewValue, "dateText");
+        var previewFromDate = GetPreviewStringValue(previewValue, "fromDate");
+        var previewToDate = GetPreviewStringValue(previewValue, "toDate");
+
+        if (!string.IsNullOrWhiteSpace(dateText))
+        {
+            parts.Add(FormatFileNameDate(dateText));
+        }
+        else if (!string.IsNullOrWhiteSpace(previewFromDate) || !string.IsNullOrWhiteSpace(previewToDate))
+        {
+            parts.Add(FormatFileNameDate(string.IsNullOrWhiteSpace(previewFromDate) ? fromDate.ToString("yyyy-MM-dd") : previewFromDate));
+            parts.Add(FormatFileNameDate(string.IsNullOrWhiteSpace(previewToDate) ? toDate.ToString("yyyy-MM-dd") : previewToDate));
+        }
+        else if (reportType == LinenReportTypes.LaundryRecord ||
+                 reportType == LinenReportTypes.LaundryBalance ||
+                 reportType == LinenReportTypes.ApmtBalance)
+        {
+            parts.Add(fromDate.ToString("yyyyMMdd"));
+            parts.Add(toDate.ToString("yyyyMMdd"));
+        }
+
+        if (!string.IsNullOrWhiteSpace(linenCode))
+        {
+            parts.Add(linenCode.Trim());
+        }
+
+        return SanitizeFileName(string.Join("_", parts) + ".pdf");
+    }
+
+    private static string GetPreviewStringValue(object? previewValue, string propertyName)
+    {
+        if (previewValue == null)
+        {
+            return string.Empty;
+        }
+
+        var property = previewValue.GetType().GetProperty(propertyName);
+        if (property == null)
+        {
+            return string.Empty;
+        }
+
+        return Convert.ToString(property.GetValue(previewValue)) ?? string.Empty;
+    }
+
+    private static string FormatFileNameDate(string value)
+    {
+        if (DateTime.TryParse(value, out var parsedDate))
+        {
+            return parsedDate.ToString("yyyyMMdd");
+        }
+
+        return value;
+    }
+
+    private static string GetPdfReportName(string reportType)
+    {
+        return reportType switch
+        {
+            LinenReportTypes.Pantry => "Pantry",
+            LinenReportTypes.Delivery => "Delivery",
+            LinenReportTypes.Receive => "Receive",
+            LinenReportTypes.LaundryRecord => "LaundryRecord",
+            LinenReportTypes.NotReceive => "NotReceive",
+            LinenReportTypes.LaundryBalance => "LaundryBalance",
+            LinenReportTypes.ApmtBalance => "ApartmentBalance",
+            _ => "Report"
+        };
+    }
+
+    private static string SanitizeFileName(string fileName)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var builder = new StringBuilder(fileName.Length);
+
+        foreach (var ch in fileName)
+        {
+            if (invalidChars.Contains(ch))
+            {
+                builder.Append('_');
+                continue;
+            }
+
+            if (char.IsLetterOrDigit(ch) || ch == '.' || ch == '_' || ch == '-')
+            {
+                builder.Append(ch);
+                continue;
+            }
+
+            builder.Append('_');
+        }
+
+        var sanitized = builder.ToString().Trim('_', '.');
+        if (string.IsNullOrWhiteSpace(sanitized))
+        {
+            return "LinenReport.pdf";
+        }
+
+        return sanitized;
+    }
+
+    private static string BuildInlinePdfContentDisposition(string fileName)
+    {
+        var escapedFileName = Uri.EscapeDataString(fileName);
+        return $"inline; filename=\"{fileName}\"; filename*=UTF-8''{escapedFileName}";
+    }
 }
 
 public class LinenReportFilter
 {
-    public string ReportType { get; set; } = LinenReportTypes.LaundryRecord;
+    public string ReportType { get; set; } = LinenReportTypes.Pantry;
     public int? DescriptionId { get; set; }
     public string LinenCode { get; set; } = string.Empty;
     public DateTime? FromDate { get; set; }

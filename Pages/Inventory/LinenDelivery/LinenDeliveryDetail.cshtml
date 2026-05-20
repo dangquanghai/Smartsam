@@ -14,7 +14,6 @@
 @section Styles {
     <style>
         .linen-delivery-header label {
-            font-size: 12px;
             margin-bottom: 0;
             white-space: nowrap;
         }
@@ -105,6 +104,24 @@
             vertical-align: middle !important;
         }
 
+        .linen-delivery-bill-modal-dialog {
+            max-width: 70vw;
+            width: 70vw;
+        }
+
+        .linen-delivery-bill-table {
+            min-width: 1180px;
+        }
+
+        .linen-delivery-bill-table th,
+        .linen-delivery-bill-table td {
+            white-space: nowrap;
+        }
+
+        .linen-delivery-bill-table .bill-status-cell {
+            min-width: 170px;
+        }
+
         .linen-delivery-report-modal-dialog {
             max-width: 90vw;
             width: 90vw;
@@ -172,7 +189,6 @@
             margin-bottom: 0;
             white-space: nowrap;
             font-weight: 400;
-            font-size: 12px;
         }
 
         .linen-delivery-report-toolbar .form-control-sm,
@@ -647,7 +663,7 @@
 </div>
 
 <div class="modal fade" id="linenDeliveryBillModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-xl" role="document">
+    <div class="modal-dialog modal-xl linen-delivery-bill-modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header py-2">
                 <h5 class="modal-title">Linen Delivery Bill</h5>
@@ -681,13 +697,16 @@
                                     <th style="width: 120px;">Bill Date</th>
                                     <th style="width: 110px;">Apartment</th>
                                     <th>Customer</th>
-                                    <th style="width: 120px;">USD Amount</th>
-                                    <th style="width: 100px;">Status</th>
+                                    <th style="width: 140px;">VNDAmountBefVAT</th>
+                                    <th style="width: 90px;">PctTax</th>
+                                    <th style="width: 120px;">VNDAmountVAT</th>
+                                    <th style="width: 120px;">VNDAmount</th>
+                                    <th style="width: 170px;">Status</th>
                                 </tr>
                             </thead>
                             <tbody id="linenDeliveryBillTableBody">
                                 <tr>
-                                    <td colspan="6" class="text-center text-muted py-3">No bills</td>
+                                    <td colspan="9" class="text-center text-muted py-3">No bills</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -712,6 +731,7 @@
             isSpecialLaundry: @Model.Header.IsSpecialLaundry.ToString().ToLowerInvariant(),
             canToBill: @Model.CanToBill.ToString().ToLowerInvariant(),
             pantryNoteDetailUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("/Inventory/LinnenNoteDaily/LinnenNoteDailyDetail", new { mode = "view", popup = true }))),
+            billDetailUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("/Cus/DailyServiceBill/DailyServiceBillDetail"))),
             printPreviewUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("./LinenDeliveryDetail", "PrintPreview", new { id = Model.Header.DeliveryID }))),
             reportPdfUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("/Inventory/LinenReport/Index", "Pdf", new { reportType = "delivery", descriptionId = Model.Header.DeliveryID, lockedReportType = "delivery", popup = true }))),
             rowTemplateOptions: {

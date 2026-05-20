@@ -1,0 +1,208 @@
+.special-laundry-form-shell {
+    padding: 8px 0;
+}
+
+.special-laundry-vb-form {
+    width: 636px;
+    max-width: 100%;
+    min-height: 650px;
+    color: #222;
+    font-size: 15px;
+}
+
+.special-laundry-grid {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    grid-template-rows: 124px 1fr;
+    gap: 12px;
+}
+
+.special-laundry-fieldset {
+    border: 1px solid #ced4da;
+    margin: 0;
+    padding: 18px 12px 12px;
+    min-width: 0;
+    position: relative;
+}
+
+.special-laundry-fieldset > legend {
+    width: auto;
+    margin: 0;
+    padding: 0 4px;
+    border: 0;
+    font-size: 16px;
+    line-height: 1;
+}
+
+.special-laundry-field-row {
+    display: grid;
+    grid-template-columns: 130px 140px;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.special-laundry-field-row label {
+    margin: 0;
+    font-weight: 400;
+}
+
+.special-laundry-field-row .form-control,
+.special-laundry-option-date .form-control,
+.special-laundry-between-date .form-control {
+    height: 28px;
+    padding: 2px 4px;
+    font-size: 15px;
+    border-radius: 0;
+}
+
+.special-laundry-order {
+    padding-left: 52px;
+}
+
+.special-laundry-radio-list .custom-control {
+    margin-bottom: 12px;
+}
+
+.special-laundry-radio-list .custom-control-label {
+    font-size: 15px;
+    line-height: 1.45;
+}
+
+.special-laundry-apartments {
+    min-height: 460px;
+    padding-bottom: 50px;
+}
+
+.special-laundry-apartment-body {
+    display: grid;
+    grid-template-columns: 86px 1fr;
+    gap: 6px;
+    align-items: start;
+}
+
+.special-laundry-apartment-label {
+    margin-top: 6px;
+    font-weight: 400;
+}
+
+.special-laundry-apartment-list {
+    height: 425px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #ced4da;
+    padding: 2px 0;
+}
+
+.special-laundry-apartment-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    margin: 0;
+    padding: 0 4px;
+    font-weight: 400;
+    cursor: pointer;
+}
+
+.special-laundry-apartment-item:hover {
+    background: #e5f0ff;
+}
+
+.special-laundry-apartment-item input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+}
+
+.special-laundry-apartment-item span {
+    white-space: nowrap;
+}
+
+.special-laundry-empty {
+    padding: 8px;
+    color: #777;
+}
+
+.special-laundry-check-all {
+    position: absolute;
+    left: 102px;
+    bottom: 16px;
+}
+
+.special-laundry-check-all .custom-control-label {
+    font-size: 15px;
+}
+
+.special-laundry-excel {
+    min-height: 460px;
+}
+
+.special-laundry-inner-fieldset {
+    border: 1px solid #ced4da;
+    min-height: 236px;
+    margin: 4px 6px 0;
+    padding: 34px 28px 20px;
+    position: relative;
+}
+
+.special-laundry-inner-fieldset > legend {
+    width: auto;
+    margin: 0;
+    padding: 0 4px;
+    border: 0;
+    font-size: 16px;
+    line-height: 1;
+}
+
+.special-laundry-option-list {
+    margin-left: 0;
+}
+
+.special-laundry-option-date {
+    margin-top: 18px;
+    margin-left: 28px;
+    width: 128px;
+}
+
+.special-laundry-between-date {
+    margin-top: 14px;
+    margin-left: 28px;
+    display: grid;
+    gap: 8px;
+    width: 128px;
+}
+
+.special-laundry-excel-action {
+    margin-top: 34px;
+    text-align: center;
+}
+
+.special-laundry-excel-button {
+    width: 165px;
+    height: 40px;
+    border: 1px solid #ced4da;
+    border-radius: 0.2rem;
+    background: #f8f9fa;
+    color: #111;
+    font-size: 16px;
+}
+
+@media (max-width: 767.98px) {
+    .special-laundry-vb-form {
+        width: 100%;
+        min-height: 0;
+    }
+
+    .special-laundry-grid {
+        display: block;
+    }
+
+    .special-laundry-fieldset {
+        margin-bottom: 10px;
+    }
+
+    .special-laundry-apartment-list {
+        height: 280px;
+    }
+}
