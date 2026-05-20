@@ -105,7 +105,7 @@ public class PurchaseOrderDetailModel : BasePageModel
     {
         PagePerm = GetUserPermissions();
         Mode = string.IsNullOrWhiteSpace(mode) ? "view" : mode.Trim().ToLowerInvariant();
-        ReturnUrl = returnUrl;
+        ReturnUrl = NormalizeReturnUrl(returnUrl);
         OpenConvertModal = openConvertModal;
         LoadAllDropdowns();
         LoadWorkflowUser();
@@ -2466,6 +2466,49 @@ WHERE POID = @POID", conn, trans);
     private IActionResult RedirectToCurrentDetail(string mode = "view")
     {
         return RedirectToPage("./PurchaseOrderDetail", BuildDetailRouteValues(mode));
+    }
+
+    private string? NormalizeReturnUrl(string? returnUrl)
+    {
+        if (IsSafePurchaseOrderIndexUrl(returnUrl))
+        {
+            return returnUrl;
+        }
+
+        if (Request.Headers.TryGetValue("Referer", out var refererValues))
+        {
+            var referer = refererValues.FirstOrDefault();
+            if (Uri.TryCreate(referer, UriKind.Absolute, out var refererUri)
+                && string.Equals(refererUri.Host, Request.Host.Host, StringComparison.OrdinalIgnoreCase)
+                && IsSafePurchaseOrderIndexUrl(refererUri.PathAndQuery))
+            {
+                return refererUri.PathAndQuery;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsSafePurchaseOrderIndexUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return false;
+        }
+
+        if (!url.StartsWith("/", StringComparison.Ordinal) || url.StartsWith("//", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (Uri.TryCreate(url, UriKind.Absolute, out _))
+        {
+            return false;
+        }
+
+        var path = url.Split('?', '#')[0];
+        return string.Equals(path, "/Purchasing/PurchaseOrder", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path, "/Purchasing/PurchaseOrder/Index", StringComparison.OrdinalIgnoreCase);
     }
 
     private RouteValueDictionary BuildDetailRouteValues(string mode, bool openConvertModal = false)
