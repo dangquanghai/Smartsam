@@ -216,7 +216,7 @@
                                 <i class="fas fa-paperclip"></i> Attached Files
                             </button>
                         }
-                        <a href="@Model.BackToListUrl" class="btn btn-sm btn-default">
+                        <a href="@Model.BackToListUrl" class="btn btn-sm btn-default" id="btnBackToPurchaseOrderList">
                             <i class="fas fa-arrow-left"></i> Back to list
                         </a>
                     </div>
@@ -598,6 +598,7 @@
             canManageAttachments: @(Model.CanManageAttachments ? "true" : "false"),
             canUploadAttachments: @(Model.CanUploadAttachments ? "true" : "false"),
             canDeleteAttachments: @(Model.CanDeleteAttachments ? "true" : "false"),
+            returnUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.BackToListUrl)),
             allowedAttachmentExtensions: '@Model.AllowedAttachmentExtensionsText',
             maxAttachmentSizeMb: @Model.MaxAttachmentSizeMb,
             supplierLookupUrl: '@Html.Raw(Url.Page("./PurchaseOrderDetail", "SupplierLookup"))',

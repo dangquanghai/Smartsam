@@ -204,6 +204,7 @@
 
         const nextUrl = `${window.location.pathname}${query.toString() ? `?${query.toString()}` : ''}`;
         window.history.replaceState({}, document.title, nextUrl);
+        storeReturnUrl(nextUrl);
     }
 
     // Dong bo widget date-range voi 2 field an From/To.
@@ -1068,6 +1069,17 @@ async function downloadPurchaseOrderPdf(reportUrl, fileName) {
 
     // Dong goi filter hien tai de detail quay ve dung trang danh sach cu.
     function buildReturnUrl() {
+        const currentUrl = `${window.location.pathname}${window.location.search || ''}`;
+        if (isPurchaseOrderIndexUrl(currentUrl)) {
+            storeReturnUrl(currentUrl);
+            return currentUrl;
+        }
+
+        const storedUrl = getStoredReturnUrl();
+        if (storedUrl) {
+            return storedUrl;
+        }
+
         const params = new URLSearchParams();
         const poNo = $('#Filter_PONo').val();
         const requestNo = $('#Filter_RequestNo').val();
@@ -1096,6 +1108,37 @@ async function downloadPurchaseOrderPdf(reportUrl, fileName) {
         params.set('Filter.PageSize', String(pageSize || defaultPageSize || 10));
 
         return window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
+    }
+
+    function storeReturnUrl(url) {
+        if (!isPurchaseOrderIndexUrl(url)) {
+            return;
+        }
+
+        try {
+            window.sessionStorage.setItem('purchaseOrder.returnUrl', url);
+        } catch (e) {
+            // Ignore browser storage errors.
+        }
+    }
+
+    function getStoredReturnUrl() {
+        try {
+            const url = window.sessionStorage.getItem('purchaseOrder.returnUrl') || '';
+            return isPurchaseOrderIndexUrl(url) ? url : '';
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function isPurchaseOrderIndexUrl(url) {
+        if (!url || url.indexOf('/') !== 0 || url.indexOf('//') === 0) {
+            return false;
+        }
+
+        const path = url.split(/[?#]/)[0];
+        return path.toLowerCase() === '/purchasing/purchaseorder'
+            || path.toLowerCase() === '/purchasing/purchaseorder/index';
     }
 
     $(document).ready(initializePage);
