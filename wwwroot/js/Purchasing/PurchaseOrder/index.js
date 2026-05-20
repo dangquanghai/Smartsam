@@ -216,6 +216,18 @@
         window.initSimpleDateRange('PoDateRange', '#Filter_FromDate', '#Filter_ToDate', {
             linkedCalendars: false
         });
+        $('#PoDateRange').parent().find('.date-clear-btn')
+            .off('click.poDateClearUseDate')
+            .on('click.poDateClearUseDate', function () {
+                $('#Filter_UseDateRange').prop('checked', false);
+                syncDateRangeState();
+            });
+        $('#PoDateRange')
+            .off('cancel.daterangepicker.poDateClearUseDate')
+            .on('cancel.daterangepicker.poDateClearUseDate', function () {
+                $('#Filter_UseDateRange').prop('checked', false);
+                syncDateRangeState();
+            });
 
         const fromDate = $('#Filter_FromDate').val();
         const toDate = $('#Filter_ToDate').val();
