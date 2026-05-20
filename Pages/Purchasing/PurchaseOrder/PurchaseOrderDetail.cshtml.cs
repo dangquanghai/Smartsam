@@ -59,7 +59,7 @@ public class PurchaseOrderDetailModel : BasePageModel
     public bool OpenConvertModal { get; private set; }
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
     public string BackToListUrl => string.IsNullOrWhiteSpace(ReturnUrl) ? Url.Page("./Index") ?? "./Index" : ReturnUrl;
-    public bool ShouldCloseDetailAfterWorkflow => string.Equals(CloseDetailAfterWorkflow, "true", StringComparison.OrdinalIgnoreCase);
+    public bool ShouldCloseDetailAfterWorkflow => string.Equals(Request.Query["closeAfterWorkflow"].ToString(), "true", StringComparison.OrdinalIgnoreCase);
     public string DepartmentOptionsJson => JsonSerializer.Serialize(DepartmentOptions.Select(x => new LookupOptionDto
     {
         Value = x.Value,
@@ -75,9 +75,6 @@ public class PurchaseOrderDetailModel : BasePageModel
 
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }
-
-    [TempData]
-    public string? CloseDetailAfterWorkflow { get; set; }
 
     [BindProperty]
     public PurchaseOrderHeader Header { get; set; } = new PurchaseOrderHeader();
@@ -281,8 +278,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         }
 
         TempData["SuccessMessage"] = "Purchase order sent to approval successfully.";
-        CloseDetailAfterWorkflow = "true";
-        return RedirectToCurrentDetail("view");
+        return RedirectToCurrentDetail("view", true);
     }
 
     public IActionResult OnGetPrLines(int prId, int? currentPoId)
@@ -707,8 +703,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         }
 
         TempData["SuccessMessage"] = "Purchase order approved successfully.";
-        CloseDetailAfterWorkflow = "true";
-        return RedirectToCurrentDetail("view");
+        return RedirectToCurrentDetail("view", true);
     }
 
     public IActionResult OnPostBackToProcessing()
@@ -2469,9 +2464,9 @@ WHERE POID = @POID", conn, trans);
         }
     }
 
-    private IActionResult RedirectToCurrentDetail(string mode = "view")
+    private IActionResult RedirectToCurrentDetail(string mode = "view", bool closeAfterWorkflow = false)
     {
-        return RedirectToPage("./PurchaseOrderDetail", BuildDetailRouteValues(mode));
+        return RedirectToPage("./PurchaseOrderDetail", BuildDetailRouteValues(mode, closeAfterWorkflow: closeAfterWorkflow));
     }
 
     private string? NormalizeReturnUrl(string? returnUrl)
@@ -2517,14 +2512,15 @@ WHERE POID = @POID", conn, trans);
             || string.Equals(path, "/Purchasing/PurchaseOrder/Index", StringComparison.OrdinalIgnoreCase);
     }
 
-    private RouteValueDictionary BuildDetailRouteValues(string mode, bool openConvertModal = false)
+    private RouteValueDictionary BuildDetailRouteValues(string mode, bool openConvertModal = false, bool closeAfterWorkflow = false)
     {
         return new RouteValueDictionary
         {
             { "id", Header.Id },
             { "mode", mode },
             { "returnUrl", ReturnUrl },
-            { "openConvertModal", openConvertModal }
+            { "openConvertModal", openConvertModal },
+            { "closeAfterWorkflow", closeAfterWorkflow ? "true" : null }
         };
     }
 
