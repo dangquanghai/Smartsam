@@ -109,6 +109,7 @@ namespace SmartSam.Services.Implementations
                2: Waiting for approval
                 CFO approve nó cập nhật thông tin approve vào PC_PO rồi gửi cho BOD
                 BOD approve nó cập nhật thông tin approve vào PC_PO rồi gửi cho Purchaser 
+               3: BOD approved
 
                Mã hành động:
                2: View, 3: Add, 4: Edit, 6: Back to Processing, 7: Purchaser Evaluate
@@ -116,6 +117,10 @@ namespace SmartSam.Services.Implementations
 
             // Các quyền luôn có: Xem và Thêm mới
             var effective = raw.Where(p => p == 2 || p == 3).ToList();
+            if (status >= 1 && status <= 3 && raw.Contains(6))
+            {
+                effective.Add(6);
+            }
 
             switch (status)
             {
@@ -129,8 +134,7 @@ namespace SmartSam.Services.Implementations
 
                 case 2: // WAITING FOR APPROVAL
                         // Khóa Sửa (4), Khóa Đánh giá (7)
-                        // Chỉ cho phép Trả về (6) để quay lại bước 1 nếu cần sửa đổi
-                    if (raw.Contains(6)) effective.Add(6);
+                        // Trả về (6) đã được mở cho StatusID <= 3 ở trên
                     break;
 
                 default:
