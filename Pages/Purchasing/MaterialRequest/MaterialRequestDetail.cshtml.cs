@@ -194,6 +194,11 @@ public class MaterialRequestDetailModel : BasePageModel
         get { return ResolveBackToListUrl(); }
     }
 
+    public bool ShouldCloseDetailAfterWorkflow
+    {
+        get { return string.Equals(Request.Query["closeAfterWorkflow"].ToString(), "true", StringComparison.OrdinalIgnoreCase); }
+    }
+
     // ==========================================
     // 1. PAGE LOAD AND INITIALIZATION
     // ==========================================
@@ -682,7 +687,7 @@ public class MaterialRequestDetailModel : BasePageModel
                 await WriteWorkflowHistoryAsync(action, currentStatus, transition, Id.Value, cancellationToken, autoHeadApproveOnSubmit);
                 TryQueueWorkflowNotifyEmail(action, currentStatus, existing, isAuto, Array.Empty<MaterialRequestLineDto>(), autoHeadApproveOnSubmit);
                 SuccessMessage = transition.SuccessMessage;
-                return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
+                return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id, true));
             }
 
             IReadOnlyList<MaterialRequestLineDto> purchaserLines = Array.Empty<MaterialRequestLineDto>();
@@ -702,7 +707,7 @@ public class MaterialRequestDetailModel : BasePageModel
             await WriteWorkflowHistoryAsync(action, currentStatus, transition, Id.Value, cancellationToken, autoHeadApproveOnSubmit);
             TryQueueWorkflowNotifyEmail(action, currentStatus, existing, isAuto, purchaserLines, autoHeadApproveOnSubmit);
             SuccessMessage = transition.SuccessMessage;
-            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
+            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id, true));
         }
         catch (Exception ex)
         {
@@ -2282,7 +2287,7 @@ public class MaterialRequestDetailModel : BasePageModel
         <li>According To: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(header.AccordingTo ?? string.Empty)}</span></b></li>
         <li>Step: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(stepLabel)}</span></b></li>
         </ul>
-        {(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Material Request Detail</a></p>")}
+        {(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open Approval Page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Material Request Detail</a></p>")}
         <p>SmartSam System</p>";
 
         var htmlBody = EmailTemplateHelper.WrapInNotifyTemplate(title, color, DateTime.Now, body);
@@ -2635,13 +2640,14 @@ public class MaterialRequestDetailModel : BasePageModel
         return null;
     }
 
-    private object BuildDetailRoute(long? requestNo)
+    private object BuildDetailRoute(long? requestNo, bool closeAfterWorkflow = false)
     {
         return new
         {
             id = requestNo,
             mode = ResolveDetailMode(),
-            returnUrl = ReturnUrl
+            returnUrl = ReturnUrl,
+            closeAfterWorkflow = closeAfterWorkflow ? "true" : null
         };
     }
 

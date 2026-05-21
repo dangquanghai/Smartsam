@@ -42,7 +42,9 @@
               data-store-group-locked="@Model.StoreGroupLocked.ToString().ToLowerInvariant()"
               data-lock-existing-header-fields="@lockExistingHeaderFields.ToString().ToLowerInvariant()"
               data-show-advanced-columns="@Model.ShowAdvancedDetailColumns.ToString().ToLowerInvariant()"
-              data-hide-zero-buy-lines="@Model.HideZeroBuyLines.ToString().ToLowerInvariant()">
+              data-hide-zero-buy-lines="@Model.HideZeroBuyLines.ToString().ToLowerInvariant()"
+              data-close-after-workflow="@Model.ShouldCloseDetailAfterWorkflow.ToString().ToLowerInvariant()"
+              data-back-to-list-url="@Model.BackToListUrl">
               <input type="hidden" asp-for="Id" />
               <input type="hidden" asp-for="LinesJson" id="linesJsonInput" />
               <input type="hidden" asp-for="RejectItemLineIdsJson" id="rejectItemLineIdsJsonInput" />

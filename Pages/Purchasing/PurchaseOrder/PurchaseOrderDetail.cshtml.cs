@@ -59,6 +59,7 @@ public class PurchaseOrderDetailModel : BasePageModel
     public bool OpenConvertModal { get; private set; }
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
     public string BackToListUrl => string.IsNullOrWhiteSpace(ReturnUrl) ? Url.Page("./Index") ?? "./Index" : ReturnUrl;
+    public bool ShouldCloseDetailAfterWorkflow => string.Equals(Request.Query["closeAfterWorkflow"].ToString(), "true", StringComparison.OrdinalIgnoreCase);
     public string DepartmentOptionsJson => JsonSerializer.Serialize(DepartmentOptions.Select(x => new LookupOptionDto
     {
         Value = x.Value,
@@ -277,7 +278,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         }
 
         TempData["SuccessMessage"] = "Purchase order sent to approval successfully.";
-        return RedirectToCurrentDetail("view");
+        return RedirectToCurrentDetail("view", true);
     }
 
     public IActionResult OnGetPrLines(int prId, int? currentPoId)
@@ -702,7 +703,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         }
 
         TempData["SuccessMessage"] = "Purchase order approved successfully.";
-        return RedirectToCurrentDetail("view");
+        return RedirectToCurrentDetail("view", true);
     }
 
     public IActionResult OnPostBackToProcessing()
@@ -1887,7 +1888,7 @@ public class PurchaseOrderDetailModel : BasePageModel
             : CanEditCurrentPurchaseOrder());
         CanPurchaserApprove = Header.Id > 0
             && Header.StatusId == StatusProcessing
-            && (IsAdminRole() || _workflowUser.IsPurchaser);
+            && _workflowUser.IsPurchaser;
         CanEvaluate = Header.Id > 0 && Header.StatusId == StatusProcessing;
         CanEditEvaluate = Header.Id > 0 && Header.StatusId == StatusProcessing && _workflowUser.IsPurchaser;
         CanApprove = Header.Id > 0 && Header.StatusId == StatusWaitingForApproval && (CanApproveAsCfo() || CanApproveAsBod());
@@ -1902,12 +1903,12 @@ public class PurchaseOrderDetailModel : BasePageModel
 
     private bool CanApproveAsCfo()
     {
-        return Header.Id > 0 && Header.StatusId == StatusWaitingForApproval && !Header.CAId.HasValue && (_workflowUser.IsCFO || IsAdminRole());
+        return Header.Id > 0 && Header.StatusId == StatusWaitingForApproval && !Header.CAId.HasValue && _workflowUser.IsCFO;
     }
 
     private bool CanApproveAsBod()
     {
-        return Header.Id > 0 && Header.StatusId == StatusWaitingForApproval && Header.CAId.HasValue && !Header.GDId.HasValue && (_workflowUser.IsBOD || IsAdminRole());
+        return Header.Id > 0 && Header.StatusId == StatusWaitingForApproval && Header.CAId.HasValue && !Header.GDId.HasValue && _workflowUser.IsBOD;
     }
 
     private static List<PurchaseOrderNotifyRecipientViewModel> GetWorkflowRecipientsByFlag(SqlConnection conn, SqlTransaction trans, string flagColumn)
@@ -2009,7 +2010,7 @@ WHERE EmployeeID = @EmployeeID
   <li>Remark: <b>{WrapNotifyValue(remarkText)}</b></li>
   <li>Total Amount: <b>{FormatAmountForView(totalAmount)} {WebUtility.HtmlEncode(GetCurrencyDisplayText(Header.Currency))}</b></li>
 </ul>
-{(showApproveLink && !string.IsNullOrWhiteSpace(absoluteUrl) ? $"<p>Click Here to Approve: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Purchase Order Approve</a></p>" : string.Empty)}
+{(showApproveLink && !string.IsNullOrWhiteSpace(absoluteUrl) ? $"<p>Open Approval Page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Purchase Order Approve</a></p>" : string.Empty)}
 <p>SmartSam System</p>";
 
         return EmailTemplateHelper.WrapInNotifyTemplate(title, color, DateTime.Now, WrapNotifyMessageBody(body));
@@ -2463,9 +2464,9 @@ WHERE POID = @POID", conn, trans);
         }
     }
 
-    private IActionResult RedirectToCurrentDetail(string mode = "view")
+    private IActionResult RedirectToCurrentDetail(string mode = "view", bool closeAfterWorkflow = false)
     {
-        return RedirectToPage("./PurchaseOrderDetail", BuildDetailRouteValues(mode));
+        return RedirectToPage("./PurchaseOrderDetail", BuildDetailRouteValues(mode, closeAfterWorkflow: closeAfterWorkflow));
     }
 
     private string? NormalizeReturnUrl(string? returnUrl)
@@ -2511,14 +2512,15 @@ WHERE POID = @POID", conn, trans);
             || string.Equals(path, "/Purchasing/PurchaseOrder/Index", StringComparison.OrdinalIgnoreCase);
     }
 
-    private RouteValueDictionary BuildDetailRouteValues(string mode, bool openConvertModal = false)
+    private RouteValueDictionary BuildDetailRouteValues(string mode, bool openConvertModal = false, bool closeAfterWorkflow = false)
     {
         return new RouteValueDictionary
         {
             { "id", Header.Id },
             { "mode", mode },
             { "returnUrl", ReturnUrl },
-            { "openConvertModal", openConvertModal }
+            { "openConvertModal", openConvertModal },
+            { "closeAfterWorkflow", closeAfterWorkflow ? "true" : null }
         };
     }
 

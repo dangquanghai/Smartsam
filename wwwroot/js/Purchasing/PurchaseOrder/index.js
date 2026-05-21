@@ -216,6 +216,18 @@
         window.initSimpleDateRange('PoDateRange', '#Filter_FromDate', '#Filter_ToDate', {
             linkedCalendars: false
         });
+        $('#PoDateRange').parent().find('.date-clear-btn')
+            .off('click.poDateClearUseDate')
+            .on('click.poDateClearUseDate', function () {
+                $('#Filter_UseDateRange').prop('checked', false);
+                syncDateRangeState();
+            });
+        $('#PoDateRange')
+            .off('cancel.daterangepicker.poDateClearUseDate')
+            .on('cancel.daterangepicker.poDateClearUseDate', function () {
+                $('#Filter_UseDateRange').prop('checked', false);
+                syncDateRangeState();
+            });
 
         const fromDate = $('#Filter_FromDate').val();
         const toDate = $('#Filter_ToDate').val();
@@ -643,6 +655,24 @@ async function downloadPurchaseOrderPdf(reportUrl, fileName) {
 
         state.currentPage = queryPage;
         performSearch(queryPage);
+        bindRefreshOnPageShow();
+    }
+
+    function bindRefreshOnPageShow() {
+        if (window.purchaseOrderPage?.pageShowRefreshBound) {
+            return;
+        }
+
+        window.purchaseOrderPage = window.purchaseOrderPage || {};
+        window.purchaseOrderPage.pageShowRefreshBound = true;
+        window.addEventListener('pageshow', function (event) {
+            if (!event.persisted) {
+                return;
+            }
+
+            const page = getQueryInt('Filter.Page') || state.currentPage || 1;
+            performSearch(page);
+        });
     }
 
     // Hien dong loading don gian trong luc dang search.

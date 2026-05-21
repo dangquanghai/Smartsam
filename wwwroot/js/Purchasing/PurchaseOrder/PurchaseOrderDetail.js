@@ -2,6 +2,7 @@ $(document).ready(function () {
     const mode = ($('#Mode').val() || 'add').toLowerCase();
     initializePage(mode);
     syncBackToListUrl();
+    closeDetailAfterWorkflowIfNeeded();
 
     $('#purchaseOrderDetailForm').on('submit', function (e) {
         if (mode === 'view') {
@@ -44,6 +45,22 @@ function syncBackToListUrl() {
     }
 
     $('#btnBackToPurchaseOrderList').attr('href', returnUrl);
+}
+
+function closeDetailAfterWorkflowIfNeeded() {
+    if (!window.purchaseOrderDetailPage?.closeAfterWorkflow) {
+        return;
+    }
+
+    const backToListUrl = window.purchaseOrderDetailPage?.returnUrl || '/Purchasing/PurchaseOrder';
+    setTimeout(function () {
+        window.open('', '_self');
+        window.close();
+
+        setTimeout(function () {
+            window.location.href = backToListUrl;
+        }, 300);
+    }, 300);
 }
 
 function isPurchaseOrderIndexUrl(url) {
