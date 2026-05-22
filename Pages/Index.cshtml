@@ -52,7 +52,7 @@
         min-height: 0;
     }
 
-    /* Khung chứa các thẻ tóm tắt số liệu Vùng 3 */
+    /* Khung chứa các thẻ tóm tắt số liệu Vùng 3 (Căn giữa hoàn toàn) */
     .kpi-card {
         background-color: #FFFFFF !important;
         border: 1px solid #E2E8F0;
@@ -61,23 +61,44 @@
         padding: 10px 15px;
         display: flex;
         flex-direction: column;
-        justify-content: center; /* Căn giữa 2 dòng theo chiều dọc */
+        justify-content: center;
+        align-items: center; /* Căn giữa tất cả thành phần theo chiều ngang */
+        text-align: center;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
     }
 
-    .kpi-title {
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        font-weight: 700;
-        color: #718096;
+    /* Dòng 1: Tiêu đề và Giá trị đứng cạnh nhau */
+    .kpi-header-line {
+        display: flex;
+        align-items: baseline;
+        gap: 8px; /* Khoảng cách giữa chữ và số */
         margin-bottom: 2px;
     }
 
+    .kpi-title {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #718096;
+    }
+
     .kpi-value {
-        font-size: 1.3rem;
+        font-size: 1.25rem;
         font-weight: 700;
         color: #1A202C;
-        line-height: 1.1;
+    }
+
+    /* Dòng 2: Tỷ lệ biến đổi so với cùng kỳ */
+    .kpi-growth {
+        font-size: 0.78rem;
+        font-weight: 600;
+    }
+
+    .growth-up {
+        color: #28a745 !important; /* Màu xanh lá chuẩn cho chỉ số tăng */
+    }
+
+    .growth-down {
+        color: #dc3545 !important; /* Màu đỏ chuẩn cho chỉ số giảm */
     }
 
     /* Tạo lưới 2x2 cho vùng biểu đồ */
@@ -125,7 +146,7 @@
         <!-- Phần 1.1: Tiêu đề Dashboard -->
         <div class="col-md-6 flex-align-center p-0 align-items-start">
             <h4 class="text-uppercase m-0 font-weight-bold" style="letter-spacing: 1px; font-size: 1.3rem; line-height: 1.0;">
-                APARTMENT MANAGEMENT BOD DASHBOARD<br>
+                Apartment Management<br>
             </h4>
         </div>
 
@@ -164,41 +185,61 @@
         </div>
     </div>
 
-    <!-- ================= VÙNG 3 (MỚI THÊM - Nằm giữa Vùng 1 và Vùng 2, chia làm 4 phần) ================= -->
+    <!-- ================= VÙNG 3 (Đã sửa đổi: Căn giữa, Text & Số cùng dòng, thêm tăng trưởng) ================= -->
+    <!-- ================= VÙNG 3 (Đã cập nhật dấu trừ cho chỉ số giảm) ================= -->
     <div class="section-kpi row m-0 g-2">
         <!-- Vùng 3.1: Total Revenue -->
         <div class="col-md-3 p-1">
             <div class="kpi-card">
-                <div class="kpi-title">Total Revenue</div>
-                <div class="kpi-value text-success">1,850M VND</div>
+                <div class="kpi-header-line">
+                    <span class="kpi-title">Revenue:</span>
+                    <span class="kpi-value">1,850M VND</span>
+                </div>
+                <div class="kpi-growth growth-up">
+                    <i class="fas fa-arrow-up mr-1"></i> +15% <span class="text-muted font-weight-normal" style="font-size: 0.7rem;">vs cùng kỳ</span>
+                </div>
             </div>
         </div>
 
         <!-- Vùng 3.2: Cost -->
         <div class="col-md-3 p-1">
             <div class="kpi-card">
-                <div class="kpi-title">Cost</div>
-                <div class="kpi-value text-danger">980M VND</div>
+                <div class="kpi-header-line">
+                    <span class="kpi-title">Cost:</span>
+                    <span class="kpi-value">980M VND</span>
+                </div>
+                <div class="kpi-growth growth-up">
+                    <i class="fas fa-arrow-up mr-1"></i> +5% <span class="text-muted font-weight-normal" style="font-size: 0.7rem;">vs cùng kỳ</span>
+                </div>
             </div>
         </div>
 
         <!-- Vùng 3.3: NET Profit -->
         <div class="col-md-3 p-1">
             <div class="kpi-card">
-                <div class="kpi-title">NET Profit</div>
-                <div class="kpi-value text-info">870M VND</div>
+                <div class="kpi-header-line">
+                    <span class="kpi-title">NET Profit:</span>
+                    <span class="kpi-value">870M VND</span>
+                </div>
+                <div class="kpi-growth growth-up">
+                    <i class="fas fa-arrow-up mr-1"></i> +21% <span class="text-muted font-weight-normal" style="font-size: 0.7rem;">vs cùng kỳ</span>
+                </div>
             </div>
         </div>
 
-        <!-- Vùng 3.4: Average Occupancy -->
+        <!-- Vùng 3.4: Average Occupancy (Chỉ số giảm có dấu - phía trước) -->
         <div class="col-md-3 p-1">
             <div class="kpi-card">
-                <div class="kpi-title">Average Occupancy</div>
-                <div class="kpi-value text-warning">88.5%</div>
+                <div class="kpi-header-line">
+                    <span class="kpi-title">Occupancy:</span>
+                    <span class="kpi-value">88.5%</span>
+                </div>
+                <div class="kpi-growth growth-down">
+                    - <i class="fas fa-arrow-down mx-1"></i> 2.3% <span class="text-muted font-weight-normal" style="font-size: 0.7rem;">vs cùng kỳ</span>
+                </div>
             </div>
         </div>
     </div>
-
     <!-- ================= VÙNG 2 (Chiếm toàn bộ diện tích còn lại bên dưới) ================= -->
     <div class="section-bottom">
         <div class="grid-charts">
