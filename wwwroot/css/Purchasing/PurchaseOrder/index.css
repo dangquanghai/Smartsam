@@ -274,6 +274,32 @@ padding: 5px;
     margin: 1.75rem auto;
 }
 
+#purchaseOrderViewDetailModal.fade .modal-dialog {
+    opacity: 0;
+    transform: translate(0, 0) scaleY(0.04);
+    transform-origin: center center;
+    transition: transform 0.22s ease-out, opacity 0.14s ease-out;
+}
+
+#purchaseOrderViewDetailModal.show .modal-dialog {
+    opacity: 1;
+    transform: translate(0, 0) scaleY(1);
+}
+
+#purchaseOrderViewDetailModal .modal-content {
+    overflow: hidden;
+    transform-origin: center center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #purchaseOrderViewDetailModal.fade .modal-dialog,
+    #purchaseOrderViewDetailModal.show .modal-dialog {
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
+}
+
 #purchaseOrderEstimateViewModal .po-estimateview-modal-dialog {
     max-width: 56vw;
     width: 56vw;
