@@ -5,20 +5,20 @@ using Microsoft.Data.SqlClient;
 using ClosedXML.Excel;
 using SmartSam.Pages;
 using SmartSam.Services;
+using SmartSam.Services.Interfaces;
 
 namespace SmartSam.Pages.Inventory.SpecialLaundryReport;
 
 public class IndexModel : BasePageModel
 {
     private const int FunctionId = 161;
-    private const int PermissionView = 1;
     private static readonly DateTime DefaultFromDate = new DateTime(2019, 4, 1);
 
-    private readonly PermissionService _permissionService;
+    private readonly ISecurityService _securityService;
 
-    public IndexModel(IConfiguration config, PermissionService permissionService) : base(config)
+    public IndexModel(IConfiguration config, ISecurityService securityService) : base(config)
     {
-        _permissionService = permissionService;
+        _securityService = securityService;
     }
 
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
@@ -657,18 +657,15 @@ ORDER BY p.ApartmentNo;";
 
     private PagePermissions GetUserPermissions()
     {
-        var isAdmin = User.FindFirst("IsAdminRole")?.Value == "True";
-        var roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
+        var roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
         var perms = new PagePermissions();
-        perms.AllowedNos = isAdmin
-            ? Enumerable.Range(1, 20).ToList()
-            : _permissionService.GetPermissionsForPage(roleId, FunctionId);
+        perms.AllowedNos = _securityService.GetEffectivePermissions(FunctionId, roleId, 1);
         return perms;
     }
 
     private bool HasPageAccess()
     {
-        return PagePerm.HasPermission(PermissionView);
+        return PagePerm.AllowedNos.Count > 0;
     }
 }
 
