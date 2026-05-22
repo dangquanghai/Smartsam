@@ -181,7 +181,7 @@
                     <table class="table table-bordered table-sm mb-0" id="poItemsTable">
                         <thead>
                             <tr>
-                                <th style="width:60px;">Select</th>
+                                <th style="width:60px;" class="text-center"><input type="checkbox" id="poSelectAll" aria-label="Select all" /></th>
                                 <th>Item</th>
                                 <th class="text-right">Quantity</th>
                                 <th class="text-right po-checkqty-col">CheckQ.ty</th>
@@ -243,6 +243,7 @@
             let pendingSubmitButton = null;
             let confirmBypass = false;
             const tbody = document.querySelector('#poItemsTable tbody');
+            const selectAll = document.getElementById('poSelectAll');
             const confirmBtn = document.getElementById('btnConfirmPoItems');
             const detailBody = document.querySelector('#detailTable tbody');
             const existingDetailHtml = detailBody.innerHTML;
@@ -258,6 +259,17 @@
             function refreshConfirmButtonState() {
                 const hasChecked = [...tbody.querySelectorAll('.po-select')].some(x => x.checked);
                 if (confirmBtn) confirmBtn.disabled = !hasChecked;
+                const checkboxes = [...tbody.querySelectorAll('.po-select')];
+                if (selectAll) {
+                    if (!checkboxes.length) {
+                        selectAll.checked = false;
+                        selectAll.indeterminate = false;
+                    } else {
+                        const checkedCount = checkboxes.filter(x => x.checked).length;
+                        selectAll.checked = checkedCount > 0 && checkedCount === checkboxes.length;
+                        selectAll.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+                    }
+                }
             }
             function showNotify(type, message) {
                 const header = document.getElementById('notifyModalHeader');
@@ -440,6 +452,16 @@
                     if (qtyInput) qtyInput.disabled = !checkbox.checked;
                     refreshConfirmButtonState();
                 }
+            });
+            selectAll?.addEventListener('change', function () {
+                const checked = !!selectAll.checked;
+                tbody.querySelectorAll('.po-select').forEach(function (checkbox) {
+                    checkbox.checked = checked;
+                    const row = checkbox.closest('tr');
+                    const qtyInput = row?.querySelector('.po-qty-passed');
+                    if (qtyInput) qtyInput.disabled = !checked;
+                });
+                refreshConfirmButtonState();
             });
             modal.on('shown.bs.modal', function () { if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) window.jQuery('select.select2').not('#poItemsModal select.select2').select2('close'); });
             modal.on('hidden.bs.modal', function () { if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) window.jQuery('select.select2').not('#poItemsModal select.select2').each(function () { const $el = window.jQuery(this); const prevDisabled = $el.data('prevDisabled'); if (typeof prevDisabled !== 'undefined') { $el.prop('disabled', !!prevDisabled).trigger('change.select2'); $el.removeData('prevDisabled'); } }); if (notifyModal.hasClass('show')) { notifyModal.modal('hide'); } $('.modal-backdrop').css('z-index', ''); $('#poItemsModal').css('z-index', ''); $('#notifyModal').css('z-index', ''); refreshConfirmButtonState(); });

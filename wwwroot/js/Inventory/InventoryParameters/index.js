@@ -122,16 +122,12 @@
 
     function initActions() {
         const addBtn = document.getElementById("ipAddBtn");
-        const editBtn = document.getElementById("ipEditBtn");
         const viewMemberBtn = document.getElementById("ipViewMemberBtn");
         const viewStoreBtn = document.getElementById("ipViewStoreBtn");
         const idInput = document.getElementById("GroupInput_KPGroupID");
 
         const syncButtons = () => {
             const row = getSelectedRow();
-            if (editBtn) {
-                editBtn.disabled = !row;
-            }
             if (viewMemberBtn) {
                 viewMemberBtn.disabled = !row;
             }
@@ -145,12 +141,24 @@
             showGroupModal();
         });
 
-        editBtn?.addEventListener("click", () => {
-            const row = getSelectedRow();
-            if (!row) return;
+        document.querySelectorAll(".ip-edit-link").forEach((link) => {
+            link.addEventListener("click", (ev) => {
+                ev.preventDefault();
+                const row = link.closest(".ip-row");
+                if (!row) return;
 
-            setModalMode("edit", row);
-            showGroupModal();
+                const check = row.querySelector(".ip-selector");
+                if (check) {
+                    document.querySelectorAll(".ip-selector").forEach((item) => {
+                        item.checked = false;
+                    });
+                    check.checked = true;
+                    check.dispatchEvent(new Event("change", { bubbles: true }));
+                }
+
+                setModalMode("edit", row);
+                showGroupModal();
+            });
         });
 
         viewMemberBtn?.addEventListener("click", () => {

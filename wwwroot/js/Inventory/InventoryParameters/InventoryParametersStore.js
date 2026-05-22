@@ -173,7 +173,6 @@
 
     function initActions() {
         const addBtn = document.getElementById("ipsAddBtn");
-        const editBtn = document.getElementById("ipsEditBtn");
         const deleteBtn = document.getElementById("ipsDeleteBtn");
         const storeIdInput = document.getElementById("StoreInput_StoreID");
         const currentGroupId = document.getElementById("inventoryParameterStoreForm")?.getAttribute("data-current-group-id") || "";
@@ -184,9 +183,6 @@
 
         const syncButtons = () => {
             const row = getSelectedRow();
-            if (editBtn) {
-                editBtn.disabled = !row;
-            }
             if (deleteBtn) {
                 deleteBtn.disabled = !row;
             }
@@ -197,12 +193,24 @@
             showModal("inventoryParameterStoreModal");
         });
 
-        editBtn?.addEventListener("click", () => {
-            const row = getSelectedRow();
-            if (!row) return;
+        document.querySelectorAll(".ips-edit-link").forEach((link) => {
+            link.addEventListener("click", (ev) => {
+                ev.preventDefault();
+                const row = link.closest(".ips-row");
+                if (!row) return;
 
-            setStoreModalMode("edit", row);
-            showModal("inventoryParameterStoreModal");
+                const check = row.querySelector(".ips-selector");
+                if (check) {
+                    document.querySelectorAll(".ips-selector").forEach((item) => {
+                        item.checked = false;
+                    });
+                    check.checked = true;
+                    document.dispatchEvent(new CustomEvent("ips:selection-changed", { detail: { row } }));
+                }
+
+                setStoreModalMode("edit", row);
+                showModal("inventoryParameterStoreModal");
+            });
         });
 
         deleteBtn?.addEventListener("click", () => {

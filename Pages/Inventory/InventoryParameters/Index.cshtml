@@ -182,7 +182,14 @@
                                                     <input type="radio" class="ip-selector" name="selectedInventoryGroup" aria-label="Select row" />
                                                 </td>
                                                 <td class="ip-col-group">
-                                                    <span class="ip-ellipsis vni-font" title="@row.KPGroupName">@row.KPGroupName</span>
+                                                    @if (Model.CanEdit)
+                                                    {
+                                                        <a href="#" class="ip-edit-link text-primary font-weight-bold" data-action="edit-group" title="@row.KPGroupName">@row.KPGroupName</a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="ip-ellipsis vni-font font-weight-bold" title="@row.KPGroupName">@row.KPGroupName</span>
+                                                    }
                                                 </td>
                                                 <td class="ip-col-department">
                                                     <span class="ip-ellipsis vni-font" title="@row.DepartmentText">@row.DepartmentText</span>
@@ -212,12 +219,6 @@
                         {
                             <button type="button" id="ipAddBtn" class="btn btn-sm btn-action-add border mx-1 my-1">
                                 <i class="fas fa-plus"></i> Add
-                            </button>
-                        }
-                        @if (Model.CanEdit)
-                        {
-                            <button type="button" id="ipEditBtn" class="btn btn-sm btn-action-save border mx-1 my-1" disabled>
-                                <i class="fas fa-edit"></i> Edit
                             </button>
                         }
                         <button type="button" id="ipViewMemberBtn" class="btn btn-sm btn-action-close border mx-1 my-1" disabled>
