@@ -848,20 +848,20 @@ async function downloadPurchaseOrderPdf(reportUrl, fileName) {
     // Hien loading cho modal View Detail.
     function showViewDetailLoading(show) {
         if (show) {
-            $('#purchaseOrderViewDetailRows').html('<tr><td colspan="10" class="text-center text-muted py-4">No data</td></tr>');
+            $('#purchaseOrderViewDetailRows').html('<tr><td colspan="12" class="text-center text-muted py-4">No data</td></tr>');
         }
     }
 
     // Hien loi trong modal View Detail.
     function showViewDetailError(message) {
-        $('#purchaseOrderViewDetailRows').html(`<tr><td colspan="10" class="text-center text-danger py-4">${escapeHtml(message)}</td></tr>`);
+        $('#purchaseOrderViewDetailRows').html(`<tr><td colspan="12" class="text-center text-danger py-4">${escapeHtml(message)}</td></tr>`);
     }
 
     // Ve lai bang detail ben modal View Detail.
     function renderViewDetailRows(items) {
         const $tbody = $('#purchaseOrderViewDetailRows');
         if (!items || items.length === 0) {
-            $tbody.html('<tr><td colspan="10" class="text-center text-muted py-4">No detail rows</td></tr>');
+            $tbody.html('<tr><td colspan="12" class="text-center text-muted py-4">No detail rows</td></tr>');
             $('#purchaseOrderViewDetailCount').text('Total Record(s): 0');
             return;
         }
@@ -870,6 +870,8 @@ async function downloadPurchaseOrderPdf(reportUrl, fileName) {
             const row = item || {};
             return `
                 <tr>
+                    <td>${buildEllipsisCell(row.poNo || '')}</td>
+                    <td>${escapeHtml(row.poDateDisplay || '')}</td>
                     <td>${buildEllipsisCell(row.itemCode || '')}</td>
                     <td class="tcvn3-font">${buildEllipsisCell(row.itemName || '', 'tcvn3-font')}</td>
                     <td class="text-right">${formatNumber(row.quantity || 0)}</td>

@@ -302,14 +302,30 @@ padding: 5px;
 
 #purchaseOrderViewDetailTable th:nth-child(1),
 #purchaseOrderViewDetailTable td:nth-child(1) {
-    width: 110px;
-    max-width: 110px;
+    width: 120px;
+    max-width: 120px;
     padding-left: 5px;
     padding-right: 5px;
 }
 
 #purchaseOrderViewDetailTable th:nth-child(2),
 #purchaseOrderViewDetailTable td:nth-child(2) {
+    width: 100px;
+    max-width: 100px;
+    padding-left: 4px;
+    padding-right: 4px;
+}
+
+#purchaseOrderViewDetailTable th:nth-child(3),
+#purchaseOrderViewDetailTable td:nth-child(3) {
+    width: 110px;
+    max-width: 110px;
+    padding-left: 5px;
+    padding-right: 5px;
+}
+
+#purchaseOrderViewDetailTable th:nth-child(4),
+#purchaseOrderViewDetailTable td:nth-child(4) {
     width: 220px;
     max-width: 220px;
     padding-left: 4px;
