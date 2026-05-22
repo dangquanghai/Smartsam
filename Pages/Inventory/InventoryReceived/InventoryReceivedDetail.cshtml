@@ -1,0 +1,1531 @@
+﻿@page
+@using System.Text.Json
+@model SmartSam.Pages.Inventory.InventoryReceived.InventoryReceivedDetailModel
+@{
+    ViewData["Title"] = "Item Received Detail";
+    var initialDetailsJson = JsonSerializer.Serialize(Model.Details, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+    var alertClass = (Model.MessageType ?? "info").ToLowerInvariant() switch
+    {
+        "success" => "alert-success",
+        "warning" => "alert-warning",
+        "error" => "alert-danger",
+        _ => "alert-info"
+    };
+}
+
+<section class="content vni-font">
+    <div class="container-fluid">
+        <div class="card card-primary card-outline">
+            <div class="card-header py-2">
+                <h3 class="card-title prq-detail-title">Item Received Detail</h3>
+            </div>
+
+            <form method="post" enctype="multipart/form-data" id="inventoryReceivedDetailForm" class="mb-0">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <input type="hidden" name="mode" value="@Model.Mode" />
+                <input asp-for="DetailsJson" type="hidden" id="DetailsJson" />
+                <input asp-for="SelectedIssueFlowId" type="hidden" id="SelectedIssueFlowId" />
+                <input asp-for="DeletedAttachmentDocIdsJson" type="hidden" id="DeletedAttachmentDocIdsJson" />
+                <input asp-for="ConfirmAfterSave" type="hidden" id="ConfirmAfterSave" value="false" />
+                @if (Model.IsEditMode)
+                {
+                    <input type="hidden" asp-for="Header.POID" />
+                }
+
+                <div class="card-body">
+                    @if (!string.IsNullOrWhiteSpace(Model.Message))
+                    {
+                        <div class="alert @alertClass mb-2 py-2">@Model.Message</div>
+                    }
+                    <div id="clientValidationAlert" class="alert alert-danger mb-2 py-2 d-none"></div>
+
+                    <div class="row prq-detail-form-row mb-3">
+                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
+                            <label class="prq-detail-label">Doc No.<span class="required-mark">*</span></label>
+                            <input asp-for="Header.FlowNo" class="form-control form-control-sm vni-font" readonly="@(Model.IsAddMode && Model.CanEditVoucherBusiness ? null : "readonly")" />
+                            <span asp-validation-for="Header.FlowNo" class="text-danger small"></span>
+                        </div>
+                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
+                            <label class="prq-detail-label">Received Date</label>
+                            <input asp-for="Header.FlowDate" type="date" class="form-control form-control-sm" readonly="@(Model.CanEditVoucherBusiness ? null : "readonly")" />
+                        </div>
+                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
+                            <label class="prq-detail-label">Received Type<span class="required-mark">*</span></label>
+                            <select asp-for="Header.FlowSubType" asp-items="Model.ReceiveTypes" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
+                            <span asp-validation-for="Header.FlowSubType" class="text-danger small"></span>
+                        </div>
+                    </div>
+
+                    <div class="row prq-detail-form-row mb-3">
+                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
+                            <label class="prq-detail-label">Enter To<span class="required-mark">*</span></label>
+                            <select asp-for="Header.ToStore" asp-items="Model.Stores" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
+                            <span asp-validation-for="Header.ToStore" class="text-danger small"></span>
+                        </div>
+                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
+                            <label class="prq-detail-label">According To</label>
+                            <input asp-for="Header.According" class="form-control form-control-sm vni-font" readonly="@(Model.CanEditVoucherBusiness ? null : "readonly")" />
+                        </div>
+                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
+                            <label class="prq-detail-label">PO No.</label>
+                            <div class="d-flex align-items-start">
+                                <select asp-for="Header.POID" asp-items="Model.PONos" class="form-control form-control-sm select2 detail-context-field" disabled="@(Model.CanEditVoucherBusiness && Model.IsAddMode ? null : "disabled")"></select>
+                                <button type="button" id="btnOpenAttachmentModal" class="btn btn-sm btn-action-secondary border ml-2 mb-2 text-nowrap" data-toggle="modal" data-target="#prqAttachmentModal">
+                                    <i class="fas fa-paperclip"></i> Attached Files (<span id="attachmentCountText">@Model.AttachmentList.Count</span>)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row prq-detail-form-row mb-3">
+                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
+                            <label class="prq-detail-label">Move to Company Store<span id="moveToCompanyStoreRequiredMark" class="required-mark d-none">*</span></label>
+                            <select asp-for="Header.MoveToCPNStore" asp-items="Model.MoveToCPNStores" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")">
+                                <option value="">--- Select ---</option>
+                            </select>
+                            <span asp-validation-for="Header.MoveToCPNStore" class="text-danger small"></span>
+                        </div>
+                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
+                            <label class="prq-detail-label">Return Department</label>
+                            <select asp-for="Header.RetDept" asp-items="Model.Departments" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
+                        </div>
+                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
+                            <label class="prq-detail-label">Return Location</label>
+                            <select asp-for="Header.RetAssetLocation" asp-items="Model.Locations" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
+                        </div>
+                        <input type="hidden" asp-for="Header.StatusID" />
+                        <input type="hidden" asp-for="Header.StatusName" />
+                    </div>
+
+                    <div class="row prq-detail-form-row mb-3">
+                        <div class="col-12 prq-detail-form-col">
+                            <label class="prq-detail-label">Reason</label>
+                            <input asp-for="Header.Reason" class="form-control form-control-sm vni-font" readonly="@(Model.CanEditVoucherBusiness ? null : "readonly")" />
+                        </div>
+                    </div>
+
+                    <div class="row prq-detail-form-row mb-3 align-items-end">
+                        <div class="col-12 prq-detail-form-col d-flex justify-content-start align-items-center">
+                            @if (Model.CanEditVoucherBusiness)
+                            {
+                                <button type="button" id="btnOpenAddDetail" class="btn btn-sm btn-action-close border"><i class="fas fa-plus"></i> Add Detail</button>
+                            }
+                            <span class="ml-3 font-weight-bold">Status: <span id="statusTextStrong" class="font-weight-bold">@Model.Header.StatusName</span></span>
+                        </div>
+                    </div>
+
+                    <div class="row prq-detail-form-row mb-0">
+                        <div class="col-12 prq-detail-form-col">
+                            <div class="table-responsive prq-table-wrap border rounded-sm inventory-received-detail-scroll inventory-received-detail-scroll-x">
+                                <table class="table table-hover table-bordered mb-0 text-nowrap prq-table inventory-received-main-table">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th style="width:70px;" class="text-center">Action</th>
+                                            <th style="width:220px;">Item Code</th>
+                                            <th style="min-width:360px;">Item Name</th>
+                                            <th style="width:90px;">Unit</th>
+                                            <th class="text-right" style="width:100px;">Doc. Qty</th>
+                                            <th class="text-right" style="width:100px;">Act. Qty</th>
+                                            <th class="text-right" style="width:110px;">Price</th>
+                                            <th class="text-right" style="width:120px; min-width:120px; max-width:120px;">Amount</th>
+                                            <th style="width:260px;">Location</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="detailRowsBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-footer p-2 text-left module-action-bar prq-action-bar">
+                    @if (Model.CanEditVoucherBusiness)
+                    {
+                        <button type="submit" class="btn btn-sm btn-action-save btn-success border mx-1 my-1"><i class="fas fa-save"></i> Save</button>
+                    }
+                    @if ((Model.IsAddMode && Model.CanEditVoucherBusiness) || Model.CanConfirmVoucherBusiness)
+                    {
+                        <button type="button" id="btnOpenConfirmVoucher" class="btn btn-sm btn-success border mx-1 my-1" data-toggle="modal" data-target="#confirmInventoryReceivedModal"><i class="fas fa-check"></i> Confirm</button>
+                    }
+                    @if ((Model.IsAddMode || Model.IsEditMode) && Model.CanEditVoucherBusiness)
+                    {
+                        <button type="button" id="btnOpenReceiveFromIssue" class="btn btn-sm btn-info border mx-1 my-1" disabled><i class="fas fa-exchange-alt"></i> Receive From Inventory Issue</button>
+                    }
+                    <a class="btn btn-sm btn-action-close border mx-1 my-1" asp-page="./Index"><i class="fas fa-arrow-left"></i> Back to List</a>
+                </div>
+            </form>
+
+            @if (Model.Id.HasValue && Model.PagePerm.HasPermission(5))
+            {
+                <form method="post" asp-page-handler="Confirm" id="confirmInventoryReceivedForm" class="d-none">
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <input type="hidden" name="mode" value="@Model.Mode" />
+                </form>
+            }
+        </div>
+    </div>
+</section>
+
+<div class="modal fade vni-font" id="confirmInventoryReceivedModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-primary">
+            <div class="modal-header bg-primary py-2">
+                <h5 class="modal-title text-white">Confirm Voucher</h5>
+                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to confirm this inventory received voucher?
+            </div>
+            <div class="modal-footer py-2 justify-content-end">
+                <button type="button" id="btnConfirmVoucherAction" class="btn btn-sm btn-primary"><i class="fas fa-check"></i> Confirm</button>
+                <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade vni-font" id="receivedAddDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen-xl-down modal-xl" style="max-width: 96vw;" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title">Add Detail</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body pb-2">
+                <div id="addDetailModalValidationAlert" class="alert alert-danger mb-2 py-2 d-none"></div>
+                <div id="addDetailManualPanel" class="d-none">
+                    <div class="row">
+                        <div class="col-md-4 mb-2">
+                            <label class="prq-detail-label">Item</label>
+                            <select id="manualAddItemId" class="form-control form-control-sm select2"></select>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <label class="prq-detail-label">Unit</label>
+                            <input type="text" id="manualAddUnit" class="form-control form-control-sm" readonly />
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <label class="prq-detail-label">Location</label>
+                            <select id="manualAddLocationId" class="form-control form-control-sm select2"></select>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <label class="prq-detail-label">Doc. Qty</label>
+                            <input type="text" id="manualAddDocQty" class="form-control form-control-sm text-right number-format" value="0" />
+                            <small id="manualAddDocQtyError" class="text-danger d-none"></small>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <label class="prq-detail-label">Act. Qty</label>
+                            <input type="text" id="manualAddActQty" class="form-control form-control-sm text-right number-format" value="0" />
+                            <small id="manualAddActQtyError" class="text-danger d-none"></small>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <label class="prq-detail-label">Price</label>
+                            <input type="text" id="manualAddUnitPrice" class="form-control form-control-sm text-right number-format" value="0" />
+                            <small id="manualAddUnitPriceError" class="text-danger d-none"></small>
+                        </div>
+                    </div>
+                </div>
+                <div id="addDetailPoPanel" class="table-responsive inventory-received-add-detail-scroll">
+                    <table class="table table-bordered table-hover table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:45px;" class="text-center"><input type="checkbox" id="checkAllAddDetail" /></th>
+                                <th style="width:220px;">Item Code</th>
+                                <th style="min-width:360px;">Item Name</th>
+                                <th style="width:90px;">Unit</th>
+                                <th style="width:130px;" class="text-right">Doc. Qty</th>
+                                <th style="width:130px;" class="text-right">Act. Qty</th>
+                                <th style="width:110px;" class="text-right">Price</th>
+                                <th style="width:160px;">Location</th>
+                            </tr>
+                        </thead>
+                        <tbody id="addDetailRowsBody">
+                            <tr><td colspan="8" class="text-center text-muted py-3">No data</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" id="btnAddDetailConfirm" class="btn btn-sm btn-primary" disabled><i class="fas fa-save"></i> Add</button>
+                <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade vni-font" id="detailResetWarningModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-warning">
+            <div class="modal-header bg-warning py-2">
+                <h5 class="modal-title text-dark">Warning</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">Changing this header field will reset the current detail list. Do you want to continue?</div>
+            <div class="modal-footer py-2">
+                <button type="button" id="btnConfirmResetDetails" class="btn btn-sm btn-warning">Continue</button>
+                <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade vni-font" id="receiveFromIssueModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document" style="max-width: 96vw;">
+        <div class="modal-content">
+            <div class="modal-header py-2 bg-info">
+                <h5 class="modal-title text-white">Receive From Inventory Issue</h5>
+                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body pb-2">
+                <div id="receiveFromIssueAlert" class="alert alert-danger mb-2 py-2 d-none"></div>
+                <div class="form-row align-items-end mb-2">
+                    <div class="col-md-3">
+                        <label class="prq-detail-label">From Date</label>
+                        <input type="date" id="issueFromDate" class="form-control form-control-sm" value="@DateTime.Today.AddMonths(-1).ToString("yyyy-MM-dd")" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="prq-detail-label">To Date</label>
+                        <input type="date" id="issueToDate" class="form-control form-control-sm" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" id="btnSearchIssueReceive" class="btn btn-sm btn-primary"><i class="fas fa-search"></i> Search</button>
+                    </div>
+                </div>
+                <div class="table-responsive inventory-received-add-detail-scroll mb-3">
+                    <table class="table table-bordered table-hover table-sm mb-0 text-nowrap">
+                        <thead>
+                            <tr>
+                                <th style="width:45px;" class="text-center"></th>
+                                <th style="width:150px;">Doc No.</th>
+                                <th style="width:120px;">Issue Date</th>
+                                <th style="min-width:220px;">According</th>
+                                <th style="min-width:180px;">Issue as St.House</th>
+                                <th style="min-width:180px;">Received Department</th>
+                                <th style="min-width:180px;">Received Location</th>
+                            </tr>
+                        </thead>
+                        <tbody id="issueReceiveRowsBody">
+                            <tr><td colspan="7" class="text-center text-muted py-3">No data</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="table-responsive inventory-received-add-detail-scroll">
+                    <table class="table table-bordered table-hover table-sm mb-0 text-nowrap">
+                        <thead>
+                            <tr>
+                                <th style="width:220px;">Item Code</th>
+                                <th style="min-width:360px;">Item Name</th>
+                                <th style="width:90px;">Unit</th>
+                                <th style="width:110px;" class="text-right">Doc. Qty</th>
+                                <th style="width:110px;" class="text-right">Act. Qty</th>
+                                <th style="width:110px;" class="text-right">Price</th>
+                                <th style="width:120px;" class="text-right">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody id="issueReceiveDetailRowsBody">
+                            <tr><td colspan="7" class="text-center text-muted py-3">No data</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" id="btnReceiveFromIssueOk" class="btn btn-sm btn-primary" disabled><i class="fas fa-check"></i> OK</button>
+                <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade vni-font" id="prqAttachmentModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-xl attachment-modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title">Attached Files</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                @if (Model.CanEditVoucherBusiness)
+                {
+                <div class="form-group mb-2">
+                    <label class="mb-1">Attached Files <span class="prq-attachment-note">Allowed: @Model.AllowedAttachmentExtensionsText | Max size: @Model.MaxAttachmentSizeMb MB</span></label>
+                    <input asp-for="AttachmentUploads" type="file" form="inventoryReceivedDetailForm" class="form-control-file" id="detailAttachmentUpload" accept="@Model.AllowedAttachmentExtensionsText" multiple />
+                    <div id="detailAttachmentError" class="text-danger small mt-1" style="display:none;"></div>
+                </div>
+                }
+                <div class="table-responsive attachment-list-scroll-x">
+                    <table class="table table-bordered table-sm mb-0 text-nowrap">
+                        <thead>
+                            <tr>
+                                <th style="width:70px;" class="text-center">Action</th>
+                                <th>File Name</th>
+                                <th style="width:190px; min-width:190px;">Date created</th>
+                                <th style="width:140px; min-width:140px;">User</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attachmentListBody">
+                            <tr><td colspan="4" class="text-center text-muted py-3">No files selected</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                @if (Model.CanEditVoucherBusiness)
+                {
+                    <button type="button" class="btn btn-sm btn-action-save border" id="btnAttachmentAgree" data-dismiss="modal">Agree</button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Close</button>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Purchasing/PurchaseRequisition/index.css" asp-append-version="true" />
+    <style>
+        .select2-results__group { font-weight: 700; color: #212529; }
+        .select2-container--default .select2-results__option[aria-disabled=true] { color: #6c757d; }
+        body.inventory-received-modal-open > .select2-container { z-index: 1035 !important; }
+        #inventoryReceivedDetailForm .modal .select2-container { z-index: 1080 !important; }
+        #inventoryReceivedDetailForm .modal .select2-dropdown { z-index: 1081 !important; }
+        #receiveFromIssueModal { z-index: 1075 !important; }
+        #receiveFromIssueModal .modal-dialog { z-index: 1076 !important; }
+        #prqAttachmentModal { z-index: 1060 !important; }
+        #confirmInventoryReceivedModal { z-index: 1070 !important; }
+        #confirmInventoryReceivedModal .modal-dialog { z-index: 1071 !important; }
+        .modal-backdrop { z-index: 1040; }
+        body.inventory-received-confirm-open .select2-container { z-index: 1035 !important; }
+        .inventory-received-detail-scroll { max-height: 500px; overflow-y: auto; }
+        .inventory-received-detail-scroll-x { overflow-x: auto; }
+        .inventory-received-add-detail-scroll { max-height: calc(100vh - 220px); overflow-y: auto; }
+        .inventory-received-detail-scroll thead th,
+        .inventory-received-add-detail-scroll thead th { position: sticky; top: 0; z-index: 2; background: #f8f9fa; }
+        .inventory-received-main-table { min-width: 1650px; }
+        .inventory-received-detail-scroll .table,
+        .inventory-received-add-detail-scroll .table { table-layout: auto; }
+        .inventory-received-add-detail-scroll td:nth-child(2),
+        .inventory-received-add-detail-scroll td:nth-child(3),
+        .inventory-received-add-detail-scroll th:nth-child(2),
+        .inventory-received-add-detail-scroll th:nth-child(3),
+        .inventory-received-detail-scroll td:nth-child(2),
+        .inventory-received-detail-scroll td:nth-child(3),
+        .inventory-received-detail-scroll th:nth-child(2),
+        .inventory-received-detail-scroll th:nth-child(3) { white-space: nowrap; }
+        .inventory-received-detail-scroll .detail-docqty,
+        .inventory-received-detail-scroll .detail-actqty,
+        .inventory-received-add-detail-scroll .add-docqty,
+        .inventory-received-add-detail-scroll .add-actqty { width: 100px; min-width: 100px; max-width: 100px; }
+        .inventory-received-detail-scroll .detail-unitprice,
+        .inventory-received-add-detail-scroll .add-unitprice { width: 110px; min-width: 110px; max-width: 110px; }
+        .inventory-received-detail-scroll .detail-location { min-width: 230px; white-space: nowrap; }
+        .inventory-received-detail-scroll td:first-child { text-align: center; vertical-align: middle; }
+        .attachment-list-scroll-x { overflow-x: auto; }
+        .attachment-modal-dialog { max-width: 1100px; }
+    </style>
+}
+
+@section Scripts {
+    <script>
+        (function () {
+            const itemCatalog = @Html.Raw(JsonSerializer.Serialize(Model.ItemCatalog.Select(x => new {
+                id = x.ItemId.ToString(),
+                checkingId = x.ChekingID,
+                checkingDtId = x.ChekingDTID,
+                mrDetailId = x.MRDetailID,
+                itemCode = x.ItemCode,
+                itemName = x.ItemName,
+                unit = x.Unit,
+                remainingQty = x.RemainingQty,
+                price = x.Price
+            })));
+            const locationCatalog = @Html.Raw(JsonSerializer.Serialize(Model.Locations.Where(x => !string.IsNullOrWhiteSpace(x.Value)).Select(x => new { id = x.Value, text = x.Text })));
+            const existingAttachments = @Html.Raw(JsonSerializer.Serialize(Model.AttachmentList.Select(x => new {
+                docId = x.DocId,
+                filePath = x.FilePath,
+                uploadDate = x.UploadDate?.ToString("dd/MM/yyyy HH:mm") ?? "",
+                employeeCode = x.EmployeeCode,
+                downloadUrl = Url.Page("./InventoryReceivedDetail", "DownloadAttachment", new { id = Model.Id, docId = x.DocId }),
+                deleteUrl = Url.Page("./InventoryReceivedDetail", "DeleteAttachment", new { id = Model.Id, docId = x.DocId })
+            })));
+            const currentEmployeeCode = '@Model.CurrentEmployeeCode';
+            const currentUserName = '@(User?.Identity?.Name ?? string.Empty)';
+            let details = @Html.Raw(initialDetailsJson);
+            let pendingField = null;
+            let pendingOldValue = null;
+            let pendingAction = '';
+            const $addDetailModal = $('#receivedAddDetailModal');
+            let stagedAttachments = [];
+            let pendingAttachments = [];
+            let deletedAttachmentDocIds = [];
+            let isSubmittingConfirmAfterSave = false;
+            let issueReceiveList = [];
+            let issueReceiveDetails = [];
+            let selectedIssueFlowId = Number($('#SelectedIssueFlowId').val() || 0);
+
+            function formatBytes(bytes) {
+                const value = Number(bytes || 0);
+                if (value < 1024) return `${value} B`;
+                if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+                return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+            }
+
+            function formatDateTimeDdMmYyyyHm(date) {
+                const d = date instanceof Date ? date : new Date(date);
+                const dd = String(d.getDate()).padStart(2, '0');
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const yyyy = d.getFullYear();
+                const hh = String(d.getHours()).padStart(2, '0');
+                const min = String(d.getMinutes()).padStart(2, '0');
+                return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+            }
+
+            function attachmentKey(file) {
+                return `${file.name || ''}__${file.size || 0}__${file.lastModified || 0}`;
+            }
+
+            function syncAttachmentInputFromStaging() {
+                const dt = new DataTransfer();
+                stagedAttachments.forEach(file => dt.items.add(file));
+                const input = document.getElementById('detailAttachmentUpload');
+                if (!input) {
+                    return;
+                }
+                input.files = dt.files;
+            }
+
+            function renderAttachmentStaging() {
+                const $body = $('#attachmentListBody');
+                $body.empty();
+                const canEdit = @Model.CanEditVoucherBusiness.ToString().ToLowerInvariant();
+
+                existingAttachments.filter(file => !deletedAttachmentDocIds.includes(Number(file.docId))).forEach(file => {
+                    const deleteAction = canEdit
+                        ? `<button type="button" class="btn btn-xs btn-danger btn-remove-existing-attachment" data-docid="${file.docId}"><i class="fas fa-trash"></i></button>`
+                        : '';
+                    $body.append(`<tr>
+                        <td class="text-center">${deleteAction}</td>
+                        <td><a href="${file.downloadUrl}">${file.filePath || ''}</a></td>
+                        <td>${file.uploadDate || ''}</td>
+                        <td>${file.employeeCode || ''}</td>
+                    </tr>`);
+                });
+
+                pendingAttachments.forEach((file, index) => {
+                    const removeAction = canEdit
+                        ? `<button type="button" class="btn btn-xs btn-danger btn-remove-pending-attachment" data-index="${index}"><i class="fas fa-trash"></i></button>`
+                        : '';
+                    const nowText = formatDateTimeDdMmYyyyHm(new Date());
+                    const displayUser = (currentEmployeeCode || currentUserName || 'Current User');
+                    $body.append(`<tr>
+                        <td class="text-center">${removeAction}</td>
+                        <td>${file.name || ''}</td>
+                        <td>${nowText}</td>
+                        <td>${displayUser}</td>
+                    </tr>`);
+                });
+
+                const visibleExistingCount = existingAttachments.filter(file => !deletedAttachmentDocIds.includes(Number(file.docId))).length;
+                $('#attachmentCountText').text(visibleExistingCount + pendingAttachments.length);
+                if (visibleExistingCount === 0 && pendingAttachments.length === 0) {
+                    $body.append('<tr><td colspan="4" class="text-center text-muted py-3">No files selected</td></tr>');
+                    return;
+                }
+            }
+
+            function syncDeletedAttachmentDocIds() {
+                $('#DeletedAttachmentDocIdsJson').val(JSON.stringify(deletedAttachmentDocIds));
+            }
+
+            function initSelect2() {
+                if (!$.fn.select2) return;
+                const $modal = $addDetailModal;
+                $('select.select2').not($modal.find('select.select2')).select2({ width: '100%' });
+                $modal.find('select.select2').select2({ width: '100%', dropdownParent: $modal });
+            }
+
+            function reloadReceiveContext() {
+                const flowSubType = $('#Header_FlowSubType').val() || '';
+                const mode = ($('input[name="mode"]').val() || '').toLowerCase();
+                const url = `?handler=ReceiveContext&flowSubType=${encodeURIComponent(flowSubType)}`;
+
+                return fetch(url, { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(r => r.ok ? r.json() : null)
+                    .then(data => {
+                        if (!data) return;
+                        $('#Header_StatusID').val(data.statusId || '');
+                        $('#Header_StatusName').val(data.statusName || '');
+                        $('#statusTextStrong').text(data.statusName || '');
+                        if (mode === 'add' && data.flowNo) {
+                            $('#Header_FlowNo').val(data.flowNo);
+                        } else if (mode === 'add' && !flowSubType) {
+                            $('#Header_FlowNo').val('');
+                        }
+                    })
+                    .catch(() => {
+                        $('#Header_StatusName').val('');
+                    });
+            }
+
+            function setFieldEnabled($field, enabled, clearWhenDisabled) {
+                if (!$field || $field.length === 0) return;
+                const tagName = ($field.prop('tagName') || '').toLowerCase();
+                if (tagName === 'select') {
+                    if (!enabled && clearWhenDisabled) {
+                        $field.val('').trigger('change.select2');
+                    }
+                    $field.prop('disabled', !enabled).trigger('change.select2');
+                    return;
+                }
+
+                if (!enabled && clearWhenDisabled) {
+                    $field.val('');
+                }
+                $field.prop('readonly', !enabled);
+            }
+
+            function syncReceiveFromIssueButton() {
+                const flowSubType = Number($('#Header_FlowSubType').val() || 0);
+                const mode = ($('input[name="mode"]').val() || '').toLowerCase();
+                const canEditBusiness = @Model.CanEditVoucherBusiness.ToString().ToLowerInvariant();
+                const canUseReceiveFromIssue = canEditBusiness && (mode === 'add' || mode === 'edit') && flowSubType === 6;
+                $('#btnOpenReceiveFromIssue').prop('disabled', !canUseReceiveFromIssue);
+            }
+
+            function applyFieldRuleByFlowSubType() {
+                const flowSubType = Number($('#Header_FlowSubType').val() || 0);
+                const mode = ($('input[name="mode"]').val() || '').toLowerCase();
+                const isView = mode === 'view';
+                const isEdit = mode === 'edit';
+                const canEditBusiness = @Model.CanEditVoucherBusiness.ToString().ToLowerInvariant();
+                const $po = $('#Header_POID');
+                const $files = $('#btnOpenAttachmentModal');
+                const $moveToCompanyStore = $('#Header_MoveToCPNStore');
+                const $retDept = $('#Header_RetDept');
+                const $retLocation = $('#Header_RetAssetLocation');
+                const $reason = $('#Header_Reason');
+
+                const canEditHeader = !isView && canEditBusiness;
+                syncReceiveFromIssueButton();
+
+                if (!canEditHeader) {
+                    $('#moveToCompanyStoreRequiredMark').addClass('d-none');
+                    setFieldEnabled($po, false, false);
+                    $files.prop('disabled', true);
+                    setFieldEnabled($moveToCompanyStore, false, false);
+                    setFieldEnabled($retDept, false, false);
+                    setFieldEnabled($retLocation, false, false);
+                    setFieldEnabled($reason, false, false);
+                    return;
+                }
+
+                if (flowSubType <= 0) {
+                    $('#moveToCompanyStoreRequiredMark').addClass('d-none');
+                    setFieldEnabled($po, false, true);
+                    $files.prop('disabled', true);
+                    setFieldEnabled($moveToCompanyStore, false, true);
+                    setFieldEnabled($retDept, false, true);
+                    setFieldEnabled($retLocation, false, true);
+                    setFieldEnabled($reason, false, true);
+                    return;
+                }
+
+                if (flowSubType === 1) {
+                    $('#moveToCompanyStoreRequiredMark').addClass('d-none');
+                    setFieldEnabled($po, !isEdit, false);
+                    $files.prop('disabled', false);
+                    setFieldEnabled($moveToCompanyStore, false, true);
+                    setFieldEnabled($retDept, true, false);
+                    setFieldEnabled($retLocation, true, false);
+                    setFieldEnabled($reason, true, false);
+                    return;
+                }
+
+                if (flowSubType !== 6) {
+                    $('#moveToCompanyStoreRequiredMark').removeClass('d-none');
+                    setFieldEnabled($po, false, true);
+                    $files.prop('disabled', true);
+                    setFieldEnabled($moveToCompanyStore, true, false);
+                    setFieldEnabled($retDept, false, true);
+                    setFieldEnabled($retLocation, false, true);
+                    setFieldEnabled($reason, true, false);
+                    return;
+                }
+
+                $('#moveToCompanyStoreRequiredMark').addClass('d-none');
+                setFieldEnabled($po, false, true);
+                $files.prop('disabled', true);
+                setFieldEnabled($moveToCompanyStore, false, true);
+                setFieldEnabled($retDept, false, true);
+                setFieldEnabled($retLocation, false, true);
+                setFieldEnabled($reason, true, false);
+            }
+
+            function syncDetailsJson() {
+                $('#DetailsJson').val(JSON.stringify(details));
+            }
+
+            function renderRows() {
+                const $body = $('#detailRowsBody');
+                const canEdit = @Model.CanEditVoucherBusiness.ToString().ToLowerInvariant();
+                $body.empty();
+                if (details.length === 0) {
+                    $body.append('<tr><td colspan="10" class="text-center text-muted py-3">No data</td></tr>');
+                    syncDetailsJson();
+                    return;
+                }
+                details.forEach((d, index) => {
+                    const itemCode = d.itemCode ?? d.ItemCode ?? '';
+                    const itemName = d.itemName ?? d.ItemName ?? '';
+                    const unit = d.unit ?? d.Unit ?? '';
+                    const docQty = Number(d.docQty ?? d.DocQty ?? 0);
+                    const actQty = Number(d.actQty ?? d.ActQty ?? 0);
+                    const unitPrice = Number(d.unitPrice ?? d.UnitPrice ?? 0);
+                    const amount = Number(d.amount ?? d.Amount ?? 0);
+                    const locationId = Number(d.locationId ?? d.LocationId ?? 0);
+                    const locationOptions = locationCatalog.map(l => {
+                        const selected = locationId === Number(l.id) ? 'selected' : '';
+                        return `<option value="${l.id}" ${selected}>${l.text}</option>`;
+                    }).join('');
+
+                    const deleteAction = canEdit
+                        ? `<button type="button" class="btn btn-xs btn-danger stage-remove btn-delete-detail" data-index="${index}" title="Remove"><i class="fas fa-trash"></i></button>`
+                        : '';
+                    const readOnlyText = canEdit ? '' : 'readonly';
+                    const disabledSelect = canEdit ? '' : 'disabled';
+                    $body.append(`<tr>
+                        <td class="text-center align-middle">${deleteAction}</td>
+                        <td class="text-bold">${itemCode}</td>
+                        <td class="tcvn3-font">${itemName}</td>
+                        <td>${unit}</td>
+                        <td><input type="text" inputmode="numeric" class="form-control form-control-sm text-right detail-docqty number-format" data-index="${index}" value="${docQty.toLocaleString(undefined,{maximumFractionDigits:0})}" ${readOnlyText} /></td>
+                        <td><input type="text" inputmode="numeric" class="form-control form-control-sm text-right detail-actqty number-format" data-index="${index}" value="${actQty.toLocaleString(undefined,{maximumFractionDigits:0})}" ${readOnlyText} /></td>
+                        <td><input type="text" inputmode="numeric" class="form-control form-control-sm text-right detail-unitprice number-format" data-index="${index}" value="${unitPrice.toLocaleString(undefined,{maximumFractionDigits:0})}" ${readOnlyText} /></td>
+                        <td class="text-right detail-amount" data-index="${index}">${amount.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+                        <td>
+                            <select class="form-control form-control-sm detail-location" data-index="${index}" ${disabledSelect}>
+                                <option value=""></option>
+                                ${locationOptions}
+                            </select>
+                        </td>
+                    </tr>`);
+                });
+                syncDetailsJson();
+            }
+
+            function clearDetails() { details = []; renderRows(); }
+            function parseNumber(v) {
+                if (v === null || v === undefined) return 0;
+                const s = String(v).replace(/,/g, '').trim();
+                const n = Number(s);
+                return isNaN(n) ? 0 : n;
+            }
+            function formatNumber(v) {
+                return Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+            }
+            function syncAddDetailCheckAll() {
+                const total = $('.add-detail-check').length;
+                const checked = $('.add-detail-check:checked').length;
+                $('#checkAllAddDetail').prop('checked', total > 0 && checked === total);
+            }
+
+            function detailKey(row) {
+                const checkingDtId = Number(row.chekingDTID || row.ChekingDTID || row.checkingDtId || 0);
+                if (checkingDtId > 0) return `checking:${checkingDtId}`;
+                return `item:${Number(row.itemId || row.id || 0)}`;
+            }
+
+            function getSelectedDetailKeys() {
+                return new Set(details.map(detailKey));
+            }
+
+            function getAvailableQty(item) {
+                return Math.max(0, Number(item.remainingQty || 0));
+            }
+
+            function showClientValidation(message) {
+                const $alert = $('#clientValidationAlert');
+                $alert.text(message || '').toggleClass('d-none', !message);
+            }
+
+            function showIssueReceiveValidation(message) {
+                const $alert = $('#receiveFromIssueAlert');
+                $alert.text(message || '').toggleClass('d-none', !message);
+            }
+
+            function renderIssueReceiveRows() {
+                const $body = $('#issueReceiveRowsBody');
+                $body.empty();
+                if (!issueReceiveList.length) {
+                    $body.append('<tr><td colspan="7" class="text-center text-muted py-3">No data</td></tr>');
+                    $('#btnReceiveFromIssueOk').prop('disabled', true);
+                    return;
+                }
+                issueReceiveList.forEach(issue => {
+                    const checked = selectedIssueFlowId === Number(issue.flowId) ? 'checked' : '';
+                    $body.append(`<tr class="issue-receive-row" data-flow-id="${issue.flowId}" style="cursor:pointer;">
+                        <td class="text-center"><input type="radio" name="issueReceiveSelect" class="issue-receive-select" value="${issue.flowId}" ${checked} /></td>
+                        <td>${issue.flowNo || ''}</td>
+                        <td>${issue.flowDate || ''}</td>
+                        <td>${issue.according || ''}</td>
+                        <td>${issue.storeName || ''}</td>
+                        <td>${issue.deptName || ''}</td>
+                        <td>${issue.locationName || ''}</td>
+                    </tr>`);
+                });
+                $('#btnReceiveFromIssueOk').prop('disabled', selectedIssueFlowId <= 0);
+            }
+
+            function renderIssueReceiveDetails() {
+                const $body = $('#issueReceiveDetailRowsBody');
+                $body.empty();
+                if (!issueReceiveDetails.length) {
+                    $body.append('<tr><td colspan="7" class="text-center text-muted py-3">No data</td></tr>');
+                    return;
+                }
+                issueReceiveDetails.forEach(d => {
+                    $body.append(`<tr>
+                        <td>${d.itemCode || ''}</td>
+                        <td class="tcvn3-font">${d.itemName || ''}</td>
+                        <td>${d.unit || ''}</td>
+                        <td class="text-right">${Number(d.docQty || 0).toLocaleString()}</td>
+                        <td class="text-right">${Number(d.actQty || 0).toLocaleString()}</td>
+                        <td class="text-right">${Number(d.unitPrice || 0).toLocaleString()}</td>
+                        <td class="text-right">${Number(d.amount || 0).toLocaleString()}</td>
+                    </tr>`);
+                });
+            }
+
+            function loadIssueReceiveList() {
+                const fromDate = $('#issueFromDate').val() || '';
+                const toDate = $('#issueToDate').val() || '';
+                const url = `?handler=IssueReceiveList&fromDate=${encodeURIComponent(fromDate)}&toDate=${encodeURIComponent(toDate)}`;
+                return fetch(url, { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(r => r.ok ? r.json() : [])
+                    .then(list => {
+                        issueReceiveList = Array.isArray(list) ? list : [];
+                        renderIssueReceiveRows();
+                    })
+                    .catch(() => {
+                        issueReceiveList = [];
+                        renderIssueReceiveRows();
+                    });
+            }
+
+            function loadIssueReceiveDetails(flowId) {
+                if (!flowId) {
+                    issueReceiveDetails = [];
+                    renderIssueReceiveDetails();
+                    return Promise.resolve();
+                }
+                const url = `?handler=IssueReceiveDetails&flowId=${encodeURIComponent(flowId)}`;
+                return fetch(url, { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(r => r.ok ? r.json() : [])
+                    .then(list => {
+                        issueReceiveDetails = Array.isArray(list) ? list : [];
+                        renderIssueReceiveDetails();
+                    })
+                    .catch(() => {
+                        issueReceiveDetails = [];
+                        renderIssueReceiveDetails();
+                    });
+            }
+
+            function showAddDetailModalValidation(message) {
+                const $alert = $('#addDetailModalValidationAlert');
+                $alert.text(message || '').toggleClass('d-none', !message);
+            }
+
+            function clearManualAddFieldErrors() {
+                $('#manualAddDocQty, #manualAddActQty, #manualAddUnitPrice').removeClass('is-invalid');
+                $('#manualAddDocQtyError, #manualAddActQtyError, #manualAddUnitPriceError').text('').addClass('d-none');
+            }
+
+            function setManualAddFieldError(selector, errorSelector, message) {
+                $(selector).addClass('is-invalid');
+                $(errorSelector).text(message).removeClass('d-none');
+            }
+
+            function clearPoAddFieldErrors() {
+                $('.add-docqty, .add-actqty, .add-unitprice').removeClass('is-invalid');
+                $('.add-docqty-error, .add-actqty-error, .add-unitprice-error').remove();
+            }
+
+            function setPoAddFieldError(itemId, cls, message) {
+                const $input = $(`.${cls}[data-itemid='${itemId}']`);
+                $input.addClass('is-invalid');
+                const $existing = $input.parent().find(`.${cls}-error`);
+                if ($existing.length > 0) {
+                    $existing.text(message);
+                } else {
+                    $input.parent().append(`<small class="text-danger ${cls}-error">${message}</small>`);
+                }
+            }
+
+            function renderAddDetailRows() {
+                const $body = $('#addDetailRowsBody');
+                $body.empty();
+
+                if (!itemCatalog || itemCatalog.length === 0) {
+                    $body.append('<tr><td colspan="8" class="text-center text-muted py-3">No data</td></tr>');
+                    $('#btnAddDetailConfirm').prop('disabled', true);
+                    return;
+                }
+
+                const selectedDetailKeys = getSelectedDetailKeys();
+                const availableItems = itemCatalog.filter(x => getAvailableQty(x) > 0 && !selectedDetailKeys.has(detailKey(x)));
+
+                if (availableItems.length === 0) {
+                    $body.append('<tr><td colspan="8" class="text-center text-muted py-3">No data</td></tr>');
+                    $('#btnAddDetailConfirm').prop('disabled', true);
+                    return;
+                }
+
+                availableItems.forEach((item, index) => {
+                    const availableQty = getAvailableQty(item);
+                    const locationOptions = locationCatalog.map(l => `<option value="${l.id}">${l.text}</option>`).join('');
+                    $body.append(`<tr>
+                        <td class="text-center"><input type="checkbox" class="add-detail-check" data-itemid="${item.id}" data-checkingdtid="${item.checkingDtId || ''}" /></td>
+                        <td class="text-bold">${item.itemCode || ''}</td>
+                        <td class="tcvn3-font">${item.itemName || ''}</td>
+                        <td>${item.unit || ''}</td>
+                        <td><input type="text" inputmode="numeric" class="form-control form-control-sm text-right add-docqty number-format" data-itemid="${item.id}" value="${Number(availableQty || 0).toLocaleString(undefined,{maximumFractionDigits:0})}" /></td>
+                        <td><input type="text" inputmode="numeric" class="form-control form-control-sm text-right add-actqty number-format" data-itemid="${item.id}" data-maxqty="${availableQty}" value="${Number(availableQty || 0).toLocaleString(undefined,{maximumFractionDigits:0})}" /></td>
+                        <td><input type="text" inputmode="numeric" class="form-control form-control-sm text-right add-unitprice number-format" data-itemid="${item.id}" value="${Number(item.price || 0).toLocaleString(undefined,{maximumFractionDigits:0})}" /></td>
+                        <td><select class="form-control form-control-sm add-location" data-itemid="${item.id}"><option value=""></option>${locationOptions}</select></td>
+                    </tr>`);
+                });
+
+                $('#checkAllAddDetail').prop('checked', false);
+                $('#btnAddDetailConfirm').prop('disabled', true);
+                showClientValidation('');
+            }
+
+            function resetAddDetailModalInputs() {
+                renderAddDetailRows();
+                clearPoAddFieldErrors();
+                showAddDetailModalValidation('');
+            }
+
+            function buildItemOptionText(item) {
+                const code = item.itemCode || '';
+                const name = item.itemName || '';
+                return (code + ' - ' + name).trim();
+            }
+
+            function isPoFlow() {
+                return Number($('#Header_FlowSubType').val() || 0) === 1;
+            }
+
+            function renderManualAddDetailOptions() {
+                const selectedDetailKeys = getSelectedDetailKeys();
+                const availableItems = itemCatalog.filter(x => !selectedDetailKeys.has(detailKey(x)));
+                const $item = $('#manualAddItemId');
+                const locationOptions = ['<option value=""></option>'].concat(locationCatalog.map(l => `<option value="${l.id}">${l.text}</option>`));
+                $('#manualAddLocationId').html(locationOptions.join(''));
+                $item.html('<option value=""></option>' + availableItems.map(x => `<option value="${x.id}">${buildItemOptionText(x)}</option>`).join(''));
+                $('#manualAddUnit').val('');
+                $('#manualAddDocQty').val('0');
+                $('#manualAddActQty').val('0');
+                $('#manualAddUnitPrice').val('0');
+                $('#btnAddDetailConfirm').prop('disabled', availableItems.length === 0);
+                clearManualAddFieldErrors();
+                showAddDetailModalValidation('');
+                initModalSelect2($('#receivedAddDetailModal'));
+            }
+
+            function syncManualItemInfo() {
+                const itemId = Number($('#manualAddItemId').val() || 0);
+                const item = itemCatalog.find(x => Number(x.id) === itemId);
+                $('#manualAddUnit').val(item?.unit || '');
+                if (item) {
+                    $('#manualAddUnitPrice').val(formatNumber(item.price || 0));
+                }
+            }
+
+            function reloadDetailItemsByPo() {
+                const poId = $('#Header_POID').val() || '';
+                const flowId = $('input[name="id"]').val() || '';
+                const url = `?handler=PoItems&poId=${encodeURIComponent(poId)}&flowId=${encodeURIComponent(flowId)}`;
+
+                return fetch(url, { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(r => r.ok ? r.json() : [])
+                    .then(list => {
+                        itemCatalog.length = 0;
+                        list.forEach(x => itemCatalog.push({
+                            id: String(x.id),
+                            checkingId: x.checkingId || null,
+                            checkingDtId: x.checkingDtId || null,
+                            mrDetailId: x.mrDetailId || null,
+                            itemCode: x.itemCode || '',
+                            itemName: x.itemName || '',
+                            unit: x.unit || '',
+                            remainingQty: Number(x.remainingQty || 0),
+                            price: Number(x.price || 0)
+                        }));
+
+                        renderAddDetailRows();
+                    })
+                    .catch(() => {
+                        itemCatalog.length = 0;
+                        renderAddDetailRows();
+                    });
+            }
+
+            function destroyBackgroundSelect2() {
+                $('#inventoryReceivedDetailForm select.select2').each(function () {
+                    const $select = $(this);
+                    if ($select.closest('.modal').length > 0) {
+                        return;
+                    }
+
+                    if ($select.data('select2')) {
+                        $select.select2('close');
+                        $select.select2('destroy');
+                    }
+                });
+
+                $('body').addClass('inventory-received-modal-open');
+            }
+
+            function initBackgroundSelect2() {
+                $('#inventoryReceivedDetailForm select.select2').each(function () {
+                    const $select = $(this);
+                    if ($select.closest('.modal').length > 0) {
+                        return;
+                    }
+
+                    if (!$select.data('select2')) {
+                        $select.select2({ width: '100%' });
+                    }
+                });
+
+                $('body').removeClass('inventory-received-modal-open');
+            }
+
+            function initModalSelect2($modal) {
+                $modal.find('select.select2').each(function () {
+                    const $select = $(this);
+
+                    if ($select.data('select2')) {
+                        $select.select2('destroy');
+                    }
+
+                    const config = {
+                        width: '100%',
+                        dropdownParent: $modal
+                    };
+
+                    if ($select.attr('id') === 'detailItemId' || $select.attr('id') === 'manualAddItemId') {
+                        config.templateResult = function (state) {
+                            if (!state.id) return state.text;
+                            const text = state.text || '';
+                            const idx = text.indexOf(' - ');
+                            if (idx < 0) {
+                                return $('<span></span>').text(text);
+                            }
+                            const code = text.substring(0, idx);
+                            const name = text.substring(idx + 3);
+                            const $result = $('<span><span class="item-code"></span> - <span class="tcvn3-font item-name"></span></span>');
+                            $result.find('.item-code').text(code);
+                            $result.find('.item-name').text(name);
+                            return $result;
+                        };
+
+                        config.templateSelection = function (state) {
+                            if (!state.id) return state.text;
+                            const text = state.text || '';
+                            const idx = text.indexOf(' - ');
+                            if (idx < 0) {
+                                return $('<span class="tcvn3-font"></span>').text(text);
+                            }
+                            const code = text.substring(0, idx);
+                            const name = text.substring(idx + 3);
+                            const $result = $('<span><span class="item-code"></span> - <span class="tcvn3-font item-name"></span></span>');
+                            $result.find('.item-code').text(code);
+                            $result.find('.item-name').text(name);
+                            return $result;
+                        };
+
+                        config.escapeMarkup = function (markup) { return markup; };
+                    }
+
+                    $select.select2(config);
+                });
+            }
+
+            const inventoryReceivedModalSelector = '#receivedAddDetailModal, #detailResetWarningModal, #prqAttachmentModal, #confirmInventoryReceivedModal, #receiveFromIssueModal';
+
+            $('.modal').filter(inventoryReceivedModalSelector).on('show.bs.modal', function () {
+                const $modal = $(this);
+                destroyBackgroundSelect2();
+                if ($modal.is('#confirmInventoryReceivedModal')) {
+                    $('body').addClass('inventory-received-confirm-open');
+                }
+                initModalSelect2($modal);
+            });
+
+            $('.modal').filter(inventoryReceivedModalSelector).on('hidden.bs.modal', function () {
+                if ($(this).is('#confirmInventoryReceivedModal')) {
+                    $('body').removeClass('inventory-received-confirm-open');
+                }
+                if ($('.modal.show').filter(inventoryReceivedModalSelector).length === 0) {
+                    initBackgroundSelect2();
+                }
+            });
+
+            $(document).on('select2:opening', 'select.select2', function (e) {
+                const isModalOpen = $('.modal.show').filter(inventoryReceivedModalSelector).length > 0;
+                const isInsideModal = $(this).closest('.modal.show').filter(inventoryReceivedModalSelector).length > 0;
+                if (isModalOpen && !isInsideModal) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+
+            $('#btnConfirmVoucherAction').on('click', function () {
+                const mode = ($('input[name="mode"]').val() || '').toLowerCase();
+                if (mode === 'add') {
+                    isSubmittingConfirmAfterSave = true;
+                    $('#confirmInventoryReceivedModal').modal('hide');
+                    $('#inventoryReceivedDetailForm').attr('action', '?handler=SaveAndConfirm');
+                    $('#inventoryReceivedDetailForm').trigger('submit');
+                    return;
+                }
+
+                $('#confirmInventoryReceivedForm').trigger('submit');
+            });
+
+            $('#confirmInventoryReceivedModal').on('hidden.bs.modal', function () {
+                if (isSubmittingConfirmAfterSave) {
+                    return;
+                }
+                $('#ConfirmAfterSave').val('false');
+                $('#inventoryReceivedDetailForm').attr('action', '');
+            });
+
+            $('#btnOpenAddDetail').on('click', function () {
+                $('#btnConfirmResetDetails').show();
+                const openModal = function () {
+                    if (isPoFlow()) {
+                        $('#addDetailPoPanel').removeClass('d-none');
+                        $('#addDetailManualPanel').addClass('d-none');
+                        resetAddDetailModalInputs();
+                    } else {
+                        $('#addDetailPoPanel').addClass('d-none');
+                        $('#addDetailManualPanel').removeClass('d-none');
+                        renderManualAddDetailOptions();
+                        syncManualItemInfo();
+                    }
+                    $('#receivedAddDetailModal').modal('show');
+                };
+
+                if (isPoFlow()) {
+                    reloadDetailItemsByPo().then(openModal);
+                } else {
+                    openModal();
+                }
+            });
+
+            $('#Header_POID').on('change', function () {
+                reloadDetailItemsByPo();
+            });
+
+            $('#btnAddDetailConfirm').on('click', function () {
+                if (!isPoFlow()) {
+                    showAddDetailModalValidation('');
+                    clearManualAddFieldErrors();
+                    const itemId = Number($('#manualAddItemId').val() || 0);
+                    const item = itemCatalog.find(x => Number(x.id) === itemId);
+                    if (!item) {
+                        showAddDetailModalValidation('Please select item.');
+                        return;
+                    }
+
+                    const docQty = parseNumber($('#manualAddDocQty').val());
+                    const actQty = parseNumber($('#manualAddActQty').val());
+                    const unitPrice = parseNumber($('#manualAddUnitPrice').val());
+                    const locationIdRaw = $('#manualAddLocationId').val();
+                    const location = locationCatalog.find(x => x.id === locationIdRaw);
+
+                    if (actQty <= 0) {
+                        setManualAddFieldError('#manualAddActQty', '#manualAddActQtyError', 'Act. Qty must be greater than 0.');
+                        showAddDetailModalValidation(`Item '${item.itemCode || ''}' must have Act. Qty > 0.`);
+                        return;
+                    }
+                    if (docQty < actQty) {
+                        setManualAddFieldError('#manualAddDocQty', '#manualAddDocQtyError', 'Doc. Qty must be greater than or equal Act. Qty.');
+                        setManualAddFieldError('#manualAddActQty', '#manualAddActQtyError', 'Act. Qty must be less than or equal Doc. Qty.');
+                        showAddDetailModalValidation(`Item '${item.itemCode || ''}' Doc. Qty must be greater than or equal Act. Qty.`);
+                        return;
+                    }
+                    if (unitPrice <= 0) {
+                        setManualAddFieldError('#manualAddUnitPrice', '#manualAddUnitPriceError', 'Price must be greater than 0.');
+                        showAddDetailModalValidation(`Item '${item.itemCode || ''}' must have Price > 0.`);
+                        return;
+                    }
+
+                    details.push({
+                        itemId: Number(item.id),
+                        chekingID: null,
+                        chekingDTID: null,
+                        mrDetailID: null,
+                        itemCode: item.itemCode || '',
+                        itemName: item.itemName || '',
+                        unit: item.unit || '',
+                        docQty: docQty,
+                        actQty: actQty,
+                        unitPrice: unitPrice,
+                        amount: actQty * unitPrice,
+                        locationId: locationIdRaw ? Number(locationIdRaw) : null,
+                        locationName: location?.text || ''
+                    });
+
+                    renderRows();
+                    $('#receivedAddDetailModal').modal('hide');
+                    return;
+                }
+
+                const checked = $('.add-detail-check:checked');
+                if (checked.length === 0) {
+                    return;
+                }
+
+                showClientValidation('');
+                showAddDetailModalValidation('');
+                clearPoAddFieldErrors();
+                let errorMessage = '';
+
+                checked.each(function () {
+                    if (errorMessage) return;
+                    const itemId = Number($(this).data('itemid'));
+                    const item = itemCatalog.find(x => Number(x.id) === itemId);
+                    if (!item) return;
+
+                    const docQty = parseNumber($(`.add-docqty[data-itemid='${itemId}']`).val());
+                    const actQty = parseNumber($(`.add-actqty[data-itemid='${itemId}']`).val());
+                    const unitPrice = parseNumber($(`.add-unitprice[data-itemid='${itemId}']`).val());
+                    const maxQty = getAvailableQty(item);
+                    if (actQty <= 0) {
+                        errorMessage = `Item '${item.itemCode || ''}' must have Act. Qty > 0.`;
+                        setPoAddFieldError(itemId, 'add-actqty', 'Act. Qty must be greater than 0.');
+                        return;
+                    }
+                    if (actQty > maxQty) {
+                        errorMessage = `Item '${item.itemCode || ''}' Act. Qty exceeds remaining qty (${formatNumber(maxQty)}).`;
+                        setPoAddFieldError(itemId, 'add-actqty', `Act. Qty exceeds remaining qty (${formatNumber(maxQty)}).`);
+                        return;
+                    }
+                    if (docQty < actQty) {
+                        errorMessage = `Item '${item.itemCode || ''}' Doc. Qty must be greater than or equal Act. Qty.`;
+                        setPoAddFieldError(itemId, 'add-docqty', 'Doc. Qty must be greater than or equal Act. Qty.');
+                        setPoAddFieldError(itemId, 'add-actqty', 'Act. Qty must be less than or equal Doc. Qty.');
+                        return;
+                    }
+                    if (unitPrice <= 0) {
+                        errorMessage = `Item '${item.itemCode || ''}' must have Price > 0.`;
+                        setPoAddFieldError(itemId, 'add-unitprice', 'Price must be greater than 0.');
+                        return;
+                    }
+                    if ($('#Header_POID').val() && (!item.checkingDtId || !item.mrDetailId)) {
+                        errorMessage = `Item '${item.itemCode || ''}' is missing source link.`;
+                        return;
+                    }
+                    const locationIdRaw = $(`.add-location[data-itemid='${itemId}']`).val();
+                    const location = locationCatalog.find(x => x.id === locationIdRaw);
+
+                    details.push({
+                        itemId: Number(item.id),
+                        chekingID: item.checkingId ? Number(item.checkingId) : null,
+                        chekingDTID: item.checkingDtId ? Number(item.checkingDtId) : null,
+                        mrDetailID: item.mrDetailId ? Number(item.mrDetailId) : null,
+                        itemCode: item.itemCode || '',
+                        itemName: item.itemName || '',
+                        unit: item.unit || '',
+                        docQty: docQty,
+                        actQty: actQty,
+                        unitPrice: unitPrice,
+                        amount: actQty * unitPrice,
+                        locationId: locationIdRaw ? Number(locationIdRaw) : null,
+                        locationName: location?.text || ''
+                    });
+                });
+
+                if (errorMessage) {
+                    showAddDetailModalValidation(errorMessage);
+                    return;
+                }
+
+                renderRows();
+                $('#receivedAddDetailModal').modal('hide');
+            });
+
+            $(document).on('input change', '.add-actqty, .add-docqty', function () {
+                const itemId = Number($(this).data('itemid'));
+                const item = itemCatalog.find(x => Number(x.id) === itemId);
+                if (!item) return;
+                const actQty = parseNumber($(`.add-actqty[data-itemid='${itemId}']`).val());
+                const docQty = parseNumber($(`.add-docqty[data-itemid='${itemId}']`).val());
+                const maxQty = getAvailableQty(item);
+                if (actQty > maxQty || actQty <= 0 || docQty < actQty) {
+                    $(this).addClass('is-invalid');
+                } else {
+                    $(`.add-actqty[data-itemid='${itemId}'], .add-docqty[data-itemid='${itemId}']`).removeClass('is-invalid');
+                    showClientValidation('');
+                }
+            });
+
+            $(document).on('change', '.add-detail-check', function () {
+                $('#btnAddDetailConfirm').prop('disabled', $('.add-detail-check:checked').length === 0);
+                syncAddDetailCheckAll();
+            });
+
+            $(document).on('change', '#manualAddItemId', function () {
+                syncManualItemInfo();
+            });
+
+            $('#checkAllAddDetail').on('change', function () {
+                const checked = $(this).is(':checked');
+                $('.add-detail-check').prop('checked', checked);
+                $('#btnAddDetailConfirm').prop('disabled', $('.add-detail-check:checked').length === 0);
+                syncAddDetailCheckAll();
+            });
+
+            $(document).on('input change', '.detail-docqty, .detail-actqty, .detail-unitprice, .detail-location', function () {
+                const idx = Number($(this).data('index'));
+                const row = details[idx];
+                if (!row) return;
+
+                row.docQty = parseNumber($(`.detail-docqty[data-index='${idx}']`).val());
+                row.actQty = parseNumber($(`.detail-actqty[data-index='${idx}']`).val());
+                const source = itemCatalog.find(x => detailKey(x) === detailKey(row));
+                const maxQty = source ? Number(source.remainingQty || 0) : null;
+                if (maxQty !== null && row.actQty > maxQty) {
+                    row.actQty = Math.max(0, maxQty);
+                    $(`.detail-actqty[data-index='${idx}']`).val(formatNumber(row.actQty));
+                    showClientValidation(`Item '${row.itemCode || ''}' Act. Qty exceeds remaining qty (${formatNumber(maxQty)}).`);
+                } else if (row.actQty <= 0) {
+                    showClientValidation(`Item '${row.itemCode || ''}' must have Act. Qty > 0.`);
+                } else if (row.docQty < row.actQty) {
+                    showClientValidation(`Item '${row.itemCode || ''}' Doc. Qty must be greater than or equal Act. Qty.`);
+                } else {
+                    showClientValidation('');
+                }
+                row.unitPrice = parseNumber($(`.detail-unitprice[data-index='${idx}']`).val());
+                row.amount = row.actQty * row.unitPrice;
+
+                const locationIdRaw = $(`.detail-location[data-index='${idx}']`).val();
+                const location = locationCatalog.find(x => x.id === locationIdRaw);
+                row.locationId = locationIdRaw ? Number(locationIdRaw) : null;
+                row.locationName = location?.text || '';
+
+                $(`.detail-amount[data-index='${idx}']`).text(formatNumber(row.amount));
+                syncDetailsJson();
+            });
+
+            $(document).on('focus', '.number-format', function () {
+                $(this).val(parseNumber($(this).val()));
+            });
+
+            $(document).on('blur', '.number-format', function () {
+                $(this).val(formatNumber(parseNumber($(this).val())));
+            });
+
+            $(document).on('click', '.btn-delete-detail', function () {
+                details.splice(Number($(this).data('index')), 1);
+                renderRows();
+            });
+
+            $('#detailAttachmentUpload').on('change', function () {
+                const files = Array.from(this.files || []);
+                if (files.length === 0) return;
+                const existingKeys = new Set(pendingAttachments.map(attachmentKey));
+                files.forEach(file => {
+                    const key = attachmentKey(file);
+                    if (!existingKeys.has(key)) {
+                        pendingAttachments.push(file);
+                        existingKeys.add(key);
+                    }
+                });
+                stagedAttachments = [...pendingAttachments];
+                syncAttachmentInputFromStaging();
+                renderAttachmentStaging();
+                this.value = '';
+            });
+
+            $(document).on('click', '.btn-remove-pending-attachment', function () {
+                const idx = Number($(this).data('index'));
+                pendingAttachments.splice(idx, 1);
+                stagedAttachments = [...pendingAttachments];
+                syncAttachmentInputFromStaging();
+                renderAttachmentStaging();
+            });
+
+            $(document).on('click', '.btn-remove-existing-attachment', function () {
+                const docId = Number($(this).data('docid'));
+                if (docId > 0 && !deletedAttachmentDocIds.includes(docId)) {
+                    deletedAttachmentDocIds.push(docId);
+                    syncDeletedAttachmentDocIds();
+                    renderAttachmentStaging();
+                }
+            });
+
+            $('#btnAttachmentAgree').on('click', function () {
+                syncAttachmentInputFromStaging();
+                renderAttachmentStaging();
+            });
+
+            $('#prqAttachmentModal').on('show.bs.modal', function () {
+                renderAttachmentStaging();
+            });
+
+            $('#prqAttachmentModal').on('hidden.bs.modal', function () {
+                syncAttachmentInputFromStaging();
+                renderAttachmentStaging();
+            });
+
+            $('#Header_POID').on('focus', function () { pendingOldValue = $(this).val(); });
+
+            $('#btnOpenReceiveFromIssue').on('click', function () {
+                if ($(this).prop('disabled')) {
+                    return;
+                }
+                if (Number($('#Header_FlowSubType').val() || 0) !== 6) {
+                    showClientValidation('Receive From Inventory Issue is only available for Receive From Company Main Store.');
+                    return;
+                }
+
+                showIssueReceiveValidation('');
+                loadIssueReceiveList().then(function () {
+                    if (selectedIssueFlowId > 0) {
+                        loadIssueReceiveDetails(selectedIssueFlowId);
+                    } else {
+                        issueReceiveDetails = [];
+                        renderIssueReceiveDetails();
+                    }
+                    $('#receiveFromIssueModal').modal('show');
+                });
+            });
+
+            $('#btnSearchIssueReceive').on('click', function () {
+                selectedIssueFlowId = 0;
+                issueReceiveDetails = [];
+                renderIssueReceiveDetails();
+                loadIssueReceiveList();
+            });
+
+            $(document).on('change', '.issue-receive-select', function () {
+                selectedIssueFlowId = Number($(this).val() || 0);
+                $('#btnReceiveFromIssueOk').prop('disabled', selectedIssueFlowId <= 0);
+                showIssueReceiveValidation('');
+                loadIssueReceiveDetails(selectedIssueFlowId);
+            });
+
+            $(document).on('click', '#issueReceiveRowsBody .issue-receive-row', function (e) {
+                if ($(e.target).is('.issue-receive-select')) {
+                    return;
+                }
+
+                const flowId = Number($(this).data('flow-id') || 0);
+                if (!flowId) {
+                    return;
+                }
+
+                $(this).find('.issue-receive-select').prop('checked', true).trigger('change');
+            });
+
+            $('#btnReceiveFromIssueOk').on('click', function () {
+                if (selectedIssueFlowId <= 0) {
+                    showIssueReceiveValidation('Please select issue voucher.');
+                    return;
+                }
+                if (!issueReceiveDetails.length) {
+                    showIssueReceiveValidation('Selected issue voucher has no details.');
+                    return;
+                }
+
+                details = issueReceiveDetails.map(x => ({
+                    itemId: Number(x.itemId || 0),
+                    chekingID: null,
+                    chekingDTID: null,
+                    mrDetailID: null,
+                    itemCode: x.itemCode || '',
+                    itemName: x.itemName || '',
+                    unit: x.unit || '',
+                    docQty: Number(x.docQty || 0),
+                    actQty: Number(x.actQty || 0),
+                    unitPrice: Number(x.unitPrice || 0),
+                    amount: Number(x.amount || 0),
+                    locationId: null,
+                    locationName: ''
+                }));
+
+                $('#SelectedIssueFlowId').val(selectedIssueFlowId);
+                $('#Header_POID').val('').trigger('change.select2');
+                renderRows();
+                $('#receiveFromIssueModal').modal('hide');
+            });
+            $('#Header_POID').on('change', function () {
+                if (details.length === 0) { pendingOldValue = $(this).val(); return; }
+                pendingField = this;
+                pendingAction = 'po-change';
+                $('#btnConfirmResetDetails').show();
+                $('#detailResetWarningModal .modal-body').text('Changing this header field will reset the current detail list. Do you want to continue?');
+                $('#detailResetWarningModal').modal('show');
+            });
+
+            $('#btnConfirmResetDetails').on('click', function () {
+                if (pendingField) {
+                    clearDetails();
+                    if (pendingAction === 'flow-subtype-change') {
+                        applyFieldRuleByFlowSubType();
+                        reloadReceiveContext();
+                    } else {
+                        pendingOldValue = $(pendingField).val();
+                    }
+                    pendingField = null;
+                    pendingAction = '';
+                }
+                $('#detailResetWarningModal').modal('hide');
+            });
+
+            $('#detailResetWarningModal').on('hidden.bs.modal', function () {
+                if (pendingField) {
+                    $(pendingField).val(pendingOldValue).trigger('change.select2');
+                    pendingField = null;
+                    pendingAction = '';
+                }
+                $('#btnConfirmResetDetails').show();
+            });
+
+            $('#Header_FlowSubType').on('change', function () {
+                if (details.length > 0) {
+                    pendingField = this;
+                    pendingOldValue = $(this).data('old') || '';
+                    pendingAction = 'flow-subtype-change';
+                    $('#btnConfirmResetDetails').show();
+                    $('#detailResetWarningModal .modal-body').text('Changing Received Type will reset PO No and current detail list. Do you want to continue?');
+                    $('#detailResetWarningModal').modal('show');
+                    return;
+                }
+                $(this).data('old', $(this).val());
+                applyFieldRuleByFlowSubType();
+                reloadReceiveContext();
+            });
+
+            $('#Header_FlowSubType').on('focus', function () {
+                $(this).data('old', $(this).val());
+            });
+
+            initSelect2();
+            applyFieldRuleByFlowSubType();
+            syncAttachmentInputFromStaging();
+            syncDeletedAttachmentDocIds();
+            renderRows();
+        })();
+    </script>
+}
+
+
+

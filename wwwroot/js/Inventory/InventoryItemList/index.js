@@ -502,16 +502,12 @@
 
     function initActions() {
         const addBtn = document.getElementById("iilAddBtn");
-        const editBtn = document.getElementById("iilEditBtn");
         const deleteBtn = document.getElementById("iilDeleteBtn");
         const stockBtn = document.getElementById("iilStockBtn");
         const isSubItemInput = document.getElementById("ItemInput_IsSubItem");
 
         const syncButtons = () => {
             const row = getSelectedRow();
-            if (editBtn) {
-                editBtn.disabled = !row;
-            }
             if (deleteBtn) {
                 deleteBtn.disabled = !row;
             }
@@ -525,12 +521,24 @@
             showModal("inventoryItemModal");
         });
 
-        editBtn?.addEventListener("click", () => {
-            const row = getSelectedRow();
-            if (!row) return;
+        document.querySelectorAll(".iil-edit-link").forEach((link) => {
+            link.addEventListener("click", (ev) => {
+                ev.preventDefault();
+                const row = link.closest(".iil-row");
+                if (!row) return;
 
-            setItemModalMode("edit", row);
-            showModal("inventoryItemModal");
+                const check = row.querySelector(".iil-selector");
+                if (check) {
+                    document.querySelectorAll(".iil-selector").forEach((item) => {
+                        item.checked = false;
+                    });
+                    check.checked = true;
+                    check.dispatchEvent(new Event("change", { bubbles: true }));
+                }
+
+                setItemModalMode("edit", row);
+                showModal("inventoryItemModal");
+            });
         });
 
         deleteBtn?.addEventListener("click", () => {

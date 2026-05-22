@@ -257,7 +257,16 @@
                                                 <td>
                                                     <input type="radio" class="iil-selector" name="selectedInventoryItem" aria-label="Select row" />
                                                 </td>
-                                                <td>@row.ItemCode</td>
+                                                <td>
+                                                    @if (Model.CanEdit)
+                                                    {
+                                                        <a href="#" class="iil-edit-link text-primary font-weight-bold" data-action="edit-item">@row.ItemCode</a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="font-weight-bold">@row.ItemCode</span>
+                                                    }
+                                                </td>
                                                 <td class="iil-col-name">
                                                     <span class="iil-ellipsis tcvn3-font" title="@row.ItemName">@row.ItemName</span>
                                                 </td>
@@ -293,12 +302,6 @@
                         {
                             <button type="button" id="iilAddBtn" class="btn btn-sm btn-action-add border mx-1 my-1">
                                 <i class="fas fa-plus"></i> Add
-                            </button>
-                        }
-                        @if (Model.CanEdit)
-                        {
-                            <button type="button" id="iilEditBtn" class="btn btn-sm btn-action-save border mx-1 my-1" disabled>
-                                <i class="fas fa-edit"></i> Edit
                             </button>
                         }
                         @if (Model.CanDelete)
@@ -543,7 +546,7 @@
                         <div class="form-row align-items-end mb-2">
                             <div class="form-group col-md-8 mb-0">
                                 <label for="inventoryItemRecallSearch">Search lost item</label>
-                                <input type="search" id="inventoryItemRecallSearch" class="form-control form-control-sm vni-font" placeholder="Item code, item name, category, specification" />
+                                <input type="search" id="inventoryItemRecallSearch" class="form-control form-control-sm tcvn3-font" placeholder="Item code, item name, category, specification" />
                             </div>
                             <div class="form-group col-md-4 mb-0 text-md-right">
                                 <span class="badge badge-light border">@Model.RecallLostCandidates.Count lost candidate(s)</span>
@@ -605,7 +608,7 @@
                             </table>
                         </div>
 
-                        <div class="small text-muted mt-2" id="inventoryItemRecallSelection">No item selected</div>
+                        <div class="small text-muted mt-2 tcvn3-font" id="inventoryItemRecallSelection">No item selected</div>
                     </div>
                     <div class="modal-footer py-2">
                         <button type="submit" id="iilRecallLostSubmitBtn" class="btn btn-sm btn-action-warning border" disabled>

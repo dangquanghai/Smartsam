@@ -161,7 +161,14 @@
                                                     <input type="radio" class="ips-selector" name="selectedInventoryGroupStore" aria-label="Select row" />
                                                 </td>
                                                 <td class="ips-col-store">
-                                                    <span class="ips-ellipsis vni-font" title="@row.StoreName">@row.StoreName</span>
+                                                    @if (Model.CanEdit)
+                                                    {
+                                                        <a href="#" class="ips-edit-link ips-ellipsis vni-font text-primary font-weight-bold" data-action="edit-store" title="@row.StoreName">@row.StoreName</a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="ips-ellipsis vni-font font-weight-bold" title="@row.StoreName">@row.StoreName</span>
+                                                    }
                                                 </td>
                                                 <td class="ips-col-address">
                                                     <span class="ips-ellipsis vni-font" title="@row.Address">@row.Address</span>
@@ -185,12 +192,6 @@
                         {
                             <button type="button" id="ipsAddBtn" class="btn btn-sm btn-action-add border mx-1 my-1" disabled="@(!Model.Filter.GroupId.HasValue)">
                                 <i class="fas fa-plus"></i> Add
-                            </button>
-                        }
-                        @if (Model.CanEdit)
-                        {
-                            <button type="button" id="ipsEditBtn" class="btn btn-sm btn-action-save border mx-1 my-1" disabled>
-                                <i class="fas fa-edit"></i> Edit
                             </button>
                         }
                         @if (Model.CanDelete)

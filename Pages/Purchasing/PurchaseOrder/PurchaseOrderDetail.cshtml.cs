@@ -1893,7 +1893,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         CanEditEvaluate = Header.Id > 0 && Header.StatusId == StatusProcessing && _workflowUser.IsPurchaser;
         CanApprove = Header.Id > 0 && Header.StatusId == StatusWaitingForApproval && (CanApproveAsCfo() || CanApproveAsBod());
         CanBackToProcessing = Header.Id > 0
-            && Header.StatusId == StatusWaitingForApproval
+            && Header.StatusId <= StatusBodApproved
             && effectivePermissions.Contains(PermissionBackToProcessing)
             && (_workflowUser.IsPurchaser || _workflowUser.IsCFO || _workflowUser.IsBOD || IsAdminRole());
         CanUploadAttachments = canManageAttachmentsByPermission;

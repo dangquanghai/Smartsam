@@ -56,19 +56,20 @@ public class IndexModel : BasePageModel
         LoadRows();
         using var wb = new XLWorkbook();
         var ws = wb.Worksheets.Add("ItemChecking");
-        ws.Cell(1, 1).Value = "ID"; ws.Cell(1, 2).Value = "Status"; ws.Cell(1, 3).Value = "Checked By";
-        ws.Cell(1, 4).Value = "Checked Date"; ws.Cell(1, 5).Value = "Approved By"; ws.Cell(1, 6).Value = "Approved Date";
-        ws.Cell(1, 7).Value = "Receiving No";
+        ws.Cell(1, 1).Value = "ID"; ws.Cell(1, 2).Value = "PO No"; ws.Cell(1, 3).Value = "Status"; ws.Cell(1, 4).Value = "Checked By";
+        ws.Cell(1, 5).Value = "Checked Date"; ws.Cell(1, 6).Value = "Approved By"; ws.Cell(1, 7).Value = "Approved Date";
+        ws.Cell(1, 8).Value = "Receiving No";
         for (int i = 0; i < Rows.Count; i++)
         {
             var r = Rows[i];
             ws.Cell(i + 2, 1).Value = r.CheckingId;
-            ws.Cell(i + 2, 2).Value = r.StatusName;
-            ws.Cell(i + 2, 3).Value = r.CheckedBy;
-            ws.Cell(i + 2, 4).Value = r.CheckedDate?.ToString("dd/MM/yyyy") ?? "";
-            ws.Cell(i + 2, 5).Value = r.ApprovedBy;
-            ws.Cell(i + 2, 6).Value = r.ApprovedDate?.ToString("dd/MM/yyyy") ?? "";
-            ws.Cell(i + 2, 7).Value = r.ReceiveNo;
+            ws.Cell(i + 2, 2).Value = r.PONo;
+            ws.Cell(i + 2, 3).Value = r.StatusName;
+            ws.Cell(i + 2, 4).Value = r.CheckedBy;
+            ws.Cell(i + 2, 5).Value = r.CheckedDate?.ToString("dd/MM/yyyy") ?? "";
+            ws.Cell(i + 2, 6).Value = r.ApprovedBy;
+            ws.Cell(i + 2, 7).Value = r.ApprovedDate?.ToString("dd/MM/yyyy") ?? "";
+            ws.Cell(i + 2, 8).Value = r.ReceiveNo;
         }
         ws.Columns().AdjustToContents();
         using var ms = new MemoryStream(); wb.SaveAs(ms);
@@ -109,10 +110,11 @@ AND (@Late = 0 OR ((c.ApprovedDate IS NOT NULL AND DATEDIFF(DAY,c.ExpectDate,c.A
 
         if (TotalRecords > 0 && Filter.Page > TotalPages) Filter.Page = TotalPages;
 
-        using var cmd = new SqlCommand(@"SELECT c.CheckingID, s.CheckingVoucherStatusName,
+        using var cmd = new SqlCommand(@"SELECT c.CheckingID, p.PONo, s.CheckingVoucherStatusName,
 e2.EmployeeName AS CheckBy, c.CheckedDate, e1.EmployeeName AS ApprovedBy, c.ApprovedDate,
 dbo.CollectReceivingFromChecking(c.CheckingID) AS ReceiveNo, c.StatusID
 FROM dbo.INV_RecevingChekingVoucher c
+LEFT JOIN dbo.PC_PO p ON p.POID = c.POID
 INNER JOIN dbo.INV_CheckingVoucherStatus s ON c.StatusID = s.CheckingVoucherStatusID
 LEFT JOIN dbo.MS_Employee e1 ON c.ApprovedBy = e1.EmployeeID
 LEFT JOIN dbo.MS_Employee e2 ON c.CheckedBy = e2.EmployeeID
@@ -134,6 +136,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn);
             Rows.Add(new ItemCheckingRow
             {
                 CheckingId = Convert.ToInt32(rd["CheckingID"]),
+                PONo = rd["PONo"] == DBNull.Value ? "" : Convert.ToString(rd["PONo"]) ?? "",
                 StatusName = Convert.ToString(rd["CheckingVoucherStatusName"]) ?? "",
                 CheckedBy = rd["CheckBy"] == DBNull.Value ? "" : Convert.ToString(rd["CheckBy"]) ?? "",
                 CheckedDate = rd["CheckedDate"] == DBNull.Value ? null : Convert.ToDateTime(rd["CheckedDate"]),
@@ -229,6 +232,7 @@ public class ItemCheckingFilter
 public class ItemCheckingRow
 {
     public int CheckingId { get; set; }
+    public string PONo { get; set; } = "";
     public string StatusName { get; set; } = "";
     public string CheckedBy { get; set; } = "";
     public DateTime? CheckedDate { get; set; }

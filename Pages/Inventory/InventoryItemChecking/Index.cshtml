@@ -99,7 +99,7 @@
                     <div class="card-body p-0">
                         <div class="table-responsive inventory-item-checking-table-wrap">
                             <table class="table table-hover table-bordered mb-0 text-nowrap inventory-item-checking-table vni-font" id="itemCheckingTable">
-                                <thead class="thead-light"><tr><th style="width:60px;"></th><th style="width:180px;">Status</th><th style="width:220px;">Checked By</th><th style="width:200px;">Checked Date</th><th style="width:230px;">Approved By</th><th style="width:210px;">Approved Date</th><th>Receiving NO</th></tr></thead>
+                                <thead class="thead-light"><tr><th style="width:180px;">PO No</th><th style="width:180px;">Status</th><th style="width:220px;">Checked By</th><th style="width:200px;">Checked Date</th><th style="width:230px;">Approved By</th><th style="width:210px;">Approved Date</th><th>Receiving NO</th></tr></thead>
                                 <tbody>
                                 @if (Model.Rows.Count == 0)
                                 { <tr><td colspan="7" class="text-center text-muted">No data</td></tr> }
@@ -116,7 +116,9 @@
                                             5 => "badge-danger",
                                             _ => "badge-secondary"
                                         };
-                                        <tr class="inventory-item-checking-row" data-id="@row.CheckingId" data-status-id="@row.StatusId" data-can-edit="@(Model.CanEditRow(row.StatusId) ? "true" : "false")"><td class="text-center"><input type="radio" name="selectedChecking" /></td><td><span class="badge @statusBadgeClass">@row.StatusName</span></td><td>@row.CheckedBy</td><td>@(row.CheckedDate?.ToString("dd/MM/yyyy"))</td><td>@row.ApprovedBy</td><td>@(row.ApprovedDate?.ToString("dd/MM/yyyy"))</td><td>@row.ReceiveNo</td></tr>
+                                        var detailMode = Model.CanEditRow(row.StatusId) ? "edit" : (Model.CanView ? "view" : string.Empty);
+                                        var detailUrl = string.IsNullOrEmpty(detailMode) ? string.Empty : (Url.Page("./ItemCheckingDetail", new { id = row.CheckingId, mode = detailMode }) ?? "#");
+                                        <tr class="inventory-item-checking-row" data-id="@row.CheckingId" data-status-id="@row.StatusId"><td>@if (!string.IsNullOrEmpty(detailMode)) { <a href="@detailUrl" class="inventory-item-checking-po-link font-weight-bold">@row.PONo</a> } else { <span class="font-weight-bold">@row.PONo</span> }</td><td><span class="badge @statusBadgeClass">@row.StatusName</span></td><td>@row.CheckedBy</td><td>@(row.CheckedDate?.ToString("dd/MM/yyyy"))</td><td>@row.ApprovedBy</td><td>@(row.ApprovedDate?.ToString("dd/MM/yyyy"))</td><td>@row.ReceiveNo</td></tr>
                                     }
                                 }
                                 </tbody>
@@ -131,18 +133,6 @@
                         {
                             <button type="button" id="iicAddBtn" class="btn btn-sm btn-action-add border mx-1 my-1">
                                 <i class="fas fa-plus"></i> Add
-                            </button>
-                        }
-                        @if (Model.CanEdit)
-                        {
-                            <button type="button" id="btnEdit" class="btn btn-sm btn-action-save border mx-1 my-1" disabled>
-                                <i class="fas fa-edit"></i> Edit
-                            </button>
-                        }
-                        @if (Model.CanView)
-                        {
-                            <button type="button" id="btnView" class="btn btn-sm btn-action-close border mx-1 my-1" disabled>
-                                <i class="fas fa-eye"></i> View
                             </button>
                         }
                         <button type="button" id="btnExportExcel" class="btn btn-sm btn-action-export border mx-1 my-1">

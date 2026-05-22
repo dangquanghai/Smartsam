@@ -16,6 +16,7 @@ public class IndexModel : BasePageModel
     private const int PermissionAdd = 3;
     private const int PermissionEdit = 4;
     private const int PermissionBackToProcessing = 6;
+    private const int StatusBodApproved = 3;
     private readonly ILogger<IndexModel> _logger;
     private readonly PermissionService _permissionService;
     private readonly ISecurityService _securityService;
@@ -87,7 +88,7 @@ public class IndexModel : BasePageModel
                         canEdit,
                         canView = effectivePermissions.Contains(PermissionView),
                         canBackToProcessing = effectivePermissions.Contains(PermissionBackToProcessing)
-                            && row.StatusId == 2
+                            && row.StatusId <= StatusBodApproved
                             && CanHandleWaitingForApproval(userInfo)
                     }
                 };
