@@ -3,6 +3,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Data.SqlClient;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace SmartSam.Helpers
 {
@@ -67,7 +68,64 @@ namespace SmartSam.Helpers
 
             await _next(context);
         }
+        // Hàm này chỉ giữ lại: a-z, A-Z, 0-9, dấu gạch chéo /, dấu gạch ngang -, và dấu gạch dưới _
+        private bool HasAccessNew(string empCode, string url)
+        {
+            if (string.IsNullOrEmpty(url)) return false;
 
+            // 1. Làm sạch URL đang truy cập (Cắt query, xóa ký tự ẩn, xóa / ở cuối)
+            var cleanUrl = CleanSpecials(url.Split('?')[0]);
+            string cacheKey = $"Perm_{empCode}";
+
+            // 2. Lấy danh sách URL được cấp phép từ Cache hoặc DB
+            if (!_cache.TryGetValue(cacheKey, out List<string> allowedUrls))
+            {
+                // Làm sạch TOÀN BỘ danh sách từ DB trước khi nạp vào Cache
+                allowedUrls = GetPermissionsFromDb(empCode)
+                                .Select(u => CleanSpecials(u))
+                                .Where(u => !string.IsNullOrEmpty(u)) // Loại bỏ dòng rỗng nếu có
+                                .ToList();
+
+                _cache.Set(cacheKey, allowedUrls, TimeSpan.FromMinutes(1));
+            }
+
+            // TRƯỜNG HỢP A: Khớp tuyệt đối (Dùng cho Index, Cancel, Delete...)
+            // Lúc này cả 2 bên đều đã sạch tinh tươm, Contains chắc chắn sẽ chạy đúng
+            if (allowedUrls.Contains(cleanUrl)) return true;
+
+
+            // TRƯỜNG HỢP B: Logic "Chung một mái nhà" (Dùng cho các trang Detail gộp)
+            // Lấy Folder cha của URL đang truy cập (Cắt bỏ phần tên file/action cuối cùng)
+            var lastSlashIndex = cleanUrl.LastIndexOf('/');
+            if (lastSlashIndex > 0)
+            {
+                string parentFolder = cleanUrl.Substring(0, lastSlashIndex); // Ví dụ: sales/stcontract/stcontract
+
+                // Kiểm tra xem trong DB, User có bất kỳ quyền nào bắt đầu bằng Folder này không
+                // Vì dữ liệu đã ToLower() lúc CleanSpecials nên có thể so sánh trực tiếp
+                return allowedUrls.Any(u => u.StartsWith(parentFolder + "/"));
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Hàm chuyên dụng để xóa sạch khoảng trắng, ký tự ẩn (\r, \n, \0, BOM) 
+        /// và chỉ giữ lại các ký tự hợp lệ của một URL
+        /// </summary>
+        private string CleanSpecials(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return string.Empty;
+
+            // 1. Loại bỏ khoảng trắng và dấu gạch chéo ở đầu/cuối chuỗi
+            string trimmed = input.Trim().Trim('/', ' ');
+
+            // 2. Dùng Regex giữ lại: chữ, số, gạch chéo (/), gạch ngang (-), gạch dưới (_)
+            // Tự động chuyển về chữ thường để đồng bộ
+            return Regex.Replace(trimmed, @"[^a-zA-Z0-9/_-]", "").ToLower();
+        }
+     
+        /*
         private bool HasAccessNew(string empCode, string url)
         {
             // 1. Làm sạch URL đang truy cập
@@ -80,11 +138,23 @@ namespace SmartSam.Helpers
                 allowedUrls = GetPermissionsFromDb(empCode)
                                 .Select(u => u.ToLower().TrimEnd('/'))
                                 .ToList();
+
                 _cache.Set(cacheKey, allowedUrls, TimeSpan.FromMinutes(20));
             }
 
             // TRƯỜNG HỢP A: Khớp tuyệt đối (Dùng cho Index, Cancel, Delete...)
-            if (allowedUrls.Contains(cleanUrl)) return true;
+
+            // if (allowedUrls.Contains(cleanUrl)) return true;
+
+            string targetClean = CleanSpecials(cleanUrl);
+
+            if (allowedUrls.Any(url => CleanSpecials(url) == targetClean))
+            {
+                return true;
+            }
+
+
+
 
             // TRƯỜNG HỢP B: Logic "Chung một mái nhà" (Dùng cho các trang Detail gộp)
             // Lấy Folder cha của URL đang truy cập (Cắt bỏ phần tên file/action cuối cùng)
@@ -94,13 +164,12 @@ namespace SmartSam.Helpers
                 string parentFolder = cleanUrl.Substring(0, lastSlashIndex); // Ví dụ: /sales/stcontract/stcontract
 
                 // Kiểm tra xem trong DB, User có bất kỳ quyền nào bắt đầu bằng Folder này không
-                // Ví dụ DB có: /sales/stcontract/stcontract/add -> Sẽ cho phép vào /sales/stcontract/stcontract/STContractDetail
                 return allowedUrls.Any(u => u.StartsWith(parentFolder + "/", StringComparison.OrdinalIgnoreCase));
             }
 
             return false;
         }
-
+        */
         private List<string> GetPermissionsFromDb(string empCode)
         {
             var permissions = new List<string>();

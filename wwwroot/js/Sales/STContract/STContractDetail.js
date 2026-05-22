@@ -1,12 +1,22 @@
-﻿$(document).ready(function () {
+﻿
+var MyScan = null; // Khai báo dùng chung toàn file
+$(document).ready(function () {
     // 1. Lấy Mode và ID từ hệ thống
     const urlParams = new URLSearchParams(window.location.search);
     const mode = urlParams.get('mode')?.toLowerCase() || 'add';
+    // KHÔNG khai báo 'const MyScan' ở đây nữa để tránh bị giới hạn phạm vi
+
+    // Chỉ thêm đoạn này để khởi tạo đối tượng khi trang sẵn sàng
+    if (typeof WebFxScan !== 'undefined') {
+        MyScan = new WebFxScan();
+        initScanner(); // Gọi hàm connect
+    }
 
     // 2. Chạy khởi tạo trang
     initializePage(mode);
 
-    // 3. Xử lý sự kiện SUBMIT Form chính
+  
+        // 3. Xử lý sự kiện SUBMIT Form chính
     $('form').on('submit', async function (e) {
         if (mode === 'view') return true;
 
@@ -20,17 +30,7 @@
         }
     });
 
-    // 4. Các sự kiện tính toán tự động
-    /*
-    $('#CurrentRentRate, #PerVAT').on('input', calculateNetPrice);
 
-    $('#CurrentRentRate').on('blur', function () {
-        let val = parseFloat($(this).val().replace(/[^0-9.]/g, '')) || 0;
-        $(this).val(val.toLocaleString('en-US'));
-    }).on('focus', function () {
-        $(this).val($(this).val().replace(/,/g, ''));
-    });
-    */
      $('#CurrentRentRate').on('input', function () {
         let selection = window.getSelection().toString();
         if (selection !== '') return;
@@ -56,6 +56,8 @@
    CÁC HÀM KHỞI TẠO VÀ VALIDATION (Nội bộ)
    ========================================================================== */
 function initializePage(mode) {
+
+ 
     // Khởi tạo Select2
     if (typeof window.initSelect2 === 'function') {
         window.initSelect2('#CompanyId', 'company');
@@ -105,6 +107,7 @@ function initializePage(mode) {
 
     // Tự động load Grid dịch vụ ở Vùng 2 nếu là Edit mode
     loadServiceGrid();
+
    
 }
 
@@ -594,15 +597,24 @@ function openTenantModal(mode) {
                 var info = res.info;
                 if (!info) return;
 
+                // Hàm phụ để gán ngày an toàn
+                const fillDate = (selector, dateVal) => {
+                    if (dateVal && typeof dateVal === 'string' && dateVal.includes('T')) {
+                        $(selector).val(dateVal.split('T')[0]);
+                    } else {
+                        $(selector).val('');
+                    }
+                };
+
                 // Đổ dữ liệu vào Input
                 $('#txtContractTenantID').val(info.ContractTenantID || 0);
                 $('#txtCustomerID').val(info.TenantID || 0);
                 $('#txtTitle').val(info.Title || "");
                 $('#txtCustomerName').val(info.CustomerName || "");
 
-                if (info.Birthday) $('#txtBirthday').val(info.Birthday.split('T')[0]);
-                if (info.PassportUntilDate) $('#txtPassportUntilDate').val(info.PassportUntilDate.split('T')[0]);
-
+                fillDate('#txtBirthday', info.Birthday);
+                fillDate('#txtPassportUntilDate', info.PassportUntilDate);
+                
                 $('#ddlNationality').val(info.Nationality || "").trigger('change');
                 $('#txtIDPassportNo').val(info.IDPassportNo || "");
                 $('#txtCompany').val(info.Company || "");
@@ -614,20 +626,33 @@ function openTenantModal(mode) {
                 $('#chkIsMoveOut').prop('checked', info.IsMoveOut === true);
                 $('#txtVisaNo').val(info.VisaNo || "");
 
-                if (info.VisaDate) $('#txtVisaDate').val(info.VisaDate.split('T')[0]);
-                if (info.VisaExpDate) $('#txtVisaExpDate').val(info.VisaExpDate.split('T')[0]);
-                if (info.EntryDate) $('#txtEntryDate').val(info.EntryDate.split('T')[0]);
-                if (info.LastRegDate) $('#txtLastRegDate').val(info.LastRegDate.split('T')[0]);
+                
+                fillDate('#txtVisaDate', info.VisaDate);
+                fillDate('#txtVisaExpDate', info.VisaExpDate);
+
+                fillDate('#txtEntryDate', info.EntryDate);
+                fillDate('#txtLastRegDate', info.LastRegDate);
+                
+                fillDate('#txtPermitExpDate', info.PermitExpDate); // Đã sửa lại đúng biến
+                fillDate('#txtProposeExpDate', info.ProposeExpDate); // Đã sửa lại đúng biến
 
                 $('#ddlArrivalPort').val(info.ArrivalPort || 0);
-                $('#txtADCardNo').val(info.A_DCardNo || "");
+                
+
+                
+                // Kiểm tra tất cả các khả năng có thể xảy ra của tên trường
+                var adCardValue = info.A_DCardNo || info.a_DCardNo || info.ADCardNo || info.adCardNo || "";
+
+                $('#txtADCardNo').val(adCardValue);
+
+
                 $('#txtSponsor').val(info.Sponsor || "");
                 $('#txtNotes').val(info.Notes || "");
 
                 // Xử lý hình ảnh
                 renderGalleries(res.passports, res.police);
 
-                // Chế độ View (Khóa toàn bộ)
+                // Xử lý hiển thị theo Mode
                 if (mode === 'view') {
                     $('#modalTenantDetailTitle').text("View Tenant Detail");
                     $('#btnSaveTenantDetail').hide();
@@ -635,6 +660,9 @@ function openTenantModal(mode) {
                     $('.upload-zone').hide();
                 } else {
                     $('#modalTenantDetailTitle').text("Edit Tenant Detail");
+                    $('#btnSaveTenantDetail').show();
+                    $('#modalTenantDetail input, #modalTenantDetail select, #modalTenantDetail textarea').prop('disabled', false);
+                    $('.upload-zone').show();
                 }
 
                 $('#modalTenantDetail').modal('show');
@@ -649,30 +677,18 @@ function openTenantModal(mode) {
         $('#modalTenantDetail').modal('show');
     }
 }
-function renderGalleries(passports, police) {
-    // 1. Xử lý Tab Passport (DocType = 1)
-    var htmlPassport = '';
-    if (passports && passports.length > 0) {
-        $.each(passports, function (i, doc) {
-            htmlPassport += createImgItem(doc);
-        });
-    } else {
-        htmlPassport = '<div class="col-12 text-muted p-3 text-center">Chưa có hình Passport.</div>';
-    }
-    $('#passport_gallery').html(htmlPassport);
 
-    // 2. Xử lý Tab Công an (DocType = 2)
-    var htmlPolice = '';
-    if (police && police.length > 0) {
-        $.each(police, function (i, doc) {
-            htmlPolice += createImgItem(doc);
-        });
-    } else {
-        htmlPolice = '<div class="col-12 text-muted p-3 text-center">Chưa có hồ sơ đăng ký công an.</div>';
+async function initScanner() {
+    try {
+        if (!MyScan) return;
+        // Thử kết nối tới Service Local
+        await MyScan.connect({ ip: "127.0.0.1", port: "17778" });
+        await MyScan.init();
+        console.log("✅ Scanner Service connected!");
+    } catch (e) {
+        console.warn("⚠️ Scanner service not found at port 17778");
     }
-    $('#police_gallery').html(htmlPolice);
 }
-
 // Hàm con để tạo HTML cho từng tấm ảnh
 function createImgItem(doc) {
     // doc.FilePath là đường dẫn lưu trong DB (vừa tạo ở bảng CM_ContractTenant_Doc)
@@ -695,54 +711,490 @@ function createImgItem(doc) {
 }
 
 $('#btnSaveTenantDetail').click(function () {
-    // Thu thập dữ liệu từ các control trong Modal
+    // Hàm phụ để kiểm tra nếu chuỗi rỗng thì trả về null cho Server dễ đọc
+    const cleanDate = (val) => (val && val.trim() !== "") ? val : null;
+    const cleanInt = (val) => {
+        var res = parseInt(val);
+        return isNaN(res) ? 0 : res;
+    };
+
     var tenantData = {
-        ContractID: $('#hfContractID').val(), // Lấy từ hidden field của trang chính
-        TenantID: $('#txtCustomerID').val() || 0,
+        // CỰC KỲ QUAN TRỌNG: Phải có ID này để Server biết Update hay Insert
+        ContractTenantID: cleanInt($('#txtContractTenantID').val()),
+        // Ép kiểu số cho các trường ID/Dropdown
+        ContractID: cleanInt($('#hfContractID').val()),
+        TenantID: cleanInt($('#txtCustomerID').val()),
+
         Title: $('#txtTitle').val(),
         CustomerName: $('#txtCustomerName').val(),
         Male: $('#ddlMale').val() === "true",
-        Birthday: $('#txtBirthday').val(),
-        TenantType: $('#ddlTenantType').val(),
-        Nationality: $('#ddlNationality').val(), // Nếu anh dùng Select2/Dropdown
+        Birthday: cleanDate($('#txtBirthday').val()),
+        TenantType: cleanInt($('#ddlTenantType').val()),
+        Nationality: parseInt($('#ddlNationality').val()) || 0,
         IDPassportNo: $('#txtIDPassportNo').val(),
-        PassportUntilDate: $('#txtPassportUntilDate').val(), 
-
-        Address: $('#txtAddress').val(), // Tên này phải khớp với Class C#
+        PassportUntilDate: cleanDate($('#txtPassportUntilDate').val()),
         Company: $('#txtCompany').val(),
         VATCode: $('#txtVATCode').val(),
+        Address: $('#txtAddress').val(),
 
-        FamilyPos: $('#ddlFamilyPos').val(),
+        FamilyPos: cleanInt($('#ddlFamilyPos').val()),
         IsMoveOut: $('#chkIsMoveOut').is(':checked'),
         VisaNo: $('#txtVisaNo').val(),
+        VisaDate: cleanDate($('#txtVisaDate').val()),
+        VisaExpDate: cleanDate($('#txtVisaExpDate').val()),
+        EntryDate: cleanDate($('#txtEntryDate').val()),
+        ArrivalPort: cleanInt($('#ddlArrivalPort').val()),
 
-        VisaDate: $('#txtVisaDate').val(),
-        VisaExpDate: $('#txtVisaExpDate').val(),
-
-        EntryDate: $('#txtEntryDate').val(),
-        ArrivalPort: $('#ddlArrivalPort').val(),
-
-        A_DCardNo: $('#txtADCardNo').val(),      // Lấy từ input txtADCardNo
-        LastRegDate: $('#txtLastRegDate').val(), // Lấy từ input txtLastRegDate
-
+        PermitExpDate: cleanDate($('#txtPermitExpDate').val()), 
+        ProposeExpDate: cleanDate($('#txtProposeExpDate').val()), 
+        
+        ADCardNo: $('#txtADCardNo').val(),
+        LastRegDate: cleanDate($('#txtLastRegDate').val()),
+        Sponsor: $('#txtSponsor').val(),
         Notes: $('#txtNotes').val(),
-        Sponsor: $('#txtSponsor').val()
+        
     };
+
+    console.log("Data gửi lên Server:", tenantData); // Anh nhấn F12 để xem dữ liệu có chuẩn không
 
     $.ajax({
         url: '?handler=SaveTenantDetail',
         type: 'POST',
-        contentType: 'application/json',
+        contentType: 'application/json; charset=utf-8',
         headers: { "RequestVerificationToken": $('input[name="__RequestVerificationToken"]').val() },
         data: JSON.stringify(tenantData),
         success: function (res) {
             if (res.success) {
                 alert(res.message);
                 $('#modalTenantDetail').modal('hide');
-                loadTenantsGrid(); // Load lại lưới ở Vùng 3
+                loadTenantsGrid();
             } else {
                 alert("Error: " + res.message);
             }
+        },
+        error: function (xhr) {
+            // Nếu model bị null, nó thường trả về lỗi 400 hoặc 500
+            console.error("Lỗi Ajax:", xhr.responseText);
         }
     });
 });
+
+let allDocs = []; // Chứa danh sách { FilePath, DocTypeID, ... }
+let currentIndex = 0;
+
+function renderGalleries(docs) {
+    allDocs = docs || [];
+    currentIndex = 0;
+    showImage();
+}
+
+function showImage() {
+    if (allDocs.length > 0) {
+        let doc = allDocs[currentIndex];
+        $('#current_img_display').attr('src', doc.FilePath).show();
+        $('#no_img_overlay').hide();
+        $('#ddlDocTypeID').val(doc.DocTypeID); // Tự động cập nhật Select Box theo loại hình
+        $('#img_index_label').text(`${currentIndex + 1} / ${allDocs.length}`);
+    } else {
+        $('#current_img_display').hide();
+        $('#no_img_overlay').show();
+        $('#img_index_label').text("0 / 0");
+    }
+}
+
+function moveImg(step) {
+    if (allDocs.length === 0) return;
+    currentIndex += step;
+    if (currentIndex < 0) currentIndex = allDocs.length - 1;
+    if (currentIndex >= allDocs.length) currentIndex = 0;
+    showImage();
+}
+
+// Khi tiếp tân thay đổi Select Box, cập nhật DocTypeID cho ảnh đó
+$('#ddlDocTypeID').on('change', function () {
+    if (allDocs[currentIndex]) {
+        allDocs[currentIndex].DocTypeID = $(this).val();
+        // Bạn có thể gọi API cập nhật ngay hoặc lưu tất cả khi nhấn Save
+    }
+});
+
+async function callWebSDKScan() {
+    try {
+        // 1. Hiển thị Loading
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Đang kết nối máy scan...',
+                text: 'Vui lòng đặt hộ chiếu/Visa sẵn vào khe máy',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+        }
+
+        // 2. Lấy danh sách thiết bị thực tế
+        const resList = await MyScan.getDeviceList();
+        const devices = resList?.data?.options || [];
+
+        let file = null;
+        let ocr = null;
+
+        if (devices.length === 0) {
+            throw new Error("Không tìm thấy máy scan Plustek A62. Vui lòng kiểm tra cáp USB.");
+        }
+
+        const dName = devices[0].deviceName;
+        console.log("Đang điều khiển thiết bị:", dName);
+
+        // 3. Cấu hình thiết bị
+        const config = {
+            "device-name": dName,
+            "source": "Auto",
+            "paper-size": "Auto",
+            "recognize-type": "passport",
+            "resolution": 300,
+            "mode": "color",
+            "autoScan": false
+        };
+
+        // 4. Thiết lập Scanner
+        const setRes = await MyScan.setScanner(config);
+        if (!setRes || !setRes.result) {
+            throw new Error("Không thể mở thiết bị. Lỗi: " + (setRes?.message || "Unknown"));
+        }
+
+        // 5. Khoảng nghỉ motor (2s cho dòng A62)
+        console.log("Đang đợi motor khởi động...");
+        await new Promise(r => setTimeout(r, 2000));
+
+        // 6. Thực hiện lệnh quét
+        console.log("Máy bắt đầu kéo giấy...");
+        const scanRes = await MyScan.scan();
+
+        if (typeof Swal !== 'undefined') Swal.close();
+
+        if (scanRes && scanRes.result && scanRes.data?.length > 0) {
+            file = scanRes.data[0];
+
+            // --- XỬ LÝ HIỂN THỊ ẢNH ---
+            if (file && file.base64) {
+                let rawBase64 = file.base64.trim();
+                let finalSrc = rawBase64.startsWith("data:image")
+                    ? rawBase64
+                    : "data:image/jpeg;base64," + rawBase64;
+
+                const imgElement = $('#current_img_display');
+                imgElement.attr('src', finalSrc);
+                imgElement.show();
+                $('#no_img_overlay').hide();
+                console.log("Đã hiển thị ảnh thành công.");
+
+                // --- XỬ LÝ DỮ LIỆU OCR ---
+                if (file.ocrText) {
+                    try {
+                        ocr = (typeof file.ocrText === 'string')
+                            ? JSON.parse(file.ocrText)
+                            : file.ocrText;
+
+                        console.log("Dữ liệu nhận được:", ocr);
+
+                        if (ocr) {
+                            // 1. Họ và tên
+                            const family = ocr.Familyname || "";
+                            const given = ocr.Givenname || "";
+                            const fullName = (family + " " + given).trim();
+                            $('#txtCustomerName').val(fullName);
+
+                            // 2. XỬ LÝ PHÂN LOẠI VISA / PASSPORT
+                            // ocr.Type = 'V' là Visa, 'P' là Passport
+                            if (ocr.Type === "V") {
+                                console.log("Hệ thống nhận diện: VISA");
+                                $('#txtVisaNo').val(ocr.DocumentNo || "");
+                                if (ocr.Dateofexpiry) {
+                                    $('#txtVisaUntilDate').val(formatOCRDate(ocr.Dateofexpiry));
+                                }
+                            } else {
+                                console.log("Hệ thống nhận diện: PASSPORT");
+                                $('#txtIDPassportNo').val(ocr.DocumentNo || "");
+                                if (ocr.Dateofexpiry) {
+                                    $('#txtPassportUntilDate').val(formatOCRDate(ocr.Dateofexpiry));
+                                }
+                            }
+
+                            // 3. Ngày sinh (YYMMDD)
+                            if (ocr.Birthday) {
+                                $('#txtBirthday').val(formatOCRDate(ocr.Birthday));
+                            }
+
+                            // 4. XỬ LÝ GIỚI TÍNH & TITLE
+                            if (ocr.Sex) {
+                                let sexID = 3;
+                                let title = "";
+
+                                if (ocr.Sex === "M") {
+                                    sexID = 1;
+                                    title = "Mr.";
+                                } else if (ocr.Sex === "F") {
+                                    sexID = 2;
+                                    title = "Mis";
+                                }
+
+                                $('#txtTitle').val(title);
+                                $('#ddlMale').val(sexID).trigger('change');
+                            }
+
+                            // 5. XỬ LÝ QUỐC TỊCH & TENANT TYPE
+                            if (ocr.Nationality) {
+                                try {
+                                    const response = await fetch(`?handler=LookupNation&code=${ocr.Nationality}`);
+                                    const data = await response.json();
+
+                                    // Logic TenantType: Khác VNM là khách nước ngoài (1)
+                                    let tenantTypeID = (ocr.Nationality !== "VNM") ? 1 : 2;
+                                    $('#ddlTenantType').val(tenantTypeID).trigger('change');
+
+                                    if (data && data.id > 0) {
+                                        $('#ddlNationality').val(data.id).trigger('change');
+                                    } else {
+                                        console.warn("Không tìm thấy NationID tương ứng với code:", ocr.Nationality);
+                                    }
+                                } catch (e) {
+                                    console.error("Lỗi khi tra cứu NationID:", e);
+                                }
+                            }
+
+                            console.log("Đã đổ dữ liệu vào form thành công.");
+                        }
+                    } catch (ocrErr) {
+                        console.error("Lỗi khi giải mã JSON OCR:", ocrErr);
+                    }
+                }
+            }
+        } else {
+            throw new Error(scanRes?.message || "Không nhận được dữ liệu từ máy scan.");
+        }
+    } catch (err) {
+        if (typeof Swal !== 'undefined') Swal.close();
+        console.error("Lỗi hệ thống:", err);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire('Thông báo', err.message, 'error');
+        }
+    }
+}
+/*
+async function callWebSDKScan() {
+    try {
+        // 1. Hiển thị Loading
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Đang kết nối máy scan...',
+                text: 'Vui lòng đặt hộ chiếu sẵn vào khe máy',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+        }
+
+        // 2. Lấy danh sách thiết bị thực tế
+        const resList = await MyScan.getDeviceList();
+        const devices = resList?.data?.options || [];
+
+        // Khai báo biến ở phạm vi hàm để sử dụng xuyên suốt
+        let file = null;
+        let ocr = null;
+
+        if (devices.length === 0) {
+            throw new Error("Không tìm thấy máy scan Plustek A62. Vui lòng kiểm tra cáp USB.");
+        }
+
+        const dName = devices[0].deviceName;
+        console.log("Đang điều khiển thiết bị:", dName);
+
+        // 3. Cấu hình thiết bị
+        const config = {
+            "device-name": dName,
+            "source": "Auto",
+            "paper-size": "Auto",
+            "recognize-type": "passport",
+            "resolution": 300,
+            "mode": "color",
+            "autoScan": false
+        };
+
+        // 4. Thiết lập Scanner
+        const setRes = await MyScan.setScanner(config);
+        if (!setRes || !setRes.result) {
+            throw new Error("Không thể mở thiết bị. Lỗi: " + (setRes?.message || "Unknown"));
+        }
+
+        // 5. Khoảng nghỉ motor (2s cho dòng A62)
+        console.log("Đang đợi motor khởi động...");
+        await new Promise(r => setTimeout(r, 2000));
+
+        // 6. Thực hiện lệnh quét
+        console.log("Máy bắt đầu kéo giấy...");
+        const scanRes = await MyScan.scan();
+
+        if (typeof Swal !== 'undefined') Swal.close();
+
+        if (scanRes && scanRes.result && scanRes.data?.length > 0) {
+            file = scanRes.data[0];
+
+            // --- XỬ LÝ HIỂN THỊ ẢNH ---
+            if (file && file.base64) {
+                let rawBase64 = file.base64.trim();
+                let finalSrc = rawBase64.startsWith("data:image")
+                    ? rawBase64
+                    : "data:image/jpeg;base64," + rawBase64;
+
+                const imgElement = $('#current_img_display');
+                imgElement.attr('src', finalSrc);
+                imgElement.show();
+                $('#no_img_overlay').hide();
+                console.log("Đã hiển thị ảnh thành công.");
+
+                // --- XỬ LÝ DỮ LIỆU OCR ---
+                if (file.ocrText) {
+                    try {
+                        // GÁN GIÁ TRỊ CHO BIẾN OCR TẠI ĐÂY (Bước quan trọng bị thiếu)
+                        ocr = (typeof file.ocrText === 'string')
+                            ? JSON.parse(file.ocrText)
+                            : file.ocrText;
+
+                        console.log("Dữ liệu Passport nhận được:", ocr);
+
+                        if (ocr) {
+                            // 1. Họ và tên (Ghép Familyname và Givenname)
+                            const family = ocr.Familyname || "";
+                            const given = ocr.Givenname || "";
+                            const fullName = (family + " " + given).trim();
+                            $('#txtCustomerName').val(fullName);
+
+
+                            // --- XỬ LÝ GIỚI TÍNH: Gán SexID trực tiếp theo logic của anh ---
+                            if (ocr.Sex) {
+                                let sexID = 3; // Mặc định là trường hợp còn lại
+                                let title = "";
+
+                                if (ocr.Sex === "M") {
+                                    sexID = 1;
+                                    title = "Mr.";
+                                } else if (ocr.Sex === "F") {
+                                    sexID = 2;
+                                    title = "Mis";
+                                }
+
+                                $('#txtTitle').val(title);
+                                $('#ddlMale').val(sexID).trigger('change');
+                            }
+
+
+                            // 2. Số hộ chiếu
+                            $('#txtIDPassportNo').val(ocr.DocumentNo || "");
+
+                            // 3. Ngày sinh (YYMMDD -> Format lại theo hàm của anh)
+                            if (ocr.Birthday) {
+                                $('#txtBirthday').val(formatOCRDate(ocr.Birthday));
+                            }
+
+                            // 4. Ngày hết hạn
+                            if (ocr.Dateofexpiry) {
+                                $('#txtPassportUntilDate').val(formatOCRDate(ocr.Dateofexpiry));
+                            }
+
+                            // 5. Quốc tịch (Nếu anh cần)
+                            // 2. Xử lý Quốc tịch: Truy vấn Database để lấy NationID từ NationCode
+                            if (ocr.Nationality) {
+                                try {
+                                    // Gọi Handler LookupNation đã viết ở trên
+                                    const response = await fetch(`?handler=LookupNation&code=${ocr.Nationality}`);
+                                    const data = await response.json();
+
+                                    let tenantTypeID = 2; // Mặc định là 2 (Việt Nam)
+
+                                    if (ocr.Nationality !== "VNM") {
+                                        tenantTypeID = 1; // Khác VNM thì set là 1 (Khách nước ngoài)
+                                    }
+                                    // Set giá trị cho select ddlTenantType
+                                    $('#ddlTenantType').val(tenantTypeID).trigger('change');
+
+                                    if (data && data.id > 0) {
+                                        $('#ddlNationality').val(data.id).trigger('change');
+                                    } else {
+                                        console.warn("Không tìm thấy NationID tương ứng với code:", ocr.Nationality);
+                                    }
+                                } catch (e) {
+                                    console.error("Lỗi khi tra cứu NationID:", e);
+                                }
+
+
+                            console.log("Đã đổ dữ liệu vào form thành công.");
+                        }
+                    } catch (ocrErr) {
+                        console.error("Lỗi khi giải mã JSON OCR:", ocrErr);
+                    }
+                }
+            }
+        } else {
+            throw new Error(scanRes?.message || "Không nhận được dữ liệu từ máy scan.");
+        }
+    } catch (err) {
+        if (typeof Swal !== 'undefined') Swal.close();
+        console.error("Lỗi hệ thống:", err);
+
+        if (typeof Swal !== 'undefined') {
+            Swal.fire('Thông báo', err.message, 'error');
+        }
+    }
+}
+*/
+/**
+ * Hàm hỗ trợ định dạng ngày từ YYMMDD của Passport
+ */
+function formatOCRDate(dateStr) {
+    if (!dateStr || dateStr.length !== 6) return dateStr;
+
+    let year = dateStr.substring(0, 2);
+    let month = dateStr.substring(2, 4);
+    let day = dateStr.substring(4, 6);
+
+    // Đoán thế kỷ: > 40 là 19xx, <= 40 là 20xx (Phù hợp với tuổi Passport hiện nay)
+    let fullYear = (parseInt(year) > 40) ? "19" + year : "20" + year;
+
+    // Trả về định dạng YYYY-MM-DD cho ô input date của trình duyệt
+    return `${fullYear}-${month}-${day}`;
+}
+function processScanResults(dataList) {
+    if (!dataList || dataList.length === 0) return;
+    const file = dataList[0];
+
+    // Đổ dữ liệu OCR
+    if (file.ocrText) {
+        if (file.ocrText.FullName) $('#txtCustomerName').val(file.ocrText.FullName);
+        if (file.ocrText.DocumentNo) $('#txtIDPassportNo').val(file.ocrText.DocumentNo);
+    }
+
+    // Hiển thị ảnh
+    if (file.base64) {
+        const imgBase = "data:image/jpeg;base64," + file.base64;
+        $('#current_img_display').attr('src', imgBase).show();
+        $('#no_img_overlay').hide();
+    }
+}
+
+function displayScanImage(base64) {
+    $('#current_img_display').attr('src', base64).show();
+    $('#no_img_overlay').hide();
+    // Thêm vào mảng allDocs để có thể bấm next/back nếu cần
+    allDocs.push({ FilePath: base64, DocTypeID: $('#ddlDocTypeID').val() || 1 });
+    currentIndex = allDocs.length - 1;
+    $('#img_index_label').text(`${currentIndex + 1} / ${allDocs.length}`);
+}
+function fillScanDataToForm(data) {
+    // Dùng chính các ID anh đã chuẩn hóa
+    if (data.FullName) $('#txtCustomerName').val(data.FullName);
+    if (data.IDNumber) $('#txtIDPassportNo').val(data.IDNumber);
+    if (data.Birthday) $('#txtBirthday').val(data.Birthday); // Cần format YYYY-MM-DD
+    if (data.ExpiryDate) $('#txtPassportUntilDate').val(data.ExpiryDate);
+    if (data.PersonalNumber) $('#txtADCardNo').val(data.PersonalNumber);
+
+    // Ghi chú tự động
+    $('#txtNotes').val("Scanned at " + new Date().toLocaleString());
+}

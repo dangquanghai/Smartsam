@@ -204,6 +204,19 @@
         }
     };
 
-
+    $(function () {
+        // Bắt sự kiện khi người dùng nhấn nút thu nhỏ/phóng to của AdminLTE
+        // Lưu ý: Sử dụng $(document).on để đảm bảo nó bắt được sự kiện ở mọi trang
+        $(document).on('click', '[data-widget="pushmenu"]', function () {
+            // AdminLTE mất khoảng 300ms để thực hiện hiệu ứng transition
+            setTimeout(function () {
+                if ($('body').hasClass('sidebar-collapse')) {
+                    localStorage.setItem('sidebar-state', 'collapsed');
+                } else {
+                    localStorage.setItem('sidebar-state', 'expanded');
+                }
+            }, 300);
+        });
+    });
 
 })();

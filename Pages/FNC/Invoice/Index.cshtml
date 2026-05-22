@@ -1,0 +1,225 @@
+﻿@page
+@model SmartSam.Pages.FNC.Invoice.IndexModel
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@Html.AntiForgeryToken()
+@{
+    ViewData["Title"] = "Post Invoice to Vinh Hy";
+}
+
+<style>
+    .table-row-selectable {
+        user-select: none;
+    }
+    /* Style tăng kích thước checkbox cho dễ tích chọn */
+    .chk-row, #chkAllHeader {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+
+    .table-primary-selected {
+        background-color: rgba(0, 123, 255, 0.15) !important;
+    }
+</style>
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-12">
+
+                <!-- VÙNG HIỂN THỊ LOG TIẾN TRÌNH API (XỬ LÝ QUA AJAX) -->
+                <div id="import-log-container" class="card card-dark d-none">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-terminal"></i> Tiến trình xử lý hệ thống</h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" onclick="$('#import-log-container').addClass('d-none')">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body bg-light p-2" id="import-log-content" style="max-height: 250px; overflow-y: auto; font-family: monospace; font-size: 13px;">
+                    </div>
+                </div>
+
+                <!-- LƯỚI CHỨNG TỪ CHÍNH -->
+                <div class="card card-primary">
+                    <div class="card-header">
+                        <h3 class="card-title">Invoices</h3>
+                        <span class="badge badge-light ml-2">Total: @Model.TotalRecords row</span>
+
+                        <div class="card-tools float-right">
+                            <small class="text-white">Display: @(Model.DataList?.Count ?? 0) row</small>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-bordered table-striped table-row-selectable mb-0" id="invoiceTable">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th width="40px" class="text-center">
+                                            <input type="checkbox" id="chkAllHeader" title="Select /Unselect" />
+                                        </th>
+                                        <th width="50px" class="text-center">STT</th>
+                                        <th>UID</th>
+                                        <th>Date</th>
+                                        <th>Receipt</th>
+                                        <th>Customer ID</th>
+                                        <th>Company</th>
+                                        <th>Buying</th>
+                                        <th class="text-right">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (Model.DataList != null && Model.DataList.Any())
+                                    {
+                                        int stt = 1;
+                                        foreach (var item in Model.DataList)
+                                        {
+                                            <tr data-uid="@item.Uid">
+                                                <td class="text-center">
+                                                    <input type="checkbox" class="chk-row" data-uid="@item.Uid" />
+                                                </td>
+                                                <td class="text-center text-muted">@(stt++)</td>
+                                                <td>@item.Uid</td>
+                                                <td>@item.A_ngay_ct.ToString("dd/MM/yyyy")</td>
+                                                <td class="text-bold text-primary">@item.A_officialReceipt_no</td>
+                                                <td><span class="badge badge-secondary">@item.B_ma_KH</span></td>
+                                                <td class="vni-font">@item.B_ten_cty</td>
+                                                <td>@item.B_nguoi_mua_hang</td>
+                                                <td class="text-right text-bold text-success">@item.C_tongtienthanhtoan.ToString("N0")</td>
+                                            </tr>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <tr>
+                                            <td colspan="9" class="text-center text-muted p-5">
+                                                <i class="fas fa-folder-open d-block fa-2x mb-2"></i>
+                                                Không có dữ liệu hóa đơn nào hiển thị.
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- KHỐI NÚT HÀNH ĐỘNG PHÍA DƯỚI LƯỚI (ĐÃ CHUYỂN SANG BÊN TRÁI) -->
+                    <div class="card-footer bg-white p-3 clearfix">
+                        <div class="float-left">
+                            <!-- Gửi Ajax dữ liệu danh sách Uid được chọn lên OnPostImport -->
+                            <button type="button" class="btn btn-success px-4" id="btnPostVinhHy">
+                                <i class="fas fa-cloud-upload-alt"></i> Post to Vinh Hy
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- KHỐI JAVASCRIPT XỬ LÝ SỰ KIỆN CHỌN DÒNG VÀ AJAX POST -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    $(function () {
+
+        // 1. Đồng bộ Checkbox trên tiêu đề bảng (Header) với các dòng bên dưới
+        $('#chkAllHeader').on('change', function () {
+            var isChecked = $(this).prop('checked');
+            $('.chk-row').prop('checked', isChecked);
+            toggleRowHighlight();
+        });
+
+        // 2. Khi tích chọn lẻ tẻ từng ô Checkbox
+        $('.chk-row').on('change', function () {
+            // Nếu có bất kỳ ô lẻ nào bỏ tích, bỏ tích ô Header
+            if (!$(this).prop('checked')) {
+                $('#chkAllHeader').prop('checked', false);
+            } else {
+                // Nếu tất cả ô lẻ đều được tích, tự động tích ô Header
+                if ($('.chk-row:checked').length === $('.chk-row').length) {
+                    $('#chkAllHeader').prop('checked', true);
+                }
+            }
+            toggleRowHighlight();
+        });
+
+        // Hỗ trợ click trực tiếp vào vùng text của hàng tr để đảo trạng thái Checkbox
+        $('#invoiceTable tbody').on('click', 'tr', function (e) {
+            if ($(e.target).is('input[type="checkbox"]')) return;
+
+            var chk = $(this).find('.chk-row');
+            if (chk.length > 0) {
+                chk.prop('checked', !chk.prop('checked')).trigger('change');
+            }
+        });
+
+        // Hàm đổi màu nền dòng khi được lựa chọn (Tăng trải nghiệm UX)
+        function toggleRowHighlight() {
+            $('.chk-row').each(function () {
+                if ($(this).prop('checked')) {
+                    $(this).closest('tr').addClass('table-primary-selected');
+                } else {
+                    $(this).closest('tr').removeClass('table-primary-selected');
+                }
+            });
+        }
+
+        // 3. XỬ LÝ SỰ KIỆN NÚT "POST TO VINH HY" (GỬI AJAX)
+        $('#btnPostVinhHy').on('click', function () {
+            var selectedUids = [];
+
+            // Duyệt lấy toàn bộ Uid của những dòng được chọn
+            $('.chk-row:checked').each(function () {
+                selectedUids.push($(this).data('uid'));
+            });
+
+            if (selectedUids.length === 0) {
+                alert('Vui lòng tích chọn ít nhất một dòng dữ liệu trước khi Post to Vinh Hy.');
+                return;
+            }
+
+            if (!confirm('Bạn có chắc chắn muốn tiến hành đẩy ' + selectedUids.length + ' hóa đơn đã chọn sang hệ thống Vinh Hy không?')) {
+                return;
+            }
+
+            var btn = $(this);
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Đang truyền dữ liệu...');
+            $('#import-log-container').removeClass('d-none');
+            $('#import-log-content').html('<div class="text-info">Đang khởi tạo cấu trúc dữ liệu và gọi WebService SoapClient...</div>');
+
+            // Lấy token trực tiếp từ hệ thống thông qua cú pháp Razor
+            var antiforgeryToken = '@Antiforgery.GetAndStoreTokens(HttpContext).RequestToken';
+
+            $.ajax({
+                type: "POST",
+                url: "/FNC/Invoice/Index?handler=PostToVinhHyMoi", // Chỉ định rõ ràng đường dẫn kèm Handler mới
+                data: { uids: selectedUids },
+                beforeSend: function (xhr) {
+                    // Gửi kèm token qua Header bắt buộc của ASP.NET Core
+                    xhr.setRequestHeader("RequestVerificationToken", antiforgeryToken);
+                },
+                success: function (response) {
+                    btn.prop('disabled', false).html('<i class="fas fa-cloud-upload-alt"></i> Post to Vinh Hy');
+                    if (response.success) {
+                        $('#import-log-content').html(
+                            '<div class="alert alert-success p-2 text-bold">' + response.message + '</div>' +
+                            response.log
+                        );
+                        alert(response.message);
+                        setTimeout(function () { location.reload(); }, 2000);
+                    } else {
+                        $('#import-log-content').html('<div class="text-danger font-weight-bold">Lỗi xử lý: ' + response.message + '</div>');
+                    }
+                },
+                error: function (xhr, status, error) {
+                    btn.prop('disabled', false).html('<i class="fas fa-cloud-upload-alt"></i> Post to Vinh Hy');
+                    $('#import-log-content').html('<div class="text-danger">Lỗi kết nối máy chủ API (Status: ' + xhr.status + '): ' + error + '</div>');
+                }
+            });
+        });
+
+    });
+</script>
