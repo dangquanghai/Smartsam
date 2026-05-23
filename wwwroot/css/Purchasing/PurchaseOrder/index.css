@@ -274,6 +274,32 @@ padding: 5px;
     margin: 1.75rem auto;
 }
 
+#purchaseOrderViewDetailModal.fade .modal-dialog {
+    opacity: 0;
+    transform: translate(0, 0) scaleY(0.04);
+    transform-origin: center center;
+    transition: transform 0.22s ease-out, opacity 0.14s ease-out;
+}
+
+#purchaseOrderViewDetailModal.show .modal-dialog {
+    opacity: 1;
+    transform: translate(0, 0) scaleY(1);
+}
+
+#purchaseOrderViewDetailModal .modal-content {
+    overflow: hidden;
+    transform-origin: center center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #purchaseOrderViewDetailModal.fade .modal-dialog,
+    #purchaseOrderViewDetailModal.show .modal-dialog {
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
+}
+
 #purchaseOrderEstimateViewModal .po-estimateview-modal-dialog {
     max-width: 56vw;
     width: 56vw;
@@ -302,14 +328,30 @@ padding: 5px;
 
 #purchaseOrderViewDetailTable th:nth-child(1),
 #purchaseOrderViewDetailTable td:nth-child(1) {
-    width: 110px;
-    max-width: 110px;
+    width: 120px;
+    max-width: 120px;
     padding-left: 5px;
     padding-right: 5px;
 }
 
 #purchaseOrderViewDetailTable th:nth-child(2),
 #purchaseOrderViewDetailTable td:nth-child(2) {
+    width: 100px;
+    max-width: 100px;
+    padding-left: 4px;
+    padding-right: 4px;
+}
+
+#purchaseOrderViewDetailTable th:nth-child(3),
+#purchaseOrderViewDetailTable td:nth-child(3) {
+    width: 110px;
+    max-width: 110px;
+    padding-left: 5px;
+    padding-right: 5px;
+}
+
+#purchaseOrderViewDetailTable th:nth-child(4),
+#purchaseOrderViewDetailTable td:nth-child(4) {
     width: 220px;
     max-width: 220px;
     padding-left: 4px;
