@@ -81,7 +81,7 @@ internal static class PurchaseOrderQuestPdfReport
             {
                 row.Spacing(0);
                 row.RelativeItem(1).Row(item => ComposeInlineField(item, "Người liên hệ/Contact:", model.SupplierContact, 123, VniPdfFontFamily));
-                row.RelativeItem(1.2f).TranslateX(-28).Row(item => ComposeInlineField(item, "Phone/Mail:", BuildPhoneMailText(model), 58));
+                row.RelativeItem(1.2f).TranslateX(-8).Row(item => ComposeInlineField(item, "Phone/Mail:", BuildPhoneMailText(model), 58));
             });
         });
     }

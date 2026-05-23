@@ -1682,7 +1682,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Header.PRID.HasValue ? Header.PRID.Value : DBNull.Value;
         cmd.Parameters.Add("@PONo", SqlDbType.NVarChar, 50).Value = Header.PONo.Trim();
         cmd.Parameters.Add("@PODate", SqlDbType.Date).Value = Header.PODate.Date;
-        cmd.Parameters.Add("@Remark", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(Header.Remark) ? DBNull.Value : Header.Remark;
+        cmd.Parameters.Add("@Remark", SqlDbType.NVarChar, -1).Value = string.IsNullOrWhiteSpace(Header.Remark) ? DBNull.Value : Header.Remark;
         cmd.Parameters.Add("@SupplierID", SqlDbType.Int).Value = Header.SupplierID.HasValue ? Header.SupplierID.Value : DBNull.Value;
         cmd.Parameters.Add("@POTerms", SqlDbType.NVarChar, 2000).Value = string.IsNullOrWhiteSpace(Header.POTerms) ? DBNull.Value : Header.POTerms;
         cmd.Parameters.Add("@StatusID", SqlDbType.Int).Value = Header.StatusId <= 0 ? 1 : Header.StatusId;
@@ -1711,11 +1711,6 @@ public class PurchaseOrderDetailModel : BasePageModel
         if (!Header.SupplierID.HasValue || Header.SupplierID.Value <= 0)
         {
             ModelState.AddModelError("Header.SupplierID", "Supplier is required.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(Header.Remark) && Header.Remark.Length > 100)
-        {
-            ModelState.AddModelError("Header.Remark", "Remark must not exceed 100 characters.");
         }
 
         if (details.Count == 0)
