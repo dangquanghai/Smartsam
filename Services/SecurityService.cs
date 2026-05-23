@@ -221,13 +221,15 @@ namespace SmartSam.Services.Implementations
                2: View, 3: Add, 4: Edit, 6: Back to Processing, 7: Purchaser Evaluate, 8 : Attache File
             */
 
-            // Các quyền luôn có: Xem và Thêm mới
-            var effective = raw.Where(p => p == 2 || p == 3).ToList();
+            // Các quyền luôn có: Xem và Thêm mới, Attache File
+
+            var effective = raw.Where(p => p == 2 || p == 3 || p == 8).ToList();
+
             if (status >= 1 && status <= 3 && raw.Contains(6))
             {
                 effective.Add(6);
             }
-            var effective = raw.Where(p => p == 2 || p == 3 || p == 8).ToList();
+            
 
             switch (status)
             {
