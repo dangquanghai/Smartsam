@@ -46,7 +46,7 @@ internal static class PurchaseOrderQuestPdfReport
             column.Item().AlignCenter().Text(text =>
             {
                 text.DefaultTextStyle(style => style.FontFamily(VniPdfFontFamily));
-                text.Span(model.CoName).Bold().FontSize(10);
+                text.Span((model.CoName ?? string.Empty).ToUpperInvariant()).Bold().FontSize(10);
             });
             column.Item().AlignCenter().Text(text =>
             {
@@ -79,28 +79,41 @@ internal static class PurchaseOrderQuestPdfReport
             column.Item().Row(row => ComposeInlineField(row, "Địa chỉ/Address:", model.SupplierAddress, 123, VniPdfFontFamily));
             column.Item().Row(row =>
             {
-                row.Spacing(18);
+                row.Spacing(0);
                 row.RelativeItem(1).Row(item => ComposeInlineField(item, "Người liên hệ/Contact:", model.SupplierContact, 123, VniPdfFontFamily));
-                row.RelativeItem(1.2f).Row(item => ComposeInlineField(item, "Phone/Mail:", BuildPhoneMailText(model), 58));
+                row.RelativeItem(1.2f).TranslateX(-28).Row(item => ComposeInlineField(item, "Phone/Mail:", BuildPhoneMailText(model), 58));
             });
         });
     }
 
     private static void ComposeSubject(IContainer container, PurchaseOrderDetailReportModel model)
     {
-        container.Row(row => ComposeInlineField(row, "Subject:", model.Remark, 44, VniPdfFontFamily));
+        container.Row(row => ComposeInlineField(row, "Subject:", model.Remark, 44, VniPdfFontFamily, false));
     }
 
-    private static void ComposeInlineField(RowDescriptor row, string label, string value, float labelWidth, string? valueFontFamily = null)
+    private static void ComposeInlineField(RowDescriptor row, string label, string value, float labelWidth, string? valueFontFamily = null, bool alignMiddle = true)
     {
-        row.ConstantItem(labelWidth).AlignMiddle().Text(label).Bold();
+        var labelContainer = row.ConstantItem(labelWidth);
+        if (alignMiddle)
+        {
+            labelContainer = labelContainer.AlignMiddle();
+        }
+
+        labelContainer.Text(label).Bold();
+
+        var valueContainer = row.RelativeItem();
+        if (alignMiddle)
+        {
+            valueContainer = valueContainer.AlignMiddle();
+        }
+
         if (string.IsNullOrWhiteSpace(valueFontFamily))
         {
-            row.RelativeItem().AlignMiddle().Text(value);
+            valueContainer.Text(value);
             return;
         }
 
-        row.RelativeItem().AlignMiddle().Element(content => ComposeStyledValueText(content, value, valueFontFamily));
+        valueContainer.Element(content => ComposeStyledValueText(content, value, valueFontFamily));
     }
 
     private static void ComposeItems(IContainer container, PurchaseOrderDetailReportModel model)

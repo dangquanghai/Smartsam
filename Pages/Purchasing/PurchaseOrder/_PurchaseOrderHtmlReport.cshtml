@@ -44,7 +44,7 @@
 .po-rpt-tr { text-align: right; }
 /* --- Header --- */
 .po-rpt-header { text-align: center; margin-bottom: 10px; }
-.po-rpt-header .po-rpt-company { font-size: 10pt; font-weight: bold; }
+.po-rpt-header .po-rpt-company { font-size: 10pt; font-weight: bold; text-transform: uppercase; }
 .po-rpt-header .po-rpt-addr { font-size: 10pt; }
 .po-rpt-header .po-rpt-tel { font-size: 10pt; }
 .po-rpt-header .po-rpt-dash { font-size: 10pt; margin: 4px 0; }
@@ -54,6 +54,8 @@
 /* --- Inline fields --- */
 .po-rpt-fields { margin-bottom: 10px; }
 .po-rpt-field-row { display: flex; flex-wrap: wrap; gap: 6px 20px; margin-bottom: 5px; }
+.po-rpt-field-row-main { display: grid; grid-template-columns: 130px 140px 170px 1fr; column-gap: 20px; }
+.po-rpt-field-row-contact { display: grid; grid-template-columns: 310px 1fr; column-gap: 0; }
 .po-rpt-field { display: inline-flex; align-items: center; line-height: 1.2; min-height: 18px; }
 .po-rpt-field-label { font-weight: bold; white-space: nowrap; margin-right: 6px; }
 .po-rpt-field-value { flex: 1; min-width: 60px; }
@@ -63,6 +65,8 @@
 .po-rpt-field-contact .po-rpt-field-label { min-width: 123px; }
 .po-rpt-field-currency .po-rpt-field-label { min-width: 132px; }
 .po-rpt-subject-row { margin-top: 18px; }
+.po-rpt-field-subject { align-items: flex-start; width: 100%; }
+.po-rpt-field-subject .po-rpt-field-value { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 /* --- Items table --- */
 .po-rpt-intro { font-size: 9.5pt; margin: 12px 0 4px; }
 .po-rpt-items-label { font-weight: bold; font-size: 10pt; margin-bottom: 4px; }
@@ -107,7 +111,7 @@
 
   <!-- Inline fields -->
   <div class="po-rpt-fields">
-    <div class="po-rpt-field-row">
+    <div class="po-rpt-field-row po-rpt-field-row-main">
       <span class="po-rpt-field"><span class="po-rpt-field-label">PO No:</span> <span class="po-rpt-field-value">@r.PONo</span></span>
       <span class="po-rpt-field"><span class="po-rpt-field-label">PO Date:</span> <span class="po-rpt-field-value">@poDate</span></span>
       <span class="po-rpt-field"><span class="po-rpt-field-label">PR No:</span> <span class="po-rpt-field-value">@r.RequestNo</span></span>
@@ -119,12 +123,12 @@
     <div class="po-rpt-field-row">
       <span class="po-rpt-field po-rpt-field-full po-rpt-field-address"><span class="po-rpt-field-label">Địa chỉ/Address:</span> <span class="po-rpt-field-value po-rpt-vni">@r.SupplierAddress</span></span>
     </div>
-    <div class="po-rpt-field-row">
+    <div class="po-rpt-field-row po-rpt-field-row-contact">
       <span class="po-rpt-field po-rpt-field-contact"><span class="po-rpt-field-label">Người liên hệ/Contact:</span> <span class="po-rpt-field-value po-rpt-vni">@r.SupplierContact</span></span>
       <span class="po-rpt-field"><span class="po-rpt-field-label">Phone/Mail:</span> <span class="po-rpt-field-value">@phoneMailText</span></span>
     </div>
     <div class="po-rpt-field-row po-rpt-subject-row">
-      <span class="po-rpt-field po-rpt-field-full"><span class="po-rpt-field-label">Subject:</span> <span class="po-rpt-field-value po-rpt-vni">@r.Remark</span></span>
+      <span class="po-rpt-field po-rpt-field-full po-rpt-field-subject"><span class="po-rpt-field-label">Subject:</span> <span class="po-rpt-field-value po-rpt-vni">@r.Remark</span></span>
     </div>
   </div>
 
