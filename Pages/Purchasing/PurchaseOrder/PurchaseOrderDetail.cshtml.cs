@@ -5,6 +5,7 @@ using System.IO;
 using System.Net;
 using System.Net.Mail;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -540,9 +541,13 @@ public class PurchaseOrderDetailModel : BasePageModel
 
         var pdf = PurchaseOrderQuestPdfReport.BuildDetailPdf(report);
         var fileName = BuildReportPdfFileName(report.PONo, "questpdf");
-        return download
-            ? File(pdf, "application/pdf", fileName)
-            : File(pdf, "application/pdf");
+        if (!download)
+        {
+            Response.Headers["Content-Disposition"] = BuildInlinePdfContentDisposition(fileName);
+            return File(pdf, "application/pdf");
+        }
+
+        return File(pdf, "application/pdf", fileName);
     }
 
     public IActionResult OnPostEvaluate()
@@ -1682,7 +1687,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         cmd.Parameters.Add("@PRID", SqlDbType.Int).Value = Header.PRID.HasValue ? Header.PRID.Value : DBNull.Value;
         cmd.Parameters.Add("@PONo", SqlDbType.NVarChar, 50).Value = Header.PONo.Trim();
         cmd.Parameters.Add("@PODate", SqlDbType.Date).Value = Header.PODate.Date;
-        cmd.Parameters.Add("@Remark", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(Header.Remark) ? DBNull.Value : Header.Remark;
+        cmd.Parameters.Add("@Remark", SqlDbType.NVarChar, -1).Value = string.IsNullOrWhiteSpace(Header.Remark) ? DBNull.Value : Header.Remark;
         cmd.Parameters.Add("@SupplierID", SqlDbType.Int).Value = Header.SupplierID.HasValue ? Header.SupplierID.Value : DBNull.Value;
         cmd.Parameters.Add("@POTerms", SqlDbType.NVarChar, 2000).Value = string.IsNullOrWhiteSpace(Header.POTerms) ? DBNull.Value : Header.POTerms;
         cmd.Parameters.Add("@StatusID", SqlDbType.Int).Value = Header.StatusId <= 0 ? 1 : Header.StatusId;
@@ -1711,11 +1716,6 @@ public class PurchaseOrderDetailModel : BasePageModel
         if (!Header.SupplierID.HasValue || Header.SupplierID.Value <= 0)
         {
             ModelState.AddModelError("Header.SupplierID", "Supplier is required.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(Header.Remark) && Header.Remark.Length > 100)
-        {
-            ModelState.AddModelError("Header.Remark", "Remark must not exceed 100 characters.");
         }
 
         if (details.Count == 0)
@@ -2547,7 +2547,20 @@ WHERE POID = @POID", conn, trans);
             safeName = safeName.Replace(invalidChar, '_');
         }
 
+        safeName = Regex.Replace(safeName, @"[^A-Za-z0-9._-]+", "_");
+        safeName = Regex.Replace(safeName, "_+", "_").Trim('_');
+        if (string.IsNullOrWhiteSpace(safeName))
+        {
+            safeName = "purchase_order";
+        }
+
         return $"PurchaseOrder_No_{safeName}.pdf";
+    }
+
+    private static string BuildInlinePdfContentDisposition(string fileName)
+    {
+        var escapedFileName = Uri.EscapeDataString(fileName);
+        return $"inline; filename=\"{fileName}\"; filename*=UTF-8''{escapedFileName}";
     }
 }
 
@@ -2575,7 +2588,6 @@ public class PurchaseOrderHeader
     public decimal PerVAT { get; set; }
     public decimal VAT { get; set; }
     public decimal AfterVAT { get; set; }
-    [StringLength(100)]
     public string? Remark { get; set; }
     public int? PurId { get; set; }
     public int? CAId { get; set; }
