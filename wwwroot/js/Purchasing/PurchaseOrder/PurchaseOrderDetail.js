@@ -292,47 +292,25 @@ function appendQueryParam(baseUrl, name, value) {
     return `${url.pathname}${url.search}`;
 }
 
-let activePurchaseOrderReportPreviewObjectUrl = '';
-
-async function loadPurchaseOrderPdfPreview(frame, url, getCurrentUrl) {
+function loadPurchaseOrderPdfPreview(frame, url) {
     if (!frame || !url) {
-        return null;
+        return;
     }
 
-    const response = await fetch(url, {
-        method: 'GET',
-        credentials: 'same-origin',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    });
+    frame.src = url;
+}
 
-    if (!response.ok) {
-        throw new Error('Cannot load report preview.');
-    }
-
-    const contentType = String(response.headers.get('content-type') || '').toLowerCase();
-    if (!contentType.includes('application/pdf')) {
-        const text = await response.text();
-        throw new Error(text || 'Report preview did not return a PDF.');
-    }
-
-    const blob = await response.blob();
-    if (typeof getCurrentUrl === 'function' && getCurrentUrl() !== url) {
-        return null;
-    }
-
-    const previewUrl = URL.createObjectURL(blob);
-    frame.src = previewUrl;
-    return previewUrl;
+function buildSafePurchaseOrderPdfFileName(poNo) {
+    let safeName = String(poNo || 'purchase_order').trim() || 'purchase_order';
+    safeName = safeName.replace(/[\\/:*?"<>|]+/g, '_');
+    safeName = safeName.replace(/[^A-Za-z0-9._-]+/g, '_');
+    safeName = safeName.replace(/_+/g, '_').replace(/^_+|_+$/g, '') || 'purchase_order';
+    return `PurchaseOrder_No_${safeName}.pdf`;
 }
 
 function clearPurchaseOrderPdfPreview(frame) {
     if (frame) {
         frame.removeAttribute('src');
-    }
-
-    if (activePurchaseOrderReportPreviewObjectUrl) {
-        URL.revokeObjectURL(activePurchaseOrderReportPreviewObjectUrl);
-        activePurchaseOrderReportPreviewObjectUrl = '';
     }
 }
 
@@ -359,22 +337,10 @@ function openPurchaseOrderReportPreviewModal() {
     closeOpenSelect2();
     $modal.modal('show');
 
-    loadPurchaseOrderPdfPreview(frame, previewUrl, function () {
-        return buildPurchaseOrderQuestPdfPreviewUrl();
-    })
-        .then(function (objectUrl) {
-            if (objectUrl) {
-                activePurchaseOrderReportPreviewObjectUrl = objectUrl;
-            }
-            $loading.hide();
-        })
-        .catch(function (error) {
-            $loading.hide();
-            if ($modal.length) {
-                $modal.modal('hide');
-            }
-            alert(error?.message || 'Cannot load PDF preview.');
-        });
+    frame.onload = function () {
+        $loading.hide();
+    };
+    loadPurchaseOrderPdfPreview(frame, previewUrl);
 }
 
 
@@ -386,7 +352,7 @@ async function downloadPurchaseOrderQuestPdf() {
     }
 
     const poNo = (window.purchaseOrderDetailPage?.reportFileName || 'purchase_order').trim() || 'purchase_order';
-    const fileName = `PurchaseOrder_No_${poNo.replace(/[\\/:*?"<>|]+/g, '_')}.pdf`;
+    const fileName = buildSafePurchaseOrderPdfFileName(poNo);
     const response = await fetch(reportUrl, {
         method: 'GET',
         credentials: 'same-origin'
