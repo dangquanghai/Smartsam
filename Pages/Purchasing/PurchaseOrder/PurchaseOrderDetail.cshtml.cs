@@ -279,7 +279,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         }
 
         TempData["SuccessMessage"] = "Purchase order sent to approval successfully.";
-        return RedirectToCurrentDetail("view", true);
+        return RedirectToPage("/Purchasing/PurchaseOrder/Index");
     }
 
     public IActionResult OnGetPrLines(int prId, int? currentPoId)
@@ -708,7 +708,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         }
 
         TempData["SuccessMessage"] = "Purchase order approved successfully.";
-        return RedirectToCurrentDetail("view", true);
+        return RedirectToPage("/Purchasing/PurchaseOrder/Index");
     }
 
     public IActionResult OnPostBackToProcessing()
