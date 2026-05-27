@@ -9,6 +9,7 @@ using SmartSam.Services;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using com.ehoadondientu;
 using System.Linq;
+using DocumentFormat.OpenXml.Spreadsheet;
 
 namespace SmartSam.Pages.FNC.Invoice
 {
@@ -85,94 +86,36 @@ namespace SmartSam.Pages.FNC.Invoice
                     string tenCty = Vni2Unicode(row.B_ten_cty);
                     string diaChi = Vni2Unicode(row.B_dia_chi);
                     string nguoiMua = Vni2Unicode(row.B_nguoi_mua_hang);
+
+                    // GIỮ NGUYÊN BẢN CHUỖI CHI TIẾT NHƯ HÀM CŨ, KHÔNG CẮT TÁCH BẰNG DẤU '@' NỮA
                     string chiTiet = Vni2Unicode(row.C_chitiethoadon);
-                    
 
-                    if (!string.IsNullOrEmpty(chiTiet))
-                    {
-                        // Gọt sạch khoảng trắng hoặc dấu nháy kép rác ở hai đầu chuỗi nếu có
-                        chiTiet = chiTiet.Trim().Trim('"').Trim();
+                    // Đảm bảo định dạng ngày tháng lấy đúng Date như hàm cũ
+                    DateTime date = Convert.ToDateTime(row.A_ngay_ct);
+                    DateTime ngayChungTu = new DateTime(date.Year, date.Month, date.Day);
 
-                        var lines = chiTiet.Split('#');
-                        for (int i = 0; i < lines.Length; i++)
-                        {
-                            var columns = lines[i].Split('@');
-
-                            // Kiểm tra nếu dòng có đủ số lượng cột dữ liệu (từ 9 cột trở lên)
-                            if (columns.Length >= 9)
-                            {
-                                string maHang = columns[0].Trim();
-                                string tenHang = columns[1].Trim();
-                                string dvt = columns[2].Trim();
-                                string soLuong = columns[3].Trim();
-
-                                // Ép đổi dấu chấm thập phân sang dấu phẩy để Server Vĩnh Hy Parse được kiểu số
-                                string donGia = columns[4].Trim().Replace(".", ",");
-                                string thanhTien = columns[5].Trim().Replace(".", ",");
-
-                                string thueVat = columns[7].Trim();
-
-                                string ghiChuDong = "";
-                                if (columns.Length >= 12) ghiChuDong = columns[11].Trim();
-                                if (ghiChuDong == "-" || ghiChuDong == "\"") ghiChuDong = "";
-
-                                lines[i] = $"{maHang}@{tenHang}@{dvt}@{soLuong}@{donGia}@{thanhTien}@{thueVat}@0@0@{ghiChuDong}";
-                            }
-                        }
-                        // Nối các dòng lại bằng dấu #
-                        chiTiet = string.Join("#", lines);
-                    }
-                    /*
-                    string user,
-                    string pwd,
-                    string key,
-                    System.DateTime ngay_ct,
-                    string ky_hieu_mau,
-                    string so_seri,
-                    string so_hd,
-                    string mst,
-                    string ten_cty,
-                    string dia_chi,
-                    string email,
-                    string tel,
-                    string so_tk,
-                    string nguoi_mua_hang,
-                    string hinh_thuc_thanh_toan,
-
-                    string ma_khach_hang,
-                    string so_chung_tu,
-                    double tratruoc,
-                    double conlai,
-                    string chitiethoadon0)
-                        */
-                    // ĐẶT BREAKPOINT TẠI ĐÂY: Để xem giá trị biến 'chiTiet' và 'row.A_so_serial' trước khi gửi
-                    //importHoadon_sky
-                    //importHoadon_skyAsync
-                    //string result = await service.importHoadon_sky(
-
-                   string result = await service.importHoadon_skyAsync(
+                    string result = await service.importHoadon_skyAsync(
                         "0300713227_import",
                         "Import@435466",
-                        "",
-                        row.A_ngay_ct,
+                        "", // strHoadonthaythe giống cũ
+                        ngayChungTu,
                         row.A_ky_hieu_mau,
                         row.A_so_serial,
-                        "0",
+                        "", // strTaikhoanNganhang giống cũ
                         row.B_ma_so_thue,
                         tenCty,
                         diaChi,
                         row.B_email,
                         row.B_tel,
-                        "0",
+                        "", // strNganHangMua giống cũ
                         nguoiMua,
                         "TM/CK",
-                        "",
-                        "0",
-                        0,
-                        0,
-                        chiTiet
+                        row.B_ma_KH,           // Truyền đúng Mã KH cũ
+                        row.A_officialReceipt_no, // Truyền đúng Số chứng từ cũ
+                        Convert.ToDouble(row.C_tratruoc), // Truyền đúng giá trị cũ
+                        Convert.ToDouble(row.C_conlai),   // Truyền đúng giá trị cũ
+                        chiTiet // Chuỗi chi tiết nguyên bản
                     );
-
 
 
                     if (result.Contains("thành công") || result.ToLower() == "ok")
@@ -186,6 +129,7 @@ namespace SmartSam.Pages.FNC.Invoice
                         // ĐẶT BREAKPOINT TẠI ĐÂY: Để xem nội dung lỗi chính xác từ Vĩnh Hy trả về cho dòng này
                         log.Append($"<div class='text-danger'>[Dòng {row.Uid}]: Lỗi - {result}</div>");
                     }
+
                 }
 
                 return new JsonResult(new
@@ -231,41 +175,30 @@ namespace SmartSam.Pages.FNC.Invoice
         private (List<EInvoiceRow> list, int total) FetchInvoicesFromDb()
         {
             var list = new List<EInvoiceRow>();
-            string userId = User.FindFirst("EmployeeCode")?.Value ?? "-1";
+
+            // Lấy đúng UserID (chuỗi số như "644") từ Claims của user đang đăng nhập
+            string userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                            ?? User.FindFirst("UserID")?.Value
+                            ?? "-1";
 
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
 
-            // Tối ưu hóa SQL Query động dựa vào Filter.StatusID và Filter.ObjectId từ form tìm kiếm
-            StringBuilder sql = new StringBuilder(@"
-                SELECT uid, A_ngay_ct, A_officialReceipt_no, B_nguoi_mua_hang, 
-                       B_ten_cty, B_dia_chi, B_ma_so_thue, B_email, B_tel, B_ma_KH,
-                       A_ky_hieu_mau, A_so_serial, C_tratruoc, C_conlai, C_chitiethoadon,
-                       C_tongtienthanhtoan 
-                FROM AC_EInvoice where 1 = 1 ");
-              // WHERE CreateUser = @userCode");
+            // Câu lệnh SQL chỉ giữ duy nhất bộ lọc CreateUser
+            string sql = @"
+            SELECT uid, A_ngay_ct, A_officialReceipt_no, B_nguoi_mua_hang, 
+            B_ten_cty, B_dia_chi, B_ma_so_thue, B_email, B_tel, B_ma_KH,
+            A_ky_hieu_mau, A_so_serial, C_tratruoc, C_conlai, C_chitiethoadon,
+            C_tongtienthanhtoan 
+            FROM AC_EInvoice 
+            WHERE CreateUser = @userID and status = 0
+            ORDER BY uid";
 
-            // Xử lý bộ lọc Trạng thái (Mặc định nếu chưa chọn là 0 - Chưa xử lý)
-            string statusParam = !string.IsNullOrEmpty(Filter.StatusID) ? Filter.StatusID : "0";
-            sql.Append(" AND status = @status");
+            //WHERE CreateUser = @userID and status = 0
 
-            // Xử lý bộ lọc Đối tượng (Select2) nếu có chọn
-            if (!string.IsNullOrEmpty(Filter.ObjectId))
-            {
-                sql.Append(" AND B_ma_KH = @objectId");
-            }
+            using var cmd = new SqlCommand(sql, conn);
 
-            sql.Append(" ORDER BY uid");
-
-            using var cmd = new SqlCommand(sql.ToString(), conn);
-
-            // Sửa lỗi logic đặt tên tham số cũ: SQL khai báo @userCode nhưng truyền @UserId
-           // cmd.Parameters.AddWithValue("@userCode", userId);
-            cmd.Parameters.AddWithValue("@status", statusParam);
-
-            if (!string.IsNullOrEmpty(Filter.ObjectId))
-            {
-                cmd.Parameters.AddWithValue("@objectId", Filter.ObjectId);
-            }
+            // Nạp duy nhất tham số userCode vào Command
+            cmd.Parameters.AddWithValue("@userID", userId);
 
             conn.Open();
             using var reader = cmd.ExecuteReader();
@@ -296,7 +229,10 @@ namespace SmartSam.Pages.FNC.Invoice
 
         private void UpdateStatus(double? uid, int status, bool clearAll = false)
         {
-            string userId = User.FindFirst("EmployeeCode")?.Value ?? "-1";
+            // ĐỔI TẠI ĐÂY: Lấy đúng UserID (chuỗi số như "644") từ Claims để khớp với CreateUser trong DB
+            string userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                            ?? User.FindFirst("UserID")?.Value
+                            ?? "-1";
 
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
             string sql = clearAll
@@ -306,7 +242,16 @@ namespace SmartSam.Pages.FNC.Invoice
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@Status", status);
             cmd.Parameters.AddWithValue("@UserId", userId);
-            if (uid.HasValue) cmd.Parameters.AddWithValue("@Uid", uid.Value);
+
+            // Xử lý tham số @Uid an toàn
+            if (uid.HasValue)
+            {
+                cmd.Parameters.AddWithValue("@Uid", uid.Value);
+            }
+            else
+            {
+                cmd.Parameters.AddWithValue("@Uid", DBNull.Value);
+            }
 
             conn.Open();
             cmd.ExecuteNonQuery();
