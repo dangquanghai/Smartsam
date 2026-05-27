@@ -1,0 +1,415 @@
+﻿@page
+@model SmartSam.Pages.FNC.Accnet.IndexModel
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@Html.AntiForgeryToken()
+@{
+    ViewData["Title"] = "Post Data to Accnet";
+}
+
+<style>
+    /* Ép cho phần nội dung chính sát lên trên thanh bar */
+    .content {
+        padding-top: 0px !important;
+        margin-top: -10px !important; /* Dịch chuyển ngược lên nếu cần */
+    }
+
+        /* Nếu container-fluid có padding-top lớn, đưa về 0 */
+        .content > .container-fluid {
+            padding-top: 0px !important;
+        }
+
+    .table-primary-selected {
+        background-color: rgba(0, 123, 255, 0.15) !important;
+    }
+
+    .table-row-selectable {
+        user-select: none;
+    }
+    /* Style tăng kích thước checkbox cho dễ tích chọn */
+    .chk-row, #chkAllHeader {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+
+    .table-primary-selected {
+        background-color: rgba(0, 123, 255, 0.15) !important;
+    }
+    /* Giữ layout form search dọc đẹp mắt */
+    .search-sidebar .form-group {
+        margin-bottom: 12px;
+    }
+
+    </style >
+
+<section class="content pt-2">
+    <div class="container-fluid">
+
+        <div id="accnet-log-container" class="card card-dark d-none mb-3">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-terminal"></i> Processing Accnet</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" onclick="$('#accnet-log-container').addClass('d-none')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body bg-light p-2" id="accnet-log-content" style="max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 13px;">
+            </div>
+        </div>
+
+        <div class="row">
+
+            <div class="col-md-2 search-sidebar">
+                <div class="card card-outline card-primary">
+                    <div class="card-header p-2">
+                        <h3 class="card-title text-bold" style="font-size: 16px;">
+                            <i class="fas fa-search"></i> Search
+                        </h3>
+                    </div>
+                    <form method="get" id="searchForm">
+                        <div class="card-body p-2">
+                            <div class="form-group">
+                                <label><small class="font-weight-bold">Month:</small></label>
+                                <select name="SelectedMonth" class="form-control form-control-sm">
+                                    @for (int m = 1; m <= 12; m++)
+                                    {
+                                        if (m == Model.SelectedMonth)
+                                        {
+                                            <option value="@m" selected>@m</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@m">@m</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="form-group mb-1">
+                                <label><small class="font-weight-bold">Year:</small></label>
+                                <select name="SelectedYear" class="form-control form-control-sm">
+                                    @{
+                                        int currentYear = DateTime.Now.Year;
+                                        // Hiển thị từ năm trước đến 2 năm sau để user linh hoạt chọn lựa
+                                        for (int y = currentYear - 1; y <= currentYear + 2; y++)
+                                        {
+                                            if (y == Model.SelectedYear)
+                                            {
+                                                <option value="@y" selected>@y</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@y">@y</option>
+                                            }
+                                        }
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="card-footer p-2 bg-white">
+                            <button type="submit" class="btn btn-primary btn-sm btn-block">
+                                <i class="fas fa-filter"></i> Search
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="col-md-10">
+                <div class="card card-primary card-tabs">
+                    <div class="card-header p-0 pt-1">
+                        <ul class="nav nav-tabs" id="accnetTab" role="tablist">
+                            <li class="nav-item">
+                                <a class="nav-tabs-link nav-link active text-bold" id="tab-item-purchase" data-toggle="pill" href="#content-item-purchase" role="tab">
+                                    <i class="fas fa-shopping-cart text-warning"></i> 1. Item Purchase
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-tabs-link nav-link text-bold" id="tab-item-adjustment" data-toggle="pill" href="#content-item-adjustment" role="tab">
+                                    <i class="fas fa-sliders-h text-danger"></i> 2. Item Adjustment
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-tabs-link nav-link text-bold" id="tab-invoice" data-toggle="pill" href="#content-invoice" role="tab">
+                                    <i class="fas fa-file-invoice-dollar text-success"></i> 3. Invoice
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="card-body p-0">
+                        <div class="tab-content" id="accnetTabContent">
+
+                            <div class="tab-pane fade show active" id="content-item-purchase" role="tabpanel">
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-bordered table-row-selectable mb-0 data-table" id="tableItemPurchase">
+                                        @* ĐÃ ĐỔI: Sử dụng nền xanh Primary, chữ trắng *@
+                                        @* ĐÃ ĐỔI: Màu nền xám trung tính, chữ trắng dịu hơn *@
+                                        <thead style="background-color: #707781 !important; color: #ffffff !important; font-size: 14px;">
+                                            <tr>
+                                                <th width="40px" class="text-center"><input type="checkbox" class="chk-all-header" /></th>
+                                                <th width="50px" class="text-center">STT</th>
+                                                <th>UID (FlowID)</th>
+                                                <th>Date</th>
+                                                <th>FlowNo</th>
+                                                <th>According to</th>
+                                                <th>Supplier</th>
+                                                <th>Store</th>
+                                                <th class="text-right">Total Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @if (Model.ItemPurchaseList != null && Model.ItemPurchaseList.Any())
+                                            {
+                                                int stt = 1;
+                                                foreach (var item in Model.ItemPurchaseList)
+                                                {
+                                                    @* 1. DÒNG MASTER: Ép màu nền xám trung gian (#9fa7b3) và chuyển chữ sang màu trắng *@
+                                                    <tr style="background-color: #9fa7b3 !important; color: #ffffff !important;">
+                                                        <td class="text-center">
+                                                            @* Giữ nguyên checkbox, có thể thêm style nếu muốn *@
+                                                            <input type="checkbox" class="chk-row" data-uid="@item.FlowID" />
+                                                        </td>
+                                                        <td class="text-center" style="color: #ffffff !important;">@stt</td>
+                                                        <td class="text-bold" style="color: #ffffff !important;">@item.FlowID</td>
+                                                        <td style="color: #ffffff !important;">@item.FlowDate.ToString("dd/MM/yyyy")</td>
+                                                        @* Đổi text-primary sang text-white để không bị chìm trên nền xám *@
+                                                        <td class="text-bold style="color: #ffffff !important;">@item.FlowNo</td>
+                                                        <td style="color: #ffffff !important;">@item.According</td>
+                                                        <td style="color: #ffffff !important;">@item.VendorName</td>
+                                                        <td><span class="badge badge-info">@item.StoreName</span></td>
+                                                        @* Đổi text-success sang chữ trắng đậm để nhìn sang trọng hơn *@
+                                                        <td class="text-right text-bold" style="color: #ffffff !important;">
+                                                            @item.Details.Sum(d => d.ActQty * d.Price).ToString("N0") VNĐ
+                                                        </td>
+                                                    </tr>
+
+                                                    @* 2. DÒNG DETAIL CHI TIẾT: Giữ nguyên cấu trúc tinh chỉnh trước đó *@
+                                                    @if (item.Details != null && item.Details.Any())
+                                                    {
+                                                        <tr style="background-color: #fafafa !important;">
+                                                            <td></td>
+                                                            <td colspan="8" class="p-2">
+                                                                <table class="table table-sm table-bordered mb-0" style="font-size: 13px; background-color: #ffffff;">
+                                                                    <thead style="background-color: #d6d8db !important; color: #212529 !important; font-size: 12px; font-weight: 700;">
+                                                                        <tr>
+                                                                            <th width="150px">ItemCode</th>
+                                                                            <th>Item Name</th>
+                                                                            <th width="80px" class="text-center">Unit</th>
+                                                                            <th width="120px" class="text-right">Quantity</th>
+                                                                            <th width="120px" class="text-right">Price</th>
+                                                                            <th width="120px" class="text-right">Amount</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody>
+                                                                        @foreach (var detail in item.Details)
+                                                                        {
+                                                                            <tr>
+                                                                                <td class="text-monospace">@detail.ItemCode</td>
+                                                                                <td>@detail.ItemName</td>
+                                                                                <td class="text-center">@detail.Unit</td>
+                                                                                <td class="text-right">@detail.ActQty.ToString("N2")</td>
+                                                                                <td class="text-right text-muted">@detail.Price.ToString("N0")</td>
+                                                                                <td class="text-right text-bold text-indigo">@detail.Amount.ToString("N0")</td>
+                                                                            </tr>
+                                                                        }
+                                                                    </tbody>
+                                                                </table>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                    stt++;
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <tr>
+                                                    <td colspan="9" class="text-center text-muted p-4">No data for Item Purchase.</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="card-footer bg-white p-3">
+                                    <button type="button" class="btn btn-success px-4 btn-post-accnet" data-type="ItemPurchase" data-table="#tableItemPurchase">
+                                        Post Item Purchase <i class="fas fa-long-arrow-alt-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="tab-pane fade" id="content-item-adjustment" role="tabpanel">
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-bordered table-striped table-row-selectable mb-0 data-table" id="tableItemAdjustment">
+                                        <thead class="thead-light">
+                                            <tr>
+                                                <th width="40px" class="text-center"><input type="checkbox" class="chk-all-header" /></th>
+                                                <th width="50px" class="text-center">STT</th>
+                                                <th>UID</th>
+                                                <th>Ngày điều chỉnh</th>
+                                                <th>Số chứng từ</th>
+                                                <th>Lý do điều chỉnh</th>
+                                                <th>Kho xử lý</th>
+                                                <th class="text-right">Tổng giá trị lệch</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td colspan="8" class="text-center text-muted p-4">No data for  Item Adjustment.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="card-footer bg-white p-3">
+                                    <button type="button" class="btn btn-success px-4 btn-post-accnet" data-type="ItemAdjustment" data-table="#tableItemAdjustment">
+                                        Post Item Adjustment <i class="fas fa-long-arrow-alt-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="tab-pane fade" id="content-invoice" role="tabpanel">
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-bordered table-striped table-row-selectable mb-0 data-table" id="tableInvoice">
+                                        <thead class="thead-light">
+                                            <tr>
+                                                <th width="40px" class="text-center"><input type="checkbox" class="chk-all-header" /></th>
+                                                <th width="50px" class="text-center">STT</th>
+                                                <th>UID</th>
+                                                <th>Ngày chứng từ</th>
+                                                <th>Số hóa đơn</th>
+                                                <th>Mã KH</th>
+                                                <th>Công ty / Khách hàng</th>
+                                                <th class="text-right">Tổng thanh toán</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td colspan="8" class="text-center text-muted p-4">No data for Invoice hóa đơn.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="card-footer bg-white p-3">
+                                    <button type="button" class="btn btn-success px-4 btn-post-accnet" data-type="Invoice" data-table="#tableInvoice">
+                                        Post Invoice <i class="fas fa-long-arrow-alt-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    $(function () {
+
+        // 1. Đồng bộ Checkbox Header của từng bảng độc lập
+        $('.chk-all-header').on('change', function () {
+            var isChecked = $(this).prop('checked');
+            var $table = $(this).closest('table');
+            $table.find('.chk-row').prop('checked', isChecked).trigger('change');
+        });
+
+        // 2. Tích lẻ tẻ từng dòng trong bảng ứng với từng bảng riêng
+        $(document).on('change', '.chk-row', function () {
+            var $table = $(this).closest('table');
+            var $headerChk = $table.find('.chk-all-header');
+
+            if (!$(this).prop('checked')) {
+                $headerChk.prop('checked', false);
+            } else {
+                if ($table.find('.chk-row:checked').length === $table.find('.chk-row').length) {
+                    $headerChk.prop('checked', true);
+                }
+            }
+            toggleRowHighlight($table);
+        });
+
+        // Click nguyên dòng TR để kích hoạt checkbox
+        $(document).on('click', '.data-table tbody tr', function (e) {
+            if ($(e.target).is('input[type="checkbox"]')) return;
+            var chk = $(this).find('.chk-row');
+            if (chk.length > 0) {
+                chk.prop('checked', !chk.prop('checked')).trigger('change');
+            }
+        });
+
+        // Hàm tô màu dòng được chọn
+        function toggleRowHighlight($table) {
+            $table.find('.chk-row').each(function () {
+                var $row = $(this).closest('tr');
+                if ($(this).prop('checked')) {
+                    $row.addClass('table-primary-selected');
+                } else {
+                    $row.removeClass('table-primary-selected');
+                }
+            });
+        }
+
+        // 3. XỬ LÝ SỰ KIỆN AJAX ĐẨY DATA CHO CẢ 3 NÚT POST ACCNET (Đã đồng bộ hóa Handler)
+        $('.btn-post-accnet').on('click', function () {
+            var postType = $(this).data('type');    // Sẽ mang giá trị: ItemPurchase, ItemAdjustment, hoặc Invoice
+            var tableSelector = $(this).data('table');
+            var selectedUids = [];
+
+            // Tìm chính xác các ô checkbox được check trong TAB hiện tại
+            $(tableSelector).find('.chk-row:checked').each(function () {
+                selectedUids.push($(this).data('uid'));
+            });
+
+            if (selectedUids.length === 0) {
+                alert('Vui lòng chọn ít nhất một chứng từ của tab hiện tại trước khi đẩy qua Accnet!');
+                return;
+            }
+
+            if (!confirm('Bạn có chắc chắn muốn đẩy ' + selectedUids.length + ' chứng từ đang chọn sang hệ thống Accnet không?')) {
+                return;
+            }
+
+            var btn = $(this);
+            var originalText = btn.html();
+
+            // Khóa nút bấm và bật màn hình log tiến trình chung
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Đang truyền dữ liệu...');
+            $('#accnet-log-container').removeClass('d-none');
+            $('#accnet-log-content').html('<div class="text-info">Đang khởi tạo cấu trúc và đồng bộ dữ liệu một chiều sang Accnet API [' + postType + ']...</div>');
+
+            var antiforgeryToken = '@Antiforgery.GetAndStoreTokens(HttpContext).RequestToken';
+
+            $.ajax({
+                type: "POST",
+                // Định tuyến tự động: /FNC/Accnet/Index?handler=PostItemPurchase, PostItemAdjustment hoặc PostInvoice
+                url: "/FNC/Accnet/Index?handler=Post" + postType,
+                data: { uids: selectedUids },
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader("RequestVerificationToken", antiforgeryToken);
+                },
+                success: function (response) {
+                    btn.prop('disabled', false).html(originalText);
+                    if (response.success) {
+                        $('#accnet-log-content').html(
+                            '<div class="alert alert-success p-2 text-bold">' + response.message + '</div>' +
+                            response.log
+                        );
+                        alert(response.message);
+                        setTimeout(function () { location.reload(); }, 1500);
+                    } else {
+                        $('#accnet-log-content').html('<div class="text-danger font-weight-bold">Lỗi xử lý hệ thống Accnet: ' + response.message + '</div>');
+                    }
+                },
+                error: function (xhr, status, error) {
+                    btn.prop('disabled', false).html(originalText);
+                    $('#accnet-log-content').html('<div class="text-danger">Lỗi kết nối máy chủ Accnet API (Status: ' + xhr.status + '): ' + error + '</div>');
+                }
+            });
+        });
+
+    });
+</script>
