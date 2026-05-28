@@ -172,8 +172,8 @@ namespace SmartSam.Pages.FNC.Accnet
                     master.Details.Add(new ItemPurchaseDetailModel
                     {
                         ItemCode = reader1["ItemCode"]?.ToString() ?? "",
-                        ItemName = ConverterTCVN3(reader1["ItemName"]?.ToString() ?? ""),
-                        Unit = ConverterTCVN3(reader1["Unit"]?.ToString() ?? ""),
+                        ItemName = TCVN32Unicode(reader1["ItemName"]?.ToString() ?? ""),
+                        Unit = TCVN32Unicode(reader1["Unit"]?.ToString() ?? ""),
                         ActQty = reader1["Act_Qty"] != DBNull.Value ? Convert.ToDecimal(reader1["Act_Qty"]) : 0,
                         Price = reader1["Price"] != DBNull.Value ? Convert.ToDecimal(reader1["Price"]) : 0
                     });
