@@ -138,6 +138,26 @@
         });
     }
 
+    function focusNextQuantityInput(currentInput) {
+        const currentRow = currentInput.closest("tr");
+        const columnKey = currentInput.getAttribute("data-nav-column") || "";
+        if (!currentRow || !columnKey) {
+            return;
+        }
+
+        let nextRow = currentRow.nextElementSibling;
+        while (nextRow) {
+            const nextInput = nextRow.querySelector(`.ln-qty[data-nav-column="${columnKey}"]`);
+            if (nextInput && !nextInput.readOnly && !nextInput.disabled) {
+                nextInput.focus();
+                nextInput.select();
+                return;
+            }
+
+            nextRow = nextRow.nextElementSibling;
+        }
+    }
+
     function initQuantityInputs() {
         $(document).off("keypress", ".ln-qty").on("keypress", ".ln-qty", function (ev) {
             const key = ev.which || ev.keyCode;
@@ -146,6 +166,10 @@
             const isBackspace = key === 8;
             const isMinus = key === 45;
 
+            if (key === 13) {
+                return;
+            }
+
             if (field === "be") {
                 if (!isDigit && !isMinus && !isBackspace) {
                     ev.preventDefault();
@@ -153,6 +177,15 @@
             } else if (!isDigit && !isBackspace) {
                 ev.preventDefault();
             }
+        });
+
+        $(document).off("keydown", ".ln-qty").on("keydown", ".ln-qty", function (ev) {
+            if (ev.key !== "Enter") {
+                return;
+            }
+
+            ev.preventDefault();
+            focusNextQuantityInput(this);
         });
     }
 
