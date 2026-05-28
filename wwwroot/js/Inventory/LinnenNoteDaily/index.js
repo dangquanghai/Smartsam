@@ -71,6 +71,22 @@
         }
     }
 
+    function initAutoDismissAlerts() {
+        $('.js-auto-dismiss-alert').each(function () {
+            const $alert = $(this);
+            const timeout = Number.parseInt($alert.data('timeout'), 10);
+            const delay = Number.isFinite(timeout) && timeout > 0 ? timeout : 20000;
+
+            window.setTimeout(function () {
+                if ($alert.hasClass('show')) {
+                    $alert.alert('close');
+                } else {
+                    $alert.remove();
+                }
+            }, delay);
+        });
+    }
+
     function performSearch(page = 1) {
         state.currentPage = page;
         const token = $('input[name="__RequestVerificationToken"]').val();
@@ -232,6 +248,7 @@
     }
 
     function initializePage() {
+        initAutoDismissAlerts();
         initEvents();
         initializeSearchDateRange();
         performSearch(getInitialPage());

@@ -6,6 +6,16 @@
 
 <section class="content">
     <div class="container-fluid">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show py-2 js-auto-dismiss-alert" role="alert" data-timeout="20000">
+                <i class="fas fa-check-circle"></i> @TempData["SuccessMessage"]
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+
         <div class="row linnen-note-layout-row">
             <!-- SEARCH PANEL (LEFT) -->
             <div class="col-md-2 linnen-note-search-column">
