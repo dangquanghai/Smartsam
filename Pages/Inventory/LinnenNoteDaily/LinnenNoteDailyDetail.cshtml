@@ -418,10 +418,10 @@
                                                               data-time-section="@row.TimeSection"
                                                               data-linen-code="@row.LinenCode"
                                                               data-linen-name="@row.LinenName"></span>
-                                                        <input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="be" value="@FormatQty(row.Be)" readonly="@isBeginReadonly" />
+                                                        <input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="be" data-nav-column="@($"{linen.Code}|be")" value="@FormatQty(row.Be)" readonly="@isBeginReadonly" />
                                                     </td>
-                                                    <td class="ln-qty-cell-de"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="de" value="@FormatQty(row.De)" readonly="@isView" /></td>
-                                                    <td class="ln-qty-cell-re"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="re" value="@FormatQty(row.Re)" readonly="@isView" /></td>
+                                                    <td class="ln-qty-cell-de"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="de" data-nav-column="@($"{linen.Code}|de")" value="@FormatQty(row.De)" readonly="@isView" /></td>
+                                                    <td class="ln-qty-cell-re"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right ln-qty" data-detail-id="@row.Id" data-field="re" data-nav-column="@($"{linen.Code}|re")" value="@FormatQty(row.Re)" readonly="@isView" /></td>
                                                 }
                                             }
                                         </tr>
