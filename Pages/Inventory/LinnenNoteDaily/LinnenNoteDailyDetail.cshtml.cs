@@ -64,10 +64,10 @@ public class LinnenNoteDailyDetailModel : BasePageModel
     public bool ReturnToIndex { get; set; }
 
     [BindProperty]
-    public string RedirectUrl { get; set; } = string.Empty;
+    public string? RedirectUrl { get; set; }
 
     [BindProperty(SupportsGet = true)]
-    public string ReturnUrl { get; set; } = string.Empty;
+    public string? ReturnUrl { get; set; }
 
     [BindProperty(SupportsGet = true)]
     public bool Popup { get; set; }
