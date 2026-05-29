@@ -401,10 +401,8 @@
             throw new Error("Cannot load report preview.");
         }
 
-        const blob = await response.blob();
-        const previewUrl = URL.createObjectURL(blob);
-        frame.src = previewUrl;
-        return previewUrl;
+        frame.src = url;
+        return "";
     }
 
     function clearLinnenReportPreview(frame) {
