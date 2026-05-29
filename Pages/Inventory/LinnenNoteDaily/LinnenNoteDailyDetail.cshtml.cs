@@ -15,19 +15,17 @@ public class LinnenNoteDailyDetailModel : BasePageModel
     private const int FunctionId = 115;
     private const int PermissionView = 1;
     private const int PermissionUpdate = 2;
-    private static readonly IReadOnlyList<LinnenNoteDailyGridColumn> FixedDetailColumns = new List<LinnenNoteDailyGridColumn>
+    private static readonly IReadOnlyDictionary<string, string> SupportedDetailColumnTitles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
-        new LinnenNoteDailyGridColumn("BATH", "Bath"),
-        new LinnenNoteDailyGridColumn("HAND", "Hand"),
-        new LinnenNoteDailyGridColumn("FACE", "Face"),
-        new LinnenNoteDailyGridColumn("BATH-MAT", "Bath mat"),
-        new LinnenNoteDailyGridColumn("PILLOW-CASE", "Pillow case"),
-        new LinnenNoteDailyGridColumn("SHEET-S", "Sheet S"),
-        new LinnenNoteDailyGridColumn("D-COVER-S", "D Cover S"),
-        new LinnenNoteDailyGridColumn("SHEET-K", "Sheet K"),
-        new LinnenNoteDailyGridColumn("D-COVER-K", "D Cover K"),
-        new LinnenNoteDailyGridColumn("K-CLOTH", "K Cloth"),
-        new LinnenNoteDailyGridColumn("D-CLOTH", "D Cloth")
+        ["BATH"] = "Bath",
+        ["HAND"] = "Hand",
+        ["FACE"] = "Face",
+        ["BATH-MAT"] = "Bath mat",
+        ["PILLOW-CASE"] = "Pillow case",
+        ["SHEET-S"] = "Sheet S",
+        ["D-COVER-S"] = "D Cover S",
+        ["SHEET-K"] = "Sheet K",
+        ["D-COVER-K"] = "D Cover K"
     };
     private static readonly IReadOnlyList<LinnenNoteDailyPantryDefinition> FixedPantries = new List<LinnenNoteDailyPantryDefinition>
     {
@@ -77,7 +75,7 @@ public class LinnenNoteDailyDetailModel : BasePageModel
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
     public bool IsPopup => Popup;
     public List<LinnenNoteDailyDetailRow> Details { get; set; } = new List<LinnenNoteDailyDetailRow>();
-    public IReadOnlyList<LinnenNoteDailyGridColumn> DetailColumns => FixedDetailColumns;
+    public List<LinnenNoteDailyGridColumn> DetailColumns { get; private set; } = new List<LinnenNoteDailyGridColumn>();
     public IReadOnlyList<LinnenNoteDailyPantryDefinition> DetailPantries => FixedPantries;
 
     public IActionResult OnGet(int? id, string mode = "view", string? returnUrl = null)
@@ -136,6 +134,7 @@ public class LinnenNoteDailyDetailModel : BasePageModel
             Mode = "view";
         }
 
+        LoadDetailColumns();
         LoadDetails();
         DetailsJson = JsonSerializer.Serialize(Details);
         CanSave = Mode != "view" && PagePerm.HasPermission(PermissionUpdate);
@@ -163,6 +162,7 @@ public class LinnenNoteDailyDetailModel : BasePageModel
 
         try
         {
+            LoadDetailColumns();
             var rows = LoadPrintPreviewRows(id);
             var columns = GetPreviewColumns(linenCode);
 
@@ -196,6 +196,8 @@ public class LinnenNoteDailyDetailModel : BasePageModel
             return RedirectToPage("./Index");
         }
 
+        LoadDetailColumns();
+
         var report = new LinnenNoteDailyPdfReport
         {
             NoteId = Header.Id,
@@ -208,6 +210,7 @@ public class LinnenNoteDailyDetailModel : BasePageModel
 
         var pdf = LinnenNoteDailyQuestPdfReport.BuildPdf(report);
         var fileName = $"PantryLinen_{Header.Id}.pdf";
+        Response.Headers["Content-Disposition"] = $"inline; filename=\"{fileName}\"";
         return download
             ? File(pdf, "application/pdf", fileName)
             : File(pdf, "application/pdf");
@@ -232,6 +235,7 @@ public class LinnenNoteDailyDetailModel : BasePageModel
         if (!ModelState.IsValid)
         {
             RedirectUrl = string.Empty;
+            LoadDetailColumns();
             DetailsJson = JsonSerializer.Serialize(Details);
             CanSave = PagePerm.HasPermission(PermissionUpdate);
             return Page();
@@ -308,6 +312,31 @@ WHERE ID = @ID;", conn);
         return true;
     }
 
+    private void LoadDetailColumns()
+    {
+        DetailColumns = new List<LinnenNoteDailyGridColumn>();
+        using var conn = OpenConnection();
+        using var cmd = new SqlCommand(@"
+SELECT LinnenCode,
+       ISNULL(NULLIF(LinnenName, ''), LinnenCode) AS LinenName
+FROM dbo.LN_Linnen
+WHERE ISNULL(IsLinen, 0) = 1
+  AND ISNULL(Regular, 0) = 1
+ORDER BY ISNULL(IsOrder, 0), LinnenCode;", conn);
+
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            var code = (Convert.ToString(rd["LinnenCode"]) ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(code) || !SupportedDetailColumnTitles.ContainsKey(code))
+            {
+                continue;
+            }
+
+            DetailColumns.Add(new LinnenNoteDailyGridColumn(code, SupportedDetailColumnTitles[code]));
+        }
+    }
+
     private void LoadDetails()
     {
         Details = new List<LinnenNoteDailyDetailRow>();
@@ -319,14 +348,16 @@ SELECT dt.ID,
        ISNULL(p.PentryName, 'Pantry ' + CONVERT(varchar(10), dt.Pentry)) AS PentryName,
        dt.TimeSection,
        dt.LinenCode,
-       ISNULL(l.LinnenName, dt.LinenCode) AS LinenName,
+       ISNULL(NULLIF(l.LinnenName, ''), dt.LinenCode) AS LinenName,
        ISNULL(dt.Be, 0) AS Be,
        ISNULL(dt.De, 0) AS De,
        ISNULL(dt.Re, 0) AS Re
 FROM dbo.LN_DeAndRe_DT dt
 LEFT JOIN dbo.LN_Pentry p ON dt.Pentry = p.PentryID
-LEFT JOIN dbo.LN_Linnen l ON dt.LinenCode = l.LinnenCode
+INNER JOIN dbo.LN_Linnen l ON dt.LinenCode = l.LinnenCode
 WHERE dt.IDDeAndRe = @IDDeAndRe
+  AND ISNULL(l.IsLinen, 0) = 1
+  AND ISNULL(l.Regular, 0) = 1
 ORDER BY ISNULL(p.IsOrder, dt.Pentry), dt.Pentry, dt.TimeSection, ISNULL(l.IsOrder, 0), dt.LinenCode, dt.ID;", conn);
         cmd.Parameters.Add("@IDDeAndRe", SqlDbType.Int).Value = Header.Id;
 
@@ -606,8 +637,9 @@ ORDER BY ISNULL(p.IsOrder, t.Pentry), t.Pentry, t.TimeSection;", conn);
         return rows;
     }
 
-    private static List<LinnenReportPreviewColumn> GetPreviewColumns(string? linenCode)
+    private List<LinnenReportPreviewColumn> GetPreviewColumns(string? linenCode)
     {
+        var activeCodes = new HashSet<string>(DetailColumns.Select(x => x.Code), StringComparer.OrdinalIgnoreCase);
         var columns = new List<LinnenReportPreviewColumn>
         {
             new LinnenReportPreviewColumn("BATH", "Bath", "BathBe", "BathDe", "BathRe"),
@@ -618,10 +650,10 @@ ORDER BY ISNULL(p.IsOrder, t.Pentry), t.Pentry, t.TimeSection;", conn);
             new LinnenReportPreviewColumn("SHEET-S", "Sheet S", "SheetSBe", "SheetSDe", "SheetSRe"),
             new LinnenReportPreviewColumn("D-COVER-S", "D Cover S", "DCoverSBe", "DCoverSDe", "DCoverSRe"),
             new LinnenReportPreviewColumn("SHEET-K", "Sheet K", "SheetKBe", "SheetKDe", "SheetKRe"),
-            new LinnenReportPreviewColumn("D-COVER-K", "D Cover K", "DCoverKBe", "DCoverKDe", "DCoverKRe"),
-            new LinnenReportPreviewColumn("K-CLOTH", "K Cloth", "KClothBe", "KClothDe", "KClothRe"),
-            new LinnenReportPreviewColumn("D-CLOTH", "D Cloth", "DClothBe", "DClothDe", "DClothRe")
-        };
+            new LinnenReportPreviewColumn("D-COVER-K", "D Cover K", "DCoverKBe", "DCoverKDe", "DCoverKRe")
+        }
+        .Where(x => activeCodes.Contains(x.Code))
+        .ToList();
 
         var code = (linenCode ?? string.Empty).Trim().ToUpperInvariant();
         if (string.IsNullOrWhiteSpace(code))

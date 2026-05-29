@@ -9,7 +9,7 @@ public static class LinnenNoteDailyQuestPdfReport
     private const string DefaultPdfFontFamily = "VNI-Times";
     private const float PantryColumnWidth = 42;
     private const float ShiftColumnWidth = 18;
-    private const float LinenValueColumnWidth = 20;
+    private const float LinenValueColumnWidth = 24;
 
     public static byte[] BuildPdf(LinnenNoteDailyPdfReport report)
     {
@@ -121,7 +121,7 @@ public static class LinnenNoteDailyQuestPdfReport
                         table.Cell()
                             .RowSpan((uint)groupRows.Count)
                             .Element(x => BodyCell(x, Colors.White))
-                            .Text(row.PentryName);
+                            .Text(x => x.Span(row.PentryName).FontSize(9f));
                     }
 
                     table.Cell()
@@ -132,9 +132,9 @@ public static class LinnenNoteDailyQuestPdfReport
 
                     foreach (var column in columns)
                     {
-                        table.Cell().Element(x => BodyCell(x, Colors.White)).AlignRight().Text(FormatValue(GetValue(row, column.BeField)));
-                        table.Cell().Element(x => BodyCell(x, Colors.White)).AlignRight().Text(FormatValue(GetValue(row, column.ReField)));
-                        table.Cell().Element(x => BodyCell(x, Colors.White)).AlignRight().Text(FormatValue(GetValue(row, column.DeField)));
+                        table.Cell().Element(x => BodyCell(x, Colors.White)).AlignCenter().Text(x => x.Span(FormatValue(GetValue(row, column.BeField))).FontSize(8.5f));
+                        table.Cell().Element(x => BodyCell(x, Colors.White)).AlignCenter().Text(x => x.Span(FormatValue(GetValue(row, column.ReField))).FontSize(8.5f));
+                        table.Cell().Element(x => BodyCell(x, Colors.White)).AlignCenter().Text(x => x.Span(FormatValue(GetValue(row, column.DeField))).FontSize(8.5f));
                     }
                 }
             }
@@ -156,7 +156,9 @@ public static class LinnenNoteDailyQuestPdfReport
             .Border(1)
             .BorderColor("#555555")
             .Background(backgroundColor)
+            .MinHeight(22)
             .PaddingVertical(1)
+            .AlignMiddle()
             .PaddingHorizontal(2);
     }
 
