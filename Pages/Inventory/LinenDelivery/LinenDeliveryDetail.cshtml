@@ -417,7 +417,7 @@
                                 <col style="min-width: 160px;" />
                                 <col style="width: 70px;" />
                                 <col style="width: 70px;" />
-                                <col style="width: 50px;" />
+                                <col style="width: 80px;" />
                                 <col style="width: 110px;" />
                                 <col style="width: 120px;" />
                                 <col style="min-width: 180px;" />
@@ -429,7 +429,7 @@
                                     <th>Linen</th>
                                     <th style="width: 70px;">Express</th>
                                     <th style="width: 70px;">Child</th>
-                                    <th style="width: 50px;">Qty</th>
+                                    <th style="width: 80px;">Qty</th>
                                     <th style="width: 110px;">Price</th>
                                     <th style="width: 120px;">Amount</th>
                                     <th>Note</th>
@@ -495,7 +495,7 @@
                                             </td>
                                             <td class="text-center"><input type="checkbox" class="ld-express" @(row.Express ? "checked" : null) @(isView ? "disabled" : null) /></td>
                                             <td class="text-center"><input type="checkbox" class="ld-child" @(row.IsChild ? "checked" : null) @(isView ? "disabled" : null) /></td>
-                                            <td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-right ld-quantity" value="@row.Quantity.ToString("0.##")" @(isView ? "readonly" : null) /></td>
+                                            <td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-right ld-quantity" value="@row.Quantity.ToString("0.00")" @(isView ? "readonly" : null) /></td>
                                             <td><input type="number" step="0.01" class="form-control form-control-sm text-right ld-price" value="@row.Price.ToString("0.##")" @(isView ? "readonly" : null) /></td>
                                             <td><input type="number" step="0.01" class="form-control form-control-sm text-right ld-amount" value="@row.Amount.ToString("0.##")" readonly /></td>
                                             <td class="linen-delivery-note-cell"><input type="text" maxlength="100" class="form-control form-control-sm ld-note vni-font" value="@row.Note" @(isView ? "readonly" : null) /></td>

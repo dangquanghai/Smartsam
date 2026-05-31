@@ -503,7 +503,7 @@
             <td><select class="form-control form-control-sm ld-linen vni-font">${linens}</select></td>
             <td class="text-center"><input type="checkbox" class="ld-express" /></td>
             <td class="text-center"><input type="checkbox" class="ld-child" /></td>
-            <td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-right ld-quantity" value="0" /></td>
+            <td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-right ld-quantity" value="0.00" /></td>
             <td><input type="number" step="0.01" class="form-control form-control-sm text-right ld-price" value="0" /></td>
             <td><input type="number" step="0.01" class="form-control form-control-sm text-right ld-amount" value="0" readonly /></td>
             <td class="linen-delivery-note-cell"><input type="text" maxlength="100" class="form-control form-control-sm ld-note vni-font" value="" /></td>

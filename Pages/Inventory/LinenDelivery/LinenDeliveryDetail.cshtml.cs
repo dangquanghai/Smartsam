@@ -358,7 +358,7 @@ public class LinenDeliveryDetailModel : BasePageModel
                     linenCode = x.LinenCode,
                     isChild = x.IsChild,
                     express = x.Express,
-                    quantity = x.Quantity.ToString("0.##"),
+                    quantity = x.Quantity.ToString("0.00"),
                     price = x.Price.ToString("0.##"),
                     amount = x.Amount.ToString("0.##"),
                     note = x.Note
