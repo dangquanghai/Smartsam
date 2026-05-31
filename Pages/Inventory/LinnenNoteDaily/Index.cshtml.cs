@@ -65,9 +65,9 @@ public class IndexModel : BasePageModel
                 actions = new
                 {
                     canAccess = effectivePerms.Contains(PermissionView) || effectivePerms.Contains(PermissionUpdate),
-                    accessMode = effectivePerms.Contains(PermissionUpdate) ? "edit" : "view",
+                    accessMode = effectivePerms.Contains(PermissionUpdate) && !row.IsClose ? "edit" : "view",
                     canView = effectivePerms.Contains(PermissionView) || effectivePerms.Contains(PermissionUpdate),
-                    canEdit = effectivePerms.Contains(PermissionUpdate)
+                    canEdit = effectivePerms.Contains(PermissionUpdate) && !row.IsClose
                 }
             });
 
