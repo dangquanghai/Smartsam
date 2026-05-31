@@ -364,7 +364,7 @@ public class LinenDeliveryDetailModel : BasePageModel
         }
     }
 
-    public JsonResult OnPostCreateBill(int deliveryId, DateTime? billDate)
+    public JsonResult OnPostCreateBill(int deliveryId, DateTime? billDate, string? detailsJson)
     {
         PagePerm = GetUserPermissions();
         if (!PagePerm.HasPermission(PermissionUpdate))
@@ -403,6 +403,19 @@ public class LinenDeliveryDetailModel : BasePageModel
                 return new JsonResult(new { success = false, message = "Delivery not found." });
             }
 
+            Header = header;
+            Header.DeliveryID = deliveryId;
+            DetailsJson = string.IsNullOrWhiteSpace(detailsJson) ? "[]" : detailsJson;
+            Details = ParseDetailsJson();
+
+            var detailError = ValidateDetailRowsForSave();
+            if (!string.IsNullOrEmpty(detailError))
+            {
+                trans.Rollback();
+                Response.StatusCode = StatusCodes.Status400BadRequest;
+                return new JsonResult(new { success = false, message = detailError });
+            }
+
             if (!CanHeaderCreateBill(header))
             {
                 trans.Rollback();
@@ -432,6 +445,8 @@ public class LinenDeliveryDetailModel : BasePageModel
                     })
                 });
             }
+
+            SaveDetailRows(conn, trans);
 
             using (var createCmd = new SqlCommand("exec LN_CreateBill @DeliveryID, @BillDate, @OperatorID", conn, trans))
             {
@@ -1271,6 +1286,24 @@ VALUES
                 break;
             }
         }
+    }
+
+    private string ValidateDetailRowsForSave()
+    {
+        foreach (var row in Details)
+        {
+            if (!row.LocationID.HasValue || row.LocationID.Value <= 0)
+            {
+                return "Location is required for every detail row.";
+            }
+
+            if (!row.LinnenID.HasValue || row.LinnenID.Value <= 0)
+            {
+                return "Linen is required for every detail row.";
+            }
+        }
+
+        return string.Empty;
     }
 
     private List<LinenDeliveryDetailRow> ParseDetailsJson()

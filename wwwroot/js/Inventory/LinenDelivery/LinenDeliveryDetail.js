@@ -170,11 +170,6 @@
                 return;
             }
 
-            if (pageDirty) {
-                alert('Please save delivery before creating bill.');
-                return;
-            }
-
             openBillModal();
         });
 
@@ -423,6 +418,10 @@
     function createBill() {
         clearBillError();
 
+        if (!validateMainForm()) {
+            return;
+        }
+
         const billDate = $('#linenDeliveryBillDate').val();
         if (!billDate) {
             showBillError('Bill date is required.');
@@ -435,7 +434,8 @@
             type: 'POST',
             data: {
                 deliveryId: window.linenDeliveryPage?.deliveryId || 0,
-                billDate: billDate
+                billDate: billDate,
+                detailsJson: $('#DetailsJson').val() || JSON.stringify(collectDetails())
             },
             headers: {
                 RequestVerificationToken: $('input[name="__RequestVerificationToken"]').first().val() || ''
@@ -446,6 +446,7 @@
                     return;
                 }
 
+                pageDirty = false;
                 renderBillState(true, response.bills || []);
             },
             error: function (xhr) {
