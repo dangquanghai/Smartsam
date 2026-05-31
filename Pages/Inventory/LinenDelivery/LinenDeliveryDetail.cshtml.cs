@@ -31,6 +31,9 @@ public class LinenDeliveryDetailModel : BasePageModel
     [BindProperty]
     public string DetailsJson { get; set; } = "[]";
 
+    [BindProperty]
+    public string? RedirectUrl { get; set; }
+
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
     public bool CanSave { get; private set; }
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
@@ -196,6 +199,11 @@ public class LinenDeliveryDetailModel : BasePageModel
         }
 
         TempData["SuccessMessage"] = "Linen delivery saved.";
+        if (!string.IsNullOrWhiteSpace(RedirectUrl) && Url.IsLocalUrl(RedirectUrl))
+        {
+            return LocalRedirect(RedirectUrl);
+        }
+
         return RedirectToPage("./LinenDeliveryDetail", new { id = Header.DeliveryID, mode = "edit" });
     }
 

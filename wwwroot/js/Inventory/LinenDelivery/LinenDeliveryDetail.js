@@ -2,6 +2,8 @@
     'use strict';
 
     let pageDirty = false;
+    let allowUnload = false;
+    let pendingNavigationUrl = '';
     let activeLinenDeliveryReportObjectUrl = '';
 
     function validateMainForm() {
@@ -67,6 +69,8 @@
         bindBillEvents();
         bindPantryNoteViewEvents();
         bindDirtyTracking();
+        initCloseButton();
+        initUnsavedChangeGuard();
         initReportModal();
         initPantryNoteModal();
         refreshHeaderSections();
@@ -79,15 +83,18 @@
         $('#linenDeliveryDetailForm').off('submit').on('submit', function (e) {
             e.preventDefault();
             if (!validateMainForm()) {
+                resetRedirectFlags();
                 return;
             }
 
             if (shouldConfirmPantrySelection()) {
                 if (!window.confirm('Are you sure to select this Pantry Linen !')) {
+                    resetRedirectFlags();
                     return;
                 }
             }
 
+            allowUnload = true;
             pageDirty = false;
             $(this).off('submit').submit();
         });
@@ -162,6 +169,125 @@
 
                 pageDirty = true;
             });
+    }
+
+    function hasUnsavedChanges() {
+        if (window.linenDeliveryPage?.isView) {
+            return false;
+        }
+
+        return pageDirty;
+    }
+
+    function resetRedirectFlags() {
+        $('#RedirectUrl').val('');
+    }
+
+    function initCloseButton() {
+        $('#btnCloseLinenDeliveryDetail').off('click').on('click', function () {
+            const indexUrl = $(this).data('index-url') || '/Inventory/LinenDelivery';
+
+            if (!hasUnsavedChanges()) {
+                allowUnload = true;
+                window.location.href = indexUrl;
+                return;
+            }
+
+            openUnsavedDialog(indexUrl);
+        });
+    }
+
+    function isGuardedLink($link) {
+        const href = $link.attr('href') || '';
+        if (!href || href === '#' || href.startsWith('javascript:')) {
+            return false;
+        }
+
+        if (href.startsWith('mailto:') || href.startsWith('tel:')) {
+            return false;
+        }
+
+        if ($link.attr('target') === '_blank' || $link.attr('download')) {
+            return false;
+        }
+
+        if ($link.data('skip-unsaved-check') === true) {
+            return false;
+        }
+
+        return true;
+    }
+
+    function openUnsavedDialog(targetUrl) {
+        pendingNavigationUrl = targetUrl || '';
+        $('#linenDeliveryUnsavedModal').modal('show');
+    }
+
+    function navigateWithoutSaving(targetUrl) {
+        allowUnload = true;
+        $('#linenDeliveryUnsavedModal').modal('hide');
+        if (targetUrl) {
+            window.location.href = targetUrl;
+        }
+    }
+
+    function saveAndNavigate(targetUrl) {
+        resetRedirectFlags();
+        $('#RedirectUrl').val(targetUrl || '');
+        $('#linenDeliveryUnsavedModal').modal('hide');
+        $('#linenDeliveryDetailForm').trigger('submit');
+    }
+
+    function initUnsavedChangeGuard() {
+        if (window.linenDeliveryPage?.isView) {
+            return;
+        }
+
+        resetRedirectFlags();
+
+        $(document).off('click.linenDeliveryUnsaved', 'a[href]').on('click.linenDeliveryUnsaved', 'a[href]', function (ev) {
+            if (!hasUnsavedChanges()) {
+                return;
+            }
+
+            const $link = $(this);
+            if (!isGuardedLink($link)) {
+                return;
+            }
+
+            const href = $link.attr('href') || '';
+            if (href === window.location.pathname + window.location.search) {
+                return;
+            }
+
+            ev.preventDefault();
+            openUnsavedDialog(href);
+        });
+
+        window.addEventListener('beforeunload', function (ev) {
+            if (allowUnload || !hasUnsavedChanges()) {
+                return;
+            }
+
+            ev.preventDefault();
+            ev.returnValue = '';
+        });
+
+        $('#btnLinenDeliveryUnsavedSave').off('click').on('click', function () {
+            saveAndNavigate(pendingNavigationUrl);
+        });
+
+        $('#btnLinenDeliveryUnsavedDiscard').off('click').on('click', function () {
+            navigateWithoutSaving(pendingNavigationUrl);
+        });
+
+        $('#linenDeliveryUnsavedModal').off('shown.bs.modal').on('shown.bs.modal', function () {
+            $('#btnLinenDeliveryUnsavedCancel').trigger('focus');
+        });
+
+        $('#linenDeliveryUnsavedModal').off('hidden.bs.modal').on('hidden.bs.modal', function () {
+            pendingNavigationUrl = '';
+        });
     }
 
     function bindBillEvents() {
