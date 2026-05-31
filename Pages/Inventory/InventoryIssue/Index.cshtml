@@ -1,7 +1,7 @@
-﻿@page
-@model SmartSam.Pages.Inventory.InventoryReceived.IndexModel
+@page
+@model SmartSam.Pages.Inventory.InventoryIssue.IndexModel
 @{
-    ViewData["Title"] = "Item Received List";
+    ViewData["Title"] = "Item Issue List";
     var currentPage = Model.Filter.Page <= 0 ? 1 : Model.Filter.Page;
     var totalPages = Model.TotalPages <= 0 ? 1 : Model.TotalPages;
     var pageItems = new List<int?>();
@@ -24,9 +24,26 @@
     }) ?? "#";
 }
 
-<section class="content vni-font inventory-received-page">
+<section class="content vni-font inventory-Issue-page">
     <div class="container-fluid">
-        <form method="post" asp-page-handler="Delete" id="receiveDeleteForm">
+        @if (TempData["Message"] is string message && !string.IsNullOrWhiteSpace(message))
+        {
+            var messageType = (TempData["MessageType"] as string ?? "info").ToLowerInvariant();
+            var alertClass = messageType switch
+            {
+                "success" => "alert-success",
+                "warning" => "alert-warning",
+                "error" or "danger" => "alert-danger",
+                _ => "alert-info"
+            };
+            <div class="alert @alertClass alert-dismissible fade show" role="alert">
+                @message
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        }
+        <form method="post" asp-page-handler="Delete" id="IssueeleteForm">
             <input type="hidden" name="id" id="deleteFlowId" />
             <input type="hidden" name="Filter.FlowNo" value="@Model.Filter.FlowNo" />
             <input type="hidden" name="Filter.PONo" value="@Model.Filter.PONo" />
@@ -47,12 +64,12 @@
                             <input type="hidden" name="Page" value="1" />
                             <input type="hidden" name="PageSize" value="@Model.Filter.PageSize" />
                             <div class="form-group mb-2"><label>Doc No.</label><input asp-for="Filter.FlowNo" name="FlowNo" class="form-control form-control-sm vni-font" /></div>
-                            <div class="form-group mb-2"><label>PO No.</label><input asp-for="Filter.PONo" name="PONo" class="form-control form-control-sm vni-font" /></div>
+                            <div class="form-group mb-2"><label>According</label><input asp-for="Filter.PONo" name="PONo" class="form-control form-control-sm vni-font" /></div>
                             <div class="form-group mb-2"><label>From</label><input asp-for="Filter.FromDate" name="FromDate" type="date" class="form-control form-control-sm" /></div>
                             <div class="form-group mb-2"><label>To</label><input asp-for="Filter.ToDate" name="ToDate" type="date" class="form-control form-control-sm" /></div>
-                            <div class="form-group mb-2"><label>Rec. Type</label><select asp-for="Filter.RecTypeId" name="RecTypeId" asp-items="Model.ReceiveTypes" class="form-control form-control-sm select2 vni-font"></select></div>
+                            <div class="form-group mb-2"><label>Issue Type</label><select asp-for="Filter.RecTypeId" name="RecTypeId" asp-items="Model.IssueTypes" class="form-control form-control-sm select2 vni-font"></select></div>
                             <div class="form-group mb-2"><label>Status</label><select asp-for="Filter.StatusId" name="StatusId" asp-items="Model.Statuses" class="form-control form-control-sm select2 vni-font"></select></div>
-                            <div class="form-group mb-2"><label>To St House</label><select asp-for="Filter.ToStoreId" name="ToStoreId" asp-items="Model.Stores" class="form-control form-control-sm select2 vni-font"></select></div>
+                            <div class="form-group mb-2"><label>Issue as St.House</label><select asp-for="Filter.ToStoreId" name="ToStoreId" asp-items="Model.Stores" class="form-control form-control-sm select2 vni-font"></select></div>
                             <button type="submit" class="btn btn-primary btn-block btn-sm border mb-2"><i class="fas fa-search"></i> Search</button>
                         </form>
                     </div>
@@ -63,7 +80,7 @@
                 <div class="card card-primary">
                     <div class="card-header prq-table-header">
                         <div class="prq-table-header-left">
-                            <h3 class="card-title">Item Received List</h3>
+                            <h3 class="card-title">Item Issue List</h3>
                             <span class="badge badge-light ml-2">@Model.TotalRecords records</span>
                         </div>
                         <div class="prq-table-header-right app-paging-white">
@@ -79,8 +96,8 @@
                                     }
                                 </div>
                                 <div class="prq-page-size-form d-inline-flex mr-2">
-                                    <label class="mb-0 prq-page-size-label" for="receivePageSize">Show</label>
-                                    <select id="receivePageSize" class="form-control form-control-sm prq-page-size-select">
+                                    <label class="mb-0 prq-page-size-label" for="IssuePageSize">Show</label>
+                                    <select id="IssuePageSize" class="form-control form-control-sm prq-page-size-select">
                                         @foreach (var pageSizeOption in Model.PageSizeOptions)
                                         {
                                             <option value="@pageSizeOption" selected="@(Model.Filter.PageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
@@ -113,34 +130,34 @@
                     </div>
                     <div class="card-body p-0">
                         <div class="table-responsive prq-table-wrap">
-                        <table class="table table-hover table-bordered mb-0 text-nowrap prq-table" id="receiveTable">
+                        <table class="table table-hover table-bordered mb-0 text-nowrap prq-table" id="IssueTable">
                             <thead class="thead-light">
                                 <tr>
                                     <th style="width:32px;"></th>
                                     <th style="width:150px;">Doc No.</th>
-                                    <th style="width:120px;">Received Date</th>
+                                    <th style="width:120px;">Issue Date</th>
                                     <th>Status</th>
                                     <th style="width:210px;">StoreName</th>
                                     <th style="width:140px;">PO.No</th>
-                                    <th style="width:260px;">Rec. Type</th>
+                                    <th style="width:260px;">Issue Type</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @if (Model.Rows.Count == 0)
                                 {
-                                    <tr><td colspan="7" class="text-center text-muted py-3">No item received found.</td></tr>
+                                    <tr><td colspan="7" class="text-center text-muted py-3">No item Issue found.</td></tr>
                                 }
                                 else
                                 {
                                     foreach (var row in Model.Rows)
                                     {
-                                        <tr class="receive-row" data-flowid="@row.FlowID" data-statusid="@row.StatusID" data-view-url="@Url.Page("./InventoryReceivedDetail", new { id = row.FlowID, mode = "view" })" data-edit-url="@Url.Page("./InventoryReceivedDetail", new { id = row.FlowID, mode = "edit" })" data-approved-url="@Url.Page("./InventoryReceivedDetail", new { id = row.FlowID, mode = "approved" })">
-                                            <td><input type="radio" class="receive-selector" name="selectedInventoryReceived" aria-label="Select row" /></td>
+                                        <tr class="Issue-row" data-flowid="@row.FlowID" data-statusid="@row.StatusID" data-view-url="@Url.Page("./InventoryIssueDetail", new { id = row.FlowID, mode = "view" })" data-edit-url="@Url.Page("./InventoryIssueDetail", new { id = row.FlowID, mode = "edit" })" data-approved-url="@Url.Page("./InventoryIssueDetail", new { id = row.FlowID, mode = "approved" })">
+                                            <td><input type="radio" class="Issue-selector" name="selectedInventoryIssue" aria-label="Select row" /></td>
                                             <td>
                                                 @if (Model.PagePerm.HasPermission(2) || Model.PagePerm.HasPermission(4) || Model.PagePerm.HasPermission(5))
                                                 {
                                                     var accessMode = Model.PagePerm.HasPermission(4) ? "edit" : (Model.PagePerm.HasPermission(5) ? "approved" : "view");
-                                                    <a href="@Url.Page("./InventoryReceivedDetail", new { id = row.FlowID, mode = accessMode })" class="prq-row-link prq-row-link-request-no text-bold">@row.FlowNo</a>
+                                                    <a href="@Url.Page("./InventoryIssueDetail", new { id = row.FlowID, mode = accessMode })" class="prq-row-link prq-row-link-request-no text-bold">@row.FlowNo</a>
                                                 }
                                                 else
                                                 {
@@ -150,8 +167,7 @@
                                             <td>@row.FlowDate.ToString("dd/MM/yyyy")</td>
                                             <td>@row.StatusName</td>
                                             <td>@row.StoreName</td>
-                                            <td>@row.PONo</td>
-                                            <td>@row.SupplierName</td>
+                                            <td>@row.PONo</td><td>@row.SupplierName</td>
                                         </tr>
                                     }
                                 }
@@ -165,16 +181,17 @@
                     <div class="card-footer p-2 text-center module-action-bar prq-action-bar">
                         @if (Model.PagePerm.HasPermission(3))
                         {
-                            <a asp-page="./InventoryReceivedDetail" asp-route-mode="add" class="btn btn-sm btn-action-add border mx-1 my-1"><i class="fas fa-plus"></i> Add</a>
+                            <a asp-page="./InventoryIssueDetail" asp-route-mode="add" class="btn btn-sm btn-action-add border mx-1 my-1"><i class="fas fa-plus"></i> Add</a>
                         }
                         @if (Model.PagePerm.HasPermission(4))
                         {
-                            <button type="button" id="btnDeleteReceived" class="btn btn-sm btn-danger border mx-1 my-1" disabled><i class="fas fa-trash"></i> Delete</button>
+                            <button type="button" id="btnDeleteIssue" class="btn btn-sm btn-danger border mx-1 my-1" disabled><i class="fas fa-trash"></i> Delete</button>
                         }
                         @if (Model.PagePerm.HasPermission(2))
                         {
-                            <button type="button" id="btnPrintReceived" class="btn btn-sm btn-info border mx-1 my-1" disabled><i class="fas fa-print"></i> Print</button>
-                            <button type="button" class="btn btn-sm btn-action-close border mx-1 my-1" data-toggle="modal" data-target="#receiveSearchDetailModal"><i class="fas fa-search-plus"></i> Search Detail</button>
+                            <button type="button" id="btnExportIssue" class="btn btn-sm btn-primary border mx-1 my-1" disabled><i class="fas fa-file-pdf"></i> Export</button>
+                            <button type="button" id="btnPrintIssue" class="btn btn-sm btn-info border mx-1 my-1" disabled><i class="fas fa-print"></i> Print</button>
+                            <button type="button" class="btn btn-sm btn-action-close border mx-1 my-1" data-toggle="modal" data-target="#IssueSearchDetailModal"><i class="fas fa-search-plus"></i> Search Detail</button>
                         }
                     </div>
                 </div>
@@ -183,48 +200,36 @@
     </div>
 </section>
 
-<div class="modal fade vni-font" id="receiveReportPreviewModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog inventory-received-report-preview-modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header py-2"><h5 class="modal-title">Print Preview</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
-            <div class="modal-body p-0 inventory-received-report-preview-body"><iframe id="receiveReportPreviewFrame" class="inventory-received-report-preview-frame" title="Inventory Received Report Preview"></iframe></div>
-            <div class="modal-footer py-2">
-                <button type="button" id="btnReceiveReportPrint" class="btn btn-sm btn-info border"><i class="fas fa-print"></i> Print</button>
-                <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Close</button>
-            </div>
-        </div>
-    </div>
-</div>
-<div class="modal fade vni-font" id="receiveSearchDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-xl" role="document">
+<div class="modal fade vni-font" id="IssueSearchDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" style="max-width: 96vw; width: 96vw;" role="document">
         <div class="modal-content">
             <div class="modal-header py-2"><h5 class="modal-title">Search Detail</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
             <div class="modal-body">
                 <div class="form-row align-items-end mb-2">
-                    <div class="col-md-5"><label>Item Code / Item Name / Doc No.</label><input id="receiveDetailKeyword" class="form-control form-control-sm vni-font" /></div>
-                    <div class="col-md-1"><button id="btnReceiveDetailSearch" type="button" class="btn btn-sm btn-primary btn-block"><i class="fas fa-search"></i> Search</button></div>
+                    <div class="col-md-5"><label>Item Code / Item Name / Doc No.</label><input id="IssueetailKeyword" class="form-control form-control-sm vni-font" /></div>
+                    <div class="col-md-1"><button id="btnIssueetailSearch" type="button" class="btn btn-sm btn-primary btn-block"><i class="fas fa-search"></i> Search</button></div>
                 </div>
-                <div class="table-responsive receive-detail-table-wrap">
-                    <table class="table table-sm table-bordered table-hover mb-1 text-nowrap receive-detail-table">
+                <div class="table-responsive Issue-detail-table-wrap">
+                    <table class="table table-sm table-bordered table-hover mb-1 text-nowrap Issue-detail-table">
                         <thead class="thead-light"><tr><th>Item Code</th><th>Item Name</th><th>Doc No.</th><th>Date</th><th class="text-right">Act. Qty</th><th class="text-right">Price</th><th class="text-right">Amount</th></tr></thead>
-                        <tbody id="receiveDetailRows"><tr><td colspan="7" class="text-center text-muted">Enter keyword then search.</td></tr></tbody>
+                        <tbody id="IssueetailRows"><tr><td colspan="7" class="text-center text-muted">Enter keyword then search.</td></tr></tbody>
                     </table>
                 </div>
                 <div class="prq-table-header-right mt-2">
                     <nav aria-label="Search detail paging">
                         <div class="d-inline-block mr-2 prq-pagination-info">
-                            <small id="receiveDetailPagingInfo">No records</small>
+                            <small id="IssueetailPagingInfo">No records</small>
                         </div>
                         <div class="prq-page-size-form d-inline-flex mr-2">
-                            <label class="mb-0 prq-page-size-label" for="receiveDetailPageSize">Show</label>
-                            <select id="receiveDetailPageSize" class="form-control form-control-sm prq-page-size-select">
+                            <label class="mb-0 prq-page-size-label" for="IssueetailPageSize">Show</label>
+                            <select id="IssueetailPageSize" class="form-control form-control-sm prq-page-size-select">
                                 @foreach (var pageSizeOption in Model.PageSizeOptions)
                                 {
                                     <option value="@pageSizeOption" selected="@(pageSizeOption == 10 ? "selected" : null)">@pageSizeOption</option>
                                 }
                             </select>
                         </div>
-                        <ul class="pagination pagination-sm mb-0 d-inline-flex" id="receiveDetailPagination"></ul>
+                        <ul class="pagination pagination-sm mb-0 d-inline-flex" id="IssueetailPagination"></ul>
                     </nav>
                 </div>
             </div>
@@ -233,16 +238,35 @@
     </div>
 </div>
 
-<div class="modal fade vni-font" id="receiveDeleteConfirmModal" tabindex="-1" role="dialog" aria-hidden="true">
+<div class="modal fade vni-font" id="IssueReportPreviewModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog inventory-issue-report-preview-modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="IssueReportPreviewModalTitle">Issue Report Preview</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body p-0">
+                <iframe id="IssueReportPreviewFrame" class="inventory-issue-report-preview-frame" title="Inventory Issue Report Preview"></iframe>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" id="btnIssueReportOpen" class="btn btn-sm btn-primary border"><i class="fas fa-file-pdf"></i> Export</button>
+                <button type="button" id="btnIssueReportPrint" class="btn btn-sm btn-info border"><i class="fas fa-print"></i> Print</button>
+                <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade vni-font" id="IssueeleteConfirmModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content border-danger">
             <div class="modal-header bg-danger py-2">
                 <h5 class="modal-title text-white">Confirm Delete</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
-            <div class="modal-body" id="receiveDeleteConfirmText">Do you want to delete this Doc no.?</div>
+            <div class="modal-body" id="IssueeleteConfirmText">Do you want to delete this Doc no.?</div>
             <div class="modal-footer py-2">
-                <button type="button" id="btnConfirmDeleteReceived" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i> Delete</button>
+                <button type="button" id="btnConfirmDeleteIssue" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i> Delete</button>
                 <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Cancel</button>
             </div>
         </div>
@@ -253,38 +277,42 @@
     <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Purchasing/PurchaseRequisition/index.css" asp-append-version="true" />
     <style>
-        #receiveTable tbody tr.receive-row {
+        #IssueTable tbody tr.Issue-row {
             cursor: pointer;
         }
-        body.inventory-received-search-modal-open .select2-container { z-index: 1040 !important; }
-        #receiveSearchDetailModal { z-index: 2050; }
-        #receiveSearchDetailModal .modal-dialog { z-index: 2051; }
-        #receiveSearchDetailModal .modal-content { z-index: 2052; }
-        #receiveSearchDetailModal .select2-container { z-index: 2060 !important; }
-        #receiveSearchDetailModal .select2-dropdown { z-index: 2061 !important; }
-        #receiveReportPreviewModal { z-index: 2050; }
-        #receiveReportPreviewModal .modal-dialog { z-index: 2051; }
-        #receiveReportPreviewModal .modal-content { z-index: 2052; }
-        .inventory-received-report-preview-modal-dialog { width: 100vw; max-width: 100vw; height: 100vh; margin: 0; }
-        .inventory-received-report-preview-modal-dialog .modal-content { height: 100vh; border-radius: 0; display: flex; flex-direction: column; }
-        .inventory-received-report-preview-body { flex: 1 1 auto; overflow: auto; min-height: 0; }
-        .inventory-received-report-preview-frame { display: block; width: 100%; height: 100%; min-height: calc(100vh - 106px); border: 0; background: #fff; }
-        #receiveDeleteConfirmModal { z-index: 2050; }
-        #receiveDeleteConfirmModal .modal-dialog { z-index: 2051; }
-        #receiveDeleteConfirmModal .modal-content { z-index: 2052; }
-        .receive-detail-table-wrap { overflow-x: auto; }
-        .receive-detail-table { min-width: 1100px; }
-        .receive-detail-table th,
-        .receive-detail-table td { white-space: nowrap; }
+        body.inventory-Issue-search-modal-open .select2-container { z-index: 1040 !important; }
+        #IssueSearchDetailModal { z-index: 2050; }
+        #IssueSearchDetailModal .modal-dialog { z-index: 2051; }
+        #IssueSearchDetailModal .modal-content { z-index: 2052; }
+        #IssueSearchDetailModal .select2-container { z-index: 2060 !important; }
+        #IssueSearchDetailModal .select2-dropdown { z-index: 2061 !important; }
+        #IssueeleteConfirmModal { z-index: 2050; }
+        #IssueeleteConfirmModal .modal-dialog { z-index: 2051; }
+        #IssueeleteConfirmModal .modal-content { z-index: 2052; }
+        #IssueReportPreviewModal { z-index: 2050; }
+        #IssueReportPreviewModal .modal-dialog { z-index: 2051; }
+        #IssueReportPreviewModal .modal-content { z-index: 2052; }
+        .inventory-issue-report-preview-modal-dialog { width: 100vw; max-width: 100vw; height: 100vh; margin: 0; }
+        .inventory-issue-report-preview-modal-dialog .modal-content { height: 100vh; border-radius: 0; }
+        .inventory-issue-report-preview-frame { display: block; width: 100%; height: calc(100vh - 106px); border: 0; }
+        .Issue-detail-table-wrap { overflow-x: auto; }
+        .Issue-detail-table { min-width: 1100px; }
+        .Issue-detail-table th,
+        .Issue-detail-table td { white-space: nowrap; }
     </style>
 }
 
 @section Scripts {
     <script>
         (function () {
-            const $searchDetailModal = $('#receiveSearchDetailModal');
-            const $deleteConfirmModal = $('#receiveDeleteConfirmModal');
-            let receiveDetailState = { page: 1, pageSize: 10, totalPages: 1, totalRecords: 0, keyword: '' };
+            const $searchDetailModal = $('#IssueSearchDetailModal');
+            const $deleteConfirmModal = $('#IssueeleteConfirmModal');
+            const $reportPreviewModal = $('#IssueReportPreviewModal');
+            let selectedReportUrl = '';
+            let selectedReportPreviewUrl = '';
+            let issueReportPreviewMode = 'export';
+            const issueReportPageUrl = '@Url.Page("./InventoryIssueDetail")';
+            let IssueetailState = { page: 1, pageSize: 10, totalPages: 1, totalRecords: 0, keyword: '' };
 
             if ($.fn.select2) {
                 $('select').select2({ width: '100%' });
@@ -299,7 +327,7 @@
                         $select.select2('destroy');
                     }
                 });
-                $('body').addClass('inventory-received-search-modal-open');
+                $('body').addClass('inventory-Issue-search-modal-open');
             }
 
             function initBackgroundSelect2() {
@@ -310,7 +338,7 @@
                         $select.select2({ width: '100%' });
                     }
                 });
-                $('body').removeClass('inventory-received-search-modal-open');
+                $('body').removeClass('inventory-Issue-search-modal-open');
             }
 
             function buildPagerItems(currentPage, totalPages) {
@@ -336,28 +364,28 @@
                 return items;
             }
 
-            function renderReceiveDetailPagination() {
-                const start = receiveDetailState.totalRecords === 0 ? 0 : ((receiveDetailState.page - 1) * receiveDetailState.pageSize) + 1;
-                const end = receiveDetailState.totalRecords === 0 ? 0 : Math.min(receiveDetailState.page * receiveDetailState.pageSize, receiveDetailState.totalRecords);
-                $('#receiveDetailPagingInfo').text(receiveDetailState.totalRecords === 0
+            function renderIssueetailPagination() {
+                const start = IssueetailState.totalRecords === 0 ? 0 : ((IssueetailState.page - 1) * IssueetailState.pageSize) + 1;
+                const end = IssueetailState.totalRecords === 0 ? 0 : Math.min(IssueetailState.page * IssueetailState.pageSize, IssueetailState.totalRecords);
+                $('#IssueetailPagingInfo').text(IssueetailState.totalRecords === 0
                     ? 'No records'
-                    : `Showing ${start} to ${end} of ${receiveDetailState.totalRecords} entries`);
+                    : `Showing ${start} to ${end} of ${IssueetailState.totalRecords} entries`);
 
-                const $pagination = $('#receiveDetailPagination');
+                const $pagination = $('#IssueetailPagination');
                 $pagination.empty();
-                buildPagerItems(receiveDetailState.page, receiveDetailState.totalPages).forEach(item => {
+                buildPagerItems(IssueetailState.page, IssueetailState.totalPages).forEach(item => {
                     const disabledClass = item.disabled ? ' disabled' : '';
                     const activeClass = item.active ? ' active' : '';
                     const href = item.disabled || item.page === null ? '#' : `#page-${item.page}`;
                     if (item.page === null) {
                         $pagination.append('<li class="page-item disabled"><span class="page-link">...</span></li>');
                     } else {
-                        $pagination.append(`<li class="page-item${disabledClass}${activeClass}"><a class="page-link prq-pager-link receive-detail-page-link" data-page="${item.page}" href="${href}">${item.text}</a></li>`);
+                        $pagination.append(`<li class="page-item${disabledClass}${activeClass}"><a class="page-link prq-pager-link Issue-detail-page-link" data-page="${item.page}" href="${href}">${item.text}</a></li>`);
                     }
                 });
             }
 
-            $('#receivePageSize').on('change', function () {
+            $('#IssuePageSize').on('change', function () {
                 const url = new URL(window.location.href);
                 url.searchParams.set('PageSize', this.value);
                 url.searchParams.set('Page', '1');
@@ -365,27 +393,30 @@
             });
 
             function getSelectedRow() {
-                const row = document.querySelector('#receiveTable tbody tr.receive-row input.receive-selector:checked');
-                return row ? row.closest('tr.receive-row') : null;
+                const row = document.querySelector('#IssueTable tbody tr.Issue-row input.Issue-selector:checked');
+                return row ? row.closest('tr.Issue-row') : null;
             }
 
             function syncDeleteButtonState() {
                 const row = getSelectedRow();
                 if (!row) {
-                    $('#btnDeleteReceived').prop('disabled', true);
-                    $('#btnPrintReceived').prop('disabled', true);
+                    $('#btnDeleteIssue').prop('disabled', true);
+                    $('#btnExportIssue').prop('disabled', true);
+                    $('#btnPrintIssue').prop('disabled', true);
                     return;
                 }
                 const statusId = Number(row.getAttribute('data-statusid') || 0);
-                $('#btnDeleteReceived').prop('disabled', statusId > 1);
-                $('#btnPrintReceived').prop('disabled', false);
+                $('#btnDeleteIssue').prop('disabled', statusId > 1);
+                const flowId = Number(row.getAttribute('data-flowid') || 0);
+                $('#btnExportIssue').prop('disabled', !(flowId > 0));
+                $('#btnPrintIssue').prop('disabled', !(flowId > 0));
             }
 
-            $(document).on('click', '#receiveTable tbody tr.receive-row', function (e) {
+            $(document).on('click', '#IssueTable tbody tr.Issue-row', function (e) {
                 if (!$(e.target).is('a')) {
-                    const $radio = $(this).find('input.receive-selector');
+                    const $radio = $(this).find('input.Issue-selector');
                     const wasChecked = $radio.prop('checked');
-                    $('input.receive-selector').prop('checked', false);
+                    $('input.Issue-selector').prop('checked', false);
                     if (!wasChecked) {
                         $radio.prop('checked', true);
                     }
@@ -393,7 +424,7 @@
                 }
             });
 
-            $('#btnDeleteReceived').on('click', function () {
+            $('#btnDeleteIssue').on('click', function () {
                 const row = getSelectedRow();
                 if (!row) {
                     return;
@@ -402,26 +433,50 @@
                 const flowId = row.getAttribute('data-flowid');
                 const flowNo = row.querySelector('td:nth-child(2) a, td:nth-child(2)')?.textContent?.trim() || '';
                 $('#deleteFlowId').val(flowId);
-                $('#receiveDeleteConfirmText').text(`Do you want to delete this Doc no. '${flowNo}' ?`);
-                $('#receiveDeleteConfirmModal').modal('show');
+                $('#IssueeleteConfirmText').text(`Do you want to delete this Doc no. '${flowNo}' ?`);
+                $('#IssueeleteConfirmModal').modal('show');
             });
 
-            $('#btnConfirmDeleteReceived').on('click', function () {
-                $('#receiveDeleteConfirmModal').modal('hide');
-                $('#receiveDeleteForm').trigger('submit');
+            $('#btnConfirmDeleteIssue').on('click', function () {
+                $('#IssueeleteConfirmModal').modal('hide');
+                $('#IssueeleteForm').trigger('submit');
             });
 
-            $('#btnPrintReceived').on('click', function () {
+            $('#btnExportIssue').on('click', function () {
                 const row = getSelectedRow();
                 if (!row) return;
-                const flowId = row.getAttribute('data-flowid');
-                if (!flowId) return;
-                $('#receiveReportPreviewFrame').attr('src', '/Inventory/InventoryReceived/InventoryReceivedDetail?id=' + flowId + '&handler=Report&inline=true');
-                $('#receiveReportPreviewModal').modal('show');
+                const flowId = Number(row.getAttribute('data-flowid') || 0);
+                if (!(flowId > 0)) return;
+                selectedReportUrl = `${issueReportPageUrl}?id=${flowId}&handler=Report`;
+                selectedReportPreviewUrl = `${issueReportPageUrl}?id=${flowId}&handler=Report&inline=true`;
+                issueReportPreviewMode = 'export';
+                $('#IssueReportPreviewModalTitle').text('Issue Report Preview');
+                $('#btnIssueReportOpen').removeClass('d-none');
+                $('#IssueReportPreviewFrame').attr('src', selectedReportPreviewUrl);
+                $('#IssueReportPreviewModal').modal('show');
             });
 
-            $('#btnReceiveReportPrint').on('click', function () {
-                const frame = document.getElementById('receiveReportPreviewFrame');
+            $('#btnPrintIssue').on('click', function () {
+                const row = getSelectedRow();
+                if (!row) return;
+                const flowId = Number(row.getAttribute('data-flowid') || 0);
+                if (!(flowId > 0)) return;
+                selectedReportUrl = `${issueReportPageUrl}?id=${flowId}&handler=Report`;
+                selectedReportPreviewUrl = `${issueReportPageUrl}?id=${flowId}&handler=Report&inline=true`;
+                issueReportPreviewMode = 'print';
+                $('#IssueReportPreviewModalTitle').text('Print Preview');
+                $('#btnIssueReportOpen').addClass('d-none');
+                $('#IssueReportPreviewFrame').attr('src', selectedReportPreviewUrl);
+                $('#IssueReportPreviewModal').modal('show');
+            });
+
+            $('#btnIssueReportOpen').on('click', function () {
+                if (!selectedReportUrl) return;
+                window.open(selectedReportUrl, '_blank');
+            });
+
+            $('#btnIssueReportPrint').on('click', function () {
+                const frame = document.getElementById('IssueReportPreviewFrame');
                 if (!frame || !frame.contentWindow) return;
                 frame.contentWindow.focus();
                 frame.contentWindow.print();
@@ -430,44 +485,44 @@
             syncDeleteButtonState();
 
             async function loadDetail(page) {
-                receiveDetailState.keyword = $('#receiveDetailKeyword').val() || '';
-                receiveDetailState.page = page || 1;
-                receiveDetailState.pageSize = Number($('#receiveDetailPageSize').val() || 10);
-                const url = `?handler=SearchDetail&keyword=${encodeURIComponent(receiveDetailState.keyword)}&pageNumber=${receiveDetailState.page}&pageSize=${receiveDetailState.pageSize}`;
+                IssueetailState.keyword = $('#IssueetailKeyword').val() || '';
+                IssueetailState.page = page || 1;
+                IssueetailState.pageSize = Number($('#IssueetailPageSize').val() || 10);
+                const url = `?handler=SearchDetail&keyword=${encodeURIComponent(IssueetailState.keyword)}&pageNumber=${IssueetailState.page}&pageSize=${IssueetailState.pageSize}`;
                 const response = await fetch(url);
                 const data = await response.json();
-                const $rows = $('#receiveDetailRows');
+                const $rows = $('#IssueetailRows');
                 $rows.empty();
                 if (!data.rows || data.rows.length === 0) {
                     $rows.append('<tr><td colspan="7" class="text-center text-muted">No detail found.</td></tr>');
                 } else {
                     data.rows.forEach(r => {
-                        $rows.append(`<tr><td>${r.itemCode}</td><td class="tcvn3-font">${r.itemName}</td><td><a href="./InventoryReceived/InventoryReceivedDetail?id=${r.flowId}&mode=view">${r.flowNo}</a></td><td>${r.flowDate}</td><td class="text-right">${Number(r.actQty).toLocaleString()}</td><td class="text-right">${Number(r.unitPrice).toLocaleString()}</td><td class="text-right">${Number(r.amount).toLocaleString()}</td></tr>`);
+                        $rows.append(`<tr><td>${r.itemCode}</td><td class="tcvn3-font">${r.itemName}</td><td><a href="./InventoryIssue/InventoryIssueDetail?id=${r.flowId}&mode=view">${r.flowNo}</a></td><td>${r.flowDate}</td><td class="text-right">${Number(r.actQty).toLocaleString()}</td><td class="text-right">${Number(r.unitPrice).toLocaleString()}</td><td class="text-right">${Number(r.amount).toLocaleString()}</td></tr>`);
                     });
                 }
-                receiveDetailState.page = data.pageNumber || 1;
-                receiveDetailState.pageSize = data.pageSize || receiveDetailState.pageSize;
-                receiveDetailState.totalPages = data.totalPages || 1;
-                receiveDetailState.totalRecords = data.totalRecords || 0;
-                renderReceiveDetailPagination();
+                IssueetailState.page = data.pageNumber || 1;
+                IssueetailState.pageSize = data.pageSize || IssueetailState.pageSize;
+                IssueetailState.totalPages = data.totalPages || 1;
+                IssueetailState.totalRecords = data.totalRecords || 0;
+                renderIssueetailPagination();
             }
-            $('#btnReceiveDetailSearch').on('click', function () { loadDetail(1); });
-            $('#receiveDetailKeyword').on('keydown', function (e) {
+            $('#btnIssueetailSearch').on('click', function () { loadDetail(1); });
+            $('#IssueetailKeyword').on('keydown', function (e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     loadDetail(1);
                 }
             });
-            $('#receiveDetailPageSize').on('change', function () { loadDetail(1); });
-            $(document).on('click', '.receive-detail-page-link', function (e) {
+            $('#IssueetailPageSize').on('change', function () { loadDetail(1); });
+            $(document).on('click', '.Issue-detail-page-link', function (e) {
                 e.preventDefault();
                 const page = Number($(this).data('page') || 0);
-                if (page > 0 && page !== receiveDetailState.page) {
+                if (page > 0 && page !== IssueetailState.page) {
                     loadDetail(page);
                 }
             });
 
-            $searchDetailModal.add($deleteConfirmModal).on('show.bs.modal', function () {
+            $searchDetailModal.add($deleteConfirmModal).add($reportPreviewModal).on('show.bs.modal', function () {
                 destroyBackgroundSelect2();
             });
 
@@ -475,15 +530,15 @@
                 loadDetail(1);
             });
 
-            $searchDetailModal.add($deleteConfirmModal).on('hidden.bs.modal', function () {
-                if (!$('#receiveSearchDetailModal').hasClass('show') && !$('#receiveDeleteConfirmModal').hasClass('show')) {
+            $searchDetailModal.add($deleteConfirmModal).add($reportPreviewModal).on('hidden.bs.modal', function () {
+                if (!$('#IssueSearchDetailModal').hasClass('show') && !$('#IssueeleteConfirmModal').hasClass('show') && !$('#IssueReportPreviewModal').hasClass('show')) {
                     initBackgroundSelect2();
                 }
             });
 
             $(document).on('select2:opening', 'select.select2', function (e) {
-                const isModalOpen = $('#receiveSearchDetailModal.show').length > 0 || $('#receiveDeleteConfirmModal.show').length > 0;
-                const isInsideModal = $(this).closest('#receiveSearchDetailModal.show, #receiveDeleteConfirmModal.show').length > 0;
+                const isModalOpen = $('#IssueSearchDetailModal.show').length > 0 || $('#IssueeleteConfirmModal.show').length > 0 || $('#IssueReportPreviewModal.show').length > 0;
+                const isInsideModal = $(this).closest('#IssueSearchDetailModal.show, #IssueeleteConfirmModal.show, #IssueReportPreviewModal.show').length > 0;
                 if (isModalOpen && !isInsideModal) {
                     e.preventDefault();
                     return false;
@@ -492,6 +547,11 @@
         })();
     </script>
 }
+
+
+
+
+
 
 
 

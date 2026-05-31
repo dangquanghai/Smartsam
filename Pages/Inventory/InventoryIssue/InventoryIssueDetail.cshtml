@@ -1,8 +1,8 @@
 ﻿@page
 @using System.Text.Json
-@model SmartSam.Pages.Inventory.InventoryReceived.InventoryReceivedDetailModel
+@model SmartSam.Pages.Inventory.InventoryIssue.InventoryIssueDetailModel
 @{
-    ViewData["Title"] = "Item Received Detail";
+    ViewData["Title"] = "Item Issue Detail";
     var initialDetailsJson = JsonSerializer.Serialize(Model.Details, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
     var alertClass = (Model.MessageType ?? "info").ToLowerInvariant() switch
     {
@@ -17,20 +17,16 @@
     <div class="container-fluid">
         <div class="card card-primary card-outline">
             <div class="card-header py-2">
-                <h3 class="card-title prq-detail-title">Item Received Detail</h3>
+                <h3 class="card-title prq-detail-title">Item Issue Detail</h3>
             </div>
 
-            <form method="post" enctype="multipart/form-data" id="inventoryReceivedDetailForm" class="mb-0">
+            <form method="post" enctype="multipart/form-data" id="InventoryIssueDetailForm" class="mb-0">
                 <input type="hidden" name="id" value="@Model.Id" />
                 <input type="hidden" name="mode" value="@Model.Mode" />
                 <input asp-for="DetailsJson" type="hidden" id="DetailsJson" />
                 <input asp-for="SelectedIssueFlowId" type="hidden" id="SelectedIssueFlowId" />
                 <input asp-for="DeletedAttachmentDocIdsJson" type="hidden" id="DeletedAttachmentDocIdsJson" />
                 <input asp-for="ConfirmAfterSave" type="hidden" id="ConfirmAfterSave" value="false" />
-                @if (Model.IsEditMode)
-                {
-                    <input type="hidden" asp-for="Header.POID" />
-                }
 
                 <div class="card-body">
                     @if (!string.IsNullOrWhiteSpace(Model.Message))
@@ -46,82 +42,82 @@
                             <span asp-validation-for="Header.FlowNo" class="text-danger small"></span>
                         </div>
                         <div class="col-lg-4 col-md-6 prq-detail-form-col">
-                            <label class="prq-detail-label">Received Date</label>
+                            <label class="prq-detail-label">Issue Date</label>
                             <input asp-for="Header.FlowDate" type="date" class="form-control form-control-sm" readonly="@(Model.CanEditVoucherBusiness ? null : "readonly")" />
                         </div>
                         <div class="col-lg-4 col-md-6 prq-detail-form-col">
-                            <label class="prq-detail-label">Received Type<span class="required-mark">*</span></label>
-                            <select asp-for="Header.FlowSubType" asp-items="Model.ReceiveTypes" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
+                            <label class="prq-detail-label">Issue Type<span class="required-mark">*</span></label>
+                            <small id="issueType2Hint" class="ml-2 d-none" style="color:#ff0707;">Save first to open Adjust Item in Apmt, then Confirm in edit mode.</small>
+                            <select asp-for="Header.FlowSubType" asp-items="Model.IssueTypes" class="form-control form-control-sm select2" disabled="@((Model.CanEditVoucherBusiness && !Model.HasAdjustedApartmentItems) ? null : "disabled")"></select>
+                            @if (Model.HasAdjustedApartmentItems)
+                            {
+                                <input type="hidden" name="Header.FlowSubType" value="@Model.Header.FlowSubType" />
+                            }
                             <span asp-validation-for="Header.FlowSubType" class="text-danger small"></span>
                         </div>
                     </div>
 
                     <div class="row prq-detail-form-row mb-3">
                         <div class="col-lg-4 col-md-6 prq-detail-form-col">
-                            <label class="prq-detail-label">Enter To<span class="required-mark">*</span></label>
-                            <select asp-for="Header.ToStore" asp-items="Model.Stores" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
-                            <span asp-validation-for="Header.ToStore" class="text-danger small"></span>
+                            <label class="prq-detail-label">Issue House<span class="required-mark">*</span></label>
+                            <select asp-for="Header.FromStore" asp-items="Model.Stores" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
+                            <span asp-validation-for="Header.FromStore" class="text-danger small"></span>
                         </div>
                         <div class="col-lg-4 col-md-6 prq-detail-form-col">
                             <label class="prq-detail-label">According To</label>
                             <input asp-for="Header.According" class="form-control form-control-sm vni-font" readonly="@(Model.CanEditVoucherBusiness ? null : "readonly")" />
                         </div>
                         <div class="col-lg-4 col-md-6 prq-detail-form-col">
-                            <label class="prq-detail-label">PO No.</label>
-                            <div class="d-flex align-items-start">
-                                <select asp-for="Header.POID" asp-items="Model.PONos" class="form-control form-control-sm select2 detail-context-field" disabled="@(Model.CanEditVoucherBusiness && Model.IsAddMode ? null : "disabled")"></select>
-                                <button type="button" id="btnOpenAttachmentModal" class="btn btn-sm btn-action-secondary border ml-2 mb-2 text-nowrap" data-toggle="modal" data-target="#prqAttachmentModal">
-                                    <i class="fas fa-paperclip"></i> Attached Files (<span id="attachmentCountText">@Model.AttachmentList.Count</span>)
-                                </button>
-                            </div>
+                            <label class="prq-detail-label">Received Department</label>
+                            <select asp-for="Header.RecDept" asp-items="Model.Departments" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
+                            <span asp-validation-for="Header.RecDept" class="text-danger small"></span>
                         </div>
                     </div>
 
                     <div class="row prq-detail-form-row mb-3">
                         <div class="col-lg-4 col-md-6 prq-detail-form-col">
-                            <label class="prq-detail-label">Move to Company Store<span id="moveToCompanyStoreRequiredMark" class="required-mark d-none">*</span></label>
-                            <select asp-for="Header.MoveToCPNStore" asp-items="Model.MoveToCPNStores" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")">
-                                <option value="">--- Select ---</option>
-                            </select>
-                            <span asp-validation-for="Header.MoveToCPNStore" class="text-danger small"></span>
+                            <label class="prq-detail-label">Receiver By</label>
+                            <select asp-for="Header.ReceivedBy" asp-items="Model.ReceiverBys" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
+                            <span asp-validation-for="Header.ReceivedBy" class="text-danger small"></span>
                         </div>
                         <div class="col-lg-4 col-md-6 prq-detail-form-col">
-                            <label class="prq-detail-label">Return Department</label>
-                            <select asp-for="Header.RetDept" asp-items="Model.Departments" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
+                            <label class="prq-detail-label">Location</label>
+                            <select asp-for="Header.AssetLocation" asp-items="Model.Locations" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
                         </div>
                         <div class="col-lg-4 col-md-6 prq-detail-form-col">
-                            <label class="prq-detail-label">Return Location</label>
-                            <select asp-for="Header.RetAssetLocation" asp-items="Model.Locations" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
+                            <label class="prq-detail-label">Reason</label>
+                            <input asp-for="Header.Reason" class="form-control form-control-sm vni-font" readonly="@(Model.CanEditVoucherBusiness ? null : "readonly")" />
                         </div>
+                        @* <div class="col-lg-4 col-md-6 prq-detail-form-col d-flex align-items-end">
+                            <button type="button" id="btnOpenAttachmentModal" class="btn btn-sm btn-action-secondary border mb-2 text-nowrap" data-toggle="modal" data-target="#prqAttachmentModal">
+                                <i class="fas fa-paperclip"></i> Attached Files (<span id="attachmentCountText">@Model.AttachmentList.Count</span>)
+                            </button>
+                        </div> *@
                         <input type="hidden" asp-for="Header.StatusID" />
                         <input type="hidden" asp-for="Header.StatusName" />
                     </div>
 
-                    <div class="row prq-detail-form-row mb-3">
-                        <div class="col-12 prq-detail-form-col">
-                            <label class="prq-detail-label">Reason</label>
-                            <input asp-for="Header.Reason" class="form-control form-control-sm vni-font" readonly="@(Model.CanEditVoucherBusiness ? null : "readonly")" />
-                        </div>
-                    </div>
-
                     <div class="row prq-detail-form-row mb-3 align-items-end">
-                        <div class="col-12 prq-detail-form-col d-flex justify-content-start align-items-center">
+                        <div class="col-12 prq-detail-form-col d-flex justify-content-start align-items-center flex-wrap">
                             @if (Model.CanEditVoucherBusiness)
                             {
-                                <button type="button" id="btnOpenAddDetail" class="btn btn-sm btn-action-close border"><i class="fas fa-plus"></i> Add Detail</button>
-                                @if (Model.IsAddMode || Model.IsEditMode)
-                                {
-                                    <button type="button" id="btnOpenReceiveFromIssue" class="btn btn-sm btn-info border ml-2" disabled><i class="fas fa-exchange-alt"></i> Receive From Inventory Issue</button>
-                                }
+                                <button type="button" id="btnOpenAddNewAction" class="btn btn-sm btn-action-close border mr-2 mb-1" disabled="@(Model.HasAdjustedApartmentItems ? "disabled" : null)"><i class="fas fa-plus"></i> Add new</button>
+                                <button type="button" id="btnOpenFromMrAction" class="btn btn-sm btn-info border mr-2 mb-1" disabled="@(Model.HasAdjustedApartmentItems ? "disabled" : null)"><i class="fas fa-list"></i> From MR</button>
+                                <button type="button" id="btnAdjustItemInApmt" class="btn btn-sm btn-warning border mr-2 mb-1" disabled="@((Model.Id.HasValue && (Model.IsEditMode || Model.IsApprovedMode) && Model.Header.FlowSubType == 2 && !Model.HasAdjustedApartmentItems) ? null : "disabled")"><i class="fas fa-building"></i> Adjust Item in Apmt</button>
+                                @* <button type="button" id="btnOpenFromMr" class="btn btn-sm btn-info border ml-2"><i class="fas fa-list"></i> From MR</button> *@
                             }
-                            <span class="ml-3 font-weight-bold">Status: <span id="statusTextStrong" class="font-weight-bold">@Model.Header.StatusName</span></span>
+                            @if (Model.PagePerm.HasPermission(2) || Model.CanEditVoucherBusiness)
+                            {
+                                <button type="button" id="btnOpenAttachmentModal" class="btn btn-sm btn-action-close border mr-2 mb-1" data-toggle="modal" data-target="#prqAttachmentModal"><i class="fas fa-folder-open"></i> Liquidation File(<span id="attachmentCountText">@Model.AttachmentList.Count</span>)</button>
+                            }
+                            <span class="font-weight-bold">Status: <span id="statusTextStrong" class="font-weight-bold">@Model.Header.StatusName</span></span>
                         </div>
                     </div>
 
                     <div class="row prq-detail-form-row mb-0">
                         <div class="col-12 prq-detail-form-col">
-                            <div class="table-responsive prq-table-wrap border rounded-sm inventory-received-detail-scroll inventory-received-detail-scroll-x">
-                                <table class="table table-hover table-bordered mb-0 text-nowrap prq-table inventory-received-main-table">
+                            <div class="table-responsive prq-table-wrap border rounded-sm inventory-Issue-detail-scroll inventory-Issue-detail-scroll-x">
+                                <table class="table table-hover table-bordered mb-0 text-nowrap prq-table inventory-Issue-main-table">
                                     <thead class="thead-light">
                                         <tr>
                                             <th style="width:70px;" class="text-center">Action</th>
@@ -149,15 +145,25 @@
                     }
                     @if ((Model.IsAddMode && Model.CanEditVoucherBusiness) || Model.CanConfirmVoucherBusiness)
                     {
-                        <button type="button" id="btnOpenConfirmVoucher" class="btn btn-sm btn-success border mx-1 my-1" data-toggle="modal" data-target="#confirmInventoryReceivedModal"><i class="fas fa-check"></i> Confirm</button>
+                        var disableConfirmForApartmentAdd = Model.IsAddMode && Model.Header.FlowSubType == 2;
+                        var confirmButtonText = Model.IsApprovedMode ? "Sign" : "Confirm";
+                        <button type="button" id="btnOpenConfirmVoucher" class="btn btn-sm btn-success border mx-1 my-1" data-toggle="modal" data-target="#confirmInventoryIssueModal" disabled="@(disableConfirmForApartmentAdd ? "disabled" : null)"><i class="fas fa-check"></i> @confirmButtonText</button>
                     }
                     <a class="btn btn-sm btn-action-close border mx-1 my-1" asp-page="./Index"><i class="fas fa-arrow-left"></i> Back to List</a>
                 </div>
             </form>
 
+            @if (Model.Id.HasValue)
+            {
+                <form method="post" asp-page-handler="AdjustItemInApartment" id="adjustInventoryIssueForm" class="d-none">
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <input type="hidden" name="mode" value="@Model.Mode" />
+                    <input type="hidden" name="ApplyAllApartment" id="ApplyAllApartmentInput" value="false" />
+                </form>
+            }
             @if (Model.Id.HasValue && Model.PagePerm.HasPermission(5))
             {
-                <form method="post" asp-page-handler="Confirm" id="confirmInventoryReceivedForm" class="d-none">
+                <form method="post" asp-page-handler="@(Model.IsApprovedMode ? "Sign" : "Confirm")" id="confirmInventoryIssueForm" class="d-none">
                     <input type="hidden" name="id" value="@Model.Id" />
                     <input type="hidden" name="mode" value="@Model.Mode" />
                 </form>
@@ -166,25 +172,7 @@
     </div>
 </section>
 
-<div class="modal fade vni-font" id="confirmInventoryReceivedModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered" role="document">
-        <div class="modal-content border-primary">
-            <div class="modal-header bg-primary py-2">
-                <h5 class="modal-title text-white">Confirm Voucher</h5>
-                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
-            </div>
-            <div class="modal-body">
-                Are you sure you want to confirm this inventory received voucher?
-            </div>
-            <div class="modal-footer py-2 justify-content-end">
-                <button type="button" id="btnConfirmVoucherAction" class="btn btn-sm btn-primary"><i class="fas fa-check"></i> Confirm</button>
-                <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Close</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="modal fade vni-font" id="receivedAddDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
+<div class="modal fade vni-font" id="IssueAddDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-fullscreen-xl-down modal-xl" style="max-width: 96vw;" role="document">
         <div class="modal-content">
             <div class="modal-header py-2">
@@ -193,6 +181,40 @@
             </div>
             <div class="modal-body pb-2">
                 <div id="addDetailModalValidationAlert" class="alert alert-danger mb-2 py-2 d-none"></div>
+                <div id="addDetailDuplicatePanel" class="alert alert-info mb-2 py-2 d-none" style="background-color:#f3f8ff;border-color:#d7e8ff;color:#2f4f6f;">
+                    <div class="font-weight-bold mb-1">Item already exists in current voucher.</div>
+                    <div id="addDetailDuplicateMessage" class="small mb-2"></div>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm mb-2">
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    <th>Item Code</th>
+                                    <th class="text-right">Qty</th>
+                                    <th class="text-right">Price</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Current</strong></td>
+                                    <td id="duplicateCurrentItemCode"></td>
+                                    <td id="duplicateCurrentQty" class="text-right"></td>
+                                    <td id="duplicateCurrentPrice" class="text-right"></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>New</strong></td>
+                                    <td id="duplicateNewItemCode"></td>
+                                    <td id="duplicateNewQty" class="text-right"></td>
+                                    <td id="duplicateNewPrice" class="text-right"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-right">
+                        <button type="button" id="btnDuplicateReplace" class="btn btn-sm btn-info mr-2"><i class="fas fa-sync"></i> Replace</button>
+                        <button type="button" id="btnDuplicateKeep" class="btn btn-sm btn-action-close border">Keep Current</button>
+                    </div>
+                </div>
                 <div id="addDetailManualPanel" class="d-none">
                     <div class="row">
                         <div class="col-md-4 mb-2">
@@ -241,7 +263,7 @@
                         <tbody id="addDetailRowsBody">
                             <tr><td colspan="8" class="text-center text-muted py-3">No data</td></tr>
                         </tbody>
-                    </table>
+                        </table>
                 </div>
             </div>
             <div class="modal-footer py-2">
@@ -251,7 +273,57 @@
         </div>
     </div>
 </div>
+<div class="modal fade vni-font" id="confirmInventoryIssueModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog @(Model.IsApprovedMode ? "inventory-issue-sign-preview-modal-dialog" : "modal-dialog-centered")" role="document">
+        <div class="modal-content @(Model.IsApprovedMode ? "" : "border-primary")">
+            <div class="modal-header @(Model.IsApprovedMode ? "py-2" : "bg-primary py-2")">
+                <h5 class="modal-title @(Model.IsApprovedMode ? "" : "text-white")">@(Model.IsApprovedMode ? "Sign Voucher" : "Confirm Voucher")</h5>
+                <button type="button" class="close @(Model.IsApprovedMode ? "" : "text-white")" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            @if (Model.IsApprovedMode && Model.Id.HasValue)
+            {
+                <div class="modal-body p-0">
+                    <iframe id="issueSignReportPreviewFrame" class="inventory-issue-report-preview-frame" title="Inventory Issue Sign Preview"></iframe>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" id="btnConfirmVoucherAction" class="btn btn-sm btn-primary border mr-2"><i class="fas fa-check"></i> Sign</button>
+                    <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal"><i class="fas fa-times"></i> Close</button>
+                </div>
+            }
+            else
+            {
+                <div class="modal-body">
+                    Are you sure you want to confirm this Inventory Issue voucher?
+                </div>
+                <div class="modal-footer py-2 justify-content-end">
+                    <button type="button" id="btnConfirmVoucherAction" class="btn btn-sm btn-primary"><i class="fas fa-check"></i> Confirm</button>
+                    <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Close</button>
+                </div>
+            }
+        </div>
+    </div>
+</div>
 
+
+
+<div class="modal fade vni-font" id="adjustItemInApmtModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-warning">
+            <div class="modal-header bg-warning py-2">
+                <h5 class="modal-title text-dark">Adjust Item In Apartment</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                Do you want to create adjust item data for apartment?
+                <div class="text-danger mt-2">After this action, item lines can no longer be added, removed or edited for this voucher.</div>
+            </div>
+            <div class="modal-footer py-2 justify-content-end">
+                <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Close</button>
+                <button type="button" id="btnConfirmAdjustItemInApmt" class="btn btn-sm btn-warning"><i class="fas fa-building"></i> Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
 <div class="modal fade vni-font" id="detailResetWarningModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content border-warning">
@@ -268,69 +340,40 @@
     </div>
 </div>
 
-<div class="modal fade vni-font" id="receiveFromIssueModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-xl" role="document" style="max-width: 96vw;">
+<div class="modal fade vni-font" id="FromMrModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" style="max-width: 96vw; width: 96vw;" role="document">
         <div class="modal-content">
-            <div class="modal-header py-2 bg-info">
-                <h5 class="modal-title text-white">Receive From Inventory Issue</h5>
-                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
-            </div>
-            <div class="modal-body pb-2">
-                <div id="receiveFromIssueAlert" class="alert alert-danger mb-2 py-2 d-none"></div>
+            <div class="modal-header py-2"><h5 class="modal-title">Select Material Request</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
+            <div class="modal-body">
                 <div class="form-row align-items-end mb-2">
-                    <div class="col-md-3">
-                        <label class="prq-detail-label">From Date</label>
-                        <input type="date" id="issueFromDate" class="form-control form-control-sm" value="@DateTime.Today.AddMonths(-1).ToString("yyyy-MM-dd")" />
-                    </div>
-                    <div class="col-md-3">
-                        <label class="prq-detail-label">To Date</label>
-                        <input type="date" id="issueToDate" class="form-control form-control-sm" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
-                    </div>
-                    <div class="col-md-2">
-                        <button type="button" id="btnSearchIssueReceive" class="btn btn-sm btn-primary"><i class="fas fa-search"></i> Search</button>
-                    </div>
+                    <div class="col-md-3"><label>Request No.</label><input id="mrRequestNo" class="form-control form-control-sm" /></div>
+                    <div class="col-md-3"><label>Item Code</label><input id="mrItemCode" class="form-control form-control-sm" /></div>
+                    <div class="col-md-3"><label>According To</label><input id="mrAccording" class="form-control form-control-sm" /></div>
+                    <div class="col-md-3"><label>Dept</label><select id="mrDept" class="form-control form-control-sm select2"><option value="">All</option>@foreach (var dept in Model.MrDepartments.Where(x => !string.IsNullOrWhiteSpace(x.Value))) {<option value="@dept.Value">@dept.Text</option>}</select></div>
                 </div>
-                <div class="table-responsive inventory-received-add-detail-scroll mb-3">
-                    <table class="table table-bordered table-hover table-sm mb-0 text-nowrap">
-                        <thead>
-                            <tr>
-                                <th style="width:45px;" class="text-center"></th>
-                                <th style="width:150px;">Doc No.</th>
-                                <th style="width:120px;">Issue Date</th>
-                                <th style="min-width:220px;">According</th>
-                                <th style="min-width:180px;">Issue as St.House</th>
-                                <th style="min-width:180px;">Received Department</th>
-                                <th style="min-width:180px;">Received Location</th>
-                            </tr>
-                        </thead>
-                        <tbody id="issueReceiveRowsBody">
-                            <tr><td colspan="7" class="text-center text-muted py-3">No data</td></tr>
-                        </tbody>
+                <div class="form-row align-items-end mb-3">
+                    <div class="col-md-3"><label>From</label><input id="mrFromDate" type="date" class="form-control form-control-sm" /></div>
+                    <div class="col-md-3"><label>To</label><input id="mrToDate" type="date" class="form-control form-control-sm" /></div>
+                    <div class="col-md-3"><button id="btnSearchMr" type="button" class="btn btn-sm btn-primary"><i class="fas fa-search"></i> Search</button></div>
+                    <div class="col-md-3"></div>
+                </div>
+                <div class="border-top pt-3 pb-2 mt-2 mb-2 font-weight-bold text-left">Material Request</div>
+                <div class="table-responsive" style="max-height:220px;overflow:auto;">
+                    <table class="table table-sm table-bordered table-hover mb-2 text-nowrap align-middle">
+                        <thead class="thead-light"><tr><th style="width:40px;" class="text-center"></th><th style="width:120px;">Request No.</th><th style="width:120px;">Date</th><th>According To</th><th style="width:180px;">Dept</th></tr></thead>
+                        <tbody id="mrRows"><tr><td colspan="5" class="text-center text-muted">No data</td></tr></tbody>
                     </table>
                 </div>
-                <div class="table-responsive inventory-received-add-detail-scroll">
-                    <table class="table table-bordered table-hover table-sm mb-0 text-nowrap">
-                        <thead>
-                            <tr>
-                                <th style="width:220px;">Item Code</th>
-                                <th style="min-width:360px;">Item Name</th>
-                                <th style="width:90px;">Unit</th>
-                                <th style="width:110px;" class="text-right">Doc. Qty</th>
-                                <th style="width:110px;" class="text-right">Act. Qty</th>
-                                <th style="width:110px;" class="text-right">Price</th>
-                                <th style="width:120px;" class="text-right">Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody id="issueReceiveDetailRowsBody">
-                            <tr><td colspan="7" class="text-center text-muted py-3">No data</td></tr>
-                        </tbody>
+                <div class="border-top pt-3 pb-2 mt-2 mb-2 font-weight-bold text-left">Material Request Detail</div>
+                <div id="mrAlert" class="alert alert-danger py-2 d-none mb-2"></div>
+                <div class="table-responsive" style="max-height:260px;overflow:auto;">
+                    <table class="table table-sm table-bordered table-hover mb-1 text-nowrap align-middle">
+                        <thead class="thead-light"><tr><th style="width:40px;" class="text-center"><input type="checkbox" id="mrCheckAll" class="align-middle" /></th><th>Item Code</th><th>Item Name</th><th style="width:90px;">Unit</th><th style="width:100px;" class="text-right">Remain</th><th style="width:110px;" class="text-right">Issue Qty</th><th style="width:120px;" class="text-right">Price</th></tr></thead>
+                        <tbody id="mrDetailRows"><tr><td colspan="7" class="text-center text-muted">Select MR</td></tr></tbody>
                     </table>
                 </div>
             </div>
-            <div class="modal-footer py-2">
-                <button type="button" id="btnReceiveFromIssueOk" class="btn btn-sm btn-primary" disabled><i class="fas fa-check"></i> OK</button>
-                <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Cancel</button>
-            </div>
+            <div class="modal-footer py-2"><button type="button" id="btnFromMrOk" class="btn btn-sm btn-primary"><i class="fas fa-check"></i> OK</button><button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Close</button></div>
         </div>
     </div>
 </div>
@@ -339,15 +382,15 @@
     <div class="modal-dialog modal-xl attachment-modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header py-2">
-                <h5 class="modal-title">Attached Files</h5>
+                <h5 class="modal-title">Liquidation File(<span id="attachmentCountTextModal">@Model.AttachmentList.Count</span>)</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <div class="modal-body">
                 @if (Model.CanEditVoucherBusiness)
                 {
                 <div class="form-group mb-2">
-                    <label class="mb-1">Attached Files <span class="prq-attachment-note">Allowed: @Model.AllowedAttachmentExtensionsText | Max size: @Model.MaxAttachmentSizeMb MB</span></label>
-                    <input asp-for="AttachmentUploads" type="file" form="inventoryReceivedDetailForm" class="form-control-file" id="detailAttachmentUpload" accept="@Model.AllowedAttachmentExtensionsText" multiple />
+                    <label class="mb-1">Liquidation File <span class="prq-attachment-note">Allowed: @Model.AllowedAttachmentExtensionsText | Max size: @Model.MaxAttachmentSizeMb MB</span></label>
+                    <input asp-for="AttachmentUploads" type="file" form="InventoryIssueDetailForm" class="form-control-file" id="detailAttachmentUpload" accept="@Model.AllowedAttachmentExtensionsText" multiple />
                     <div id="detailAttachmentError" class="text-danger small mt-1" style="display:none;"></div>
                 </div>
                 }
@@ -387,58 +430,82 @@
     <style>
         .select2-results__group { font-weight: 700; color: #212529; }
         .select2-container--default .select2-results__option[aria-disabled=true] { color: #6c757d; }
-        body.inventory-received-modal-open > .select2-container { z-index: 1035 !important; }
-        #inventoryReceivedDetailForm .modal .select2-container { z-index: 1080 !important; }
-        #inventoryReceivedDetailForm .modal .select2-dropdown { z-index: 1081 !important; }
-        #receiveFromIssueModal { z-index: 1075 !important; }
-        #receiveFromIssueModal .modal-dialog { z-index: 1076 !important; }
+        body.inventory-Issue-modal-open > .select2-container { z-index: 1035 !important; }
+        #InventoryIssueDetailForm .modal .select2-container { z-index: 1080 !important; }
+        #InventoryIssueDetailForm .modal .select2-dropdown { z-index: 1081 !important; }
+        #FromMrModal { z-index: 1075 !important; }
+        #FromMrModal .modal-dialog { z-index: 1076 !important; }
         #prqAttachmentModal { z-index: 1060 !important; }
-        #confirmInventoryReceivedModal { z-index: 1070 !important; }
-        #confirmInventoryReceivedModal .modal-dialog { z-index: 1071 !important; }
+        #confirmInventoryIssueModal { z-index: 1070 !important; }
+        #confirmInventoryIssueModal .modal-dialog { z-index: 1071 !important; }
         .modal-backdrop { z-index: 1040; }
-        body.inventory-received-confirm-open .select2-container { z-index: 1035 !important; }
-        .inventory-received-detail-scroll { max-height: 500px; overflow-y: auto; }
-        .inventory-received-detail-scroll-x { overflow-x: auto; }
-        .inventory-received-add-detail-scroll { max-height: calc(100vh - 220px); overflow-y: auto; }
-        .inventory-received-detail-scroll thead th,
+        body.inventory-Issue-confirm-open .select2-container { z-index: 1035 !important; }
+        .inventory-Issue-detail-scroll { max-height: 500px; overflow-y: auto; }
+        .inventory-Issue-detail-scroll-x { overflow-x: auto; }
+        .inventory-Issue-add-detail-scroll, .inventory-received-add-detail-scroll { max-height: calc(100vh - 220px); overflow-y: auto; }
+        .inventory-Issue-detail-scroll thead th,
+        .inventory-Issue-add-detail-scroll thead th,
         .inventory-received-add-detail-scroll thead th { position: sticky; top: 0; z-index: 2; background: #f8f9fa; }
-        .inventory-received-main-table { min-width: 1650px; }
-        .inventory-received-detail-scroll .table,
+        .inventory-Issue-main-table { min-width: 1650px; }
+        .inventory-Issue-detail-scroll .table,
+        .inventory-Issue-add-detail-scroll .table,
         .inventory-received-add-detail-scroll .table { table-layout: auto; }
+        .inventory-Issue-add-detail-scroll td:nth-child(2),
+        .inventory-Issue-add-detail-scroll td:nth-child(3),
+        .inventory-Issue-add-detail-scroll th:nth-child(2),
+        .inventory-Issue-add-detail-scroll th:nth-child(3),
         .inventory-received-add-detail-scroll td:nth-child(2),
         .inventory-received-add-detail-scroll td:nth-child(3),
         .inventory-received-add-detail-scroll th:nth-child(2),
         .inventory-received-add-detail-scroll th:nth-child(3),
-        .inventory-received-detail-scroll td:nth-child(2),
-        .inventory-received-detail-scroll td:nth-child(3),
-        .inventory-received-detail-scroll th:nth-child(2),
-        .inventory-received-detail-scroll th:nth-child(3) { white-space: nowrap; }
-        .inventory-received-detail-scroll .detail-docqty,
-        .inventory-received-detail-scroll .detail-actqty,
+        .inventory-Issue-detail-scroll td:nth-child(2),
+        .inventory-Issue-detail-scroll td:nth-child(3),
+        .inventory-Issue-detail-scroll th:nth-child(2),
+        .inventory-Issue-detail-scroll th:nth-child(3) { white-space: nowrap; }
+        .inventory-Issue-detail-scroll .detail-docqty,
+        .inventory-Issue-detail-scroll .detail-actqty,
+        .inventory-Issue-add-detail-scroll .add-docqty,
+        .inventory-Issue-add-detail-scroll .add-actqty,
         .inventory-received-add-detail-scroll .add-docqty,
         .inventory-received-add-detail-scroll .add-actqty { width: 100px; min-width: 100px; max-width: 100px; }
-        .inventory-received-detail-scroll .detail-unitprice,
+        .inventory-Issue-detail-scroll .detail-unitprice,
+        .inventory-Issue-add-detail-scroll .add-unitprice,
         .inventory-received-add-detail-scroll .add-unitprice { width: 110px; min-width: 110px; max-width: 110px; }
-        .inventory-received-detail-scroll .detail-location { min-width: 230px; white-space: nowrap; }
-        .inventory-received-detail-scroll td:first-child { text-align: center; vertical-align: middle; }
+        .inventory-Issue-detail-scroll .detail-location { min-width: 230px; white-space: nowrap; }
+        .inventory-Issue-detail-scroll td:first-child { text-align: center; vertical-align: middle; }
         .attachment-list-scroll-x { overflow-x: auto; }
         .attachment-modal-dialog { max-width: 1100px; }
+        .inventory-issue-sign-preview-modal-dialog { width: 100vw; max-width: 100vw; height: 100vh; margin: 0; }
+        .inventory-issue-sign-preview-modal-dialog .modal-content { height: 100vh; border-radius: 0; }
+        .inventory-issue-report-preview-frame { display: block; width: 100%; height: calc(100vh - 106px); border: 0; }
     </style>
 }
 
 @section Scripts {
     <script>
         (function () {
+            const TCVN3_WEB_LOWER_U = '\uE001';
+            const TCVN3_WEB_UPPER_U = '\uE002';
+
+            function toTcvn3WebText(value) {
+                return String(value || '')
+                    .replace(/\u00AD/g, TCVN3_WEB_LOWER_U)
+                    .replace(/\u01B0/g, TCVN3_WEB_LOWER_U)
+                    .replace(/\u00A6/g, TCVN3_WEB_UPPER_U)
+                    .replace(/\u01AF/g, TCVN3_WEB_UPPER_U);
+            }
+
             const itemCatalog = @Html.Raw(JsonSerializer.Serialize(Model.ItemCatalog.Select(x => new {
-                id = x.ItemId.ToString(),
-                checkingId = x.ChekingID,
-                checkingDtId = x.ChekingDTID,
-                mrDetailId = x.MRDetailID,
+                id = x.ItemId,
                 itemCode = x.ItemCode,
                 itemName = x.ItemName,
                 unit = x.Unit,
-                remainingQty = x.RemainingQty,
-                price = x.Price
+                price = x.Price,
+                remainQty = x.RemainingQty,
+                checkingId = x.ChekingID,
+                checkingDtId = x.ChekingDTID,
+                mrDetailId = x.MRDetailID,
+                itemId = x.ItemId
             })));
             const locationCatalog = @Html.Raw(JsonSerializer.Serialize(Model.Locations.Where(x => !string.IsNullOrWhiteSpace(x.Value)).Select(x => new { id = x.Value, text = x.Text })));
             const existingAttachments = @Html.Raw(JsonSerializer.Serialize(Model.AttachmentList.Select(x => new {
@@ -446,23 +513,22 @@
                 filePath = x.FilePath,
                 uploadDate = x.UploadDate?.ToString("dd/MM/yyyy HH:mm") ?? "",
                 employeeCode = x.EmployeeCode,
-                downloadUrl = Url.Page("./InventoryReceivedDetail", "DownloadAttachment", new { id = Model.Id, docId = x.DocId }),
-                deleteUrl = Url.Page("./InventoryReceivedDetail", "DeleteAttachment", new { id = Model.Id, docId = x.DocId })
+                downloadUrl = Url.Page("./InventoryIssueDetail", "DownloadAttachment", new { id = Model.Id, docId = x.DocId }),
+                deleteUrl = Url.Page("./InventoryIssueDetail", "DeleteAttachment", new { id = Model.Id, docId = x.DocId })
             })));
             const currentEmployeeCode = '@Model.CurrentEmployeeCode';
             const currentUserName = '@(User?.Identity?.Name ?? string.Empty)';
+            const hasAdjustedApartmentItems = @Model.HasAdjustedApartmentItems.ToString().ToLowerInvariant();
             let details = @Html.Raw(initialDetailsJson);
             let pendingField = null;
             let pendingOldValue = null;
             let pendingAction = '';
-            const $addDetailModal = $('#receivedAddDetailModal');
+            const $addDetailModal = $('#IssueAddDetailModal');
             let stagedAttachments = [];
             let pendingAttachments = [];
             let deletedAttachmentDocIds = [];
             let isSubmittingConfirmAfterSave = false;
-            let issueReceiveList = [];
-            let issueReceiveDetails = [];
-            let selectedIssueFlowId = Number($('#SelectedIssueFlowId').val() || 0);
+            let pendingDuplicateIncomingRow = null;
 
             function formatBytes(bytes) {
                 const value = Number(bytes || 0);
@@ -498,7 +564,7 @@
             function renderAttachmentStaging() {
                 const $body = $('#attachmentListBody');
                 $body.empty();
-                const canEdit = @Model.CanEditVoucherBusiness.ToString().ToLowerInvariant();
+                const canEdit = @Model.CanEditVoucherBusiness.ToString().ToLowerInvariant() && !hasAdjustedApartmentItems;
 
                 existingAttachments.filter(file => !deletedAttachmentDocIds.includes(Number(file.docId))).forEach(file => {
                     const deleteAction = canEdit
@@ -545,10 +611,10 @@
                 $modal.find('select.select2').select2({ width: '100%', dropdownParent: $modal });
             }
 
-            function reloadReceiveContext() {
+            function reloadIssueContext() {
                 const flowSubType = $('#Header_FlowSubType').val() || '';
                 const mode = ($('input[name="mode"]').val() || '').toLowerCase();
-                const url = `?handler=ReceiveContext&flowSubType=${encodeURIComponent(flowSubType)}`;
+                const url = `?handler=IssueContext&flowSubType=${encodeURIComponent(flowSubType)}`;
 
                 return fetch(url, { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                     .then(r => r.ok ? r.json() : null)
@@ -568,6 +634,33 @@
                     });
             }
 
+            function reloadReceiverOptions(selectedValue) {
+                const deptId = $('#Header_RecDept').val() || '';
+                const $receiver = $('#Header_ReceivedBy');
+
+                $receiver.empty().append(new Option('--- Select ---', '', true, false));
+
+                if (!deptId) {
+                    $receiver.val('').trigger('change.select2');
+                    return Promise.resolve();
+                }
+
+                const url = `?handler=ReceiverOptions&deptId=${encodeURIComponent(deptId)}`;
+                return fetch(url, { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(r => r.ok ? r.json() : [])
+                    .then(list => {
+                        const items = Array.isArray(list) ? list : [];
+                        items.forEach(item => {
+                            $receiver.append(new Option(item.text || '', item.value || '', false, false));
+                        });
+
+                        const nextValue = selectedValue || '';
+                        $receiver.val(nextValue).trigger('change.select2');
+                    })
+                    .catch(() => {
+                        $receiver.val('').trigger('change.select2');
+                    });
+            }
             function setFieldEnabled($field, enabled, clearWhenDisabled) {
                 if (!$field || $field.length === 0) return;
                 const tagName = ($field.prop('tagName') || '').toLowerCase();
@@ -585,81 +678,19 @@
                 $field.prop('readonly', !enabled);
             }
 
-            function syncReceiveFromIssueButton() {
-                const flowSubType = Number($('#Header_FlowSubType').val() || 0);
+            function syncIssueFromIssueButton() { }
+
+            function syncConfirmButtonState() {
                 const mode = ($('input[name="mode"]').val() || '').toLowerCase();
-                const canEditBusiness = @Model.CanEditVoucherBusiness.ToString().ToLowerInvariant();
-                const canUseReceiveFromIssue = canEditBusiness && (mode === 'add' || mode === 'edit') && flowSubType === 6;
-                $('#btnOpenReceiveFromIssue').prop('disabled', !canUseReceiveFromIssue);
+                const flowSubType = Number($('#Header_FlowSubType').val() || 0);
+                const disable = mode === 'add' && flowSubType === 2;
+                $('#btnOpenConfirmVoucher').prop('disabled', disable);
+                $('#issueType2Hint').toggleClass('d-none', !disable);
             }
 
             function applyFieldRuleByFlowSubType() {
-                const flowSubType = Number($('#Header_FlowSubType').val() || 0);
-                const mode = ($('input[name="mode"]').val() || '').toLowerCase();
-                const isView = mode === 'view';
-                const isEdit = mode === 'edit';
-                const canEditBusiness = @Model.CanEditVoucherBusiness.ToString().ToLowerInvariant();
-                const $po = $('#Header_POID');
-                const $files = $('#btnOpenAttachmentModal');
-                const $moveToCompanyStore = $('#Header_MoveToCPNStore');
-                const $retDept = $('#Header_RetDept');
-                const $retLocation = $('#Header_RetAssetLocation');
-                const $reason = $('#Header_Reason');
-
-                const canEditHeader = !isView && canEditBusiness;
-                syncReceiveFromIssueButton();
-
-                if (!canEditHeader) {
-                    $('#moveToCompanyStoreRequiredMark').addClass('d-none');
-                    setFieldEnabled($po, false, false);
-                    $files.prop('disabled', true);
-                    setFieldEnabled($moveToCompanyStore, false, false);
-                    setFieldEnabled($retDept, false, false);
-                    setFieldEnabled($retLocation, false, false);
-                    setFieldEnabled($reason, false, false);
-                    return;
-                }
-
-                if (flowSubType <= 0) {
-                    $('#moveToCompanyStoreRequiredMark').addClass('d-none');
-                    setFieldEnabled($po, false, true);
-                    $files.prop('disabled', true);
-                    setFieldEnabled($moveToCompanyStore, false, true);
-                    setFieldEnabled($retDept, false, true);
-                    setFieldEnabled($retLocation, false, true);
-                    setFieldEnabled($reason, false, true);
-                    return;
-                }
-
-                if (flowSubType === 1) {
-                    $('#moveToCompanyStoreRequiredMark').addClass('d-none');
-                    setFieldEnabled($po, !isEdit, false);
-                    $files.prop('disabled', false);
-                    setFieldEnabled($moveToCompanyStore, false, true);
-                    setFieldEnabled($retDept, true, false);
-                    setFieldEnabled($retLocation, true, false);
-                    setFieldEnabled($reason, true, false);
-                    return;
-                }
-
-                if (flowSubType !== 6) {
-                    $('#moveToCompanyStoreRequiredMark').removeClass('d-none');
-                    setFieldEnabled($po, false, true);
-                    $files.prop('disabled', true);
-                    setFieldEnabled($moveToCompanyStore, true, false);
-                    setFieldEnabled($retDept, false, true);
-                    setFieldEnabled($retLocation, false, true);
-                    setFieldEnabled($reason, true, false);
-                    return;
-                }
-
-                $('#moveToCompanyStoreRequiredMark').addClass('d-none');
-                setFieldEnabled($po, false, true);
-                $files.prop('disabled', true);
-                setFieldEnabled($moveToCompanyStore, false, true);
-                setFieldEnabled($retDept, false, true);
-                setFieldEnabled($retLocation, false, true);
-                setFieldEnabled($reason, true, false);
+                syncIssueFromIssueButton();
+                syncConfirmButtonState();
             }
 
             function syncDetailsJson() {
@@ -668,7 +699,7 @@
 
             function renderRows() {
                 const $body = $('#detailRowsBody');
-                const canEdit = @Model.CanEditVoucherBusiness.ToString().ToLowerInvariant();
+                const canEdit = @Model.CanEditVoucherBusiness.ToString().ToLowerInvariant() && !hasAdjustedApartmentItems;
                 $body.empty();
                 if (details.length === 0) {
                     $body.append('<tr><td colspan="10" class="text-center text-muted py-3">No data</td></tr>');
@@ -677,7 +708,7 @@
                 }
                 details.forEach((d, index) => {
                     const itemCode = d.itemCode ?? d.ItemCode ?? '';
-                    const itemName = d.itemName ?? d.ItemName ?? '';
+                    const itemName = toTcvn3WebText(d.itemName ?? d.ItemName ?? '');
                     const unit = d.unit ?? d.Unit ?? '';
                     const docQty = Number(d.docQty ?? d.DocQty ?? 0);
                     const actQty = Number(d.actQty ?? d.ActQty ?? 0);
@@ -740,8 +771,57 @@
                 return new Set(details.map(detailKey));
             }
 
+            function upsertDetailRow(newRow) {
+                const newKey = detailKey(newRow);
+                details = details.filter(existing => detailKey(existing) !== newKey);
+                details.push(newRow);
+            }
+
+            function findExistingDetailByKey(row) {
+                const key = detailKey(row);
+                return details.find(existing => detailKey(existing) === key) || null;
+            }
+
+            function hideDuplicatePanel() {
+                $('#addDetailDuplicatePanel').addClass('d-none');
+                $('#addDetailDuplicateMessage').text('');
+                pendingDuplicateIncomingRow = null;
+            }
+
+            function showDuplicatePanel(existing, incoming) {
+                $('#duplicateCurrentItemCode').text(existing.itemCode || incoming.itemCode || '');
+                $('#duplicateCurrentQty').text(formatNumber(Number(existing.actQty || 0)));
+                $('#duplicateCurrentPrice').text(formatNumber(Number(existing.unitPrice || 0)));
+                $('#duplicateNewItemCode').text(incoming.itemCode || existing.itemCode || '');
+                $('#duplicateNewQty').text(formatNumber(Number(incoming.actQty || 0)));
+                $('#duplicateNewPrice').text(formatNumber(Number(incoming.unitPrice || 0)));
+                $('#addDetailDuplicateMessage').text('Do you want to replace current values with new values?');
+                $('#addDetailDuplicatePanel').removeClass('d-none');
+            }
+
+            function confirmReplaceExistingDetail(newRow) {
+                const existing = findExistingDetailByKey(newRow);
+                if (!existing) {
+                    return true;
+                }
+
+                pendingDuplicateIncomingRow = newRow;
+                showDuplicatePanel(existing, newRow);
+                return false;
+            }
+
             function getAvailableQty(item) {
                 return Math.max(0, Number(item.remainingQty || 0));
+            }
+
+            function getAvailableAddItems() {
+                const selectedKeys = getSelectedDetailKeys();
+                return itemCatalog.filter(x => getAvailableQty(x) > 0 && !selectedKeys.has(detailKey(x)));
+            }
+
+            function getManualAddItems() {
+                const selectedKeys = getSelectedDetailKeys();
+                return itemCatalog.filter(x => !selectedKeys.has(detailKey(x)));
             }
 
             function showClientValidation(message) {
@@ -749,23 +829,23 @@
                 $alert.text(message || '').toggleClass('d-none', !message);
             }
 
-            function showIssueReceiveValidation(message) {
-                const $alert = $('#receiveFromIssueAlert');
+            function showIssueIssueValidation(message) {
+                const $alert = $('#IssueFromIssueAlert');
                 $alert.text(message || '').toggleClass('d-none', !message);
             }
 
-            function renderIssueReceiveRows() {
-                const $body = $('#issueReceiveRowsBody');
+            function renderIssueIssueRows() {
+                const $body = $('#issueIssueRowsBody');
                 $body.empty();
-                if (!issueReceiveList.length) {
+                if (!issueIssueList.length) {
                     $body.append('<tr><td colspan="7" class="text-center text-muted py-3">No data</td></tr>');
-                    $('#btnReceiveFromIssueOk').prop('disabled', true);
+                    $('#btnIssueFromIssueOk').prop('disabled', true);
                     return;
                 }
-                issueReceiveList.forEach(issue => {
+                issueIssueList.forEach(issue => {
                     const checked = selectedIssueFlowId === Number(issue.flowId) ? 'checked' : '';
-                    $body.append(`<tr class="issue-receive-row" data-flow-id="${issue.flowId}" style="cursor:pointer;">
-                        <td class="text-center"><input type="radio" name="issueReceiveSelect" class="issue-receive-select" value="${issue.flowId}" ${checked} /></td>
+                    $body.append(`<tr class="issue-Issue-row" data-flow-id="${issue.flowId}" style="cursor:pointer;">
+                        <td class="text-center"><input type="radio" name="issueIssueSelect" class="issue-Issue-select" value="${issue.flowId}" ${checked} /></td>
                         <td>${issue.flowNo || ''}</td>
                         <td>${issue.flowDate || ''}</td>
                         <td>${issue.according || ''}</td>
@@ -774,20 +854,20 @@
                         <td>${issue.locationName || ''}</td>
                     </tr>`);
                 });
-                $('#btnReceiveFromIssueOk').prop('disabled', selectedIssueFlowId <= 0);
+                $('#btnIssueFromIssueOk').prop('disabled', selectedIssueFlowId <= 0);
             }
 
-            function renderIssueReceiveDetails() {
-                const $body = $('#issueReceiveDetailRowsBody');
+            function renderIssueIssueetails() {
+                const $body = $('#issueIssueetailRowsBody');
                 $body.empty();
-                if (!issueReceiveDetails.length) {
+                if (!issueIssueetails.length) {
                     $body.append('<tr><td colspan="7" class="text-center text-muted py-3">No data</td></tr>');
                     return;
                 }
-                issueReceiveDetails.forEach(d => {
+                issueIssueetails.forEach(d => {
                     $body.append(`<tr>
                         <td>${d.itemCode || ''}</td>
-                        <td class="tcvn3-font">${d.itemName || ''}</td>
+                        <td class="tcvn3-font">${toTcvn3WebText(d.itemName || '')}</td>
                         <td>${d.unit || ''}</td>
                         <td class="text-right">${Number(d.docQty || 0).toLocaleString()}</td>
                         <td class="text-right">${Number(d.actQty || 0).toLocaleString()}</td>
@@ -797,38 +877,38 @@
                 });
             }
 
-            function loadIssueReceiveList() {
+            function loadIssueIssueList() {
                 const fromDate = $('#issueFromDate').val() || '';
                 const toDate = $('#issueToDate').val() || '';
-                const url = `?handler=IssueReceiveList&fromDate=${encodeURIComponent(fromDate)}&toDate=${encodeURIComponent(toDate)}`;
+                const url = `?handler=IssueIssueList&fromDate=${encodeURIComponent(fromDate)}&toDate=${encodeURIComponent(toDate)}`;
                 return fetch(url, { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                     .then(r => r.ok ? r.json() : [])
                     .then(list => {
-                        issueReceiveList = Array.isArray(list) ? list : [];
-                        renderIssueReceiveRows();
+                        issueIssueList = Array.isArray(list) ? list : [];
+                        renderIssueIssueRows();
                     })
                     .catch(() => {
-                        issueReceiveList = [];
-                        renderIssueReceiveRows();
+                        issueIssueList = [];
+                        renderIssueIssueRows();
                     });
             }
 
-            function loadIssueReceiveDetails(flowId) {
+            function loadIssueIssueetails(flowId) {
                 if (!flowId) {
-                    issueReceiveDetails = [];
-                    renderIssueReceiveDetails();
+                    issueIssueetails = [];
+                    renderIssueIssueetails();
                     return Promise.resolve();
                 }
-                const url = `?handler=IssueReceiveDetails&flowId=${encodeURIComponent(flowId)}`;
+                const url = `?handler=IssueIssueetails&flowId=${encodeURIComponent(flowId)}`;
                 return fetch(url, { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                     .then(r => r.ok ? r.json() : [])
                     .then(list => {
-                        issueReceiveDetails = Array.isArray(list) ? list : [];
-                        renderIssueReceiveDetails();
+                        issueIssueetails = Array.isArray(list) ? list : [];
+                        renderIssueIssueetails();
                     })
                     .catch(() => {
-                        issueReceiveDetails = [];
-                        renderIssueReceiveDetails();
+                        issueIssueetails = [];
+                        renderIssueIssueetails();
                     });
             }
 
@@ -873,8 +953,7 @@
                     return;
                 }
 
-                const selectedDetailKeys = getSelectedDetailKeys();
-                const availableItems = itemCatalog.filter(x => getAvailableQty(x) > 0 && !selectedDetailKeys.has(detailKey(x)));
+                const availableItems = getAvailableAddItems();
 
                 if (availableItems.length === 0) {
                     $body.append('<tr><td colspan="8" class="text-center text-muted py-3">No data</td></tr>');
@@ -888,7 +967,7 @@
                     $body.append(`<tr>
                         <td class="text-center"><input type="checkbox" class="add-detail-check" data-itemid="${item.id}" data-checkingdtid="${item.checkingDtId || ''}" /></td>
                         <td class="text-bold">${item.itemCode || ''}</td>
-                        <td class="tcvn3-font">${item.itemName || ''}</td>
+                        <td class="tcvn3-font">${toTcvn3WebText(item.itemName || '')}</td>
                         <td>${item.unit || ''}</td>
                         <td><input type="text" inputmode="numeric" class="form-control form-control-sm text-right add-docqty number-format" data-itemid="${item.id}" value="${Number(availableQty || 0).toLocaleString(undefined,{maximumFractionDigits:0})}" /></td>
                         <td><input type="text" inputmode="numeric" class="form-control form-control-sm text-right add-actqty number-format" data-itemid="${item.id}" data-maxqty="${availableQty}" value="${Number(availableQty || 0).toLocaleString(undefined,{maximumFractionDigits:0})}" /></td>
@@ -910,17 +989,12 @@
 
             function buildItemOptionText(item) {
                 const code = item.itemCode || '';
-                const name = item.itemName || '';
+                const name = toTcvn3WebText(item.itemName || '');
                 return (code + ' - ' + name).trim();
             }
 
-            function isPoFlow() {
-                return Number($('#Header_FlowSubType').val() || 0) === 1;
-            }
-
             function renderManualAddDetailOptions() {
-                const selectedDetailKeys = getSelectedDetailKeys();
-                const availableItems = itemCatalog.filter(x => !selectedDetailKeys.has(detailKey(x)));
+                const availableItems = getManualAddItems();
                 const $item = $('#manualAddItemId');
                 const locationOptions = ['<option value=""></option>'].concat(locationCatalog.map(l => `<option value="${l.id}">${l.text}</option>`));
                 $('#manualAddLocationId').html(locationOptions.join(''));
@@ -932,7 +1006,7 @@
                 $('#btnAddDetailConfirm').prop('disabled', availableItems.length === 0);
                 clearManualAddFieldErrors();
                 showAddDetailModalValidation('');
-                initModalSelect2($('#receivedAddDetailModal'));
+                initModalSelect2($('#IssueAddDetailModal'));
             }
 
             function syncManualItemInfo() {
@@ -945,7 +1019,7 @@
             }
 
             function reloadDetailItemsByPo() {
-                const poId = $('#Header_POID').val() || '';
+                const poId = '';
                 const flowId = $('input[name="id"]').val() || '';
                 const url = `?handler=PoItems&poId=${encodeURIComponent(poId)}&flowId=${encodeURIComponent(flowId)}`;
 
@@ -974,7 +1048,7 @@
             }
 
             function destroyBackgroundSelect2() {
-                $('#inventoryReceivedDetailForm select.select2').each(function () {
+                $('#InventoryIssueDetailForm select.select2').each(function () {
                     const $select = $(this);
                     if ($select.closest('.modal').length > 0) {
                         return;
@@ -986,11 +1060,11 @@
                     }
                 });
 
-                $('body').addClass('inventory-received-modal-open');
+                $('body').addClass('inventory-Issue-modal-open');
             }
 
             function initBackgroundSelect2() {
-                $('#inventoryReceivedDetailForm select.select2').each(function () {
+                $('#InventoryIssueDetailForm select.select2').each(function () {
                     const $select = $(this);
                     if ($select.closest('.modal').length > 0) {
                         return;
@@ -1001,7 +1075,7 @@
                     }
                 });
 
-                $('body').removeClass('inventory-received-modal-open');
+                $('body').removeClass('inventory-Issue-modal-open');
             }
 
             function initModalSelect2($modal) {
@@ -1029,7 +1103,7 @@
                             const name = text.substring(idx + 3);
                             const $result = $('<span><span class="item-code"></span> - <span class="tcvn3-font item-name"></span></span>');
                             $result.find('.item-code').text(code);
-                            $result.find('.item-name').text(name);
+                            $result.find('.item-name').text(toTcvn3WebText(name));
                             return $result;
                         };
 
@@ -1044,7 +1118,7 @@
                             const name = text.substring(idx + 3);
                             const $result = $('<span><span class="item-code"></span> - <span class="tcvn3-font item-name"></span></span>');
                             $result.find('.item-code').text(code);
-                            $result.find('.item-name').text(name);
+                            $result.find('.item-name').text(toTcvn3WebText(name));
                             return $result;
                         };
 
@@ -1055,210 +1129,168 @@
                 });
             }
 
-            const inventoryReceivedModalSelector = '#receivedAddDetailModal, #detailResetWarningModal, #prqAttachmentModal, #confirmInventoryReceivedModal, #receiveFromIssueModal';
+            const InventoryIssueModalSelector = '#IssueAddDetailModal, #detailResetWarningModal, #prqAttachmentModal, #confirmInventoryIssueModal, #adjustItemInApmtModal, #FromMrModal';
 
-            $('.modal').filter(inventoryReceivedModalSelector).on('show.bs.modal', function () {
+            $('.modal').filter(InventoryIssueModalSelector).on('show.bs.modal', function () {
                 const $modal = $(this);
                 destroyBackgroundSelect2();
-                if ($modal.is('#confirmInventoryReceivedModal')) {
-                    $('body').addClass('inventory-received-confirm-open');
+                if ($modal.is('#confirmInventoryIssueModal')) {
+                    $('body').addClass('inventory-Issue-confirm-open');
+                    const mode = ($('input[name="mode"]').val() || '').toLowerCase();
+                    const issueId = $('input[name="id"]').val() || '';
+                    if (mode === 'approved' && issueId) {
+                        const reportUrl = `?id=${encodeURIComponent(issueId)}&handler=Report&inline=true&previewSign=true`;
+                        $('#issueSignReportPreviewFrame').attr('src', reportUrl);
+                    }
                 }
                 initModalSelect2($modal);
             });
 
-            $('.modal').filter(inventoryReceivedModalSelector).on('hidden.bs.modal', function () {
-                if ($(this).is('#confirmInventoryReceivedModal')) {
-                    $('body').removeClass('inventory-received-confirm-open');
+            $('.modal').filter(InventoryIssueModalSelector).on('hidden.bs.modal', function () {
+                if ($(this).is('#confirmInventoryIssueModal')) {
+                    $('body').removeClass('inventory-Issue-confirm-open');
+                    $('#issueSignReportPreviewFrame').attr('src', '');
                 }
-                if ($('.modal.show').filter(inventoryReceivedModalSelector).length === 0) {
+                if ($('.modal.show').filter(InventoryIssueModalSelector).length === 0) {
                     initBackgroundSelect2();
                 }
             });
 
             $(document).on('select2:opening', 'select.select2', function (e) {
-                const isModalOpen = $('.modal.show').filter(inventoryReceivedModalSelector).length > 0;
-                const isInsideModal = $(this).closest('.modal.show').filter(inventoryReceivedModalSelector).length > 0;
+                const isModalOpen = $('.modal.show').filter(InventoryIssueModalSelector).length > 0;
+                const isInsideModal = $(this).closest('.modal.show').filter(InventoryIssueModalSelector).length > 0;
                 if (isModalOpen && !isInsideModal) {
                     e.preventDefault();
                     return false;
                 }
             });
 
+            $('#btnAdjustItemInApmt').on('click', function () {
+                $('#adjustItemInApmtModal').modal('show');
+            });
+
+            $('#btnConfirmAdjustItemInApmt').on('click', function () {
+                $('#adjustItemInApmtModal').modal('hide');
+                syncDetailsJson();
+                let $applyAll = $('#InventoryIssueDetailForm input[name="ApplyAllApartment"]');
+                if ($applyAll.length === 0) {
+                    $applyAll = $('<input type="hidden" name="ApplyAllApartment" />').appendTo('#InventoryIssueDetailForm');
+                }
+                $applyAll.val($('#ApplyAllApartmentInput').val() || 'false');
+                $('#InventoryIssueDetailForm').attr('action', '?handler=AdjustItemInApartment');
+                $('#InventoryIssueDetailForm').trigger('submit');
+            });
+
             $('#btnConfirmVoucherAction').on('click', function () {
                 const mode = ($('input[name="mode"]').val() || '').toLowerCase();
                 if (mode === 'add') {
                     isSubmittingConfirmAfterSave = true;
-                    $('#confirmInventoryReceivedModal').modal('hide');
-                    $('#inventoryReceivedDetailForm').attr('action', '?handler=SaveAndConfirm');
-                    $('#inventoryReceivedDetailForm').trigger('submit');
+                    $('#confirmInventoryIssueModal').modal('hide');
+                    $('#InventoryIssueDetailForm').attr('action', '?handler=SaveAndConfirm');
+                    $('#InventoryIssueDetailForm').trigger('submit');
                     return;
                 }
 
-                $('#confirmInventoryReceivedForm').trigger('submit');
+                $('#confirmInventoryIssueForm').trigger('submit');
             });
 
-            $('#confirmInventoryReceivedModal').on('hidden.bs.modal', function () {
+            $('#confirmInventoryIssueModal').on('hidden.bs.modal', function () {
                 if (isSubmittingConfirmAfterSave) {
                     return;
                 }
                 $('#ConfirmAfterSave').val('false');
-                $('#inventoryReceivedDetailForm').attr('action', '');
+                $('#InventoryIssueDetailForm').attr('action', '');
             });
 
-            $('#btnOpenAddDetail').on('click', function () {
+            const openAddDetailModal = function () {
                 $('#btnConfirmResetDetails').show();
-                const openModal = function () {
-                    if (isPoFlow()) {
-                        $('#addDetailPoPanel').removeClass('d-none');
-                        $('#addDetailManualPanel').addClass('d-none');
-                        resetAddDetailModalInputs();
-                    } else {
-                        $('#addDetailPoPanel').addClass('d-none');
-                        $('#addDetailManualPanel').removeClass('d-none');
-                        renderManualAddDetailOptions();
-                        syncManualItemInfo();
-                    }
-                    $('#receivedAddDetailModal').modal('show');
-                };
+                $('#addDetailPoPanel').addClass('d-none');
+                $('#addDetailManualPanel').removeClass('d-none');
+                renderManualAddDetailOptions();
+                syncManualItemInfo();
+                hideDuplicatePanel();
+                $('#IssueAddDetailModal').modal('show');
+            };
 
-                if (isPoFlow()) {
-                    reloadDetailItemsByPo().then(openModal);
-                } else {
-                    openModal();
-                }
+            $('#btnOpenAddDetail, #btnOpenAddNewAction').on('click', function () {
+                openAddDetailModal();
             });
 
-            $('#Header_POID').on('change', function () {
-                reloadDetailItemsByPo();
-            });
 
             $('#btnAddDetailConfirm').on('click', function () {
-                if (!isPoFlow()) {
-                    showAddDetailModalValidation('');
-                    clearManualAddFieldErrors();
-                    const itemId = Number($('#manualAddItemId').val() || 0);
-                    const item = itemCatalog.find(x => Number(x.id) === itemId);
-                    if (!item) {
-                        showAddDetailModalValidation('Please select item.');
-                        return;
-                    }
-
-                    const docQty = parseNumber($('#manualAddDocQty').val());
-                    const actQty = parseNumber($('#manualAddActQty').val());
-                    const unitPrice = parseNumber($('#manualAddUnitPrice').val());
-                    const locationIdRaw = $('#manualAddLocationId').val();
-                    const location = locationCatalog.find(x => x.id === locationIdRaw);
-
-                    if (actQty <= 0) {
-                        setManualAddFieldError('#manualAddActQty', '#manualAddActQtyError', 'Act. Qty must be greater than 0.');
-                        showAddDetailModalValidation(`Item '${item.itemCode || ''}' must have Act. Qty > 0.`);
-                        return;
-                    }
-                    if (docQty < actQty) {
-                        setManualAddFieldError('#manualAddDocQty', '#manualAddDocQtyError', 'Doc. Qty must be greater than or equal Act. Qty.');
-                        setManualAddFieldError('#manualAddActQty', '#manualAddActQtyError', 'Act. Qty must be less than or equal Doc. Qty.');
-                        showAddDetailModalValidation(`Item '${item.itemCode || ''}' Doc. Qty must be greater than or equal Act. Qty.`);
-                        return;
-                    }
-                    if (unitPrice <= 0) {
-                        setManualAddFieldError('#manualAddUnitPrice', '#manualAddUnitPriceError', 'Price must be greater than 0.');
-                        showAddDetailModalValidation(`Item '${item.itemCode || ''}' must have Price > 0.`);
-                        return;
-                    }
-
-                    details.push({
-                        itemId: Number(item.id),
-                        chekingID: null,
-                        chekingDTID: null,
-                        mrDetailID: null,
-                        itemCode: item.itemCode || '',
-                        itemName: item.itemName || '',
-                        unit: item.unit || '',
-                        docQty: docQty,
-                        actQty: actQty,
-                        unitPrice: unitPrice,
-                        amount: actQty * unitPrice,
-                        locationId: locationIdRaw ? Number(locationIdRaw) : null,
-                        locationName: location?.text || ''
-                    });
-
-                    renderRows();
-                    $('#receivedAddDetailModal').modal('hide');
-                    return;
-                }
-
-                const checked = $('.add-detail-check:checked');
-                if (checked.length === 0) {
-                    return;
-                }
-
-                showClientValidation('');
                 showAddDetailModalValidation('');
-                clearPoAddFieldErrors();
-                let errorMessage = '';
-
-                checked.each(function () {
-                    if (errorMessage) return;
-                    const itemId = Number($(this).data('itemid'));
-                    const item = itemCatalog.find(x => Number(x.id) === itemId);
-                    if (!item) return;
-
-                    const docQty = parseNumber($(`.add-docqty[data-itemid='${itemId}']`).val());
-                    const actQty = parseNumber($(`.add-actqty[data-itemid='${itemId}']`).val());
-                    const unitPrice = parseNumber($(`.add-unitprice[data-itemid='${itemId}']`).val());
-                    const maxQty = getAvailableQty(item);
-                    if (actQty <= 0) {
-                        errorMessage = `Item '${item.itemCode || ''}' must have Act. Qty > 0.`;
-                        setPoAddFieldError(itemId, 'add-actqty', 'Act. Qty must be greater than 0.');
-                        return;
-                    }
-                    if (actQty > maxQty) {
-                        errorMessage = `Item '${item.itemCode || ''}' Act. Qty exceeds remaining qty (${formatNumber(maxQty)}).`;
-                        setPoAddFieldError(itemId, 'add-actqty', `Act. Qty exceeds remaining qty (${formatNumber(maxQty)}).`);
-                        return;
-                    }
-                    if (docQty < actQty) {
-                        errorMessage = `Item '${item.itemCode || ''}' Doc. Qty must be greater than or equal Act. Qty.`;
-                        setPoAddFieldError(itemId, 'add-docqty', 'Doc. Qty must be greater than or equal Act. Qty.');
-                        setPoAddFieldError(itemId, 'add-actqty', 'Act. Qty must be less than or equal Doc. Qty.');
-                        return;
-                    }
-                    if (unitPrice <= 0) {
-                        errorMessage = `Item '${item.itemCode || ''}' must have Price > 0.`;
-                        setPoAddFieldError(itemId, 'add-unitprice', 'Price must be greater than 0.');
-                        return;
-                    }
-                    if ($('#Header_POID').val() && (!item.checkingDtId || !item.mrDetailId)) {
-                        errorMessage = `Item '${item.itemCode || ''}' is missing source link.`;
-                        return;
-                    }
-                    const locationIdRaw = $(`.add-location[data-itemid='${itemId}']`).val();
-                    const location = locationCatalog.find(x => x.id === locationIdRaw);
-
-                    details.push({
-                        itemId: Number(item.id),
-                        chekingID: item.checkingId ? Number(item.checkingId) : null,
-                        chekingDTID: item.checkingDtId ? Number(item.checkingDtId) : null,
-                        mrDetailID: item.mrDetailId ? Number(item.mrDetailId) : null,
-                        itemCode: item.itemCode || '',
-                        itemName: item.itemName || '',
-                        unit: item.unit || '',
-                        docQty: docQty,
-                        actQty: actQty,
-                        unitPrice: unitPrice,
-                        amount: actQty * unitPrice,
-                        locationId: locationIdRaw ? Number(locationIdRaw) : null,
-                        locationName: location?.text || ''
-                    });
-                });
-
-                if (errorMessage) {
-                    showAddDetailModalValidation(errorMessage);
+                clearManualAddFieldErrors();
+                const itemId = Number($('#manualAddItemId').val() || 0);
+                const item = itemCatalog.find(x => Number(x.id) === itemId);
+                if (!item) {
+                    showAddDetailModalValidation('Please select item.');
                     return;
                 }
+
+                const docQty = parseNumber($('#manualAddDocQty').val());
+                const actQty = parseNumber($('#manualAddActQty').val());
+                const unitPrice = parseNumber($('#manualAddUnitPrice').val());
+                const locationIdRaw = $('#manualAddLocationId').val();
+                const location = locationCatalog.find(x => x.id === locationIdRaw);
+
+                if (actQty <= 0) {
+                    setManualAddFieldError('#manualAddActQty', '#manualAddActQtyError', 'Act. Qty must be greater than 0.');
+                    showAddDetailModalValidation(`Item '${item.itemCode || ''}' must have Act. Qty > 0.`);
+                    return;
+                }
+                if (docQty < actQty) {
+                    setManualAddFieldError('#manualAddDocQty', '#manualAddDocQtyError', 'Doc. Qty must be greater than or equal Act. Qty.');
+                    setManualAddFieldError('#manualAddActQty', '#manualAddActQtyError', 'Act. Qty must be less than or equal Doc. Qty.');
+                    showAddDetailModalValidation(`Item '${item.itemCode || ''}' Doc. Qty must be greater than or equal Act. Qty.`);
+                    return;
+                }
+                if (unitPrice <= 0) {
+                    setManualAddFieldError('#manualAddUnitPrice', '#manualAddUnitPriceError', 'Price must be greater than 0.');
+                    showAddDetailModalValidation(`Item '${item.itemCode || ''}' must have Price > 0.`);
+                    return;
+                }
+
+                const incomingRow = {
+                    itemId: Number(item.id),
+                    chekingID: null,
+                    chekingDTID: null,
+                    mrDetailID: null,
+                    itemCode: item.itemCode || '',
+                    itemName: item.itemName || '',
+                    unit: item.unit || '',
+                    docQty: docQty,
+                    actQty: actQty,
+                    unitPrice: unitPrice,
+                    amount: actQty * unitPrice,
+                    locationId: locationIdRaw ? Number(locationIdRaw) : null,
+                    locationName: location?.text || ''
+                };
+
+                if (!confirmReplaceExistingDetail(incomingRow)) {
+                    return;
+                }
+
+                upsertDetailRow(incomingRow);
 
                 renderRows();
-                $('#receivedAddDetailModal').modal('hide');
+                $('#IssueAddDetailModal').modal('hide');
+                return;
+            });
+
+            $('#btnDuplicateReplace').on('click', function () {
+                if (!pendingDuplicateIncomingRow) {
+                    hideDuplicatePanel();
+                    return;
+                }
+
+                upsertDetailRow(pendingDuplicateIncomingRow);
+                renderRows();
+                hideDuplicatePanel();
+                $('#IssueAddDetailModal').modal('hide');
+            });
+
+            $('#btnDuplicateKeep').on('click', function () {
+                hideDuplicatePanel();
             });
 
             $(document).on('input change', '.add-actqty, .add-docqty', function () {
@@ -1299,19 +1331,14 @@
 
                 row.docQty = parseNumber($(`.detail-docqty[data-index='${idx}']`).val());
                 row.actQty = parseNumber($(`.detail-actqty[data-index='${idx}']`).val());
-                const source = itemCatalog.find(x => detailKey(x) === detailKey(row));
-                const maxQty = source ? Number(source.remainingQty || 0) : null;
-                if (maxQty !== null && row.actQty > maxQty) {
-                    row.actQty = Math.max(0, maxQty);
-                    $(`.detail-actqty[data-index='${idx}']`).val(formatNumber(row.actQty));
-                    showClientValidation(`Item '${row.itemCode || ''}' Act. Qty exceeds remaining qty (${formatNumber(maxQty)}).`);
-                } else if (row.actQty <= 0) {
+                if (row.actQty <= 0) {
                     showClientValidation(`Item '${row.itemCode || ''}' must have Act. Qty > 0.`);
                 } else if (row.docQty < row.actQty) {
                     showClientValidation(`Item '${row.itemCode || ''}' Doc. Qty must be greater than or equal Act. Qty.`);
                 } else {
                     showClientValidation('');
                 }
+
                 row.unitPrice = parseNumber($(`.detail-unitprice[data-index='${idx}']`).val());
                 row.amount = row.actQty * row.unitPrice;
 
@@ -1323,7 +1350,6 @@
                 $(`.detail-amount[data-index='${idx}']`).text(formatNumber(row.amount));
                 syncDetailsJson();
             });
-
             $(document).on('focus', '.number-format', function () {
                 $(this).val(parseNumber($(this).val()));
             });
@@ -1385,45 +1411,44 @@
                 renderAttachmentStaging();
             });
 
-            $('#Header_POID').on('focus', function () { pendingOldValue = $(this).val(); });
 
-            $('#btnOpenReceiveFromIssue').on('click', function () {
+            $('#btnOpenIssueFromIssue').on('click', function () {
                 if ($(this).prop('disabled')) {
                     return;
                 }
                 if (Number($('#Header_FlowSubType').val() || 0) !== 6) {
-                    showClientValidation('Receive From Inventory Issue is only available for Receive From Company Main Store.');
+                    showClientValidation('Issue From Inventory Issue is only available for Issue From Company Main Store.');
                     return;
                 }
 
-                showIssueReceiveValidation('');
-                loadIssueReceiveList().then(function () {
+                showIssueIssueValidation('');
+                loadIssueIssueList().then(function () {
                     if (selectedIssueFlowId > 0) {
-                        loadIssueReceiveDetails(selectedIssueFlowId);
+                        loadIssueIssueetails(selectedIssueFlowId);
                     } else {
-                        issueReceiveDetails = [];
-                        renderIssueReceiveDetails();
+                        issueIssueetails = [];
+                        renderIssueIssueetails();
                     }
-                    $('#receiveFromIssueModal').modal('show');
+                    $('#FromMrModal').modal('show');
                 });
             });
 
-            $('#btnSearchIssueReceive').on('click', function () {
+            $('#btnSearchIssueIssue').on('click', function () {
                 selectedIssueFlowId = 0;
-                issueReceiveDetails = [];
-                renderIssueReceiveDetails();
-                loadIssueReceiveList();
+                issueIssueetails = [];
+                renderIssueIssueetails();
+                loadIssueIssueList();
             });
 
-            $(document).on('change', '.issue-receive-select', function () {
+            $(document).on('change', '.issue-Issue-select', function () {
                 selectedIssueFlowId = Number($(this).val() || 0);
-                $('#btnReceiveFromIssueOk').prop('disabled', selectedIssueFlowId <= 0);
-                showIssueReceiveValidation('');
-                loadIssueReceiveDetails(selectedIssueFlowId);
+                $('#btnIssueFromIssueOk').prop('disabled', selectedIssueFlowId <= 0);
+                showIssueIssueValidation('');
+                loadIssueIssueetails(selectedIssueFlowId);
             });
 
-            $(document).on('click', '#issueReceiveRowsBody .issue-receive-row', function (e) {
-                if ($(e.target).is('.issue-receive-select')) {
+            $(document).on('click', '#issueIssueRowsBody .issue-Issue-row', function (e) {
+                if ($(e.target).is('.issue-Issue-select')) {
                     return;
                 }
 
@@ -1432,20 +1457,20 @@
                     return;
                 }
 
-                $(this).find('.issue-receive-select').prop('checked', true).trigger('change');
+                $(this).find('.issue-Issue-select').prop('checked', true).trigger('change');
             });
 
-            $('#btnReceiveFromIssueOk').on('click', function () {
+            $('#btnIssueFromIssueOk').on('click', function () {
                 if (selectedIssueFlowId <= 0) {
-                    showIssueReceiveValidation('Please select issue voucher.');
+                    showIssueIssueValidation('Please select issue voucher.');
                     return;
                 }
-                if (!issueReceiveDetails.length) {
-                    showIssueReceiveValidation('Selected issue voucher has no details.');
+                if (!issueIssueetails.length) {
+                    showIssueIssueValidation('Selected issue voucher has no details.');
                     return;
                 }
 
-                details = issueReceiveDetails.map(x => ({
+                details = issueIssueetails.map(x => ({
                     itemId: Number(x.itemId || 0),
                     chekingID: null,
                     chekingDTID: null,
@@ -1462,17 +1487,8 @@
                 }));
 
                 $('#SelectedIssueFlowId').val(selectedIssueFlowId);
-                $('#Header_POID').val('').trigger('change.select2');
                 renderRows();
-                $('#receiveFromIssueModal').modal('hide');
-            });
-            $('#Header_POID').on('change', function () {
-                if (details.length === 0) { pendingOldValue = $(this).val(); return; }
-                pendingField = this;
-                pendingAction = 'po-change';
-                $('#btnConfirmResetDetails').show();
-                $('#detailResetWarningModal .modal-body').text('Changing this header field will reset the current detail list. Do you want to continue?');
-                $('#detailResetWarningModal').modal('show');
+                $('#FromMrModal').modal('hide');
             });
 
             $('#btnConfirmResetDetails').on('click', function () {
@@ -1480,7 +1496,7 @@
                     clearDetails();
                     if (pendingAction === 'flow-subtype-change') {
                         applyFieldRuleByFlowSubType();
-                        reloadReceiveContext();
+                        reloadIssueContext();
                     } else {
                         pendingOldValue = $(pendingField).val();
                     }
@@ -1505,13 +1521,13 @@
                     pendingOldValue = $(this).data('old') || '';
                     pendingAction = 'flow-subtype-change';
                     $('#btnConfirmResetDetails').show();
-                    $('#detailResetWarningModal .modal-body').text('Changing Received Type will reset PO No and current detail list. Do you want to continue?');
+                    $('#detailResetWarningModal .modal-body').text('Changing Issue Type will reset PO No and current detail list. Do you want to continue?');
                     $('#detailResetWarningModal').modal('show');
                     return;
                 }
                 $(this).data('old', $(this).val());
                 applyFieldRuleByFlowSubType();
-                reloadReceiveContext();
+                reloadIssueContext();
             });
 
             $('#Header_FlowSubType').on('focus', function () {
@@ -1520,12 +1536,236 @@
 
             initSelect2();
             applyFieldRuleByFlowSubType();
+            syncConfirmButtonState();
+            let selectedMrNo = 0;
+            let mrDetails = [];
+
+            function setMrAlert(message) {
+                if (message) {
+                    $('#mrAlert').removeClass('d-none').text(message);
+                } else {
+                    $('#mrAlert').addClass('d-none').text('');
+                }
+            }
+
+            function renderMrRows(items) {
+                const $b = $('#mrRows'); $b.empty();
+                if (!items.length) { $b.html('<tr><td colspan="5" class="text-center text-muted">No data</td></tr>'); return; }
+                items.forEach(x => $b.append(`<tr class="mr-row" data-request-no="${x.requestNo}" style="cursor:pointer;"><td class="text-center"><input type="radio" name="mrSelect" class="mr-select" value="${x.requestNo}" /></td><td>${x.requestNo}</td><td>${x.dateCreate || ''}</td><td>${x.according || ''}</td><td>${x.deptName || ''}</td></tr>`));
+            }
+
+            function renderMrDetailRows(items) {
+                const $b = $('#mrDetailRows');
+                $b.empty();
+                $('#mrCheckAll').prop('checked', false);
+                if (!items.length) {
+                    $b.html('<tr><td colspan="7" class="text-center text-muted">No data</td></tr>');
+                    setMrAlert('');
+                    return;
+                }
+                items.forEach(x => $b.append(`<tr><td class="text-center"><input type="checkbox" class="mr-detail-check" data-id="${x.id}" /></td><td>${x.itemCode || ''}</td><td class="tcvn3-font">${toTcvn3WebText(x.itemName || '')}</td><td>${x.unit || ''}</td><td class="text-right">${Number(x.remainQty || 0).toLocaleString()}</td><td><input type="text" class="form-control form-control-sm text-right mr-issue-qty" data-id="${x.id}" value="0" disabled /></td><td><input type="text" class="form-control form-control-sm text-right mr-price" data-id="${x.id}" value="0" disabled /></td></tr>`));
+                const missing = items.filter(x => x.missingItemName);
+                if (missing.length) {
+                    setMrAlert(`Missing Item Name master data for ${missing.length} item(s). Please update item master.`);
+                } else {
+                    setMrAlert('');
+                }
+            }
+
+            function loadMrList() {
+                const requestNo = $('#mrRequestNo').val() || '';
+                const itemCode = $('#mrItemCode').val() || '';
+                const according = $('#mrAccording').val() || '';
+                const deptId = $('#mrDept').val() || '';
+                const fromDate = $('#mrFromDate').val() || '';
+                const toDate = $('#mrToDate').val() || '';
+                return fetch(`?handler=MrList&requestNo=${encodeURIComponent(requestNo)}&itemCode=${encodeURIComponent(itemCode)}&according=${encodeURIComponent(according)}&deptId=${encodeURIComponent(deptId)}&fromDate=${encodeURIComponent(fromDate)}&toDate=${encodeURIComponent(toDate)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(r => r.ok ? r.json() : []).then(renderMrRows);
+            }
+
+            function loadMrDetails(requestNo) {
+                return fetch(`?handler=MrDetails&requestNo=${encodeURIComponent(requestNo)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(r => r.ok ? r.json() : []).then(list => {
+                        mrDetails = Array.isArray(list) ? list : [];
+                        renderMrDetailRows(mrDetails);
+                    });
+            }
+
+            $('#btnOpenFromMr, #btnOpenFromMrAction').on('click', function () {
+                if (hasAdjustedApartmentItems) return;
+                const today = new Date();
+                const from = new Date();
+                from.setDate(today.getDate() - 60);
+                $('#mrFromDate').val(from.toISOString().slice(0, 10));
+                $('#mrToDate').val(today.toISOString().slice(0, 10));
+                selectedMrNo = 0;
+                mrDetails = [];
+                setMrAlert('');
+                renderMrDetailRows([]);
+                loadMrList();
+                $('#FromMrModal').modal('show');
+            });
+
+            $('#btnSearchMr').on('click', function () { loadMrList(); });
+
+            $('#FromMrModal').on('hidden.bs.modal', function () {
+                selectedMrNo = 0;
+                mrDetails = [];
+                $('#mrRows .mr-row').removeClass('table-primary');
+                $('input[name="mrSelect"]').prop('checked', false);
+                $('#mrCheckAll').prop('checked', false);
+                setMrAlert('');
+                renderMrDetailRows([]);
+            });
+
+            $(document).on('click', '.mr-row', function (e) {
+                if (!$(e.target).is('.mr-select')) {
+                    $(this).find('.mr-select').prop('checked', true);
+                }
+                selectedMrNo = Number($(this).data('request-no') || 0);
+                $('#mrRows .mr-row').removeClass('table-primary');
+                $(this).addClass('table-primary');
+                $('#mrCheckAll').prop('checked', false);
+                setMrAlert('');
+                loadMrDetails(selectedMrNo);
+            });
+
+            $('#mrCheckAll').on('change', function () {
+                const checked = $(this).is(':checked');
+                $('.mr-detail-check').prop('checked', checked);
+                $('.mr-issue-qty, .mr-price').prop('disabled', !checked);
+                if (!checked) { $('.mr-issue-qty, .mr-price').val('0'); }
+            });
+
+            $('#Header_RecDept').on('change', function () {
+                reloadReceiverOptions('');
+            });
+
+            $(document).on('change', '.mr-detail-check', function () {
+                const total = $('.mr-detail-check').length;
+                const checked = $('.mr-detail-check:checked').length;
+                $('#mrCheckAll').prop('checked', total > 0 && total === checked);
+                const id = Number($(this).data('id') || 0);
+                const isChecked = $(this).is(':checked');
+                const qtySelector = ".mr-issue-qty[data-id='" + id + "']";
+                const priceSelector = ".mr-price[data-id='" + id + "']";
+                $(qtySelector).prop('disabled', !isChecked);
+                $(priceSelector).prop('disabled', !isChecked);
+                if (!isChecked) { $(qtySelector).val('0'); $(priceSelector).val('0'); }
+            });
+
+            $('#btnFromMrOk').on('click', function () {
+                const selected = [];
+                const invalidItems = [];
+                const checkedRows = $('.mr-detail-check:checked');
+
+                checkedRows.each(function () {
+                    const id = Number($(this).data('id') || 0);
+                    const item = mrDetails.find(x => Number(x.id) === id);
+                    if (!item) return;
+
+                    const qty = parseNumber($(`.mr-issue-qty[data-id='${id}']`).val());
+                    const price = parseNumber($(`.mr-price[data-id='${id}']`).val());
+
+                    if (qty <= 0) {
+                        invalidItems.push(`${item.itemCode || id}: Issue Qty must be greater than 0`);
+                        return;
+                    }
+                    if (qty > Number(item.remainQty || 0)) {
+                        invalidItems.push(`${item.itemCode || id}: Issue Qty (${qty}) cannot exceed Remain (${Number(item.remainQty || 0)})`);
+                        return;
+                    }
+
+                    selected.push({
+                        itemId: Number(item.itemId || 0),
+                        mrDetailID: id,
+                        itemCode: item.itemCode || '',
+                        itemName: item.itemName || '',
+                        unit: item.unit || '',
+                        docQty: Number(item.remainQty || 0),
+                        actQty: qty,
+                        unitPrice: price,
+                        amount: qty * price,
+                        locationId: null,
+                        locationName: ''
+                    });
+                });
+
+                if (!checkedRows.length) {
+                    setMrAlert('Please select at least one MR item.');
+                    return;
+                }
+                if (invalidItems.length) {
+                    setMrAlert(invalidItems.join(' | '));
+                    return;
+                }
+                if (!selected.length) {
+                    setMrAlert('Please input valid Issue Qty.');
+                    return;
+                }
+
+                setMrAlert('');
+                selected.forEach(x => upsertDetailRow(x));
+                renderRows();
+                $('#FromMrModal').modal('hide');
+            });
+
             syncAttachmentInputFromStaging();
             syncDeletedAttachmentDocIds();
             renderRows();
         })();
     </script>
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
