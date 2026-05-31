@@ -298,7 +298,7 @@
             <td><select class="form-control form-control-sm lr-linen vni-font">${linens}</select></td>
             <td class="text-center"><input type="checkbox" class="lr-express" /></td>
             <td class="text-center"><input type="checkbox" class="lr-child" /></td>
-            <td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-right lr-quantity" value="0" /></td>
+            <td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-right lr-quantity" value="0.00" /></td>
             <td><input type="number" step="0.01" class="form-control form-control-sm text-right lr-price" value="0" /></td>
             <td><input type="number" step="0.01" class="form-control form-control-sm text-right lr-amount" value="0" readonly /></td>
             <td class="linen-receiving-note-cell"><input type="text" maxlength="100" class="form-control form-control-sm lr-note vni-font" value="" /></td>
