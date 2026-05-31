@@ -152,6 +152,7 @@ public class LinenReceivingDetailModel : BasePageModel
                 createCmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = Header.ReceiveID;
                 createCmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = Header.SendID.Value;
                 createCmd.ExecuteNonQuery();
+                BackfillReceiveDetailDisplayFields(conn, trans, Header.ReceiveID);
             }
             else
             {
@@ -546,6 +547,20 @@ VALUES
                 insertCmd.ExecuteNonQuery();
             }
         }
+    }
+
+    private static void BackfillReceiveDetailDisplayFields(SqlConnection conn, SqlTransaction trans, int receiveId)
+    {
+        using var cmd = new SqlCommand(@"
+UPDATE dt
+SET Location = ISNULL(loc.Location, dt.Location),
+    LinnenCode = ISNULL(ln.LinnenCode, dt.LinnenCode)
+FROM dbo.LN_ReceiveDT dt
+LEFT JOIN dbo.View_LN_Location loc ON loc.locationID = dt.LocationID
+LEFT JOIN dbo.LN_Linnen ln ON ln.ID = dt.LinnenID
+WHERE dt.ReceiveID = @ReceiveID;", conn, trans);
+        cmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = receiveId;
+        cmd.ExecuteNonQuery();
     }
 
     private void BindDetailParams(SqlCommand cmd, LinenReceivingDetailRow row)

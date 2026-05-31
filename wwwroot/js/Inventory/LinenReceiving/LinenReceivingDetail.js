@@ -87,13 +87,19 @@
 
         $(document).off('change', '.lr-linen').on('change', '.lr-linen', function () {
             const $row = $(this).closest('tr');
-            const selectedPrice = parseDecimal($(this).find('option:selected').data('price'));
-            $row.find('.lr-price').val(formatDecimal(selectedPrice));
+            refreshRowPriceFromLinen($row);
             recalcRow($row);
             pageDirty = true;
         });
 
-        $(document).off('input change', '.lr-quantity, .lr-price').on('input change', '.lr-quantity, .lr-price', function () {
+        $(document).off('input change', '.lr-quantity').on('input change', '.lr-quantity', function () {
+            const $row = $(this).closest('tr');
+            refreshRowPriceFromLinen($row);
+            recalcRow($row);
+            pageDirty = true;
+        });
+
+        $(document).off('input change', '.lr-price').on('input change', '.lr-price', function () {
             recalcRow($(this).closest('tr'));
             pageDirty = true;
         });
@@ -328,6 +334,11 @@
         $('#linenReceivingDetailTable tbody tr.linen-receiving-detail-row').each(function () {
             recalcRow($(this));
         });
+    }
+
+    function refreshRowPriceFromLinen($row) {
+        const selectedPrice = parseDecimal($row.find('.lr-linen option:selected').data('price'));
+        $row.find('.lr-price').val(formatDecimal(selectedPrice));
     }
 
     function recalcRow($row) {
