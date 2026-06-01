@@ -92,7 +92,10 @@
             pageDirty = true;
         });
 
-        $(document).off('input change', '.lr-quantity').on('input change', '.lr-quantity', function () {
+        $(document).off('input change', '.lr-quantity').on('input change', '.lr-quantity', function (e) {
+            if (e.type === 'change') {
+                $(this).val(formatDecimal(parseDecimal($(this).val())));
+            }
             const $row = $(this).closest('tr');
             refreshRowPriceFromLinen($row);
             recalcRow($row);
@@ -301,9 +304,9 @@
             <td><select class="form-control form-control-sm lr-linen vni-font">${linens}</select></td>
             <td class="text-center"><input type="checkbox" class="lr-express" /></td>
             <td class="text-center"><input type="checkbox" class="lr-child" /></td>
-            <td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-right lr-quantity" value="0.00" /></td>
-            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right lr-price" value="0.00" /></td>
-            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right lr-amount" value="0.00" readonly /></td>
+            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right lr-quantity" value="0" /></td>
+            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right lr-price" value="0" /></td>
+            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right lr-amount" value="0" readonly /></td>
             <td class="linen-receiving-note-cell"><input type="text" maxlength="100" class="form-control form-control-sm lr-note vni-font" value="" /></td>
         </tr>`;
 
@@ -379,11 +382,11 @@
     function formatDecimal(value) {
         const numberValue = Number(value || 0);
         if (!Number.isFinite(numberValue)) {
-            return '0.00';
+            return '0';
         }
 
         return numberValue.toLocaleString('en-US', {
-            minimumFractionDigits: 2,
+            minimumFractionDigits: 0,
             maximumFractionDigits: 2
         });
     }

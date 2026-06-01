@@ -131,7 +131,7 @@
         });
 
         $(document).off('input change', '.ld-quantity, .ld-price, .ld-express').on('input change', '.ld-quantity, .ld-price, .ld-express', function (e) {
-            if (e.type === 'change' && $(this).hasClass('ld-price')) {
+            if (e.type === 'change' && ($(this).hasClass('ld-quantity') || $(this).hasClass('ld-price'))) {
                 $(this).val(formatDecimal(parseDecimal($(this).val())));
             }
             recalcRow($(this).closest('tr'));
@@ -506,9 +506,9 @@
             <td><select class="form-control form-control-sm ld-linen vni-font">${linens}</select></td>
             <td class="text-center"><input type="checkbox" class="ld-express" /></td>
             <td class="text-center"><input type="checkbox" class="ld-child" /></td>
-            <td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-right ld-quantity" value="0.00" /></td>
-            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right ld-price" value="0.00" /></td>
-            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right ld-amount" value="0.00" readonly /></td>
+            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right ld-quantity" value="0" /></td>
+            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right ld-price" value="0" /></td>
+            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right ld-amount" value="0" readonly /></td>
             <td class="linen-delivery-note-cell"><input type="text" maxlength="100" class="form-control form-control-sm ld-note vni-font" value="" /></td>
         </tr>`;
 
@@ -972,11 +972,11 @@
     function formatDecimal(value) {
         const numberValue = Number(value || 0);
         if (!Number.isFinite(numberValue)) {
-            return '0.00';
+            return '0';
         }
 
         return numberValue.toLocaleString('en-US', {
-            minimumFractionDigits: 2,
+            minimumFractionDigits: 0,
             maximumFractionDigits: 2
         });
     }
