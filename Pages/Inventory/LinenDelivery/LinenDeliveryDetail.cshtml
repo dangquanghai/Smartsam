@@ -401,6 +401,15 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="purchase-order-action-bar mt-3">
+                        @if (Model.CanSave)
+                        {
+                            <button type="submit" class="btn btn-primary btn-sm mr-1">
+                                <i class="fas fa-save"></i> Save
+                            </button>
+                        }
+                    </div>
                 </div>
             </div>
 
@@ -511,9 +520,6 @@
                     {
                         <button type="button" class="btn btn-success btn-sm mr-1" id="btnAddDetailRow">
                             <i class="fas fa-plus"></i> Add Detail
-                        </button>
-                        <button type="submit" class="btn btn-primary btn-sm mr-1">
-                            <i class="fas fa-save"></i> Save
                         </button>
                     }
                     <button type="button" class="btn btn-info btn-sm mr-1" id="btnPrintLinenDeliveryDetail">
