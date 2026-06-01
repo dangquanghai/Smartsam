@@ -67,16 +67,67 @@
         }
 
         .linen-delivery-header-vb .linen-delivery-supplier-wrap .ld-inline-field,
-        .linen-delivery-header-vb .linen-delivery-note-wrap .ld-inline-field {
+        .linen-delivery-header-vb .linen-delivery-note-wrap .ld-inline-field,
+        .linen-delivery-header-vb .ld-field-rent,
+        .linen-delivery-header-vb .ld-field-special .ld-check-field {
             grid-template-columns: 100px minmax(0, 1fr);
+        }
+
+        .linen-delivery-header-vb .ld-field-supplier {
+            grid-column: 4;
+            grid-row: 1;
+        }
+
+        .linen-delivery-header-vb .ld-field-lock {
+            grid-column: 5;
+            grid-row: 1;
+        }
+
+        .linen-delivery-header-vb .ld-field-note-view {
+            grid-column: 6;
+            grid-row: 1;
         }
 
         .linen-delivery-header-vb .ld-field-description {
             grid-column: 1 / span 3;
+            grid-row: 2;
+        }
+
+        .linen-delivery-header-vb .ld-field-pantry {
+            grid-column: 4;
+            grid-row: 2;
+        }
+
+        .linen-delivery-header-vb .ld-field-rent {
+            grid-column: 5;
+            grid-row: 2;
+            display: grid;
+        }
+
+        .linen-delivery-header-vb .ld-field-save {
+            grid-column: 6;
+            grid-row: 2;
         }
 
         .linen-delivery-header-vb .ld-field-special {
             grid-column: 4 / span 2;
+            grid-row: 3;
+        }
+
+        .linen-delivery-header-vb.ld-layout-supplier .ld-field-rent,
+        .linen-delivery-header-vb.ld-layout-special .ld-field-rent,
+        .linen-delivery-header-vb.ld-layout-simple .ld-field-rent {
+            grid-column: 4;
+        }
+
+        .linen-delivery-header-vb.ld-layout-supplier .ld-field-save,
+        .linen-delivery-header-vb.ld-layout-special .ld-field-save,
+        .linen-delivery-header-vb.ld-layout-simple .ld-field-save {
+            grid-column: 5;
+        }
+
+        .linen-delivery-header-vb.ld-layout-simple .ld-field-lock {
+            grid-column: 4;
         }
 
         .linen-delivery-header-vb .ld-check-field {
@@ -86,6 +137,12 @@
             min-height: 28px;
             gap: 0.35rem;
             white-space: nowrap;
+        }
+
+        .linen-delivery-header-vb .ld-field-rent,
+        .linen-delivery-header-vb .ld-field-special .ld-check-field {
+            display: grid;
+            grid-template-columns: 100px minmax(0, 1fr);
         }
 
         .linen-delivery-header-vb .ld-action-cell .btn {
@@ -503,7 +560,7 @@
                             }
                         </div>
 
-                        <div class="linen-delivery-supplier-wrap">
+                        <div class="linen-delivery-supplier-wrap ld-field-supplier">
                             <div class="ld-inline-field">
                                 <label class="ld-header-label">Supplier(*)</label>
                                 <select asp-for="Header.SupplierID"
@@ -515,7 +572,7 @@
                             </div>
                         </div>
 
-                        <div class="ld-check-field">
+                        <div class="ld-check-field ld-field-lock">
                             <span class="ld-header-label">Lock</span>
                             <div class="custom-control custom-checkbox">
                                 <input asp-for="Header.Closed" class="custom-control-input" disabled="@isView" />
@@ -523,7 +580,7 @@
                             </div>
                         </div>
 
-                        <div class="ld-action-cell linen-delivery-note-wrap">
+                        <div class="ld-action-cell linen-delivery-note-wrap ld-field-note-view">
                             @if (Model.Header.NoteID.HasValue && Model.Header.NoteID.Value > 0)
                             {
                                 <button type="button"
@@ -543,7 +600,7 @@
                             <input asp-for="Header.Description" class="form-control form-control-sm vni-font" maxlength="100" readonly="@isView" />
                         </div>
 
-                        <div class="linen-delivery-note-wrap">
+                        <div class="linen-delivery-note-wrap ld-field-pantry">
                             <div class="ld-inline-field">
                                 <label class="ld-header-label">Pantry-Linen(*)</label>
                                 <select asp-for="Header.NoteID"
@@ -559,7 +616,7 @@
                             </div>
                         </div>
 
-                        <div class="ld-check-field">
+                        <div class="ld-check-field ld-field-rent">
                             <span class="ld-header-label">Is Rent</span>
                             <div class="custom-control custom-checkbox">
                                 <input asp-for="Header.IsRent" class="custom-control-input" disabled="@isView" />
@@ -567,7 +624,7 @@
                             </div>
                         </div>
 
-                        <div class="ld-action-cell">
+                        <div class="ld-action-cell ld-field-save">
                             @if (Model.CanSave)
                             {
                                 <button type="submit" class="btn btn-primary btn-sm">

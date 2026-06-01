@@ -611,6 +611,11 @@
         const showSupplier = typeValue === '1' || typeValue === '2' || typeValue === '3';
         const showSpecial = typeValue === '3';
 
+        const layoutClass = showPantry ? 'ld-layout-pantry' : (showSpecial ? 'ld-layout-special' : (showSupplier ? 'ld-layout-supplier' : 'ld-layout-simple'));
+        $('.linen-delivery-header-vb')
+            .removeClass('ld-layout-pantry ld-layout-supplier ld-layout-special ld-layout-simple')
+            .addClass(layoutClass);
+
         $('.linen-delivery-note-wrap').toggle(showPantry);
         $('.linen-delivery-supplier-wrap').toggle(showSupplier);
         $('.linen-delivery-special-wrap').toggle(showSpecial);
