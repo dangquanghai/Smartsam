@@ -51,6 +51,124 @@
             top: 50%;
             transform: translateY(-50%);
         }
+        .linen-delivery-header-vb {
+            display: grid;
+            grid-template-columns: minmax(122px, 0.7fr) minmax(132px, 0.8fr) minmax(160px, 1fr) minmax(240px, 1.45fr) 92px 82px;
+            gap: 0.4rem 0.75rem;
+            align-items: center;
+        }
+
+        .linen-delivery-header-vb .ld-inline-field {
+            display: grid;
+            grid-template-columns: max-content minmax(0, 1fr);
+            gap: 0.35rem;
+            align-items: center;
+            min-width: 0;
+        }
+
+        .linen-delivery-header-vb .linen-delivery-supplier-wrap .ld-inline-field,
+        .linen-delivery-header-vb .linen-delivery-note-wrap .ld-inline-field {
+            grid-template-columns: 100px minmax(0, 1fr);
+        }
+
+        .linen-delivery-header-vb .ld-field-supplier {
+            grid-column: 4;
+            grid-row: 2;
+        }
+
+        .linen-delivery-header-vb .ld-field-lock {
+            grid-column: 5;
+            grid-row: 1;
+        }
+
+        .linen-delivery-header-vb .ld-field-note-view {
+            grid-column: 6;
+            grid-row: 1;
+        }
+
+        .linen-delivery-header-vb .ld-field-description {
+            grid-column: 1 / span 3;
+            grid-row: 2;
+        }
+
+        .linen-delivery-header-vb .ld-field-pantry {
+            grid-column: 4;
+            grid-row: 1;
+        }
+
+        .linen-delivery-header-vb .ld-field-rent {
+            grid-column: 5;
+            grid-row: 2;
+        }
+
+        .linen-delivery-header-vb .ld-field-save {
+            grid-column: 6;
+            grid-row: 2;
+        }
+
+        .linen-delivery-header-vb .ld-field-special {
+            grid-column: 4 / span 2;
+            grid-row: 3;
+        }
+
+        .linen-delivery-header-vb.ld-layout-supplier .ld-field-supplier,
+        .linen-delivery-header-vb.ld-layout-special .ld-field-supplier {
+            grid-row: 1;
+        }
+
+        .linen-delivery-header-vb.ld-layout-supplier .ld-field-rent,
+        .linen-delivery-header-vb.ld-layout-special .ld-field-rent,
+        .linen-delivery-header-vb.ld-layout-simple .ld-field-rent {
+            grid-column: 4;
+        }
+
+        .linen-delivery-header-vb.ld-layout-supplier .ld-field-save,
+        .linen-delivery-header-vb.ld-layout-special .ld-field-save,
+        .linen-delivery-header-vb.ld-layout-simple .ld-field-save {
+            grid-column: 5;
+        }
+
+        .linen-delivery-header-vb.ld-layout-simple .ld-field-lock {
+            grid-column: 4;
+        }
+
+        .linen-delivery-header-vb .ld-check-field {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 28px;
+            gap: 0.35rem;
+            white-space: nowrap;
+        }
+
+        .linen-delivery-header-vb .ld-field-lock,
+        .linen-delivery-header-vb .ld-field-rent {
+            display: grid;
+            grid-template-columns: 48px auto;
+            column-gap: 0.35rem;
+            align-items: center;
+            justify-content: start;
+        }
+
+
+        .linen-delivery-header-vb .ld-action-cell .btn {
+            width: 100%;
+            min-width: 78px;
+            height: 28px;
+            padding-top: 2px;
+            padding-bottom: 2px;
+        }
+
+        .linen-delivery-header-vb .ld-header-label {
+            margin-bottom: 0;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            line-height: 1.2;
+        }
+
+        .linen-delivery-header-vb .form-control-sm {
+            width: 100%;
+        }
 
         .linen-delivery-grid th,
         .linen-delivery-grid td {
@@ -263,13 +381,136 @@
             padding: 0;
         }
 
-        .linen-delivery-pantry-note-frame {
-            display: block;
-            width: 100%;
-            height: 100%;
+        .linen-delivery-pantry-note-body {
+            flex: 1 1 auto;
             min-height: 0;
-            border: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .linen-delivery-pantry-note-meta {
+            flex: 0 0 auto;
+            display: grid;
+            grid-template-columns: repeat(5, max-content minmax(0, 1fr));
+            gap: 0.35rem 0.5rem;
+            align-items: center;
+            padding: 0.5rem;
+            border-bottom: 1px solid #d7d7d7;
+            background: #f7f7f7;
+        }
+
+        .linen-delivery-pantry-note-meta label {
+            margin-bottom: 0;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .linen-delivery-pantry-note-meta .form-control-sm {
+            height: 26px;
+            min-width: 0;
+            background: #e9ecef;
+        }
+
+        .linen-delivery-pantry-note-checks {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            white-space: nowrap;
+        }
+
+        .linen-delivery-pantry-note-table-wrap {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
             background: #fff;
+        }
+
+        .linen-delivery-pantry-note-table {
+            table-layout: fixed;
+            min-width: 1320px;
+            font-size: 0.8125rem;
+        }
+
+        .linen-delivery-pantry-note-table th,
+        .linen-delivery-pantry-note-table td {
+            border-color: #9b9b9b !important;
+            padding: 0.25rem 0.3rem !important;
+            vertical-align: middle !important;
+            white-space: nowrap;
+        }
+
+        .linen-delivery-pantry-note-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+
+        .linen-delivery-pantry-note-table .pl-pantry-title {
+            width: 96px;
+            background: #ff9f3a;
+            text-align: center;
+        }
+
+        .linen-delivery-pantry-note-table .pl-linen-title {
+            background: #5b58d6;
+            color: #fff;
+            text-align: center;
+        }
+
+        .linen-delivery-pantry-note-table .pl-sub-title {
+            width: 42px;
+            background: #c8c1f2;
+            color: #1c236d;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .linen-delivery-pantry-note-table .pl-pantry-cell {
+            width: 58px;
+            background: #ff6674;
+            text-align: center;
+            font-weight: 700;
+        }
+
+        .linen-delivery-pantry-note-table .pl-time-cell {
+            width: 38px;
+            text-align: center;
+            font-weight: 700;
+        }
+
+        .linen-delivery-pantry-note-table .pl-time-am {
+            background: #fff49a;
+        }
+
+        .linen-delivery-pantry-note-table .pl-time-pm {
+            background: #ffc2d2;
+        }
+
+        .linen-delivery-pantry-note-table .pl-qty-be {
+            background: #f5d6b5;
+        }
+
+        .linen-delivery-pantry-note-table .pl-qty-cell {
+            text-align: right;
+            width: 42px;
+        }
+
+        .linen-delivery-pantry-note-loading,
+        .linen-delivery-pantry-note-error {
+            padding: 1rem;
+            text-align: center;
+            color: #6c757d;
+        }
+
+        .linen-delivery-pantry-note-error {
+            color: #dc3545;
+        }
+
+        @@media (max-width: 991.98px) {
+            .linen-delivery-pantry-note-meta {
+                grid-template-columns: max-content minmax(0, 1fr);
+            }
         }
     </style>
 }
@@ -297,117 +538,120 @@
             <input type="hidden" asp-for="RedirectUrl" id="RedirectUrl" />
 
             <div class="card card-primary card-outline">
-                <div class="card-body p-2 linen-delivery-header">
-                    <div class="row">
-                        <div class="col-lg-6">
-                            <div class="form-group row mb-2 align-items-center">
-                                <label class="col-sm-3 col-form-label col-form-label-sm">Delivery ID</label>
-                                <div class="col-sm-4">
-                                    <input asp-for="Header.DeliveryID" class="form-control form-control-sm" readonly />
-                                </div>
-                                <label class="col-sm-1 col-form-label col-form-label-sm">Date</label>
-                                <div class="col-sm-4">
-                                    <input asp-for="Header.DeliveryDate" type="date" class="form-control form-control-sm" readonly="@isView" />
-                                </div>
-                            </div>
+                <div class="card-header py-2">
+                    <h3 class="card-title">Linen Delivery Detail</h3>
+                </div>
+                <div class="card-body pb-2 linen-delivery-header">
+                    <div class="linen-delivery-header-vb">
+                        <div class="ld-inline-field">
+                            <label class="ld-header-label">Delivery ID</label>
+                            <input asp-for="Header.DeliveryID" class="form-control form-control-sm" readonly />
+                        </div>
 
-                            <div class="form-group row mb-2 align-items-center">
-                                <label class="col-sm-3 col-form-label col-form-label-sm">Description</label>
-                                <div class="col-sm-9">
-                                    <input asp-for="Header.Description" class="form-control form-control-sm vni-font" maxlength="100" readonly="@isView" />
-                                </div>
-                            </div>
+                        <div class="ld-inline-field">
+                            <label class="ld-header-label">Date</label>
+                            <input asp-for="Header.DeliveryDate" type="date" class="form-control form-control-sm" readonly="@isView" />
+                        </div>
 
-                            <div class="form-group row mb-2 align-items-center">
-                                <label class="col-sm-3 col-form-label col-form-label-sm">Type(*)</label>
-                                <div class="col-sm-5">
-                                    <select asp-for="Header.DeliveryType"
-                                            asp-items="Model.DeliveryTypeOptions"
-                                            class="form-control form-control-sm vni-font"
-                                            id="Header_DeliveryType"
-                                            disabled="@Model.IsTypeLocked">
-                                    </select>
-                                    @if (Model.IsTypeLocked)
-                                    {
-                                        <input type="hidden" asp-for="Header.DeliveryType" />
-                                    }
-                                </div>
-                                <div class="col-sm-4 linen-delivery-header-checks">
-                                    <div class="custom-control custom-checkbox d-inline-block mr-3">
-                                        <input asp-for="Header.Closed" class="custom-control-input" disabled="@isView" />
-                                        <label asp-for="Header.Closed" class="custom-control-label">Close</label>
-                                    </div>
-                                    <div class="custom-control custom-checkbox d-inline-block">
-                                        <input asp-for="Header.IsRent" class="custom-control-input" disabled="@isView" />
-                                        <label asp-for="Header.IsRent" class="custom-control-label">Rent</label>
-                                    </div>
-                                </div>
+                        <div class="ld-inline-field">
+                            <label class="ld-header-label">Type(*)</label>
+                            <select asp-for="Header.DeliveryType"
+                                    asp-items="Model.DeliveryTypeOptions"
+                                    class="form-control form-control-sm vni-font"
+                                    id="Header_DeliveryType"
+                                    disabled="@Model.IsTypeLocked">
+                            </select>
+                            @if (Model.IsTypeLocked)
+                            {
+                                <input type="hidden" asp-for="Header.DeliveryType" />
+                            }
+                        </div>
+
+                        <div class="linen-delivery-supplier-wrap ld-field-supplier">
+                            <div class="ld-inline-field">
+                                <label class="ld-header-label">Supplier(*)</label>
+                                <select asp-for="Header.SupplierID"
+                                        asp-items="Model.SupplierOptions"
+                                        class="form-control form-control-sm vni-font"
+                                        id="Header_SupplierID"
+                                        disabled="@isView">
+                                </select>
                             </div>
                         </div>
 
-                        <div class="col-lg-6">
-                            <div class="form-group row mb-2 align-items-center linen-delivery-note-wrap">
-                                <label class="col-sm-3 col-form-label col-form-label-sm">Pantry Linen(*)</label>
-                                <div class="col-sm-6">
-                                    <select asp-for="Header.NoteID"
-                                            asp-items="Model.PantryNoteOptions"
-                                            class="form-control form-control-sm vni-font"
-                                            id="Header_NoteID"
-                                            disabled="@Model.IsPantryNoteLocked">
-                                    </select>
-                                    @if (Model.IsPantryNoteLocked)
-                                    {
-                                        <input type="hidden" asp-for="Header.NoteID" />
-                                    }
-                                </div>
-                                <div class="col-sm-3">
-                                    @if (Model.Header.NoteID.HasValue && Model.Header.NoteID.Value > 0)
-                                    {
-                                        <button type="button"
-                                                class="btn btn-info btn-sm btn-block js-view-pantry-note"
-                                                data-note-id="@Model.Header.NoteID.Value">
-                                            View
-                                        </button>
-                                    }
-                                    else
-                                    {
-                                        <button type="button" class="btn btn-info btn-sm btn-block js-view-pantry-note" disabled>View</button>
-                                    }
-                                </div>
+                        <div class="ld-check-field ld-field-lock">
+                            <span class="ld-header-label">Lock</span>
+                            <div class="custom-control custom-checkbox">
+                                <input asp-for="Header.Closed" class="custom-control-input" disabled="@isView" />
+                                <label asp-for="Header.Closed" class="custom-control-label"><span class="sr-only">Lock</span></label>
                             </div>
+                        </div>
 
-                            <div class="form-group row mb-2 align-items-center linen-delivery-supplier-wrap">
-                                <label class="col-sm-3 col-form-label col-form-label-sm">Supplier(*)</label>
-                                <div class="col-sm-9">
-                                    <select asp-for="Header.SupplierID"
-                                            asp-items="Model.SupplierOptions"
-                                            class="form-control form-control-sm vni-font"
-                                            id="Header_SupplierID"
-                                            disabled="@isView">
-                                    </select>
-                                </div>
+                        <div class="ld-action-cell linen-delivery-note-wrap ld-field-note-view">
+                            @if (Model.Header.NoteID.HasValue && Model.Header.NoteID.Value > 0)
+                            {
+                                <button type="button"
+                                        class="btn btn-info btn-sm js-view-pantry-note"
+                                        data-note-id="@Model.Header.NoteID.Value">
+                                    View
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-info btn-sm js-view-pantry-note" disabled>View</button>
+                            }
+                        </div>
+
+                        <div class="ld-inline-field ld-field-description">
+                            <label class="ld-header-label">Description</label>
+                            <input asp-for="Header.Description" class="form-control form-control-sm vni-font" maxlength="100" readonly="@isView" />
+                        </div>
+
+                        <div class="linen-delivery-note-wrap ld-field-pantry">
+                            <div class="ld-inline-field">
+                                <label class="ld-header-label">Pantry-Linen(*)</label>
+                                <select asp-for="Header.NoteID"
+                                        asp-items="Model.PantryNoteOptions"
+                                        class="form-control form-control-sm vni-font"
+                                        id="Header_NoteID"
+                                        disabled="@Model.IsPantryNoteLocked">
+                                </select>
+                                @if (Model.IsPantryNoteLocked)
+                                {
+                                    <input type="hidden" asp-for="Header.NoteID" />
+                                }
                             </div>
+                        </div>
 
-                            <div class="form-group row mb-0 align-items-center linen-delivery-special-wrap">
-                                <label class="col-sm-3 col-form-label col-form-label-sm">Special Laundry</label>
-                                <div class="col-sm-9 linen-delivery-header-checks">
-                                    <div class="custom-control custom-checkbox d-inline-block">
-                                        <input asp-for="Header.IsSpecialLaundry" class="custom-control-input" disabled="@Model.IsSpecialLocked" />
-                                        <label asp-for="Header.IsSpecialLaundry" class="custom-control-label">
-                                            <span class="sr-only">Special Laundry</span>
-                                        </label>
-                                    </div>
+                        <div class="ld-check-field ld-field-rent">
+                            <span class="ld-header-label">Is Rent</span>
+                            <div class="custom-control custom-checkbox">
+                                <input asp-for="Header.IsRent" class="custom-control-input" disabled="@isView" />
+                                <label asp-for="Header.IsRent" class="custom-control-label"><span class="sr-only">Is Rent</span></label>
+                            </div>
+                        </div>
+
+                        <div class="ld-action-cell ld-field-save">
+                            @if (Model.CanSave)
+                            {
+                                <button type="submit" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-save"></i> Save
+                                </button>
+                            }
+                        </div>
+
+                        <div class="linen-delivery-special-wrap ld-field-special">
+                            <div class="ld-check-field">
+                                <span class="ld-header-label">Special Laundry</span>
+                                <div class="custom-control custom-checkbox">
+                                    <input asp-for="Header.IsSpecialLaundry" class="custom-control-input" disabled="@Model.IsSpecialLocked" />
+                                    <label asp-for="Header.IsSpecialLaundry" class="custom-control-label"><span class="sr-only">Special Laundry</span></label>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="card card-primary">
-                <div class="card-header py-2">
-                    <h3 class="card-title">Detail</h3>
-                </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-bordered table-sm mb-0 linen-delivery-grid" id="linenDeliveryDetailTable">
@@ -506,26 +750,23 @@
                         </table>
                     </div>
                 </div>
-                <div class="card-footer p-2 text-center">
+                <div class="card-footer py-2 text-center">
                     @if (Model.CanSave)
                     {
-                        <button type="button" class="btn btn-success btn-sm mr-1" id="btnAddDetailRow">
+                        <button type="button" class="btn btn-sm btn-success mr-2" id="btnAddDetailRow">
                             <i class="fas fa-plus"></i> Add Detail
                         </button>
-                        <button type="submit" class="btn btn-primary btn-sm mr-1">
-                            <i class="fas fa-save"></i> Save
-                        </button>
                     }
-                    <button type="button" class="btn btn-info btn-sm mr-1" id="btnPrintLinenDeliveryDetail">
+                    <button type="button" class="btn btn-sm btn-info mr-2" id="btnPrintLinenDeliveryDetail">
                         <i class="fas fa-print"></i> Print
                     </button>
                     <button type="button"
-                            class="btn btn-warning btn-sm mr-1"
+                            class="btn btn-sm btn-warning mr-2"
                             id="btnToBill"
                             @(Model.CanToBill ? null : "disabled")>
                         <i class="fas fa-file-invoice-dollar"></i> To Bill
                     </button>
-                    <button type="button" class="btn btn-secondary btn-sm" id="btnCloseLinenDeliveryDetail" data-index-url="/Inventory/LinenDelivery">
+                    <button type="button" class="btn btn-sm btn-default" id="btnCloseLinenDeliveryDetail" data-index-url="/Inventory/LinenDelivery">
                         <i class="fas fa-arrow-left"></i> Back to list
                     </button>
                 </div>
@@ -649,10 +890,24 @@
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="modal-body p-0 flex-fill">
-                <iframe id="linenDeliveryPantryNoteFrame"
-                        class="linen-delivery-pantry-note-frame"
-                        title="Pantry Linen Detail"></iframe>
+            <div class="modal-body p-0 linen-delivery-pantry-note-body">
+                <div class="linen-delivery-pantry-note-meta">
+                    <label>Note No</label>
+                    <input type="text" class="form-control form-control-sm" id="linenDeliveryPantryNoteNo" readonly />
+                    <label>Date</label>
+                    <input type="text" class="form-control form-control-sm" id="linenDeliveryPantryNoteDate" readonly />
+                    <label>Description</label>
+                    <input type="text" class="form-control form-control-sm vni-font" id="linenDeliveryPantryNoteDescription" readonly />
+                    <label class="linen-delivery-pantry-note-checks">
+                        <input type="checkbox" id="linenDeliveryPantryNoteRent" disabled /> Is Rent
+                    </label>
+                    <label class="linen-delivery-pantry-note-checks">
+                        <input type="checkbox" id="linenDeliveryPantryNoteClose" disabled /> Close
+                    </label>
+                </div>
+                <div class="linen-delivery-pantry-note-table-wrap" id="linenDeliveryPantryNoteContent">
+                    <div class="linen-delivery-pantry-note-loading">Loading pantry linen...</div>
+                </div>
             </div>
             <div class="modal-footer py-2">
                 <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">
@@ -721,6 +976,7 @@
     </div>
 </div>
 
+
 <div class="modal fade" id="linenDeliveryUnsavedModal" tabindex="-1" role="dialog" aria-labelledby="linenDeliveryUnsavedModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-md modal-dialog-centered" role="document">
         <div class="modal-content">
@@ -741,7 +997,6 @@
         </div>
     </div>
 </div>
-
 @section Scripts {
     <script>
         window.linenDeliveryPage = {
@@ -753,6 +1008,7 @@
             isSpecialLaundry: @Model.Header.IsSpecialLaundry.ToString().ToLowerInvariant(),
             canToBill: @Model.CanToBill.ToString().ToLowerInvariant(),
             pantryNoteDetailUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("/Inventory/LinnenNoteDaily/LinnenNoteDailyDetail", new { mode = "view", popup = true }))),
+            pantryNotePrintPreviewUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("/Inventory/LinnenNoteDaily/LinnenNoteDailyDetail", "PrintPreview"))),
             billDetailUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("/Cus/DailyServiceBill/DailyServiceBillDetail"))),
             printPreviewUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("./LinenDeliveryDetail", "PrintPreview", new { id = Model.Header.DeliveryID }))),
             reportPdfUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("/Inventory/LinenReport/Index", "Pdf", new { reportType = "delivery", descriptionId = Model.Header.DeliveryID, lockedReportType = "delivery", popup = true }))),

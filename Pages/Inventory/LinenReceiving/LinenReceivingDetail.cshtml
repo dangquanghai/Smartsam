@@ -409,19 +409,10 @@
                     <div class="purchase-order-action-bar mt-3">
                         @if (Model.CanSave)
                         {
-                            <button type="button" class="btn btn-sm btn-success mr-2" id="btnAddDetailRow">
-                                <i class="fas fa-plus"></i> Add Detail
-                            </button>
                             <button type="submit" class="btn btn-sm btn-primary mr-2">
                                 <i class="fas fa-save"></i> Save
                             </button>
                         }
-                        <button type="button" class="btn btn-sm btn-info mr-2" id="btnPrintLinenReceivingDetail">
-                            <i class="fas fa-print"></i> Print
-                        </button>
-                        <a class="btn btn-sm btn-default" href="@Model.BackUrl">
-                            <i class="fas fa-arrow-left"></i> Back to list
-                        </a>
                     </div>
                 </div>
 
@@ -535,7 +526,19 @@
                         </table>
                     </div>
                 </div>
-                <div class="card-footer py-2">
+                <div class="card-footer py-2 text-center">
+                    @if (Model.CanSave)
+                    {
+                        <button type="button" class="btn btn-sm btn-success mr-2" id="btnAddDetailRow">
+                            <i class="fas fa-plus"></i> Add Detail
+                        </button>
+                    }
+                    <button type="button" class="btn btn-sm btn-info mr-2" id="btnPrintLinenReceivingDetail">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                    <a class="btn btn-sm btn-default" href="@Model.BackUrl">
+                        <i class="fas fa-arrow-left"></i> Back to list
+                    </a>
                 </div>
             </div>
         </form>

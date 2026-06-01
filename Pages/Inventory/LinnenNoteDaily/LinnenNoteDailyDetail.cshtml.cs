@@ -177,6 +177,8 @@ public class LinnenNoteDailyDetailModel : BasePageModel
                 noteId = Header.Id,
                 description = Header.Description,
                 dateCreate = Header.DateCreate.ToString("yyyy-MM-dd"),
+                isRent = Header.IsRent,
+                isClose = Header.IsClose,
                 columns,
                 rows
             });
