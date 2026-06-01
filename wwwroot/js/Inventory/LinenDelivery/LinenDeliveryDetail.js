@@ -130,7 +130,10 @@
             pageDirty = true;
         });
 
-        $(document).off('input change', '.ld-quantity, .ld-price, .ld-express').on('input change', '.ld-quantity, .ld-price, .ld-express', function () {
+        $(document).off('input change', '.ld-quantity, .ld-price, .ld-express').on('input change', '.ld-quantity, .ld-price, .ld-express', function (e) {
+            if (e.type === 'change' && $(this).hasClass('ld-price')) {
+                $(this).val(formatDecimal(parseDecimal($(this).val())));
+            }
             recalcRow($(this).closest('tr'));
             pageDirty = true;
         });
@@ -504,8 +507,8 @@
             <td class="text-center"><input type="checkbox" class="ld-express" /></td>
             <td class="text-center"><input type="checkbox" class="ld-child" /></td>
             <td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-right ld-quantity" value="0.00" /></td>
-            <td><input type="number" step="0.01" class="form-control form-control-sm text-right ld-price" value="0" /></td>
-            <td><input type="number" step="0.01" class="form-control form-control-sm text-right ld-amount" value="0" readonly /></td>
+            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right ld-price" value="0.00" /></td>
+            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right ld-amount" value="0.00" readonly /></td>
             <td class="linen-delivery-note-cell"><input type="text" maxlength="100" class="form-control form-control-sm ld-note vni-font" value="" /></td>
         </tr>`;
 
@@ -962,12 +965,20 @@
             return 0;
         }
 
-        const parsed = parseFloat(value);
+        const parsed = parseFloat(value.toString().replace(/,/g, ''));
         return Number.isNaN(parsed) ? 0 : parsed;
     }
 
     function formatDecimal(value) {
-        return Number(value || 0).toFixed(2).replace(/\.00$/, '');
+        const numberValue = Number(value || 0);
+        if (!Number.isFinite(numberValue)) {
+            return '0.00';
+        }
+
+        return numberValue.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
     }
 
     function encodeHtml(value) {
