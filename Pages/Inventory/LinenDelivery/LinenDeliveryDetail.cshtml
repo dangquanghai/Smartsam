@@ -294,6 +294,7 @@
         <form method="post" id="linenDeliveryDetailForm">
             <input type="hidden" asp-for="Mode" />
             <input type="hidden" asp-for="DetailsJson" id="DetailsJson" />
+            <input type="hidden" asp-for="RedirectUrl" id="RedirectUrl" />
 
             <div class="card card-primary card-outline">
                 <div class="card-body p-2 linen-delivery-header">
@@ -416,7 +417,7 @@
                                 <col style="min-width: 160px;" />
                                 <col style="width: 70px;" />
                                 <col style="width: 70px;" />
-                                <col style="width: 50px;" />
+                                <col style="width: 80px;" />
                                 <col style="width: 110px;" />
                                 <col style="width: 120px;" />
                                 <col style="min-width: 180px;" />
@@ -428,7 +429,7 @@
                                     <th>Linen</th>
                                     <th style="width: 70px;">Express</th>
                                     <th style="width: 70px;">Child</th>
-                                    <th style="width: 50px;">Qty</th>
+                                    <th style="width: 80px;">Qty</th>
                                     <th style="width: 110px;">Price</th>
                                     <th style="width: 120px;">Amount</th>
                                     <th>Note</th>
@@ -494,9 +495,9 @@
                                             </td>
                                             <td class="text-center"><input type="checkbox" class="ld-express" @(row.Express ? "checked" : null) @(isView ? "disabled" : null) /></td>
                                             <td class="text-center"><input type="checkbox" class="ld-child" @(row.IsChild ? "checked" : null) @(isView ? "disabled" : null) /></td>
-                                            <td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-right ld-quantity" value="@row.Quantity.ToString("0.##")" @(isView ? "readonly" : null) /></td>
-                                            <td><input type="number" step="0.01" class="form-control form-control-sm text-right ld-price" value="@row.Price.ToString("0.##")" @(isView ? "readonly" : null) /></td>
-                                            <td><input type="number" step="0.01" class="form-control form-control-sm text-right ld-amount" value="@row.Amount.ToString("0.##")" readonly /></td>
+                                            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right ld-quantity" value="@row.Quantity.ToString("#,0.##", System.Globalization.CultureInfo.InvariantCulture)" @(isView ? "readonly" : null) /></td>
+                                            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right ld-price" value="@row.Price.ToString("#,0.##", System.Globalization.CultureInfo.InvariantCulture)" @(isView ? "readonly" : null) /></td>
+                                            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right ld-amount" value="@row.Amount.ToString("#,0.##", System.Globalization.CultureInfo.InvariantCulture)" readonly /></td>
                                             <td class="linen-delivery-note-cell"><input type="text" maxlength="100" class="form-control form-control-sm ld-note vni-font" value="@row.Note" @(isView ? "readonly" : null) /></td>
                                         </tr>
                                     }
@@ -524,9 +525,9 @@
                             @(Model.CanToBill ? null : "disabled")>
                         <i class="fas fa-file-invoice-dollar"></i> To Bill
                     </button>
-                    <a class="btn btn-secondary btn-sm" href="/Inventory/LinenDelivery">
+                    <button type="button" class="btn btn-secondary btn-sm" id="btnCloseLinenDeliveryDetail" data-index-url="/Inventory/LinenDelivery">
                         <i class="fas fa-arrow-left"></i> Back to list
-                    </a>
+                    </button>
                 </div>
             </div>
         </form>
@@ -715,6 +716,27 @@
             </div>
             <div class="modal-footer py-2">
                 <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="linenDeliveryUnsavedModal" tabindex="-1" role="dialog" aria-labelledby="linenDeliveryUnsavedModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-md modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="linenDeliveryUnsavedModalLabel">Unsaved Changes</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body py-3">
+                Data has changed. Do you want to save before leaving?
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-primary btn-sm" id="btnLinenDeliveryUnsavedSave">Save</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="btnLinenDeliveryUnsavedDiscard">Don't Save</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnLinenDeliveryUnsavedCancel" data-dismiss="modal">Cancel</button>
             </div>
         </div>
     </div>

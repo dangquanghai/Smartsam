@@ -31,11 +31,14 @@ public class LinenDeliveryDetailModel : BasePageModel
     [BindProperty]
     public string DetailsJson { get; set; } = "[]";
 
+    [BindProperty]
+    public string? RedirectUrl { get; set; }
+
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
     public bool CanSave { get; private set; }
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
     public bool IsTypeLocked => IsViewMode || !string.Equals(Mode, "edit", StringComparison.OrdinalIgnoreCase) || Header.DeliveryType.HasValue;
-    public bool IsSpecialLocked => IsViewMode || (!IsLaundryType(Header.DeliveryType) && Header.DeliveryType != 5);
+    public bool IsSpecialLocked => IsViewMode || Header.DeliveryType.HasValue;
     public bool IsPantryNoteLocked { get; private set; }
     public List<LinenDeliveryDetailRow> Details { get; set; } = new List<LinenDeliveryDetailRow>();
     public List<SelectListItem> DeliveryTypeOptions { get; set; } = new List<SelectListItem>();
@@ -45,7 +48,7 @@ public class LinenDeliveryDetailModel : BasePageModel
     public List<SelectListItem> LinenOptions { get; set; } = new List<SelectListItem>();
     public string LocationOptionsJson { get; set; } = "[]";
     public string LinenOptionsJson { get; set; } = "[]";
-    public bool CanToBill => Header.DeliveryID > 0 && CanHeaderCreateBill(Header) && !Header.IsSpecialLaundry;
+    public bool CanToBill => Header.DeliveryID > 0 && CanHeaderCreateBill(Header);
 
     public IActionResult OnGet(int? id, string mode = "view")
     {
@@ -135,11 +138,9 @@ public class LinenDeliveryDetailModel : BasePageModel
                 return NotFound();
             }
 
-            var existingDetailCount = GetDetailCount(conn, trans, Header.DeliveryID);
-            if (Header.DeliveryType == 1 && existingDetailCount > 0 && currentHeader.NoteID != Header.NoteID)
-            {
-                ModelState.AddModelError(string.Empty, "Pantry Linen cannot be changed after detail rows exist.");
-            }
+            var shouldCreatePantryDetails = Header.DeliveryType == 1
+                && Header.NoteID.HasValue
+                && currentHeader.NoteID != Header.NoteID;
 
             if (!ModelState.IsValid)
             {
@@ -151,15 +152,14 @@ public class LinenDeliveryDetailModel : BasePageModel
 
             UpdateMaster(conn, trans);
 
-            if (Header.DeliveryType == 1 && Header.NoteID.HasValue && existingDetailCount == 0)
+            if (shouldCreatePantryDetails)
             {
                 using var createCmd = new SqlCommand("exec LN_CreateDeliveryDT_NEW @DeliveryID, @NoteID, @SupplierID", conn, trans);
                 createCmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = Header.DeliveryID;
-                createCmd.Parameters.Add("@NoteID", SqlDbType.Int).Value = Header.NoteID.Value;
+                createCmd.Parameters.Add("@NoteID", SqlDbType.Int).Value = Header.NoteID!.Value;
                 createCmd.Parameters.Add("@SupplierID", SqlDbType.Int).Value = Header.SupplierID ?? 0;
                 createCmd.ExecuteNonQuery();
                 LoadDetails(conn, trans);
-                existingDetailCount = Details.Count;
             }
             else
             {
@@ -184,6 +184,14 @@ public class LinenDeliveryDetailModel : BasePageModel
                 message = "Cannot create bill because Sale Point master data is missing."
             });
         }
+        catch (InvalidOperationException ex)
+        {
+            trans.Rollback();
+            ModelState.AddModelError(string.Empty, ex.Message);
+            LoadLookupData();
+            CanSave = true;
+            return Page();
+        }
         catch
         {
             trans.Rollback();
@@ -191,6 +199,11 @@ public class LinenDeliveryDetailModel : BasePageModel
         }
 
         TempData["SuccessMessage"] = "Linen delivery saved.";
+        if (!string.IsNullOrWhiteSpace(RedirectUrl) && Url.IsLocalUrl(RedirectUrl))
+        {
+            return LocalRedirect(RedirectUrl);
+        }
+
         return RedirectToPage("./LinenDeliveryDetail", new { id = Header.DeliveryID, mode = "edit" });
     }
 
@@ -345,7 +358,7 @@ public class LinenDeliveryDetailModel : BasePageModel
                     linenCode = x.LinenCode,
                     isChild = x.IsChild,
                     express = x.Express,
-                    quantity = x.Quantity.ToString("0.##"),
+                    quantity = x.Quantity.ToString("0.00"),
                     price = x.Price.ToString("0.##"),
                     amount = x.Amount.ToString("0.##"),
                     note = x.Note
@@ -359,7 +372,7 @@ public class LinenDeliveryDetailModel : BasePageModel
         }
     }
 
-    public JsonResult OnPostCreateBill(int deliveryId, DateTime? billDate)
+    public JsonResult OnPostCreateBill(int deliveryId, DateTime? billDate, string? detailsJson)
     {
         PagePerm = GetUserPermissions();
         if (!PagePerm.HasPermission(PermissionUpdate))
@@ -398,6 +411,19 @@ public class LinenDeliveryDetailModel : BasePageModel
                 return new JsonResult(new { success = false, message = "Delivery not found." });
             }
 
+            Header = header;
+            Header.DeliveryID = deliveryId;
+            DetailsJson = string.IsNullOrWhiteSpace(detailsJson) ? "[]" : detailsJson;
+            Details = ParseDetailsJson();
+
+            var detailError = ValidateDetailRowsForSave();
+            if (!string.IsNullOrEmpty(detailError))
+            {
+                trans.Rollback();
+                Response.StatusCode = StatusCodes.Status400BadRequest;
+                return new JsonResult(new { success = false, message = detailError });
+            }
+
             if (!CanHeaderCreateBill(header))
             {
                 trans.Rollback();
@@ -427,6 +453,8 @@ public class LinenDeliveryDetailModel : BasePageModel
                     })
                 });
             }
+
+            SaveDetailRows(conn, trans);
 
             using (var createCmd = new SqlCommand("exec LN_CreateBill @DeliveryID, @BillDate, @OperatorID", conn, trans))
             {
@@ -493,10 +521,10 @@ public class LinenDeliveryDetailModel : BasePageModel
             return new JsonResult(new { success = false, message = "Delivery not found." });
         }
 
-        if (!CanHeaderCreateBill(header))
+        if (!CanHeaderMarkNoNeedBill(header))
         {
             Response.StatusCode = StatusCodes.Status400BadRequest;
-            return new JsonResult(new { success = false, message = "No Need Bill is available only for Laundry and In-House Laundry." });
+            return new JsonResult(new { success = false, message = "No Need Bill is available only for non-special Laundry and In-House Laundry." });
         }
 
         using var cmd = new SqlCommand(@"
@@ -852,7 +880,7 @@ ORDER BY LinnenCode;";
             if (Header.IsSpecialLaundry)
             {
                 return @"
-SELECT ID, LinnenCode, 0 AS DisplayPrice
+SELECT ID, LinnenCode, TRY_CONVERT(decimal(18,2), VNDPriceNew3) AS DisplayPrice
 FROM dbo.LN_Linnen
 WHERE (ISNULL(IsUniform, 0) = 0)
   AND (ISNULL(IsLinen, 0) = 0)
@@ -1268,6 +1296,24 @@ VALUES
         }
     }
 
+    private string ValidateDetailRowsForSave()
+    {
+        foreach (var row in Details)
+        {
+            if (!row.LocationID.HasValue || row.LocationID.Value <= 0)
+            {
+                return "Location is required for every detail row.";
+            }
+
+            if (!row.LinnenID.HasValue || row.LinnenID.Value <= 0)
+            {
+                return "Linen is required for every detail row.";
+            }
+        }
+
+        return string.Empty;
+    }
+
     private List<LinenDeliveryDetailRow> ParseDetailsJson()
     {
         try
@@ -1334,6 +1380,21 @@ VALUES
         }
 
         if (header.DeliveryType == 3)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool CanHeaderMarkNoNeedBill(LinenDeliveryHeader header)
+    {
+        if (header.DeliveryType == 5)
+        {
+            return true;
+        }
+
+        if (header.DeliveryType == 3 && !header.IsSpecialLaundry)
         {
             return true;
         }

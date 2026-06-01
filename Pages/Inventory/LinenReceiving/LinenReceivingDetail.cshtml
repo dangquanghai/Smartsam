@@ -18,7 +18,8 @@
             white-space: nowrap;
         }
 
-        .linen-receiving-header .form-control-sm {
+        .linen-receiving-header .form-control-sm,
+        .linen-receiving-header .custom-select-sm {
             height: 28px;
             padding-top: 2px;
             padding-bottom: 2px;
@@ -31,7 +32,13 @@
             gap: 0.75rem;
         }
 
-        .linen-receiving-header-checks .custom-control,
+        .linen-receiving-header-checks .custom-control {
+            display: flex;
+            align-items: center;
+            min-height: 28px;
+            margin-bottom: 0;
+        }
+
         .linen-receiving-header-checks .custom-control-label {
             display: inline-flex;
             align-items: center;
@@ -45,9 +52,93 @@
             transform: translateY(-50%);
         }
 
+        .linen-receiving-header-layout {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+
+        .linen-receiving-header-left {
+            flex: 0 0 58%;
+            max-width: 58%;
+        }
+
+        .linen-receiving-header-right {
+            flex: 1 1 42%;
+            max-width: 42%;
+        }
+
+        .linen-receiving-header .form-group {
+            margin-left: 0;
+            margin-right: 0;
+        }
+
+        .linen-receiving-header .lr-label-main,
+        .linen-receiving-header .lr-label-sub {
+            text-align: left;
+            padding-right: 0.5rem;
+        }
+
+        .linen-receiving-header .lr-label-main {
+            flex: 0 0 22%;
+            max-width: 22%;
+        }
+
+        .linen-receiving-header .lr-field-main {
+            flex: 0 0 78%;
+            max-width: 78%;
+        }
+
+        .linen-receiving-header .lr-label-sub {
+            flex: 0 0 18%;
+            max-width: 18%;
+            padding-left: 1.5rem;
+        }
+
+        .linen-receiving-header .lr-field-sub {
+            flex: 0 0 24%;
+            max-width: 24%;
+        }
+
+        .linen-receiving-header .lr-note-select {
+            flex: 0 0 53%;
+            max-width: 53%;
+        }
+
+        .linen-receiving-header .lr-note-view {
+            flex: 0 0 25%;
+            max-width: 25%;
+        }
+
+        .linen-receiving-header .lr-special-field {
+            flex: 0 0 78%;
+            max-width: 78%;
+        }
+
+
         .linen-receiving-grid th,
         .linen-receiving-grid td {
             vertical-align: middle !important;
+        }
+
+        #linenReceivingDetailTable tbody > tr > td:first-of-type,
+        #linenReceivingDetailTable tbody > tr > th:first-of-type,
+        #linenReceivingDetailTable tfoot > tr > td:first-of-type,
+        #linenReceivingDetailTable tfoot > tr > th:first-of-type,
+        #linenReceivingDetailTable thead > tr > td:first-of-type,
+        #linenReceivingDetailTable thead > tr > th:first-of-type {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+
+        .linen-receiving-grid .form-control-sm,
+        .linen-receiving-grid .custom-select-sm {
+            min-width: 50px;
+        }
+
+        .linen-receiving-grid .lr-location,
+        .linen-receiving-grid .lr-linen {
+            min-width: 160px;
         }
 
         .linen-receiving-action-cell {
@@ -186,6 +277,35 @@
             color: #6c757d;
             background: #f8f9fa;
             margin-bottom: 0.5rem;
+            flex: 0 0 auto;
+        }
+
+        @@media (max-width: 991.98px) {
+            .linen-receiving-header-layout {
+                display: block;
+            }
+
+            .linen-receiving-header-left,
+            .linen-receiving-header-right {
+                max-width: 100%;
+                flex-basis: 100%;
+            }
+
+            .linen-receiving-header .lr-label-main,
+            .linen-receiving-header .lr-field-main,
+            .linen-receiving-header .lr-label-sub,
+            .linen-receiving-header .lr-field-sub,
+            .linen-receiving-header .lr-note-select,
+            .linen-receiving-header .lr-note-view,
+            .linen-receiving-header .lr-special-field {
+                flex: 0 0 100%;
+                max-width: 100%;
+                padding-left: 0;
+            }
+
+            .linen-receiving-header .lr-label-sub {
+                padding-top: 0.25rem;
+            }
         }
     </style>
 }
@@ -213,32 +333,35 @@
             <input type="hidden" asp-for="DetailsJson" id="DetailsJson" />
 
             <div class="card card-primary card-outline">
-                <div class="card-body p-2 linen-receiving-header">
-                    <div class="row">
-                        <div class="col-lg-6">
+                <div class="card-header py-2">
+                    <h3 class="card-title">Linen Receiving Detail</h3>
+                </div>
+                <div class="card-body pb-2 linen-receiving-header">
+                    <div class="linen-receiving-header-layout">
+                        <div class="linen-receiving-header-left">
                             <div class="form-group row mb-2 align-items-center">
-                                <label class="col-sm-3 col-form-label col-form-label-sm">Receive ID</label>
-                                <div class="col-sm-4">
+                                <label class="col-sm-3 col-form-label col-form-label-sm lr-label-main">Receive ID</label>
+                                <div class="col-sm-4 lr-field-sub">
                                     <input asp-for="Header.ReceiveID" class="form-control form-control-sm" readonly />
                                 </div>
-                                <label class="col-sm-1 col-form-label col-form-label-sm">Date</label>
-                                <div class="col-sm-4">
+                                <label class="col-sm-1 col-form-label col-form-label-sm lr-label-sub">Date</label>
+                                <div class="col-sm-4 lr-field-sub">
                                     <input asp-for="Header.ReceiveDate" type="date" class="form-control form-control-sm" readonly="@isView" />
                                 </div>
                             </div>
 
                             <div class="form-group row mb-2 align-items-center">
-                                <label class="col-sm-3 col-form-label col-form-label-sm">Description</label>
-                                <div class="col-sm-9">
+                                <label class="col-sm-3 col-form-label col-form-label-sm lr-label-main">Description</label>
+                                <div class="col-sm-9 lr-field-main">
                                     <input asp-for="Header.Description" class="form-control form-control-sm vni-font" maxlength="100" readonly="@isView" />
                                 </div>
                             </div>
                         </div>
 
-                        <div class="col-lg-6">
-                            <div class="form-group row mb-2 align-items-center">
-                                <label class="col-sm-3 col-form-label col-form-label-sm">Delivery(*)</label>
-                                <div class="col-sm-7">
+                        <div class="linen-receiving-header-right">
+                            <div class="form-group row mb-2 align-items-center linen-receiving-delivery-wrap">
+                                <label class="col-sm-3 col-form-label col-form-label-sm lr-label-main">Delivery(*)</label>
+                                <div class="col-sm-6 lr-note-select">
                                     <select asp-for="Header.SendID"
                                             asp-items="Model.DeliveryOptions"
                                             class="form-control form-control-sm vni-font"
@@ -250,11 +373,13 @@
                                         <input type="hidden" asp-for="Header.SendID" />
                                     }
                                 </div>
-                                <div class="col-sm-2">
+                                <div class="col-sm-3 lr-note-view">
                                     @if (Model.Header.SendID.HasValue && Model.Header.SendID.Value > 0)
                                     {
                                         <a class="btn btn-info btn-sm btn-block"
-                                           href="/Inventory/LinenDelivery/LinenDeliveryDetail?id=@Model.Header.SendID.Value&mode=view">
+                                           href="/Inventory/LinenDelivery/LinenDeliveryDetail?id=@Model.Header.SendID.Value&mode=view"
+                                           target="_blank"
+                                           rel="noopener noreferrer">
                                             View
                                         </a>
                                     }
@@ -265,14 +390,14 @@
                                 </div>
                             </div>
 
-                            <div class="form-group row mb-0 align-items-center">
-                                <label class="col-sm-3 col-form-label col-form-label-sm">Options</label>
-                                <div class="col-sm-9 linen-receiving-header-checks">
-                                    <div class="custom-control custom-checkbox">
+                            <div class="form-group row mb-0 align-items-center linen-receiving-options-wrap">
+                                <label class="col-sm-3 col-form-label col-form-label-sm lr-label-main">Options</label>
+                                <div class="col-sm-9 linen-receiving-header-checks lr-special-field">
+                                    <div class="custom-control custom-checkbox d-inline-block mr-3">
                                         <input asp-for="Header.IsRent" class="custom-control-input" disabled="@isView" />
                                         <label asp-for="Header.IsRent" class="custom-control-label">Rent</label>
                                     </div>
-                                    <div class="custom-control custom-checkbox">
+                                    <div class="custom-control custom-checkbox d-inline-block">
                                         <input asp-for="Header.IsLocked" class="custom-control-input" disabled="@isView" />
                                         <label asp-for="Header.IsLocked" class="custom-control-label">Lock</label>
                                     </div>
@@ -280,13 +405,26 @@
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <div class="card card-primary">
-                <div class="card-header py-2">
-                    <h3 class="card-title">Detail</h3>
+                    <div class="purchase-order-action-bar mt-3">
+                        @if (Model.CanSave)
+                        {
+                            <button type="button" class="btn btn-sm btn-success mr-2" id="btnAddDetailRow">
+                                <i class="fas fa-plus"></i> Add Detail
+                            </button>
+                            <button type="submit" class="btn btn-sm btn-primary mr-2">
+                                <i class="fas fa-save"></i> Save
+                            </button>
+                        }
+                        <button type="button" class="btn btn-sm btn-info mr-2" id="btnPrintLinenReceivingDetail">
+                            <i class="fas fa-print"></i> Print
+                        </button>
+                        <a class="btn btn-sm btn-default" href="@Model.BackUrl">
+                            <i class="fas fa-arrow-left"></i> Back to list
+                        </a>
+                    </div>
                 </div>
+
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-bordered table-sm mb-0 linen-receiving-grid" id="linenReceivingDetailTable">
@@ -297,7 +435,7 @@
                                 <col style="min-width: 160px;" />
                                 <col style="width: 70px;" />
                                 <col style="width: 70px;" />
-                                <col style="width: 50px;" />
+                                <col style="width: 80px;" />
                                 <col style="width: 110px;" />
                                 <col style="width: 120px;" />
                                 <col style="min-width: 180px;" />
@@ -308,11 +446,11 @@
                                     <th>Delivery</th>
                                     <th>Location</th>
                                     <th>Linen</th>
-                                    <th>Express</th>
-                                    <th>Child</th>
-                                    <th>Qty</th>
-                                    <th>Price</th>
-                                    <th>Amount</th>
+                                    <th style="width: 70px;">Express</th>
+                                    <th style="width: 70px;">Child</th>
+                                    <th style="width: 80px;">Qty</th>
+                                    <th style="width: 110px;">Price</th>
+                                    <th style="width: 120px;">Amount</th>
                                     <th>Note</th>
                                 </tr>
                             </thead>
@@ -386,9 +524,9 @@
                                             </td>
                                             <td class="text-center"><input type="checkbox" class="lr-express" @(row.Express ? "checked" : null) @(isView ? "disabled" : null) /></td>
                                             <td class="text-center"><input type="checkbox" class="lr-child" @(row.IsChild ? "checked" : null) @(isView ? "disabled" : null) /></td>
-                                            <td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-right lr-quantity" value="@row.Quantity.ToString("0.##")" @(isView ? "readonly" : null) /></td>
-                                            <td><input type="number" step="0.01" class="form-control form-control-sm text-right lr-price" value="@row.Price.ToString("0.##")" @(isView ? "readonly" : null) /></td>
-                                            <td><input type="number" step="0.01" class="form-control form-control-sm text-right lr-amount" value="@row.Amount.ToString("0.##")" readonly /></td>
+                                            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right lr-quantity" value="@row.Quantity.ToString("#,0.##", System.Globalization.CultureInfo.InvariantCulture)" @(isView ? "readonly" : null) /></td>
+                                            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right lr-price" value="@row.Price.ToString("#,0.##", System.Globalization.CultureInfo.InvariantCulture)" @(isView ? "readonly" : null) /></td>
+                                            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right lr-amount" value="@row.Amount.ToString("#,0.##", System.Globalization.CultureInfo.InvariantCulture)" readonly /></td>
                                             <td class="linen-receiving-note-cell"><input type="text" maxlength="100" class="form-control form-control-sm lr-note vni-font" value="@row.Note" @(isView ? "readonly" : null) /></td>
                                         </tr>
                                     }
@@ -397,22 +535,7 @@
                         </table>
                     </div>
                 </div>
-                <div class="card-footer p-2 text-center">
-                    @if (Model.CanSave)
-                    {
-                        <button type="button" class="btn btn-success btn-sm mr-1" id="btnAddDetailRow">
-                            <i class="fas fa-plus"></i> Add Detail
-                        </button>
-                        <button type="submit" class="btn btn-primary btn-sm mr-1">
-                            <i class="fas fa-save"></i> Save
-                        </button>
-                    }
-                    <button type="button" class="btn btn-info btn-sm mr-1" id="btnPrintLinenReceivingDetail">
-                        <i class="fas fa-print"></i> Print
-                    </button>
-                    <a class="btn btn-secondary btn-sm" href="@Model.BackUrl">
-                        <i class="fas fa-arrow-left"></i> Back to list
-                    </a>
+                <div class="card-footer py-2">
                 </div>
             </div>
         </form>
@@ -451,7 +574,7 @@
                     <div class="row">
                         <div class="col-lg-4 col-md-6">
                             <div class="linen-receiving-report-inline-field">
-                                <label for="linenReceivingReportDescription">Des</label>
+                                <label for="linenReceivingReportDescription" class="linen-receiving-report-inline-label">Des</label>
                                 <select class="form-control form-control-sm vni-font" id="linenReceivingReportDescription" disabled>
                                     <option value="@Model.Header.ReceiveID">@Model.Header.Description</option>
                                 </select>
@@ -459,7 +582,7 @@
                         </div>
                         <div class="col-lg-3 col-md-6">
                             <div class="linen-receiving-report-inline-field">
-                                <label for="linenReceivingReportLinenCode">Linnen</label>
+                                <label for="linenReceivingReportLinenCode" class="linen-receiving-report-inline-label">Linnen</label>
                                 <select class="form-control form-control-sm vni-font" id="linenReceivingReportLinenCode">
                                     <option value="">All</option>
                                     @foreach (var linenCode in reportLinenCodes)
@@ -471,7 +594,7 @@
                         </div>
                         <div class="col-lg-4 col-md-8">
                             <div class="linen-receiving-report-inline-field">
-                                <label>From - To</label>
+                                <label class="linen-receiving-report-inline-label">From - To</label>
                                 <input type="date" class="form-control form-control-sm" value="@Model.Header.ReceiveDate.ToString("yyyy-MM-dd")" disabled />
                                 <input type="date" class="form-control form-control-sm" value="@Model.Header.ReceiveDate.ToString("yyyy-MM-dd")" disabled />
                             </div>

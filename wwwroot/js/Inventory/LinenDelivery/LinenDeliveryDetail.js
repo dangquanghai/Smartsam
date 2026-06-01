@@ -2,6 +2,8 @@
     'use strict';
 
     let pageDirty = false;
+    let allowUnload = false;
+    let pendingNavigationUrl = '';
     let activeLinenDeliveryReportObjectUrl = '';
 
     function validateMainForm() {
@@ -67,6 +69,8 @@
         bindBillEvents();
         bindPantryNoteViewEvents();
         bindDirtyTracking();
+        initCloseButton();
+        initUnsavedChangeGuard();
         initReportModal();
         initPantryNoteModal();
         refreshHeaderSections();
@@ -79,15 +83,18 @@
         $('#linenDeliveryDetailForm').off('submit').on('submit', function (e) {
             e.preventDefault();
             if (!validateMainForm()) {
+                resetRedirectFlags();
                 return;
             }
 
             if (shouldConfirmPantrySelection()) {
                 if (!window.confirm('Are you sure to select this Pantry Linen !')) {
+                    resetRedirectFlags();
                     return;
                 }
             }
 
+            allowUnload = true;
             pageDirty = false;
             $(this).off('submit').submit();
         });
@@ -123,7 +130,10 @@
             pageDirty = true;
         });
 
-        $(document).off('input change', '.ld-quantity, .ld-price, .ld-express').on('input change', '.ld-quantity, .ld-price, .ld-express', function () {
+        $(document).off('input change', '.ld-quantity, .ld-price, .ld-express').on('input change', '.ld-quantity, .ld-price, .ld-express', function (e) {
+            if (e.type === 'change' && ($(this).hasClass('ld-quantity') || $(this).hasClass('ld-price'))) {
+                $(this).val(formatDecimal(parseDecimal($(this).val())));
+            }
             recalcRow($(this).closest('tr'));
             pageDirty = true;
         });
@@ -164,14 +174,128 @@
             });
     }
 
-    function bindBillEvents() {
-        $('#btnToBill').off('click').on('click', function () {
-            if ($(this).is(':disabled')) {
+    function hasUnsavedChanges() {
+        if (window.linenDeliveryPage?.isView) {
+            return false;
+        }
+
+        return pageDirty;
+    }
+
+    function resetRedirectFlags() {
+        $('#RedirectUrl').val('');
+    }
+
+    function initCloseButton() {
+        $('#btnCloseLinenDeliveryDetail').off('click').on('click', function () {
+            const indexUrl = $(this).data('index-url') || '/Inventory/LinenDelivery';
+
+            if (!hasUnsavedChanges()) {
+                allowUnload = true;
+                window.location.href = indexUrl;
                 return;
             }
 
-            if (pageDirty) {
-                alert('Please save delivery before creating bill.');
+            openUnsavedDialog(indexUrl);
+        });
+    }
+
+    function isGuardedLink($link) {
+        const href = $link.attr('href') || '';
+        if (!href || href === '#' || href.startsWith('javascript:')) {
+            return false;
+        }
+
+        if (href.startsWith('mailto:') || href.startsWith('tel:')) {
+            return false;
+        }
+
+        if ($link.attr('target') === '_blank' || $link.attr('download')) {
+            return false;
+        }
+
+        if ($link.data('skip-unsaved-check') === true) {
+            return false;
+        }
+
+        return true;
+    }
+
+    function openUnsavedDialog(targetUrl) {
+        pendingNavigationUrl = targetUrl || '';
+        $('#linenDeliveryUnsavedModal').modal('show');
+    }
+
+    function navigateWithoutSaving(targetUrl) {
+        allowUnload = true;
+        $('#linenDeliveryUnsavedModal').modal('hide');
+        if (targetUrl) {
+            window.location.href = targetUrl;
+        }
+    }
+
+    function saveAndNavigate(targetUrl) {
+        resetRedirectFlags();
+        $('#RedirectUrl').val(targetUrl || '');
+        $('#linenDeliveryUnsavedModal').modal('hide');
+        $('#linenDeliveryDetailForm').trigger('submit');
+    }
+
+    function initUnsavedChangeGuard() {
+        if (window.linenDeliveryPage?.isView) {
+            return;
+        }
+
+        resetRedirectFlags();
+
+        $(document).off('click.linenDeliveryUnsaved', 'a[href]').on('click.linenDeliveryUnsaved', 'a[href]', function (ev) {
+            if (!hasUnsavedChanges()) {
+                return;
+            }
+
+            const $link = $(this);
+            if (!isGuardedLink($link)) {
+                return;
+            }
+
+            const href = $link.attr('href') || '';
+            if (href === window.location.pathname + window.location.search) {
+                return;
+            }
+
+            ev.preventDefault();
+            openUnsavedDialog(href);
+        });
+
+        window.addEventListener('beforeunload', function (ev) {
+            if (allowUnload || !hasUnsavedChanges()) {
+                return;
+            }
+
+            ev.preventDefault();
+            ev.returnValue = '';
+        });
+
+        $('#btnLinenDeliveryUnsavedSave').off('click').on('click', function () {
+            saveAndNavigate(pendingNavigationUrl);
+        });
+
+        $('#btnLinenDeliveryUnsavedDiscard').off('click').on('click', function () {
+            navigateWithoutSaving(pendingNavigationUrl);
+        });
+
+        $('#linenDeliveryUnsavedModal').off('shown.bs.modal').on('shown.bs.modal', function () {
+            $('#btnLinenDeliveryUnsavedCancel').trigger('focus');
+        });
+
+        $('#linenDeliveryUnsavedModal').off('hidden.bs.modal').on('hidden.bs.modal', function () {
+            pendingNavigationUrl = '';
+        });
+    }
+
+    function bindBillEvents() {
+        $('#btnToBill').off('click').on('click', function () {
+            if ($(this).is(':disabled')) {
                 return;
             }
 
@@ -354,8 +478,7 @@
     }
 
     function syncToBillButtonState(typeValue) {
-        const isSpecialLaundry = $('#Header_IsSpecialLaundry').is(':checked');
-        const canToBill = typeValue === '5' || (typeValue === '3' && !isSpecialLaundry);
+        const canToBill = typeValue === '5' || typeValue === '3';
         $('#btnToBill').prop('disabled', !canToBill);
     }
 
@@ -383,9 +506,9 @@
             <td><select class="form-control form-control-sm ld-linen vni-font">${linens}</select></td>
             <td class="text-center"><input type="checkbox" class="ld-express" /></td>
             <td class="text-center"><input type="checkbox" class="ld-child" /></td>
-            <td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-right ld-quantity" value="0" /></td>
-            <td><input type="number" step="0.01" class="form-control form-control-sm text-right ld-price" value="0" /></td>
-            <td><input type="number" step="0.01" class="form-control form-control-sm text-right ld-amount" value="0" readonly /></td>
+            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right ld-quantity" value="0" /></td>
+            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right ld-price" value="0" /></td>
+            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right ld-amount" value="0" readonly /></td>
             <td class="linen-delivery-note-cell"><input type="text" maxlength="100" class="form-control form-control-sm ld-note vni-font" value="" /></td>
         </tr>`;
 
@@ -424,6 +547,10 @@
     function createBill() {
         clearBillError();
 
+        if (!validateMainForm()) {
+            return;
+        }
+
         const billDate = $('#linenDeliveryBillDate').val();
         if (!billDate) {
             showBillError('Bill date is required.');
@@ -436,7 +563,8 @@
             type: 'POST',
             data: {
                 deliveryId: window.linenDeliveryPage?.deliveryId || 0,
-                billDate: billDate
+                billDate: billDate,
+                detailsJson: $('#DetailsJson').val() || JSON.stringify(collectDetails())
             },
             headers: {
                 RequestVerificationToken: $('input[name="__RequestVerificationToken"]').first().val() || ''
@@ -447,6 +575,7 @@
                     return;
                 }
 
+                pageDirty = false;
                 renderBillState(true, response.bills || []);
             },
             error: function (xhr) {
@@ -836,12 +965,20 @@
             return 0;
         }
 
-        const parsed = parseFloat(value);
+        const parsed = parseFloat(value.toString().replace(/,/g, ''));
         return Number.isNaN(parsed) ? 0 : parsed;
     }
 
     function formatDecimal(value) {
-        return Number(value || 0).toFixed(2).replace(/\.00$/, '');
+        const numberValue = Number(value || 0);
+        if (!Number.isFinite(numberValue)) {
+            return '0';
+        }
+
+        return numberValue.toLocaleString('en-US', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+        });
     }
 
     function encodeHtml(value) {

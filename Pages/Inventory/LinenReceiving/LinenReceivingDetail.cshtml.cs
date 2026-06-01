@@ -152,6 +152,7 @@ public class LinenReceivingDetailModel : BasePageModel
                 createCmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = Header.ReceiveID;
                 createCmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = Header.SendID.Value;
                 createCmd.ExecuteNonQuery();
+                BackfillReceiveDetailDisplayFields(conn, trans, Header.ReceiveID);
             }
             else
             {
@@ -548,6 +549,20 @@ VALUES
         }
     }
 
+    private static void BackfillReceiveDetailDisplayFields(SqlConnection conn, SqlTransaction trans, int receiveId)
+    {
+        using var cmd = new SqlCommand(@"
+UPDATE dt
+SET Location = ISNULL(loc.Location, dt.Location),
+    LinnenCode = ISNULL(ln.LinnenCode, dt.LinnenCode)
+FROM dbo.LN_ReceiveDT dt
+LEFT JOIN dbo.View_LN_Location loc ON loc.locationID = dt.LocationID
+LEFT JOIN dbo.LN_Linnen ln ON ln.ID = dt.LinnenID
+WHERE dt.ReceiveID = @ReceiveID;", conn, trans);
+        cmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = receiveId;
+        cmd.ExecuteNonQuery();
+    }
+
     private void BindDetailParams(SqlCommand cmd, LinenReceivingDetailRow row)
     {
         cmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = Header.ReceiveID;
@@ -672,11 +687,51 @@ VALUES
     {
         var isAdmin = User.FindFirst("IsAdminRole")?.Value == "True";
         var roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
+        var employeeId = int.Parse(User.FindFirst("EmployeeID")?.Value ?? "0");
         var perms = new PagePermissions();
         perms.AllowedNos = isAdmin
             ? Enumerable.Range(1, 20).ToList()
             : _permissionService.GetPermissionsForPage(roleId, FunctionId);
+
+        if (!isAdmin && employeeId > 0)
+        {
+            perms.AllowedNos = perms.AllowedNos
+                .Union(GetEmployeeRolePermissions(employeeId))
+                .Distinct()
+                .ToList();
+        }
+
         return perms;
+    }
+
+    private List<int> GetEmployeeRolePermissions(int employeeId)
+    {
+        var result = new List<int>();
+        using var conn = OpenConnection();
+        using var cmd = new SqlCommand(@"
+SELECT rp.Permission
+FROM dbo.SYS_RoleMember rm
+INNER JOIN dbo.SYS_RolePermission rp ON rp.RoleID = rm.RoleID
+WHERE rm.Operator = @EmployeeID
+  AND rp.FunctionID = @FunctionID
+  AND ISNULL(rp.IsActive, 1) = 1;", conn);
+        cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId;
+        cmd.Parameters.Add("@FunctionID", SqlDbType.Int).Value = FunctionId;
+
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            var permissionText = Convert.ToString(rd["Permission"]) ?? string.Empty;
+            foreach (var permission in permissionText.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (int.TryParse(permission.Trim(), out var permissionNo))
+                {
+                    result.Add(permissionNo);
+                }
+            }
+        }
+
+        return result;
     }
 
     private static string NormalizeMode(string? mode)

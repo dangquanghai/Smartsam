@@ -134,10 +134,15 @@ public class LinnenNoteDailyDetailModel : BasePageModel
             Mode = "view";
         }
 
+        if (Header.IsClose)
+        {
+            Mode = "view";
+        }
+
         LoadDetailColumns();
         LoadDetails();
         DetailsJson = JsonSerializer.Serialize(Details);
-        CanSave = Mode != "view" && PagePerm.HasPermission(PermissionUpdate);
+        CanSave = Mode != "view" && PagePerm.HasPermission(PermissionUpdate) && !Header.IsClose;
         return Page();
     }
 
@@ -237,7 +242,7 @@ public class LinnenNoteDailyDetailModel : BasePageModel
             RedirectUrl = string.Empty;
             LoadDetailColumns();
             DetailsJson = JsonSerializer.Serialize(Details);
-            CanSave = PagePerm.HasPermission(PermissionUpdate);
+            CanSave = PagePerm.HasPermission(PermissionUpdate) && !Header.IsClose;
             return Page();
         }
 
@@ -257,6 +262,18 @@ public class LinnenNoteDailyDetailModel : BasePageModel
                 {
                     trans.Rollback();
                     return NotFound();
+                }
+
+                if (IsHeaderClosed(conn, trans, Header.Id))
+                {
+                    trans.Rollback();
+                    ModelState.AddModelError(string.Empty, "This Pantry Linen note is closed and cannot be edited.");
+                    Header.IsClose = true;
+                    LoadDetailColumns();
+                    DetailsJson = JsonSerializer.Serialize(Details);
+                    CanSave = false;
+                    Mode = "view";
+                    return Page();
                 }
 
                 UpdateHeader(conn, trans);
@@ -467,6 +484,13 @@ WHERE ID = @ID
         using var cmd = new SqlCommand("SELECT COUNT(1) FROM dbo.LN_DeAndReMT WHERE ID = @ID;", conn, trans);
         cmd.Parameters.Add("@ID", SqlDbType.Int).Value = id;
         return Convert.ToInt32(cmd.ExecuteScalar() ?? 0) > 0;
+    }
+
+    private bool IsHeaderClosed(SqlConnection conn, SqlTransaction trans, int id)
+    {
+        using var cmd = new SqlCommand("SELECT ISNULL(IsClose, 0) FROM dbo.LN_DeAndReMT WHERE ID = @ID;", conn, trans);
+        cmd.Parameters.Add("@ID", SqlDbType.Int).Value = id;
+        return ToBool(cmd.ExecuteScalar() ?? false);
     }
 
     private string GetSuggestedDescription()

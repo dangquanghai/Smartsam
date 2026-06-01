@@ -263,6 +263,130 @@ WHERE FlowID=@FlowID", conn, tran);
     private IActionResult ExecuteConfirm(long id, string mode)
         => ExecuteConfirmAsync(id, mode).GetAwaiter().GetResult();
 
+    public IActionResult OnGetReport(long id, bool inline = false)
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionViewDetail)) return Redirect("/");
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        var report = LoadReceivedReport(conn, id);
+        if (report == null) return NotFound();
+
+        var pdf = InventoryReceivedPdfReport.BuildPdf(report);
+        if (inline)
+        {
+            Response.Headers["Content-Disposition"] = $"inline; filename={report.FlowNo}.pdf";
+            return File(pdf, "application/pdf");
+        }
+
+        return File(pdf, "application/pdf", $"{report.FlowNo}.pdf");
+    }
+
+    private InventoryReceivedReportModel? LoadReceivedReport(SqlConnection conn, long flowId)
+    {
+        using var cmd = new SqlCommand(@"SELECT h.FlowNo,h.FlowDate,ISNULL(h.According,'') AS According,ISNULL(h.Reason,'') AS Reason,
+       ISNULL(s.StoreName,'') AS StoreName,ISNULL(po.PONo,'') AS PONo,ISNULL(sp.SupplierName,'') AS SupplierName,
+       ISNULL(h.StatusID,1) AS StatusID,h.OperatorID
+FROM dbo.INV_ItemFlow h
+LEFT JOIN dbo.INV_StoreList s ON s.StoreID=h.ToStore
+LEFT JOIN dbo.PC_PO po ON po.POID=h.POID
+LEFT JOIN dbo.PC_Suppliers sp ON sp.SupplierID=po.SupplierID
+WHERE h.FlowID=@FlowID", conn);
+        cmd.Parameters.Add("@FlowID", SqlDbType.BigInt).Value = flowId;
+        using var rd = cmd.ExecuteReader();
+        if (!rd.Read()) return null;
+
+        var statusId = Convert.ToInt32(rd["StatusID"] == DBNull.Value ? 1 : rd["StatusID"]);
+        var operatorId = rd["OperatorID"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["OperatorID"]);
+        var report = new InventoryReceivedReportModel
+        {
+            FlowNo = Convert.ToString(rd["FlowNo"]) ?? string.Empty,
+            FlowDateText = Convert.ToDateTime(rd["FlowDate"]).ToString("dd/MM/yyyy"),
+            According = Convert.ToString(rd["According"]) ?? string.Empty,
+            Reason = Convert.ToString(rd["Reason"]) ?? string.Empty,
+            StoreName = Convert.ToString(rd["StoreName"]) ?? string.Empty,
+            PONo = Convert.ToString(rd["PONo"]) ?? string.Empty,
+            SupplierName = Convert.ToString(rd["SupplierName"]) ?? string.Empty
+        };
+        rd.Close();
+
+        if (statusId >= 2)
+        {
+            report.Level2Signature = LoadConfirmSignatureByActionType(conn, flowId, 2) ?? LoadEmployeeSignature(conn, operatorId);
+        }
+
+        if (statusId >= 3)
+        {
+            report.Level3Signature = LoadConfirmSignatureByActionType(conn, flowId, 3);
+        }
+
+        if (statusId >= 4)
+        {
+            report.Level4Signature = LoadConfirmSignatureByActionType(conn, flowId, 4);
+        }
+
+        using var detailCmd = new SqlCommand(@"SELECT ISNULL(i.ItemCode,'') AS ItemCode,ISNULL(i.ItemName,'') AS ItemName,ISNULL(dt.Unit,'') AS Unit,
+       ISNULL(dt.Doc_Qty,0) AS DocQty,ISNULL(dt.Act_Qty,0) AS ActQty,ISNULL(dt.Amount,0) AS Amount,ISNULL(l.LocationName,'') AS LocationName
+FROM dbo.INV_ItemFlowDetail dt
+INNER JOIN dbo.INV_ItemList i ON i.ItemID=dt.ItemID
+LEFT JOIN dbo.MS_CoLocation l ON l.LocationID=dt.LocationID
+WHERE dt.FlowID=@FlowID
+ORDER BY i.ItemCode", conn);
+        detailCmd.Parameters.Add("@FlowID", SqlDbType.BigInt).Value = flowId;
+        using var detailRd = detailCmd.ExecuteReader();
+        while (detailRd.Read())
+        {
+            report.Items.Add(new InventoryReceivedReportItem
+            {
+                ItemCode = Convert.ToString(detailRd["ItemCode"]) ?? string.Empty,
+                ItemName = Convert.ToString(detailRd["ItemName"]) ?? string.Empty,
+                Unit = Convert.ToString(detailRd["Unit"]) ?? string.Empty,
+                DocQty = Convert.ToDecimal(detailRd["DocQty"]),
+                ActQty = Convert.ToDecimal(detailRd["ActQty"]),
+                Amount = Convert.ToDecimal(detailRd["Amount"]),
+                LocationName = Convert.ToString(detailRd["LocationName"]) ?? string.Empty
+            });
+        }
+
+        return report;
+    }
+
+    private byte[]? LoadConfirmSignatureByActionType(SqlConnection conn, long flowId, int actionTypeId)
+    {
+        using var cmd = new SqlCommand(@"SELECT TOP 1 UserID
+FROM dbo.INV_ItemFlowAction
+WHERE FlowID=@FlowID AND ActionTypeID=@ActionTypeID
+ORDER BY TheDateTime DESC", conn);
+        cmd.Parameters.Add("@FlowID", SqlDbType.BigInt).Value = flowId;
+        cmd.Parameters.Add("@ActionTypeID", SqlDbType.Int).Value = actionTypeId;
+        var employeeId = cmd.ExecuteScalar();
+        if (employeeId == null || employeeId == DBNull.Value) return null;
+        return LoadEmployeeSignature(conn, Convert.ToInt32(employeeId));
+    }
+    private byte[]? LoadEmployeeSignature(SqlConnection conn, int? employeeId)
+    {
+        if (!employeeId.HasValue || employeeId.Value <= 0) return null;
+        using var cmd = new SqlCommand("SELECT TOP 1 ISNULL(UrlNomalSign,'') FROM dbo.MS_Employee WHERE EmployeeID=@EmployeeID", conn);
+        cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId.Value;
+        var fileName = Convert.ToString(cmd.ExecuteScalar())?.Trim();
+        if (string.IsNullOrWhiteSpace(fileName)) return null;
+        var path = ResolveEmployeeSignaturePath(fileName);
+        return string.IsNullOrWhiteSpace(path) || !System.IO.File.Exists(path) ? null : System.IO.File.ReadAllBytes(path);
+    }
+
+    private string ResolveEmployeeSignaturePath(string fileName)
+    {
+        var cleanedFileName = Path.GetFileName(fileName.Trim());
+        if (string.IsNullOrWhiteSpace(cleanedFileName)) return string.Empty;
+        var basePath = _config.GetValue<string>("FileUploads:BasePath");
+        if (string.IsNullOrWhiteSpace(basePath)) return string.Empty;
+        var rootPath = Path.IsPathRooted(basePath) ? basePath : Path.Combine(Directory.GetCurrentDirectory(), basePath);
+        var functionPath = _config.GetValue<string>("FileUploads:Funtions:18") ?? "Admin/Employee";
+        var relativeSegments = functionPath.Replace('\\', '/').Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return Path.Combine(new[] { rootPath }.Concat(relativeSegments).Concat(new[] { cleanedFileName }).ToArray());
+    }
+
     private async Task<IActionResult> ExecuteConfirmAsync(long id, string mode)
     {
         Mode = string.IsNullOrWhiteSpace(mode) ? "edit" : mode.Trim().ToLowerInvariant();
@@ -1799,3 +1923,7 @@ public class ConfirmFlowInfo
     public int? MoveToCPNStore { get; set; }
     public int? RetDept { get; set; }
 }
+
+
+
+
