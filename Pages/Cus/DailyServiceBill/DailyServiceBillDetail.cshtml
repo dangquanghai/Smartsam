@@ -40,19 +40,19 @@
             border-radius: 0;
         }
 
-        .daily-service-bill-popup .card-body {
-            padding: 0.5rem 0.75rem !important;
-        }
-
-        .daily-service-bill-popup .form-row {
+        .daily-service-bill-popup .card-outline .card-body {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 0.32rem 0.75rem;
-            align-items: center !important;
-            margin: 0 0 0.25rem 0;
+            align-items: center;
+            padding: 0.5rem 0.75rem !important;
         }
 
-        .daily-service-bill-popup .form-row > [class*="col-"] {
+        .daily-service-bill-popup .card-outline .form-row {
+            display: contents;
+        }
+
+        .daily-service-bill-popup .card-outline .form-row > [class*="col-"] {
             flex: none;
             width: auto;
             max-width: none;
@@ -87,13 +87,13 @@
         }
 
         @@media (max-width: 1199.98px) {
-            .daily-service-bill-popup .form-row {
+            .daily-service-bill-popup .card-outline .card-body {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
 
         @@media (max-width: 767.98px) {
-            .daily-service-bill-popup .form-row {
+            .daily-service-bill-popup .card-outline .card-body {
                 grid-template-columns: 1fr;
             }
         }
