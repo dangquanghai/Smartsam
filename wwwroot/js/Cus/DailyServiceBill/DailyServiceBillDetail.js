@@ -48,6 +48,7 @@
     function initPopupMode() {
         if (window.dailyServiceBillPage?.isPopup) {
             document.body.classList.add("daily-service-bill-popup-body");
+            document.body.classList.remove("sidebar-mini", "sidebar-collapse", "layout-fixed");
         }
     }
 
