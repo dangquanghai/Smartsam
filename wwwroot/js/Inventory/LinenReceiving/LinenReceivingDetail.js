@@ -99,7 +99,10 @@
             pageDirty = true;
         });
 
-        $(document).off('input change', '.lr-price').on('input change', '.lr-price', function () {
+        $(document).off('input change', '.lr-price').on('input change', '.lr-price', function (e) {
+            if (e.type === 'change') {
+                $(this).val(formatDecimal(parseDecimal($(this).val())));
+            }
             recalcRow($(this).closest('tr'));
             pageDirty = true;
         });
@@ -299,8 +302,8 @@
             <td class="text-center"><input type="checkbox" class="lr-express" /></td>
             <td class="text-center"><input type="checkbox" class="lr-child" /></td>
             <td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-right lr-quantity" value="0.00" /></td>
-            <td><input type="number" step="0.01" class="form-control form-control-sm text-right lr-price" value="0" /></td>
-            <td><input type="number" step="0.01" class="form-control form-control-sm text-right lr-amount" value="0" readonly /></td>
+            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right lr-price" value="0.00" /></td>
+            <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right lr-amount" value="0.00" readonly /></td>
             <td class="linen-receiving-note-cell"><input type="text" maxlength="100" class="form-control form-control-sm lr-note vni-font" value="" /></td>
         </tr>`;
 
@@ -369,16 +372,20 @@
             return 0;
         }
 
-        const parsed = parseFloat(value);
+        const parsed = parseFloat(value.toString().replace(/,/g, ''));
         return Number.isNaN(parsed) ? 0 : parsed;
     }
 
     function formatDecimal(value) {
-        if (!Number.isFinite(value)) {
-            return '0';
+        const numberValue = Number(value || 0);
+        if (!Number.isFinite(numberValue)) {
+            return '0.00';
         }
 
-        return value.toFixed(2).replace(/\.?0+$/, '');
+        return numberValue.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
     }
 
     function encodeHtml(value) {
