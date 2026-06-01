@@ -60,7 +60,7 @@ namespace SmartSam.Services
                                  INNER JOIN SYS_Function f ON fp.FunctionID = f.FunctionID 
                                  INNER JOIN SYS_Module m ON f.ModuleID = m.ModuleID 
                                  INNER JOIN MS_Employee e ON rm.Operator = e.EmployeeID
-                                 WHERE fp.PermissionNo = 1 and f.IsActive = 1
+                                 WHERE fp.PermissionNo = 1 -- and f.IsActive = 1
                                  AND f.Url <> '' 
                                  AND e.EmployeeCode = @EmpCode
                                  ORDER BY m.ModuleID, f.TheOrder";

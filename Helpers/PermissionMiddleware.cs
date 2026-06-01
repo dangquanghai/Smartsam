@@ -143,23 +143,8 @@ namespace SmartSam.Helpers
                 INNER JOIN SYS_FuncPermission fp ON rp.FunctionID = fp.FunctionID
                 INNER JOIN MS_Employee e ON rm.Operator = e.EmployeeID
                 WHERE e.EmployeeCode = @EmpCode 
-                AND fp.Url IS NOT NULL AND fp.Url <> ''
+                AND fp.Url IS NOT NULL AND fp.Url <> ''";
 
-                UNION
-
-                SELECT DISTINCT v.Url
-                FROM SYS_RoleMember rm
-                INNER JOIN SYS_RolePermission rp ON rm.RoleID = rp.RoleID
-                INNER JOIN MS_Employee e ON rm.Operator = e.EmployeeID
-                CROSS APPLY (VALUES
-                    (1, '/Inventory/LinenReceiving/Index'),
-                    (2, '/Inventory/LinenReceiving/LinenReceivingDetail')
-                ) v(PermissionNo, Url)
-                WHERE e.EmployeeCode = @EmpCode
-                AND rp.FunctionID = 117
-                AND ISNULL(rp.IsActive, 1) = 1
-                AND (',' + ISNULL(rp.Permission, '') + ',') LIKE ('%,' + CAST(v.PermissionNo AS VARCHAR(10)) + ',%')";
-                //AND (',' + rp.Permission + ',') LIKE ('%,' + CAST(fp.PermissionNo AS VARCHAR) + ',%')";
 
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@EmpCode", empCode);
