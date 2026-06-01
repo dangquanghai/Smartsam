@@ -80,6 +80,10 @@
             min-width: 0;
         }
 
+        .daily-service-bill-popup .daily-service-bill-note-field {
+            grid-column: span 2;
+        }
+
         .daily-service-bill-popup .custom-control {
             grid-column: 2;
             margin-top: 0 !important;
@@ -95,6 +99,10 @@
         @@media (max-width: 767.98px) {
             .daily-service-bill-popup .card-outline .card-body {
                 grid-template-columns: 1fr;
+            }
+
+            .daily-service-bill-popup .daily-service-bill-note-field {
+                grid-column: auto;
             }
         }
     </style>
@@ -169,7 +177,7 @@
                             <label>Description</label>
                             <input asp-for="Bill.Description" class="form-control form-control-sm vni-font" readonly="@isView" />
                         </div>
-                        <div class="form-group col-md-4">
+                        <div class="form-group col-md-4 daily-service-bill-note-field">
                             <label>Note</label>
                             <input asp-for="Bill.Note" class="form-control form-control-sm vni-font" readonly="@isView" />
                         </div>
