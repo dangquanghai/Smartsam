@@ -312,13 +312,136 @@
             padding: 0;
         }
 
-        .linen-delivery-pantry-note-frame {
-            display: block;
-            width: 100%;
-            height: 100%;
+        .linen-delivery-pantry-note-body {
+            flex: 1 1 auto;
             min-height: 0;
-            border: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .linen-delivery-pantry-note-meta {
+            flex: 0 0 auto;
+            display: grid;
+            grid-template-columns: repeat(5, max-content minmax(0, 1fr));
+            gap: 0.35rem 0.5rem;
+            align-items: center;
+            padding: 0.5rem;
+            border-bottom: 1px solid #d7d7d7;
+            background: #f7f7f7;
+        }
+
+        .linen-delivery-pantry-note-meta label {
+            margin-bottom: 0;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .linen-delivery-pantry-note-meta .form-control-sm {
+            height: 26px;
+            min-width: 0;
+            background: #e9ecef;
+        }
+
+        .linen-delivery-pantry-note-checks {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            white-space: nowrap;
+        }
+
+        .linen-delivery-pantry-note-table-wrap {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
             background: #fff;
+        }
+
+        .linen-delivery-pantry-note-table {
+            table-layout: fixed;
+            min-width: 1320px;
+            font-size: 0.8125rem;
+        }
+
+        .linen-delivery-pantry-note-table th,
+        .linen-delivery-pantry-note-table td {
+            border-color: #9b9b9b !important;
+            padding: 0.25rem 0.3rem !important;
+            vertical-align: middle !important;
+            white-space: nowrap;
+        }
+
+        .linen-delivery-pantry-note-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+
+        .linen-delivery-pantry-note-table .pl-pantry-title {
+            width: 96px;
+            background: #ff9f3a;
+            text-align: center;
+        }
+
+        .linen-delivery-pantry-note-table .pl-linen-title {
+            background: #5b58d6;
+            color: #fff;
+            text-align: center;
+        }
+
+        .linen-delivery-pantry-note-table .pl-sub-title {
+            width: 42px;
+            background: #c8c1f2;
+            color: #1c236d;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .linen-delivery-pantry-note-table .pl-pantry-cell {
+            width: 58px;
+            background: #ff6674;
+            text-align: center;
+            font-weight: 700;
+        }
+
+        .linen-delivery-pantry-note-table .pl-time-cell {
+            width: 38px;
+            text-align: center;
+            font-weight: 700;
+        }
+
+        .linen-delivery-pantry-note-table .pl-time-am {
+            background: #fff49a;
+        }
+
+        .linen-delivery-pantry-note-table .pl-time-pm {
+            background: #ffc2d2;
+        }
+
+        .linen-delivery-pantry-note-table .pl-qty-be {
+            background: #f5d6b5;
+        }
+
+        .linen-delivery-pantry-note-table .pl-qty-cell {
+            text-align: right;
+            width: 42px;
+        }
+
+        .linen-delivery-pantry-note-loading,
+        .linen-delivery-pantry-note-error {
+            padding: 1rem;
+            text-align: center;
+            color: #6c757d;
+        }
+
+        .linen-delivery-pantry-note-error {
+            color: #dc3545;
+        }
+
+        @@media (max-width: 991.98px) {
+            .linen-delivery-pantry-note-meta {
+                grid-template-columns: max-content minmax(0, 1fr);
+            }
         }
     </style>
 }
@@ -698,10 +821,24 @@
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="modal-body p-0 flex-fill">
-                <iframe id="linenDeliveryPantryNoteFrame"
-                        class="linen-delivery-pantry-note-frame"
-                        title="Pantry Linen Detail"></iframe>
+            <div class="modal-body p-0 linen-delivery-pantry-note-body">
+                <div class="linen-delivery-pantry-note-meta">
+                    <label>Note No</label>
+                    <input type="text" class="form-control form-control-sm" id="linenDeliveryPantryNoteNo" readonly />
+                    <label>Date</label>
+                    <input type="text" class="form-control form-control-sm" id="linenDeliveryPantryNoteDate" readonly />
+                    <label>Description</label>
+                    <input type="text" class="form-control form-control-sm vni-font" id="linenDeliveryPantryNoteDescription" readonly />
+                    <label class="linen-delivery-pantry-note-checks">
+                        <input type="checkbox" id="linenDeliveryPantryNoteRent" disabled /> Is Rent
+                    </label>
+                    <label class="linen-delivery-pantry-note-checks">
+                        <input type="checkbox" id="linenDeliveryPantryNoteClose" disabled /> Close
+                    </label>
+                </div>
+                <div class="linen-delivery-pantry-note-table-wrap" id="linenDeliveryPantryNoteContent">
+                    <div class="linen-delivery-pantry-note-loading">Loading pantry linen...</div>
+                </div>
             </div>
             <div class="modal-footer py-2">
                 <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">
@@ -802,6 +939,7 @@
             isSpecialLaundry: @Model.Header.IsSpecialLaundry.ToString().ToLowerInvariant(),
             canToBill: @Model.CanToBill.ToString().ToLowerInvariant(),
             pantryNoteDetailUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("/Inventory/LinnenNoteDaily/LinnenNoteDailyDetail", new { mode = "view", popup = true }))),
+            pantryNotePrintPreviewUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("/Inventory/LinnenNoteDaily/LinnenNoteDailyDetail", "PrintPreview"))),
             billDetailUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("/Cus/DailyServiceBill/DailyServiceBillDetail"))),
             printPreviewUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("./LinenDeliveryDetail", "PrintPreview", new { id = Model.Header.DeliveryID }))),
             reportPdfUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Page("/Inventory/LinenReport/Index", "Pdf", new { reportType = "delivery", descriptionId = Model.Header.DeliveryID, lockedReportType = "delivery", popup = true }))),

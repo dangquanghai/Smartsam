@@ -348,31 +348,177 @@
 
     function initPantryNoteModal() {
         $('#linenDeliveryPantryNoteModal').off('hidden.bs.modal').on('hidden.bs.modal', function () {
-            const frame = document.getElementById('linenDeliveryPantryNoteFrame');
-            if (frame) {
-                frame.removeAttribute('src');
-            }
+            clearPantryNoteViewer();
         });
     }
 
     function openPantryNoteModal() {
         const noteId = ($('#Header_NoteID').val() || $('.js-view-pantry-note').data('note-id') || '').toString();
-        const frame = document.getElementById('linenDeliveryPantryNoteFrame');
-        if (!noteId || !frame) {
+        if (!noteId) {
             alert('Pantry Linen is required.');
             focusErrorField('#Header_NoteID');
             return;
         }
 
-        const baseUrl = window.linenDeliveryPage?.pantryNoteDetailUrl || '/Inventory/LinnenNoteDaily/LinnenNoteDailyDetail?mode=view&popup=true';
-        const url = new URL(baseUrl, window.location.origin);
-        url.searchParams.set('id', noteId);
-        url.searchParams.set('mode', 'view');
-        url.searchParams.set('popup', 'true');
-
-        frame.src = `${url.pathname}${url.search}`;
         $('#linenDeliveryPantryNoteModalLabel').text(`Pantry Linen Detail - ${noteId}`);
         $('#linenDeliveryPantryNoteModal').modal('show');
+        showPantryNoteLoading();
+
+        const baseUrl = window.linenDeliveryPage?.pantryNotePrintPreviewUrl || '/Inventory/LinnenNoteDaily/LinnenNoteDailyDetail?handler=PrintPreview';
+        const url = new URL(baseUrl, window.location.origin);
+        url.searchParams.set('id', noteId);
+
+        $.ajax({
+            url: `${url.pathname}${url.search}`,
+            type: 'GET',
+            success: function (response) {
+                if (!response || response.success !== true) {
+                    showPantryNoteError(response && response.message ? response.message : 'Cannot load pantry linen.');
+                    return;
+                }
+
+                renderPantryNoteViewer(response);
+            },
+            error: function (xhr) {
+                showPantryNoteError(readAjaxError(xhr, 'Cannot load pantry linen.'));
+            }
+        });
+    }
+
+    function clearPantryNoteViewer() {
+        $('#linenDeliveryPantryNoteNo').val('');
+        $('#linenDeliveryPantryNoteDate').val('');
+        $('#linenDeliveryPantryNoteDescription').val('');
+        $('#linenDeliveryPantryNoteRent').prop('checked', false);
+        $('#linenDeliveryPantryNoteClose').prop('checked', false);
+        $('#linenDeliveryPantryNoteContent').html('<div class="linen-delivery-pantry-note-loading">Loading pantry linen...</div>');
+    }
+
+    function showPantryNoteLoading() {
+        $('#linenDeliveryPantryNoteNo').val('');
+        $('#linenDeliveryPantryNoteDate').val('');
+        $('#linenDeliveryPantryNoteDescription').val('');
+        $('#linenDeliveryPantryNoteRent').prop('checked', false);
+        $('#linenDeliveryPantryNoteClose').prop('checked', false);
+        $('#linenDeliveryPantryNoteContent').html('<div class="linen-delivery-pantry-note-loading">Loading pantry linen...</div>');
+    }
+
+    function showPantryNoteError(message) {
+        $('#linenDeliveryPantryNoteContent').html(`<div class="linen-delivery-pantry-note-error">${encodeHtml(message || 'Cannot load pantry linen.')}</div>`);
+    }
+
+    function renderPantryNoteViewer(response) {
+        const noteId = getJsonValue(response, 'noteId') || '';
+        const description = getJsonValue(response, 'description') || '';
+        const dateCreate = getJsonValue(response, 'dateCreate') || '';
+        const isRent = getJsonValue(response, 'isRent') === true;
+        const isClose = getJsonValue(response, 'isClose') === true;
+        const columns = getJsonValue(response, 'columns') || [];
+        const rows = getJsonValue(response, 'rows') || [];
+
+        $('#linenDeliveryPantryNoteNo').val(noteId);
+        $('#linenDeliveryPantryNoteDate').val(dateCreate);
+        $('#linenDeliveryPantryNoteDescription').val(description);
+        $('#linenDeliveryPantryNoteRent').prop('checked', isRent);
+        $('#linenDeliveryPantryNoteClose').prop('checked', isClose);
+        $('#linenDeliveryPantryNoteContent').html(buildPantryNoteTable(columns, rows));
+    }
+
+    function buildPantryNoteTable(columns, rows) {
+        if (!columns.length) {
+            return '<div class="linen-delivery-pantry-note-error">No linen columns.</div>';
+        }
+
+        let html = '<table class="table table-bordered table-sm mb-0 linen-delivery-pantry-note-table"><thead><tr>';
+        html += '<th colspan="2" rowspan="2" class="pl-pantry-title">Pantry<br>No</th>';
+        columns.forEach(function (column) {
+            html += `<th colspan="3" class="pl-linen-title">${encodeHtml(getJsonValue(column, 'title') || '')}</th>`;
+        });
+        html += '</tr><tr>';
+        columns.forEach(function () {
+            html += '<th class="pl-sub-title">Be</th><th class="pl-sub-title">De</th><th class="pl-sub-title">Re</th>';
+        });
+        html += '</tr></thead><tbody>';
+
+        const groups = groupPantryRows(rows);
+        groups.forEach(function (group) {
+            const amRow = group.rows.find(function (row) { return parseInt(getJsonValue(row, 'timeSection') || '0', 10) === 1; }) || {};
+            const pmRow = group.rows.find(function (row) { return parseInt(getJsonValue(row, 'timeSection') || '0', 10) === 2; }) || {};
+            html += buildPantryNoteDataRow(group.name, 'A', amRow, columns, true);
+            html += buildPantryNoteDataRow(group.name, 'P', pmRow, columns, false);
+        });
+
+        html += '</tbody></table>';
+        return html;
+    }
+
+    function buildPantryNoteDataRow(pantryName, shiftName, row, columns, includePantryName) {
+        let html = '<tr>';
+        if (includePantryName) {
+            html += `<td rowspan="2" class="pl-pantry-cell">${encodeHtml(pantryName)}</td>`;
+        }
+
+        html += `<td class="pl-time-cell ${shiftName === 'A' ? 'pl-time-am' : 'pl-time-pm'}">${shiftName}</td>`;
+        columns.forEach(function (column) {
+            html += `<td class="pl-qty-cell pl-qty-be">${formatPantryQty(getJsonValue(row, getJsonValue(column, 'beField')))}</td>`;
+            html += `<td class="pl-qty-cell">${formatPantryQty(getJsonValue(row, getJsonValue(column, 'deField')))}</td>`;
+            html += `<td class="pl-qty-cell">${formatPantryQty(getJsonValue(row, getJsonValue(column, 'reField')))}</td>`;
+        });
+        html += '</tr>';
+        return html;
+    }
+
+    function groupPantryRows(rows) {
+        const groups = [];
+        rows.forEach(function (row) {
+            const pentry = getJsonValue(row, 'pentry') || '';
+            let group = groups.find(function (item) { return item.pentry === pentry; });
+            if (!group) {
+                group = {
+                    pentry: pentry,
+                    name: getJsonValue(row, 'pentryName') || pentry,
+                    rows: []
+                };
+                groups.push(group);
+            }
+
+            group.rows.push(row);
+        });
+        return groups;
+    }
+
+    function getJsonValue(source, name) {
+        if (!source || !name) {
+            return undefined;
+        }
+
+        if (Object.prototype.hasOwnProperty.call(source, name)) {
+            return source[name];
+        }
+
+        const camelName = name.charAt(0).toLowerCase() + name.slice(1);
+        if (Object.prototype.hasOwnProperty.call(source, camelName)) {
+            return source[camelName];
+        }
+
+        const pascalName = name.charAt(0).toUpperCase() + name.slice(1);
+        if (Object.prototype.hasOwnProperty.call(source, pascalName)) {
+            return source[pascalName];
+        }
+
+        return undefined;
+    }
+
+    function formatPantryQty(value) {
+        const numberValue = Number(value || 0);
+        if (!Number.isFinite(numberValue) || numberValue === 0) {
+            return '';
+        }
+
+        return numberValue.toLocaleString('en-US', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+        });
     }
 
     function previewLinenDeliveryReportPdf() {
