@@ -3,14 +3,67 @@
 @{
     ViewData["Title"] = "Daily Service Bill Detail";
     var isView = Model.IsViewMode;
+    var isPopup = Model.IsPopup;
 }
 
-<section class="content">
+@if (isPopup)
+{
+    <script>document.body.classList.add("daily-service-bill-popup-body");</script>
+}
+
+@section Styles {
+    <style>
+        .daily-service-bill-popup-body .main-header,
+        .daily-service-bill-popup-body .main-sidebar,
+        .daily-service-bill-popup-body .main-footer,
+        .daily-service-bill-popup-body .content-header {
+            display: none !important;
+        }
+
+        .daily-service-bill-popup-body .content-wrapper {
+            margin-left: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+            min-height: 100vh !important;
+        }
+
+        .daily-service-bill-popup-body,
+        .daily-service-bill-popup-body .wrapper,
+        .daily-service-bill-popup-body .content-wrapper > .content,
+        .daily-service-bill-popup-body .content-wrapper > .content > .container-fluid,
+        .daily-service-bill-popup .container-fluid {
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+            overflow-x: hidden;
+        }
+
+        .daily-service-bill-popup .card {
+            margin-bottom: 0;
+            border-radius: 0;
+        }
+
+        .daily-service-bill-popup .form-row {
+            margin-left: 0;
+            margin-right: 0;
+        }
+
+        .daily-service-bill-popup .form-row > [class*="col-"] {
+            padding-left: 5px;
+            padding-right: 5px;
+        }
+    </style>
+}
+
+<section class="content @(isPopup ? "daily-service-bill-popup" : string.Empty)">
     <div class="container-fluid">
         <form method="post" id="dailyServiceBillDetailForm">
             <input type="hidden" asp-for="Bill.BillID" />
             <input type="hidden" asp-for="ReturnUrl" />
             <input type="hidden" asp-for="Mode" />
+            <input type="hidden" asp-for="Popup" />
 
             <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
 
@@ -109,17 +162,20 @@
                         </div>
                     </div>
                 </div>
-                <div class="card-footer py-2">
-                    @if (!isView)
-                    {
-                        <button type="submit" asp-page-handler="Save" class="btn btn-primary btn-sm">
-                            <i class="fas fa-save"></i> Save
-                        </button>
-                    }
-                    <a class="btn btn-secondary btn-sm" href="@Model.SafeReturnUrl">
-                        <i class="fas fa-arrow-left"></i> Back
-                    </a>
-                </div>
+                @if (!isPopup)
+                {
+                    <div class="card-footer py-2">
+                        @if (!isView)
+                        {
+                            <button type="submit" asp-page-handler="Save" class="btn btn-primary btn-sm">
+                                <i class="fas fa-save"></i> Save
+                            </button>
+                        }
+                        <a class="btn btn-secondary btn-sm" href="@Model.SafeReturnUrl">
+                            <i class="fas fa-arrow-left"></i> Back
+                        </a>
+                    </div>
+                }
             </div>
 
             <div class="card">
@@ -191,7 +247,8 @@
     <script>
         window.dailyServiceBillPage = {
             pctTax: @Model.Bill.PctTax.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            isView: @Model.IsViewMode.ToString().ToLowerInvariant()
+            isView: @Model.IsViewMode.ToString().ToLowerInvariant(),
+            isPopup: @(isPopup ? "true" : "false")
         };
     </script>
     <script src="~/js/Cus/DailyServiceBill/DailyServiceBillDetail.js" asp-append-version="true"></script>

@@ -44,6 +44,20 @@
         $('#billAfterVat').val(formatDecimal(afterVat));
     }
 
+
+    function initPopupMode() {
+        if (window.dailyServiceBillPage?.isPopup) {
+            document.body.classList.add("daily-service-bill-popup-body");
+        }
+    }
+
+    function initClosePopupButton() {
+        $("#btnClosePopupBillDetail").off("click").on("click", function () {
+            if (window.parent && window.parent.$) {
+                window.parent.$("#linenDeliveryBillDetailModal").modal("hide");
+            }
+        });
+    }
     function initializePage() {
         if (window.dailyServiceBillPage?.isView === true) {
             return;
@@ -56,5 +70,9 @@
             });
     }
 
-    $(document).ready(initializePage);
+    $(document).ready(function () {
+        initPopupMode();
+        initClosePopupButton();
+        initializePage();
+    });
 })();
