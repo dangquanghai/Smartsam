@@ -81,10 +81,15 @@
             min-width: 0;
         }
 
-        #dailyServiceBillDetailTable .daily-service-bill-detail-note {
+        #dailyServiceBillDetailTable .daily-service-bill-detail-note-cell {
+            padding-left: 0.2rem;
+            padding-right: 0.2rem;
+        }
+
+        #dailyServiceBillDetailTable .daily-service-bill-detail-note-cell .daily-service-bill-detail-note {
             display: block;
             width: 100% !important;
-            max-width: none;
+            max-width: none !important;
             min-width: 0;
             box-sizing: border-box;
         }
@@ -283,7 +288,7 @@
                                         <td>
                                             <input asp-for="DetailRows[i].Amount" class="form-control form-control-sm text-right js-bill-amount" readonly />
                                         </td>
-                                        <td>
+                                        <td class="daily-service-bill-detail-note-cell">
                                             <input asp-for="DetailRows[i].Notes" class="form-control form-control-sm vni-font daily-service-bill-detail-note" readonly="@isView" />
                                         </td>
                                     </tr>
