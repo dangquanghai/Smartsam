@@ -199,6 +199,31 @@
             padding: 0;
         }
 
+        #linenReceivingDeliveryDetailModal.fade .modal-dialog {
+            opacity: 0;
+            transform: translate(0, 0) scaleY(0.04);
+            transform-origin: center center;
+            transition: transform 0.22s ease-out, opacity 0.14s ease-out;
+        }
+
+        #linenReceivingDeliveryDetailModal.show .modal-dialog {
+            opacity: 1;
+            transform: translate(0, 0) scaleY(1);
+        }
+
+        #linenReceivingDeliveryDetailModal .modal-content {
+            transform-origin: center center;
+        }
+
+        @@media (prefers-reduced-motion: reduce) {
+            #linenReceivingDeliveryDetailModal.fade .modal-dialog,
+            #linenReceivingDeliveryDetailModal.show .modal-dialog {
+                opacity: 1;
+                transform: none;
+                transition: none;
+            }
+        }
+
         .linen-receiving-delivery-detail-body {
             flex: 1 1 auto;
             min-height: 0;

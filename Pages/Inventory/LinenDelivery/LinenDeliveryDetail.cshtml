@@ -759,20 +759,23 @@
                             </div>
                         </div>
 
-                        <div class="ld-action-cell linen-delivery-note-wrap ld-field-note-view">
-                            @if (!isPopup && Model.Header.NoteID.HasValue && Model.Header.NoteID.Value > 0)
-                            {
-                                <button type="button"
-                                        class="btn btn-info btn-sm js-view-pantry-note"
-                                        data-note-id="@Model.Header.NoteID.Value">
-                                    View
-                                </button>
-                            }
-                            else if (!isPopup)
-                            {
-                                <button type="button" class="btn btn-info btn-sm js-view-pantry-note" disabled>View</button>
-                            }
-                        </div>
+                        @if (!isPopup)
+                        {
+                            <div class="ld-action-cell linen-delivery-note-wrap ld-field-note-view">
+                                @if (Model.Header.NoteID.HasValue && Model.Header.NoteID.Value > 0)
+                                {
+                                    <button type="button"
+                                            class="btn btn-info btn-sm js-view-pantry-note"
+                                            data-note-id="@Model.Header.NoteID.Value">
+                                        View
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-info btn-sm js-view-pantry-note" disabled>View</button>
+                                }
+                            </div>
+                        }
 
                         <div class="ld-inline-field ld-field-description">
                             <label class="ld-header-label">Description</label>
