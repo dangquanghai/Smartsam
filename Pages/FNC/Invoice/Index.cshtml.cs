@@ -9,6 +9,7 @@ using SmartSam.Services;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using com.ehoadondientu;
 using System.Linq;
+using DocumentFormat.OpenXml.Spreadsheet;
 
 namespace SmartSam.Pages.FNC.Invoice
 {
@@ -85,94 +86,36 @@ namespace SmartSam.Pages.FNC.Invoice
                     string tenCty = Vni2Unicode(row.B_ten_cty);
                     string diaChi = Vni2Unicode(row.B_dia_chi);
                     string nguoiMua = Vni2Unicode(row.B_nguoi_mua_hang);
+
+                    // GIỮ NGUYÊN BẢN CHUỖI CHI TIẾT NHƯ HÀM CŨ, KHÔNG CẮT TÁCH BẰNG DẤU '@' NỮA
                     string chiTiet = Vni2Unicode(row.C_chitiethoadon);
-                    
 
-                    if (!string.IsNullOrEmpty(chiTiet))
-                    {
-                        // Gọt sạch khoảng trắng hoặc dấu nháy kép rác ở hai đầu chuỗi nếu có
-                        chiTiet = chiTiet.Trim().Trim('"').Trim();
+                    // Đảm bảo định dạng ngày tháng lấy đúng Date như hàm cũ
+                    DateTime date = Convert.ToDateTime(row.A_ngay_ct);
+                    DateTime ngayChungTu = new DateTime(date.Year, date.Month, date.Day);
 
-                        var lines = chiTiet.Split('#');
-                        for (int i = 0; i < lines.Length; i++)
-                        {
-                            var columns = lines[i].Split('@');
-
-                            // Kiểm tra nếu dòng có đủ số lượng cột dữ liệu (từ 9 cột trở lên)
-                            if (columns.Length >= 9)
-                            {
-                                string maHang = columns[0].Trim();
-                                string tenHang = columns[1].Trim();
-                                string dvt = columns[2].Trim();
-                                string soLuong = columns[3].Trim();
-
-                                // Ép đổi dấu chấm thập phân sang dấu phẩy để Server Vĩnh Hy Parse được kiểu số
-                                string donGia = columns[4].Trim().Replace(".", ",");
-                                string thanhTien = columns[5].Trim().Replace(".", ",");
-
-                                string thueVat = columns[7].Trim();
-
-                                string ghiChuDong = "";
-                                if (columns.Length >= 12) ghiChuDong = columns[11].Trim();
-                                if (ghiChuDong == "-" || ghiChuDong == "\"") ghiChuDong = "";
-
-                                lines[i] = $"{maHang}@{tenHang}@{dvt}@{soLuong}@{donGia}@{thanhTien}@{thueVat}@0@0@{ghiChuDong}";
-                            }
-                        }
-                        // Nối các dòng lại bằng dấu #
-                        chiTiet = string.Join("#", lines);
-                    }
-                    /*
-                    string user,
-                    string pwd,
-                    string key,
-                    System.DateTime ngay_ct,
-                    string ky_hieu_mau,
-                    string so_seri,
-                    string so_hd,
-                    string mst,
-                    string ten_cty,
-                    string dia_chi,
-                    string email,
-                    string tel,
-                    string so_tk,
-                    string nguoi_mua_hang,
-                    string hinh_thuc_thanh_toan,
-
-                    string ma_khach_hang,
-                    string so_chung_tu,
-                    double tratruoc,
-                    double conlai,
-                    string chitiethoadon0)
-                        */
-                    // ĐẶT BREAKPOINT TẠI ĐÂY: Để xem giá trị biến 'chiTiet' và 'row.A_so_serial' trước khi gửi
-                    //importHoadon_sky
-                    //importHoadon_skyAsync
-                    //string result = await service.importHoadon_sky(
-
-                   string result = await service.importHoadon_skyAsync(
+                    string result = await service.importHoadon_skyAsync(
                         "0300713227_import",
                         "Import@435466",
-                        "",
-                        row.A_ngay_ct,
+                        "", // strHoadonthaythe giống cũ
+                        ngayChungTu,
                         row.A_ky_hieu_mau,
                         row.A_so_serial,
-                        "0",
+                        "", // strTaikhoanNganhang giống cũ
                         row.B_ma_so_thue,
                         tenCty,
                         diaChi,
                         row.B_email,
                         row.B_tel,
-                        "0",
+                        "", // strNganHangMua giống cũ
                         nguoiMua,
                         "TM/CK",
-                        "",
-                        "0",
-                        0,
-                        0,
-                        chiTiet
+                        row.B_ma_KH,           // Truyền đúng Mã KH cũ
+                        row.A_officialReceipt_no, // Truyền đúng Số chứng từ cũ
+                        Convert.ToDouble(row.C_tratruoc), // Truyền đúng giá trị cũ
+                        Convert.ToDouble(row.C_conlai),   // Truyền đúng giá trị cũ
+                        chiTiet // Chuỗi chi tiết nguyên bản
                     );
-
 
 
                     if (result.Contains("thành công") || result.ToLower() == "ok")
@@ -186,6 +129,7 @@ namespace SmartSam.Pages.FNC.Invoice
                         // ĐẶT BREAKPOINT TẠI ĐÂY: Để xem nội dung lỗi chính xác từ Vĩnh Hy trả về cho dòng này
                         log.Append($"<div class='text-danger'>[Dòng {row.Uid}]: Lỗi - {result}</div>");
                     }
+
                 }
 
                 return new JsonResult(new
@@ -204,6 +148,19 @@ namespace SmartSam.Pages.FNC.Invoice
                 });
             }
         }
+        /*
+        public static string Vni2Unicode(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            string kq = s;
+            int[] u = { 7845, 7847, 7849, 7851, 7853, 226, 7843, 227, 7841, 7855, 7857, 7859, 7861, 7863, 259, 250, 249, 7911, 361, 7909, 7913, 7915, 7917, 7919, 7921, 432, 7871, 7873, 7875, 7877, 7879, 234, 233, 232, 7867, 7869, 7865, 7889, 7891, 7893, 7895, 7897, 7887, 245, 7885, 7899, 7901, 7903, 7905, 7907, 417, 237, 236, 7881, 297, 7883, 253, 7923, 7927, 7929, 7925, 273, 7844, 7846, 7848, 7850, 7852, 194, 7842, 195, 7840, 7854, 7856, 7858, 7860, 7862, 258, 218, 217, 7910, 360, 7908, 7912, 7914, 7916, 7918, 7920, 431, 7870, 7872, 7874, 7876, 7878, 202, 201, 200, 7866, 7868, 7864, 7888, 7890, 7892, 7894, 7896, 7886, 213, 7884, 7898, 7900, 7902, 7904, 7906, 416, 205, 204, 7880, 296, 7882, 221, 7922, 7926, 7928, 7924, 272, 225, 224, 244, 243, 242, 193, 192, 212, 211, 210 };
+            string[] v = { "aá", "aà", "aå", "aã", "aä", "aâ", "aû", "aõ", "aï", "aé", "aè", "aú", "aü", "aë", "aê", "uù", "uø", "uû", "uõ", "uï", "öù", "öø", "öû", "öõ", "öï", "ö", "eá", "eà", "eå", "eã", "eä", "eâ", "eù", "eø", "eû", "eõ", "eï", "oá", "oà", "oå", "oã", "oä", "oû", "oõ", "oï", "ôù", "ôø", "ôû", "ôõ", "ôï", "ô", "í", "ì", "æ", "ó", "ò", "yù", "yø", "yû", "yõ", "î", "ñ", "AÁ", "AÀ", "AÅ", "AÃ", "AÄ", "AÂ", "AÛ", "AÕ", "AÏ", "AÉ", "AÈ", "AÚ", "AÜ", "AË", "AÊ", "UÙ", "UØ", "UÛ", "UÕ", "UÏ", "ÖÙ", "ÖØ", "ÖÛ", "ÖÕ", "ÖÏ", "Ö", "EÁ", "EÀ", "EÅ", "EÃ", "EÄ", "EÂ", "EÙ", "EØ", "EÛ", "EÕ", "EÏ", "OÁ", "OÀ", "OÅ", "OÃ", "OÄ", "OÛ", "OÕ", "OÏ", "ÔÙ", "ÔØ", "ÔÛ", "ÔÕ", "ÔÏ", "Ô", "Í", "Ì", "Æ", "Ó", "Ò", "YÙ", "YØ", "YÛ", "YÕ", "Î", "Ñ", "aù", "aø", "oâ", "où", "oø", "AÙ", "AØ", "OÂ", "OÙ", "OØ" };
+
+            for (int i = 0; i < v.Length; i++)
+                kq = kq.Replace(v[i], ((char)u[i]).ToString());
+            return kq;
+        }
+        */
         public IActionResult OnPostClearAll()
         {
             UpdateStatus(null, 1, clearAll: true);
@@ -231,41 +188,30 @@ namespace SmartSam.Pages.FNC.Invoice
         private (List<EInvoiceRow> list, int total) FetchInvoicesFromDb()
         {
             var list = new List<EInvoiceRow>();
-            string userId = User.FindFirst("EmployeeCode")?.Value ?? "-1";
+
+            // Lấy đúng UserID (chuỗi số như "644") từ Claims của user đang đăng nhập
+            string userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                            ?? User.FindFirst("EmployeeID")?.Value
+                            ?? "-1";
 
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
 
-            // Tối ưu hóa SQL Query động dựa vào Filter.StatusID và Filter.ObjectId từ form tìm kiếm
-            StringBuilder sql = new StringBuilder(@"
-                SELECT uid, A_ngay_ct, A_officialReceipt_no, B_nguoi_mua_hang, 
-                       B_ten_cty, B_dia_chi, B_ma_so_thue, B_email, B_tel, B_ma_KH,
-                       A_ky_hieu_mau, A_so_serial, C_tratruoc, C_conlai, C_chitiethoadon,
-                       C_tongtienthanhtoan 
-                FROM AC_EInvoice where 1 = 1 ");
-              // WHERE CreateUser = @userCode");
+            // Câu lệnh SQL chỉ giữ duy nhất bộ lọc CreateUser
+            string sql = @"
+            SELECT uid, A_ngay_ct, A_officialReceipt_no, B_nguoi_mua_hang, 
+            B_ten_cty, B_dia_chi, B_ma_so_thue, B_email, B_tel, B_ma_KH,
+            A_ky_hieu_mau, A_so_serial, C_tratruoc, C_conlai, C_chitiethoadon,
+            C_tongtienthanhtoan 
+            FROM AC_EInvoice 
+            WHERE CreateUser = @userID and status = 0
+            ORDER BY uid";
 
-            // Xử lý bộ lọc Trạng thái (Mặc định nếu chưa chọn là 0 - Chưa xử lý)
-            string statusParam = !string.IsNullOrEmpty(Filter.StatusID) ? Filter.StatusID : "0";
-            sql.Append(" AND status = @status");
+            //WHERE CreateUser = @userID and status = 0
 
-            // Xử lý bộ lọc Đối tượng (Select2) nếu có chọn
-            if (!string.IsNullOrEmpty(Filter.ObjectId))
-            {
-                sql.Append(" AND B_ma_KH = @objectId");
-            }
+            using var cmd = new SqlCommand(sql, conn);
 
-            sql.Append(" ORDER BY uid");
-
-            using var cmd = new SqlCommand(sql.ToString(), conn);
-
-            // Sửa lỗi logic đặt tên tham số cũ: SQL khai báo @userCode nhưng truyền @UserId
-           // cmd.Parameters.AddWithValue("@userCode", userId);
-            cmd.Parameters.AddWithValue("@status", statusParam);
-
-            if (!string.IsNullOrEmpty(Filter.ObjectId))
-            {
-                cmd.Parameters.AddWithValue("@objectId", Filter.ObjectId);
-            }
+            // Nạp duy nhất tham số userCode vào Command
+            cmd.Parameters.AddWithValue("@userID", userId);
 
             conn.Open();
             using var reader = cmd.ExecuteReader();
@@ -296,7 +242,10 @@ namespace SmartSam.Pages.FNC.Invoice
 
         private void UpdateStatus(double? uid, int status, bool clearAll = false)
         {
-            string userId = User.FindFirst("EmployeeCode")?.Value ?? "-1";
+            // ĐỔI TẠI ĐÂY: Lấy đúng UserID (chuỗi số như "644") từ Claims để khớp với CreateUser trong DB
+            string userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                            ?? User.FindFirst("UserID")?.Value
+                            ?? "-1";
 
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
             string sql = clearAll
@@ -306,23 +255,22 @@ namespace SmartSam.Pages.FNC.Invoice
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@Status", status);
             cmd.Parameters.AddWithValue("@UserId", userId);
-            if (uid.HasValue) cmd.Parameters.AddWithValue("@Uid", uid.Value);
+
+            // Xử lý tham số @Uid an toàn
+            if (uid.HasValue)
+            {
+                cmd.Parameters.AddWithValue("@Uid", uid.Value);
+            }
+            else
+            {
+                cmd.Parameters.AddWithValue("@Uid", DBNull.Value);
+            }
 
             conn.Open();
             cmd.ExecuteNonQuery();
         }
 
-        public static string Vni2Unicode(string s)
-        {
-            if (string.IsNullOrEmpty(s)) return "";
-            string kq = s;
-            int[] u = { 7845, 7847, 7849, 7851, 7853, 226, 7843, 227, 7841, 7855, 7857, 7859, 7861, 7863, 259, 250, 249, 7911, 361, 7909, 7913, 7915, 7917, 7919, 7921, 432, 7871, 7873, 7875, 7877, 7879, 234, 233, 232, 7867, 7869, 7865, 7889, 7891, 7893, 7895, 7897, 7887, 245, 7885, 7899, 7901, 7903, 7905, 7907, 417, 237, 236, 7881, 297, 7883, 253, 7923, 7927, 7929, 7925, 273, 7844, 7846, 7848, 7850, 7852, 194, 7842, 195, 7840, 7854, 7856, 7858, 7860, 7862, 258, 218, 217, 7910, 360, 7908, 7912, 7914, 7916, 7918, 7920, 431, 7870, 7872, 7874, 7876, 7878, 202, 201, 200, 7866, 7868, 7864, 7888, 7890, 7892, 7894, 7896, 7886, 213, 7884, 7898, 7900, 7902, 7904, 7906, 416, 205, 204, 7880, 296, 7882, 221, 7922, 7926, 7928, 7924, 272, 225, 224, 244, 243, 242, 193, 192, 212, 211, 210 };
-            string[] v = { "aá", "aà", "aå", "aã", "aä", "aâ", "aû", "aõ", "aï", "aé", "aè", "aú", "aü", "aë", "aê", "uù", "uø", "uû", "uõ", "uï", "öù", "öø", "öû", "öõ", "öï", "ö", "eá", "eà", "eå", "eã", "eä", "eâ", "eù", "eø", "eû", "eõ", "eï", "oá", "oà", "oå", "oã", "oä", "oû", "oõ", "oï", "ôù", "ôø", "ôû", "ôõ", "ôï", "ô", "í", "ì", "æ", "ó", "ò", "yù", "yø", "yû", "yõ", "î", "ñ", "AÁ", "AÀ", "AÅ", "AÃ", "AÄ", "AÂ", "AÛ", "AÕ", "AÏ", "AÉ", "AÈ", "AÚ", "AÜ", "AË", "AÊ", "UÙ", "UØ", "UÛ", "UÕ", "UÏ", "ÖÙ", "ÖØ", "ÖÛ", "ÖÕ", "ÖÏ", "Ö", "EÁ", "EÀ", "EÅ", "EÃ", "EÄ", "EÂ", "EÙ", "EØ", "EÛ", "EÕ", "EÏ", "OÁ", "OÀ", "OÅ", "OÃ", "OÄ", "OÛ", "OÕ", "OÏ", "ÔÙ", "ÔØ", "ÔÛ", "ÔÕ", "ÔÏ", "Ô", "Í", "Ì", "Æ", "Ó", "Ò", "YÙ", "YØ", "YÛ", "YÕ", "Î", "Ñ", "aù", "aø", "oâ", "où", "oø", "AÙ", "AØ", "OÂ", "OÙ", "OØ" };
-
-            for (int i = 0; i < v.Length; i++)
-                kq = kq.Replace(v[i], ((char)u[i]).ToString());
-            return kq;
-        }
+       
     }
 
     // --- CLASS ĐIỀU KIỆN LỌC ---

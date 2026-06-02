@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Mvc.Filters;
 using SmartSam.Services; // QUAN TRỌNG: Namespace này chứa PermissionService
 using SmartSam.Services.Interfaces; // Nếu anh để ISecurityService ở thư mục Interfaces
 
@@ -23,9 +24,6 @@ namespace SmartSam.Services.Implementations
             75,  // Analyzing Suppliers
             60,  // Inventory Parameters
             64,  // Item list
-            //66,  // Item Issue
-            //67,  // Item Receice 
-            //68,  // Item Transfer
             70,  // Inventory Report
             90 , // Inventory Make  New year=> tạo số liệu tồn đầu năm cho các kho
             114, // Laundty & Linen  list
@@ -35,6 +33,7 @@ namespace SmartSam.Services.Implementations
             118, // Laundry Linen Report
             148, // Special Laudry Report
             149, // Post Invoice to Vinhy
+           
         };
 
         public List<int> GetEffectivePermissions(int functionId, int roleId, int objectStatus)
@@ -68,6 +67,9 @@ namespace SmartSam.Services.Implementations
                 case 73: // Purchase Order
                     return FilterPurchaseOrder(raw, objectStatus);
 
+                case 151:  // Item Checking
+                    return FilterItemChecking(raw, objectStatus);
+
                 case 66: // Item Issue
                     return FilterItemIssue(raw, objectStatus);
                 case 67:  // Item Receice 
@@ -78,6 +80,39 @@ namespace SmartSam.Services.Implementations
                 default:
                     return raw;
             }
+        }
+        private List<int> FilterItemChecking(List<int> raw, int status)
+        {
+            /* 
+               Mã quyền (Action):
+               1: View List, 2: View Detail, 3: Add, 4: Edit
+
+               Trạng thái ItemChecking: 
+               1: Just Created, 2: Checked, 3: Approved, 4: Received, 5: Cancel
+            */
+
+            // Bước 1: Khởi tạo danh sách quyền mặc định (Lúc nào cũng được xem List và thêm mới)
+            // Sử dụng Distinct để tránh trùng lặp nếu trong raw đã có sẵn nhiều quyền giống nhau
+            var effective = raw.Where(p => p == 1 || p == 3).Distinct().ToList();
+
+            // Bước 2: Xét quyền xem chi tiết (View Detail - 2) 
+            // Thường thì trạng thái nào cũng được xem chi tiết nếu có quyền
+            if (raw.Contains(2))
+            {
+                effective.Add(2);
+            }
+
+            // Bước 3: Xét quyền đặc thù theo trạng thái
+            if (status == 1) // Chỉ trạng thái Just Created mới được Edit
+            {
+                if (raw.Contains(4))
+                {
+                    effective.Add(4);
+                }
+            }
+            // Các trạng thái 2, 3, 4, 5 sẽ không rơi vào if này -> Không có quyền 4 (Edit)
+
+            return effective.Distinct().ToList();
         }
         private List<int> FilterItemTransfer(List<int> raw, int status)
         {
@@ -221,13 +256,15 @@ namespace SmartSam.Services.Implementations
                2: View, 3: Add, 4: Edit, 6: Back to Processing, 7: Purchaser Evaluate, 8 : Attache File
             */
 
-            // Các quyền luôn có: Xem và Thêm mới
-            var effective = raw.Where(p => p == 2 || p == 3).ToList();
+            // Các quyền luôn có: Xem và Thêm mới, Attache File
+
+            var effective = raw.Where(p => p == 2 || p == 3 || p == 8).ToList();
+
             if (status >= 1 && status <= 3 && raw.Contains(6))
             {
                 effective.Add(6);
             }
-            var effective = raw.Where(p => p == 2 || p == 3 || p == 8).ToList();
+            
 
             switch (status)
             {
