@@ -10,7 +10,7 @@ namespace SmartSam.Pages.Inventory.ItemChecking;
 
 public class IndexModel : BasePageModel
 {
-    private const int FunctionId = 147;
+    private const int FunctionId = 151;
     private const int PermissionViewList = 1;
     private const int PermissionViewDetail = 2;
     private const int PermissionAdd = 3;
