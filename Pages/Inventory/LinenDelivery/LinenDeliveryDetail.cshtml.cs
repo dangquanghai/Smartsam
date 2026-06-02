@@ -877,7 +877,7 @@ ORDER BY dbo.CM_Contract.CurrentApartmentNo;";
     {
         var priceColumn = GetPriceColumn(Header.SupplierID);
 
-        if (Header.DeliveryType == 1)
+        if (Header.DeliveryType == 1 || Header.DeliveryType == 4)
         {
             return $@"
 SELECT ID, LinnenCode, ISNULL({priceColumn}, 0) AS DisplayPrice
@@ -892,8 +892,8 @@ ORDER BY LinnenCode;";
             return $@"
 SELECT ID, LinnenCode, ISNULL({priceColumn}, 0) AS DisplayPrice
 FROM dbo.LN_Linnen
-WHERE ISNULL({priceColumn}, 0) > 0
-  AND ISNULL(IsUniform, 0) = 1
+WHERE ISNULL(IsUniform, 0) = 1
+  AND ISNULL({priceColumn}, 0) > 0
 ORDER BY LinnenCode;";
         }
 
@@ -904,25 +904,25 @@ ORDER BY LinnenCode;";
                 return @"
 SELECT ID, LinnenCode, TRY_CONVERT(decimal(18,2), VNDPriceNew3) AS DisplayPrice
 FROM dbo.LN_Linnen
-WHERE (ISNULL(IsUniform, 0) = 0)
-  AND (ISNULL(IsLinen, 0) = 0)
+WHERE ISNULL(IsLinen, 0) = 0
+  AND ISNULL(IsUniform, 0) = 0
+  AND TRY_CONVERT(decimal(18,2), VNDPriceNew3) > 0
 ORDER BY LinnenCode;";
             }
 
             return $@"
 SELECT ID, LinnenCode, ISNULL({priceColumn}, 0) AS DisplayPrice
 FROM dbo.LN_Linnen
-WHERE ISNULL({priceColumn}, 0) > 0
-  AND (ISNULL(IsUniform, 0) = 0)
-  AND (ISNULL(IsLinen, 0) = 0)
+WHERE ISNULL(IsLinen, 0) = 0
+  AND ISNULL(IsUniform, 0) = 0
+  AND ISNULL({priceColumn}, 0) > 0
 ORDER BY LinnenCode;";
         }
 
         return @"
-SELECT ID, LinnenCode, TRY_CONVERT(decimal(18,2), VNDPriceNew3) AS DisplayPrice
+SELECT ID, LinnenCode, CAST(0 AS decimal(18,2)) AS DisplayPrice
 FROM dbo.LN_Linnen
-WHERE TRY_CONVERT(decimal(18,2), VNDPriceNew3) > 0
-  AND (ISNULL(IsUniform, 0) = 0)
+WHERE 1 = 0
 ORDER BY LinnenCode;";
     }
 
