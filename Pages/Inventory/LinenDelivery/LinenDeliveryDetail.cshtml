@@ -304,27 +304,33 @@
             background-color: #eef5ff;
         }
 
-        #linenDeliveryBillModal.show .linen-delivery-bill-modal-dialog,
-        #linenDeliveryBillDetailModal.show .linen-delivery-bill-detail-modal-dialog {
-            animation: linenDeliveryEyeOpen 0.18s ease-out;
+        #linenDeliveryBillModal.fade .modal-dialog,
+        #linenDeliveryBillDetailModal.fade .modal-dialog {
+            opacity: 0;
+            transform: translate(0, 0) scaleY(0.04);
             transform-origin: center center;
-            will-change: transform, opacity;
+            transition: transform 0.22s ease-out, opacity 0.14s ease-out;
         }
 
-        @@keyframes linenDeliveryEyeOpen {
-            0% {
-                opacity: 0;
-                transform: scaleY(0.08) scaleX(0.96);
-            }
+        #linenDeliveryBillModal.show .modal-dialog,
+        #linenDeliveryBillDetailModal.show .modal-dialog {
+            opacity: 1;
+            transform: translate(0, 0) scaleY(1);
+        }
 
-            70% {
-                opacity: 1;
-                transform: scaleY(1.03) scaleX(1);
-            }
+        #linenDeliveryBillModal .modal-content,
+        #linenDeliveryBillDetailModal .modal-content {
+            transform-origin: center center;
+        }
 
-            100% {
+        @@media (prefers-reduced-motion: reduce) {
+            #linenDeliveryBillModal.fade .modal-dialog,
+            #linenDeliveryBillModal.show .modal-dialog,
+            #linenDeliveryBillDetailModal.fade .modal-dialog,
+            #linenDeliveryBillDetailModal.show .modal-dialog {
                 opacity: 1;
-                transform: scaleY(1) scaleX(1);
+                transform: none;
+                transition: none;
             }
         }
         .linen-delivery-report-modal-dialog {
