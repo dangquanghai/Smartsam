@@ -710,9 +710,12 @@
             <input type="hidden" asp-for="Popup" />
 
             <div class="card card-primary card-outline">
-                <div class="card-header py-2">
-                    <h3 class="card-title">Linen Delivery Detail</h3>
-                </div>
+                @if (!isPopup)
+                {
+                    <div class="card-header py-2">
+                        <h3 class="card-title">Linen Delivery Detail</h3>
+                    </div>
+                }
                 <div class="card-body linen-delivery-header">
                     <div class="linen-delivery-header-vb">
                         <div class="ld-inline-field">
@@ -843,7 +846,7 @@
                             </colgroup>
                             <thead class="thead-light">
                                 <tr>
-                                    <th class="linen-delivery-action-cell text-center">@(isView ? "STT" : string.Empty)</th>
+                                    <th class="linen-delivery-action-cell text-center">@(isView ? "#" : string.Empty)</th>
                                     <th>Location</th>
                                     <th>Linen</th>
                                     <th style="width: 70px;">Express</th>
