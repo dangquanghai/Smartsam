@@ -280,13 +280,13 @@
                                             <input type="hidden" asp-for="DetailRows[i].Unit" />
                                         </td>
                                         <td>
-                                            <input asp-for="DetailRows[i].Quantity" class="form-control form-control-sm text-right js-bill-qty" readonly="@isView" />
+                                            <input asp-for="DetailRows[i].Quantity" asp-format="{0:#,0.##}" inputmode="decimal" class="form-control form-control-sm text-right js-bill-qty" readonly="@isView" />
                                         </td>
                                         <td>
-                                            <input asp-for="DetailRows[i].Price" class="form-control form-control-sm text-right js-bill-price" readonly="@isView" />
+                                            <input asp-for="DetailRows[i].Price" asp-format="{0:#,0.##}" inputmode="decimal" class="form-control form-control-sm text-right js-bill-price" readonly="@isView" />
                                         </td>
                                         <td>
-                                            <input asp-for="DetailRows[i].Amount" class="form-control form-control-sm text-right js-bill-amount" readonly />
+                                            <input asp-for="DetailRows[i].Amount" asp-format="{0:#,0.##}" inputmode="decimal" class="form-control form-control-sm text-right js-bill-amount" readonly />
                                         </td>
                                         <td class="daily-service-bill-detail-note-cell">
                                             <input asp-for="DetailRows[i].Notes" class="form-control form-control-sm vni-font daily-service-bill-detail-note" readonly="@isView" />
