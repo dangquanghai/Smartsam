@@ -8,6 +8,7 @@
         bindFormSubmit();
         bindGridEvents();
         bindHeaderEvents();
+        bindDeliveryViewEvents();
         bindPrintEvents();
         bindDirtyTracking();
         initReportModal();
@@ -128,6 +129,25 @@
             });
     }
 
+    function bindDeliveryViewEvents() {
+        $(document).off('click', '.js-view-delivery-detail').on('click', '.js-view-delivery-detail', function () {
+            const detailUrl = $(this).data('delivery-url') || '';
+            const frame = document.getElementById('linenReceivingDeliveryDetailFrame');
+            if (!detailUrl || !frame) {
+                return;
+            }
+
+            frame.src = detailUrl;
+            $('#linenReceivingDeliveryDetailModal').modal('show');
+        });
+
+        $('#linenReceivingDeliveryDetailModal').off('hidden.bs.modal').on('hidden.bs.modal', function () {
+            const frame = document.getElementById('linenReceivingDeliveryDetailFrame');
+            if (frame) {
+                frame.removeAttribute('src');
+            }
+        });
+    }
     function bindPrintEvents() {
         $('#btnPrintLinenReceivingDetail').off('click').on('click', function () {
             if (pageDirty) {

@@ -25,6 +25,9 @@ public class LinenDeliveryDetailModel : BasePageModel
     [BindProperty(SupportsGet = true)]
     public string Mode { get; set; } = "view";
 
+    [BindProperty(SupportsGet = true)]
+    public bool Popup { get; set; }
+
     [BindProperty]
     public LinenDeliveryHeader Header { get; set; } = new LinenDeliveryHeader();
 
@@ -54,6 +57,11 @@ public class LinenDeliveryDetailModel : BasePageModel
     {
         PagePerm = GetUserPermissions();
         Mode = NormalizeMode(mode);
+        if (Popup)
+        {
+            Mode = "view";
+        }
+
         RedirectUrl = NormalizeReturnUrl(returnUrl);
 
         if (Mode == "add")

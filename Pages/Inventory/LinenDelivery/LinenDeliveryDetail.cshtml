@@ -3,7 +3,13 @@
 @{
     ViewData["Title"] = "Linen Delivery Detail";
     var isView = Model.IsViewMode;
+    var isPopup = Model.Popup;
     var indexUrl = string.IsNullOrWhiteSpace(Model.RedirectUrl) ? "/Inventory/LinenDelivery" : Model.RedirectUrl;
+    if (isPopup)
+    {
+        Layout = "_PopupLayout";
+        ViewData["PopupBodyClass"] = "linen-delivery-popup-body";
+    }
     var reportLinenCodes = Model.Details
         .Select(x => (x.LinenCode ?? string.Empty).Trim())
         .Where(x => !string.IsNullOrWhiteSpace(x))
@@ -14,6 +20,26 @@
 
 @section Styles {
     <style>
+        body.linen-delivery-popup-body {
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: hidden;
+            background: #f4f6f9;
+        }
+
+        .linen-delivery-popup,
+        .linen-delivery-popup .container-fluid {
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+        }
+
+        .linen-delivery-popup .card {
+            margin-bottom: 0;
+            border-radius: 0;
+        }
+
         .linen-delivery-header label {
             margin-bottom: 0;
             white-space: nowrap;
@@ -660,7 +686,7 @@
     </style>
 }
 
-<section class="content">
+<section class="content @(isPopup ? "linen-delivery-popup" : string.Empty)">
     <div class="container-fluid">
         @if (TempData["SuccessMessage"] != null)
         {
@@ -681,6 +707,7 @@
             <input type="hidden" asp-for="Mode" />
             <input type="hidden" asp-for="DetailsJson" id="DetailsJson" />
             <input type="hidden" asp-for="RedirectUrl" id="RedirectUrl" />
+            <input type="hidden" asp-for="Popup" />
 
             <div class="card card-primary card-outline">
                 <div class="card-header py-2">
@@ -733,7 +760,7 @@
                         </div>
 
                         <div class="ld-action-cell linen-delivery-note-wrap ld-field-note-view">
-                            @if (Model.Header.NoteID.HasValue && Model.Header.NoteID.Value > 0)
+                            @if (!isPopup && Model.Header.NoteID.HasValue && Model.Header.NoteID.Value > 0)
                             {
                                 <button type="button"
                                         class="btn btn-info btn-sm js-view-pantry-note"
@@ -741,7 +768,7 @@
                                     View
                                 </button>
                             }
-                            else
+                            else if (!isPopup)
                             {
                                 <button type="button" class="btn btn-info btn-sm js-view-pantry-note" disabled>View</button>
                             }
@@ -903,7 +930,9 @@
                         </table>
                     </div>
                 </div>
-                <div class="card-footer py-2 text-center">
+                @if (!isPopup)
+                {
+                    <div class="card-footer py-2 text-center">
                     @if (Model.CanSave)
                     {
                         <button type="button" class="btn btn-sm btn-success mr-2" id="btnAddDetailRow">
@@ -922,7 +951,8 @@
                     <button type="button" class="btn btn-sm btn-default" id="btnCloseLinenDeliveryDetail" data-index-url="@indexUrl">
                         <i class="fas fa-arrow-left"></i> Back to list
                     </button>
-                </div>
+                    </div>
+                }
             </div>
         </form>
     </div>
