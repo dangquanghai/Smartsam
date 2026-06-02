@@ -232,6 +232,19 @@
             margin: 0;
         }
 
+        .linen-receiving-report-mode-item input:checked + span {
+            color: #198754;
+            font-weight: 700;
+            background: #e8f5ee;
+            border: 1px solid #198754;
+            border-radius: 3px;
+            padding: 1px 4px;
+        }
+
+        .linen-receiving-report-mode-item:has(input:checked) {
+            color: #198754;
+        }
+
         .linen-receiving-report-toolbar label {
             margin-bottom: 0;
             white-space: nowrap;

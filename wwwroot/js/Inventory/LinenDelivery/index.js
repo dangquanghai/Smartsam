@@ -35,17 +35,9 @@
         state.currentPage = page;
 
         const token = $('input[name="__RequestVerificationToken"]').val();
-        const filter = {
-            fromDate: $('#Filter_FromDate').val() || null,
-            toDate: $('#Filter_ToDate').val() || null,
-            deliveryId: parseNullableInt($('#Filter_DeliveryId').val()),
-            deliveryTypeId: parseNullableInt($('#Filter_DeliveryTypeId').val()),
-            supplierId: parseNullableInt($('#Filter_SupplierId').val()),
-            closed: $('#Filter_Closed').is(':checked'),
-            isRent: $('#Filter_IsRent').is(':checked'),
-            page: state.currentPage,
-            pageSize: CONFIG.pageSize
-        };
+        const filter = buildSearchFilter(state.currentPage);
+
+        syncSearchUrl(filter);
 
         showLoading(true);
 
@@ -152,7 +144,7 @@
         });
 
         $('#btnAdd').off('click').on('click', function () {
-            window.location.href = '/Inventory/LinenDelivery/LinenDeliveryDetail?mode=add';
+            window.location.href = buildDetailUrl(null, 'add');
         });
 
         $('#linenDeliverySearchForm').off('submit').on('submit', function (e) {
@@ -196,7 +188,7 @@
     function initializePage() {
         initEvents();
         initializeSearchDateRange();
-        performSearch(1);
+        performSearch(getInitialPage());
     }
 
     function showLoading(show) {
@@ -218,7 +210,7 @@
         if (item.actions?.canAccess) {
             const id = item.data.deliveryID || item.data.deliveryId;
             const mode = item.actions.accessMode || 'view';
-            window.location.href = `/Inventory/LinenDelivery/LinenDeliveryDetail?id=${id}&mode=${mode}`;
+            window.location.href = buildDetailUrl(id, mode);
         } else {
             alert('You do not have permission to view this linen delivery.');
         }
@@ -231,6 +223,79 @@
 
         const parsed = parseInt(value, 10);
         return Number.isNaN(parsed) ? null : parsed;
+    }
+
+    function buildSearchFilter(page) {
+        return {
+            fromDate: $('#Filter_FromDate').val() || null,
+            toDate: $('#Filter_ToDate').val() || null,
+            deliveryId: parseNullableInt($('#Filter_DeliveryId').val()),
+            deliveryTypeId: parseNullableInt($('#Filter_DeliveryTypeId').val()),
+            supplierId: parseNullableInt($('#Filter_SupplierId').val()),
+            closed: $('#Filter_Closed').is(':checked'),
+            isRent: $('#Filter_IsRent').is(':checked'),
+            page: page,
+            pageSize: CONFIG.pageSize
+        };
+    }
+
+    function syncSearchUrl(filter) {
+        if (!window.history || typeof window.history.replaceState !== 'function') {
+            return;
+        }
+
+        const url = new URL(window.location.href);
+        setQueryParam(url.searchParams, 'Filter.FromDate', filter.fromDate);
+        setQueryParam(url.searchParams, 'Filter.ToDate', filter.toDate);
+        setQueryParam(url.searchParams, 'Filter.DeliveryId', filter.deliveryId);
+        setQueryParam(url.searchParams, 'Filter.DeliveryTypeId', filter.deliveryTypeId);
+        setQueryParam(url.searchParams, 'Filter.SupplierId', filter.supplierId);
+        url.searchParams.set('Filter.Closed', filter.closed ? 'true' : 'false');
+        url.searchParams.set('Filter.IsRent', filter.isRent ? 'true' : 'false');
+        url.searchParams.set('page', String(filter.page || 1));
+
+        window.history.replaceState(null, '', `${url.pathname}${url.search}`);
+    }
+
+    function setQueryParam(params, name, value) {
+        if (value === null || value === undefined || value === '') {
+            params.delete(name);
+            return;
+        }
+
+        params.set(name, String(value));
+    }
+
+    function getInitialPage() {
+        const params = new URLSearchParams(window.location.search);
+        const page = parseInt(params.get('page') || '1', 10);
+        return Number.isNaN(page) || page <= 0 ? 1 : page;
+    }
+
+    function getCurrentListUrl() {
+        const filter = buildSearchFilter(state.currentPage || 1);
+        const url = new URL('/Inventory/LinenDelivery', window.location.origin);
+        setQueryParam(url.searchParams, 'Filter.FromDate', filter.fromDate);
+        setQueryParam(url.searchParams, 'Filter.ToDate', filter.toDate);
+        setQueryParam(url.searchParams, 'Filter.DeliveryId', filter.deliveryId);
+        setQueryParam(url.searchParams, 'Filter.DeliveryTypeId', filter.deliveryTypeId);
+        setQueryParam(url.searchParams, 'Filter.SupplierId', filter.supplierId);
+        url.searchParams.set('Filter.Closed', filter.closed ? 'true' : 'false');
+        url.searchParams.set('Filter.IsRent', filter.isRent ? 'true' : 'false');
+        url.searchParams.set('page', String(filter.page || 1));
+
+        return `${url.pathname}${url.search}`;
+    }
+
+    function buildDetailUrl(id, mode) {
+        const url = new URL('/Inventory/LinenDelivery/LinenDeliveryDetail', window.location.origin);
+        if (id) {
+            url.searchParams.set('id', id);
+        }
+
+        url.searchParams.set('mode', mode || 'view');
+        url.searchParams.set('returnUrl', getCurrentListUrl());
+        return `${url.pathname}${url.search}`;
     }
 
     function encodeHtml(value) {

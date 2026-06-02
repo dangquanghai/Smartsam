@@ -133,7 +133,7 @@
         $tbody.empty();
 
         if (!items || items.length === 0) {
-            $tbody.append('<tr><td colspan="8" class="text-center py-4">No data</td></tr>');
+            $tbody.append('<tr><td colspan="5" class="text-center py-4">No data</td></tr>');
             return;
         }
 
@@ -142,10 +142,8 @@
             const actions = item.actions || {};
             const idText = encodeHtml(row.id || '');
             const dateText = encodeHtml(row.dateCreateText || '');
-            const closeChecked = row.isClose ? 'checked' : '';
-            const rentChecked = row.isRent ? 'checked' : '';
-            const startChecked = row.start ? 'checked' : '';
-            const detailCount = encodeHtml(row.detailCount || 0);
+            const noteText = row.description || '';
+            const deliveryText = row.deliveryDescription || '';
             const linkClass = actions.canAccess ? 'linnen-note-link text-primary font-weight-bold' : 'linnen-note-link text-muted font-weight-bold';
 
             return `
@@ -154,12 +152,9 @@
                 <td style="white-space:nowrap">
                     <a href="javascript:void(0)" class="${linkClass}" style="text-decoration:underline">${idText}</a>
                 </td>
+                <td class="vni-font">${buildEllipsisCell(noteText, 'vni-font')}</td>
                 <td>${dateText}</td>
-                <td class="vni-font">${buildEllipsisCell(row.description || '', 'vni-font')}</td>
-                <td class="text-center"><input type="checkbox" disabled ${closeChecked}></td>
-                <td class="text-center"><input type="checkbox" disabled ${rentChecked}></td>
-                <td class="text-center"><input type="checkbox" disabled ${startChecked}></td>
-                <td class="text-right">${detailCount}</td>
+                <td class="vni-font">${buildEllipsisCell(deliveryText, 'vni-font')}</td>
             </tr>`;
         });
 
@@ -256,12 +251,12 @@
 
     function showLoading(show) {
         if (show) {
-            $(CONFIG.selectors.tbody).html('<tr><td colspan="8" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>');
+            $(CONFIG.selectors.tbody).html('<tr><td colspan="5" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>');
         }
     }
 
     function showError(message) {
-        $(CONFIG.selectors.tbody).html(`<tr><td colspan="8" class="text-center text-danger py-4">${encodeHtml(message)}</td></tr>`);
+        $(CONFIG.selectors.tbody).html(`<tr><td colspan="5" class="text-center text-danger py-4">${encodeHtml(message)}</td></tr>`);
     }
 
     function openDetail(index) {

@@ -36,7 +36,7 @@ public class LinenReceivingDetailModel : BasePageModel
 
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
     public bool CanSave { get; private set; }
-    public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
+    public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase) || Header.IsLocked;
     public bool IsDeliveryLocked => IsViewMode || Details.Count > 0;
     public List<LinenReceivingDetailRow> Details { get; set; } = new List<LinenReceivingDetailRow>();
     public List<SelectListItem> DeliveryOptions { get; set; } = new List<SelectListItem>();
@@ -86,10 +86,15 @@ public class LinenReceivingDetailModel : BasePageModel
             Mode = "view";
         }
 
+        if (Mode == "edit" && Header.IsLocked)
+        {
+            Mode = "view";
+        }
+
         LoadDetails();
         LoadLookupData();
         DetailsJson = JsonSerializer.Serialize(Details);
-        CanSave = Mode != "view" && PagePerm.HasPermission(PermissionUpdate);
+        CanSave = !IsViewMode && PagePerm.HasPermission(PermissionUpdate);
         return Page();
     }
 
@@ -123,6 +128,14 @@ public class LinenReceivingDetailModel : BasePageModel
             {
                 trans.Rollback();
                 return NotFound();
+            }
+
+            if (currentHeader.IsLocked)
+            {
+                trans.Rollback();
+                ModelState.AddModelError(string.Empty, "Linen receiving is locked and cannot be edited.");
+                ReloadCurrentPage(Header.ReceiveID, viewMode: true);
+                return Page();
             }
 
             var existingDetailCount = GetDetailCount(conn, trans, Header.ReceiveID);
@@ -411,7 +424,12 @@ ORDER BY LinnenCode;", conn);
 
     private LinenReceivingHeader? GetCurrentHeaderState(SqlConnection conn, SqlTransaction? trans, int receiveId)
     {
-        using var cmd = new SqlCommand("SELECT ReceiveID, SendID FROM dbo.LN_ReceiveMT WHERE ReceiveID = @ReceiveID;", conn, trans);
+        using var cmd = new SqlCommand(@"
+SELECT ReceiveID,
+       SendID,
+       ISNULL([Lock], 0) AS IsLocked
+FROM dbo.LN_ReceiveMT
+WHERE ReceiveID = @ReceiveID;", conn, trans);
         cmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = receiveId;
         using var rd = cmd.ExecuteReader();
         if (!rd.Read())
@@ -422,8 +440,19 @@ ORDER BY LinnenCode;", conn);
         return new LinenReceivingHeader
         {
             ReceiveID = Convert.ToInt32(rd["ReceiveID"]),
-            SendID = rd["SendID"] == DBNull.Value ? null : Convert.ToInt32(rd["SendID"])
+            SendID = rd["SendID"] == DBNull.Value ? null : Convert.ToInt32(rd["SendID"]),
+            IsLocked = ToBool(rd["IsLocked"])
         };
+    }
+
+    private void ReloadCurrentPage(int receiveId, bool viewMode)
+    {
+        LoadHeader(receiveId);
+        LoadDetails();
+        LoadLookupData();
+        DetailsJson = JsonSerializer.Serialize(Details);
+        Mode = viewMode ? "view" : Mode;
+        CanSave = !IsViewMode && PagePerm.HasPermission(PermissionUpdate);
     }
 
     private int GetDetailCount(SqlConnection conn, SqlTransaction trans, int receiveId)

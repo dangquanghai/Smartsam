@@ -198,32 +198,20 @@
         return `${url.pathname}${url.search}`;
     }
 
-    async function loadPdfPreview(frame, url) {
-        const response = await fetch(url, {
-            method: 'GET',
-            credentials: 'same-origin',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    function loadPdfPreview(frame, url) {
+        return new Promise(function (resolve, reject) {
+            frame.onload = function () {
+                frame.onload = null;
+                frame.onerror = null;
+                resolve(url);
+            };
+            frame.onerror = function () {
+                frame.onload = null;
+                frame.onerror = null;
+                reject(new Error('Cannot load report preview.'));
+            };
+            frame.src = url;
         });
-
-        if (!response.ok) {
-            const contentType = String(response.headers.get('content-type') || '').toLowerCase();
-            if (contentType.includes('application/json')) {
-                const result = await response.json();
-                throw new Error(result?.message || 'Cannot load report preview.');
-            }
-
-            throw new Error('Cannot load report preview.');
-        }
-
-        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
-        if (!contentType.includes('application/pdf')) {
-            throw new Error('Cannot load report preview.');
-        }
-
-        const blob = await response.blob();
-        const previewUrl = URL.createObjectURL(blob);
-        frame.src = previewUrl;
-        return previewUrl;
     }
 
     function clearReportPreview(frame) {
@@ -231,10 +219,11 @@
             frame.removeAttribute('src');
         }
 
-        if (activeReportObjectUrl) {
+        if (activeReportObjectUrl && activeReportObjectUrl.indexOf('blob:') === 0) {
             URL.revokeObjectURL(activeReportObjectUrl);
-            activeReportObjectUrl = '';
         }
+
+        activeReportObjectUrl = '';
     }
 
     function syncDeliveryRent() {

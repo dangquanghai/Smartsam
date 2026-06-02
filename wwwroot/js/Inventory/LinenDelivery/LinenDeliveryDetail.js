@@ -73,6 +73,7 @@
         initUnsavedChangeGuard();
         initReportModal();
         initPantryNoteModal();
+        initBillDetailModal();
         refreshHeaderSections();
         updatePantryNoteViewButton();
         recalcAllRows();
@@ -306,6 +307,11 @@
             createBill();
         });
 
+        $(document).off('click', '.js-open-bill-detail').on('click', '.js-open-bill-detail', function (ev) {
+            ev.preventDefault();
+            openBillDetail($(this).closest('tr'));
+        });
+
         $(document).off('dblclick', '#linenDeliveryBillTableBody tr[data-bill-id]').on('dblclick', '#linenDeliveryBillTableBody tr[data-bill-id]', function () {
             openBillDetail($(this));
         });
@@ -349,6 +355,14 @@
     function initPantryNoteModal() {
         $('#linenDeliveryPantryNoteModal').off('hidden.bs.modal').on('hidden.bs.modal', function () {
             clearPantryNoteViewer();
+        });
+    }
+    function initBillDetailModal() {
+        $('#linenDeliveryBillDetailModal').off('hidden.bs.modal').on('hidden.bs.modal', function () {
+            const frame = document.getElementById('linenDeliveryBillDetailFrame');
+            if (frame) {
+                frame.removeAttribute('src');
+            }
         });
     }
 
@@ -520,7 +534,6 @@
             maximumFractionDigits: 2
         });
     }
-
     function previewLinenDeliveryReportPdf() {
         const reportPdfUrl = buildLinenDeliveryReportPdfUrl();
         const frame = document.getElementById('linenDeliveryReportFrame');
@@ -566,32 +579,20 @@
         return `${url.pathname}${url.search}`;
     }
 
-    async function loadLinenDeliveryReportPdfPreview(frame, url) {
-        const response = await fetch(url, {
-            method: 'GET',
-            credentials: 'same-origin',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    function loadLinenDeliveryReportPdfPreview(frame, url) {
+        return new Promise(function (resolve, reject) {
+            frame.onload = function () {
+                frame.onload = null;
+                frame.onerror = null;
+                resolve(url);
+            };
+            frame.onerror = function () {
+                frame.onload = null;
+                frame.onerror = null;
+                reject(new Error('Cannot load report preview.'));
+            };
+            frame.src = url;
         });
-
-        if (!response.ok) {
-            const contentType = String(response.headers.get('content-type') || '').toLowerCase();
-            if (contentType.includes('application/json')) {
-                const result = await response.json();
-                throw new Error(result?.message || 'Cannot load report preview.');
-            }
-
-            throw new Error('Cannot load report preview.');
-        }
-
-        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
-        if (!contentType.includes('application/pdf')) {
-            throw new Error('Cannot load report preview.');
-        }
-
-        const blob = await response.blob();
-        const previewUrl = URL.createObjectURL(blob);
-        frame.src = previewUrl;
-        return previewUrl;
     }
 
     function clearLinenDeliveryReportPreview(frame) {
@@ -599,10 +600,11 @@
             frame.removeAttribute('src');
         }
 
-        if (activeLinenDeliveryReportObjectUrl) {
+        if (activeLinenDeliveryReportObjectUrl && activeLinenDeliveryReportObjectUrl.indexOf('blob:') === 0) {
             URL.revokeObjectURL(activeLinenDeliveryReportObjectUrl);
-            activeLinenDeliveryReportObjectUrl = '';
         }
+
+        activeLinenDeliveryReportObjectUrl = '';
     }
 
     function refreshHeaderSections() {
@@ -757,7 +759,7 @@
         const html = bills.map(function (item) {
             const mode = Number(item.billStatus) === 1 ? 'edit' : 'view';
             return `<tr class="js-bill-row" data-bill-id="${encodeHtml(item.billId)}" data-mode="${mode}">
-                <td>${encodeHtml(item.billId)}</td>
+                <td><a href="#" class="bill-id-link js-open-bill-detail">${encodeHtml(item.billId)}</a></td>
                 <td>${encodeHtml(item.billDate || '')}</td>
                 <td>${encodeHtml(item.apartmentNo || '')}</td>
                 <td>${encodeHtml(item.customer || '')}</td>
@@ -777,13 +779,21 @@
         const billId = $row.data('bill-id');
         const mode = $row.data('mode') || 'view';
         const detailUrl = window.linenDeliveryPage?.billDetailUrl || '';
-        if (!billId || !detailUrl) {
+        const frame = document.getElementById('linenDeliveryBillDetailFrame');
+        if (!billId || !detailUrl || !frame) {
             return;
         }
 
         const returnUrl = `${window.location.pathname}${window.location.search || ''}`;
-        const separator = detailUrl.indexOf('?') >= 0 ? '&' : '?';
-        window.location.href = `${detailUrl}${separator}id=${encodeURIComponent(billId)}&mode=${encodeURIComponent(mode)}&returnUrl=${encodeURIComponent(returnUrl)}`;
+        const url = new URL(detailUrl, window.location.origin);
+        url.searchParams.set('id', billId);
+        url.searchParams.set('mode', mode);
+        url.searchParams.set('returnUrl', returnUrl);
+        url.searchParams.set('popup', 'true');
+
+        frame.src = `${url.pathname}${url.search}`;
+        $('#linenDeliveryBillDetailModalLabel').text(`Daily Service Bill Detail - ${billId}`);
+        $('#linenDeliveryBillDetailModal').modal('show');
     }
 
     function formatDisplayNumber(value) {
