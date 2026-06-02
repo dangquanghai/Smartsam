@@ -452,18 +452,14 @@
                                     }
                                 </div>
                                 <div class="col-sm-3 lr-note-view">
-                                    @if (Model.Header.SendID.HasValue && Model.Header.SendID.Value > 0)
-                                    {
-                                        <button type="button"
-                                                class="btn btn-info btn-sm js-view-delivery-detail"
-                                                data-delivery-url="@Url.Page("/Inventory/LinenDelivery/LinenDeliveryDetail", new { id = Model.Header.SendID.Value, mode = "view", popup = true })">
-                                            View
-                                        </button>
-                                    }
-                                    else
-                                    {
-                                        <button type="button" class="btn btn-info btn-sm" disabled>View</button>
-                                    }
+                                    <button type="button"
+                                            class="btn btn-info btn-sm js-view-delivery-detail"
+                                            id="btnViewLinenReceivingDelivery"
+                                            data-delivery-url="@(Model.Header.SendID.HasValue && Model.Header.SendID.Value > 0 ? Url.Page("/Inventory/LinenDelivery/LinenDeliveryDetail", new { id = Model.Header.SendID.Value, mode = "view", popup = true }) : string.Empty)"
+                                            data-delivery-url-template="@Url.Page("/Inventory/LinenDelivery/LinenDeliveryDetail", new { id = "__DELIVERY_ID__", mode = "view", popup = true })"
+                                            disabled="@(!Model.Header.SendID.HasValue || Model.Header.SendID.Value <= 0)">
+                                        View
+                                    </button>
                                 </div>
                             </div>
 

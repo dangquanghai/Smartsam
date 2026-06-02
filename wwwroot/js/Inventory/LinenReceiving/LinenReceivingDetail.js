@@ -113,7 +113,29 @@
     }
 
     function bindHeaderEvents() {
-        $('#Header_SendID').off('change').on('change', syncDeliveryRent);
+        $('#Header_SendID').off('change').on('change', function () {
+            updateDeliveryViewButton();
+            syncDeliveryRent();
+        });
+        updateDeliveryViewButton();
+    }
+
+    function updateDeliveryViewButton() {
+        const sendId = ($('#Header_SendID').val() || '').toString();
+        const $button = $('#btnViewLinenReceivingDelivery');
+
+        if (!$button.length) {
+            return;
+        }
+
+        if (!sendId) {
+            $button.prop('disabled', true).data('delivery-url', '').attr('data-delivery-url', '');
+            return;
+        }
+
+        const template = ($button.data('delivery-url-template') || '').toString();
+        const detailUrl = template.replace('__DELIVERY_ID__', encodeURIComponent(sendId));
+        $button.prop('disabled', false).data('delivery-url', detailUrl).attr('data-delivery-url', detailUrl);
     }
 
     function bindDirtyTracking() {
