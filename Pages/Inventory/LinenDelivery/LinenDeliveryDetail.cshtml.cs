@@ -801,8 +801,27 @@ ORDER BY mt.ID DESC;";
             new SelectListItem { Value = string.Empty, Text = "-- Select --" }
         };
 
-        var sql = BuildLocationSql();
+        var sql = $@"
+WITH LocationSource AS
+(
+{BuildLocationSql()}
+
+    UNION
+
+    SELECT LocationID AS locationID,
+           Location
+    FROM dbo.LN_DeliveryDT
+    WHERE DeliveryID = @DeliveryID
+      AND LocationID IS NOT NULL
+      AND ISNULL(Location, '') <> ''
+)
+SELECT locationID,
+       MAX(Location) AS Location
+FROM LocationSource
+GROUP BY locationID
+ORDER BY MAX(Location);";
         using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = Header.DeliveryID;
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
@@ -820,12 +839,12 @@ ORDER BY mt.ID DESC;";
     {
         if (Header.DeliveryType == 1)
         {
-            return "SELECT locationID, Location FROM dbo.ViewLNLocation_New WHERE locationID = 1000;";
+            return "    SELECT locationID, Location FROM dbo.ViewLNLocation_New WHERE locationID = 1000";
         }
 
         if (Header.DeliveryType == 2)
         {
-            return "SELECT locationID, Location FROM dbo.ViewLNLocation_New WHERE locationID = 1001 ORDER BY Location;";
+            return "    SELECT locationID, Location FROM dbo.ViewLNLocation_New WHERE locationID = 1001";
         }
 
         if (Header.DeliveryType == 3)
@@ -833,21 +852,20 @@ ORDER BY mt.ID DESC;";
             if (Header.IsSpecialLaundry)
             {
                 return @"
-SELECT dbo.AM_Apmt.ApmtID AS locationID, dbo.CM_Contract.CurrentApartmentNo AS Location
-FROM dbo.AM_Apmt
-INNER JOIN dbo.CM_Contract ON dbo.AM_Apmt.ApartmentNo = dbo.CM_Contract.CurrentApartmentNo
-INNER JOIN dbo.CM_ContractService ON dbo.CM_Contract.ContractID = dbo.CM_ContractService.ContractID
-WHERE dbo.CM_ContractService.ServiceID IN (1217, 1219)
-  AND dbo.CM_Contract.ContractStatus = 2
-  AND GETDATE() >= dbo.CM_ContractService.ServiceFromDate
-  AND GETDATE() <= DATEADD(second, 86399, CAST(dbo.CM_ContractService.ServiceToDate AS datetime))
-ORDER BY dbo.CM_Contract.CurrentApartmentNo;";
+    SELECT dbo.AM_Apmt.ApmtID AS locationID, dbo.CM_Contract.CurrentApartmentNo AS Location
+    FROM dbo.AM_Apmt
+    INNER JOIN dbo.CM_Contract ON dbo.AM_Apmt.ApartmentNo = dbo.CM_Contract.CurrentApartmentNo
+    INNER JOIN dbo.CM_ContractService ON dbo.CM_Contract.ContractID = dbo.CM_ContractService.ContractID
+    WHERE dbo.CM_ContractService.ServiceID IN (1217, 1219)
+      AND dbo.CM_Contract.ContractStatus = 2
+      AND GETDATE() >= dbo.CM_ContractService.ServiceFromDate
+      AND GETDATE() <= DATEADD(second, 86399, CAST(dbo.CM_ContractService.ServiceToDate AS datetime))";
             }
 
-            return "SELECT locationID, Location FROM dbo.ViewLNLocation_New WHERE locationID < 1000 ORDER BY Location;";
+            return "    SELECT locationID, Location FROM dbo.ViewLNLocation_New WHERE locationID < 1000";
         }
 
-        return "SELECT locationID, Location FROM dbo.ViewLNLocation_New WHERE Location <> 'Uniform' ORDER BY Location;";
+        return "    SELECT locationID, Location FROM dbo.ViewLNLocation_New WHERE Location <> 'Uniform'";
     }
 
     private List<SelectListItem> LoadLinenOptions(SqlConnection conn)
@@ -1247,7 +1265,26 @@ VALUES
     private Dictionary<int, string> GetLocationMap(SqlConnection conn, SqlTransaction trans)
     {
         var result = new Dictionary<int, string>();
-        using var cmd = new SqlCommand("SELECT locationID, Location FROM dbo.ViewLNLocation_New;", conn, trans);
+        var sql = $@"
+WITH LocationSource AS
+(
+{BuildLocationSql()}
+
+    UNION
+
+    SELECT LocationID AS locationID,
+           Location
+    FROM dbo.LN_DeliveryDT
+    WHERE DeliveryID = @DeliveryID
+      AND LocationID IS NOT NULL
+      AND ISNULL(Location, '') <> ''
+)
+SELECT locationID,
+       MAX(Location) AS Location
+FROM LocationSource
+GROUP BY locationID;";
+        using var cmd = new SqlCommand(sql, conn, trans);
+        cmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = Header.DeliveryID;
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {

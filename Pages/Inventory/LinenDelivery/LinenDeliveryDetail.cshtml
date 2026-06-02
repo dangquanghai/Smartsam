@@ -260,6 +260,27 @@
             min-width: 50px;
         }
 
+        #linenDeliveryDetailTable .select2-container {
+            width: 100% !important;
+        }
+
+        #linenDeliveryDetailTable .select2-container--default .select2-selection--single {
+            height: 31px;
+            min-height: 31px;
+            border: 1px solid #ced4da;
+            border-radius: 0.2rem;
+        }
+
+        #linenDeliveryDetailTable .select2-container--default .select2-selection--single .select2-selection__rendered {
+            line-height: 29px;
+            padding-left: 0.5rem;
+            padding-right: 1.5rem;
+        }
+
+        #linenDeliveryDetailTable .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 29px;
+        }
+
         .linen-delivery-grid .ld-location,
         .linen-delivery-grid .ld-linen {
             min-width: 160px;
@@ -893,7 +914,7 @@
                                                 }
                                             </td>
                                             <td>
-                                                <select class="form-control form-control-sm ld-location vni-font" @(isView ? "disabled" : null)>
+                                                <select class="form-control form-control-sm ld-location select2 vni-font" data-placeholder="-- Select --" @(isView ? "disabled" : null)>
                                                     @foreach (var option in Model.LocationOptions)
                                                     {
                                                         if (option.Value == Convert.ToString(row.LocationID))
