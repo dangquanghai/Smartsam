@@ -182,7 +182,8 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn);
     private PagePermissions GetUserPermissions() => IsAdminRole() ? new PagePermissions { AllowedNos = Enumerable.Range(1, 20).ToList() } : new PagePermissions { AllowedNos = _permissionService.GetPermissionsForPage(GetCurrentRoleId(), FunctionId) };
     private int GetCurrentRoleId() => int.TryParse(User.FindFirst("RoleID")?.Value, out var roleId) ? roleId : 0;
     private bool IsAdminRole() => User.FindFirst("IsAdminRole")?.Value == "True";
-    public bool CanAdd => IsAdminRole() && !_userScope.IsHeadDept && PagePerm.HasPermission(PermissionAdd);
+    //public bool CanAdd => IsAdminRole() && !_userScope.IsHeadDept && PagePerm.HasPermission(PermissionAdd);
+    public bool CanAdd => IsAdminRole() || PagePerm.HasPermission(PermissionAdd);
     public bool CanEdit => PagePerm.HasPermission(PermissionEdit);
     public bool CanView => PagePerm.HasPermission(PermissionViewDetail);
     public bool CanEditRow(int statusId)

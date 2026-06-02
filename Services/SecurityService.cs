@@ -24,9 +24,6 @@ namespace SmartSam.Services.Implementations
             75,  // Analyzing Suppliers
             60,  // Inventory Parameters
             64,  // Item list
-            //66,  // Item Issue
-            //67,  // Item Receice 
-            //68,  // Item Transfer
             70,  // Inventory Report
             90 , // Inventory Make  New year=> tạo số liệu tồn đầu năm cho các kho
             114, // Laundty & Linen  list
