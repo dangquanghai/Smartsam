@@ -383,14 +383,20 @@ ORDER BY DeliveryID DESC;";
             new SelectListItem { Value = string.Empty, Text = "-- Select --" }
         };
 
-        using var cmd = new SqlCommand("SELECT locationID, Location FROM dbo.View_LN_Location ORDER BY Location;", conn);
+        using var cmd = new SqlCommand(@"
+SELECT ApmtID,
+       ApartmentNo
+FROM dbo.AM_Apmt
+WHERE ExistFrom <= GETDATE()
+  AND ExistTo >= GETDATE()
+ORDER BY ApartmentNo;", conn);
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
             items.Add(new SelectListItem
             {
-                Value = Convert.ToInt32(rd["locationID"]).ToString(),
-                Text = Convert.ToString(rd["Location"]) ?? string.Empty
+                Value = Convert.ToInt32(rd["ApmtID"]).ToString(),
+                Text = Convert.ToString(rd["ApartmentNo"]) ?? string.Empty
             });
         }
 
@@ -619,11 +625,16 @@ WHERE dt.ReceiveID = @ReceiveID;", conn, trans);
     private static Dictionary<int, string> GetLocationMap(SqlConnection conn, SqlTransaction trans)
     {
         var map = new Dictionary<int, string>();
-        using var cmd = new SqlCommand("SELECT locationID, Location FROM dbo.View_LN_Location;", conn, trans);
+        using var cmd = new SqlCommand(@"
+SELECT ApmtID,
+       ApartmentNo
+FROM dbo.AM_Apmt
+WHERE ExistFrom <= GETDATE()
+  AND ExistTo >= GETDATE();", conn, trans);
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
-            map[Convert.ToInt32(rd["locationID"])] = Convert.ToString(rd["Location"]) ?? string.Empty;
+            map[Convert.ToInt32(rd["ApmtID"])] = Convert.ToString(rd["ApartmentNo"]) ?? string.Empty;
         }
 
         return map;

@@ -12,6 +12,7 @@
         bindPrintEvents();
         bindDirtyTracking();
         initReportModal();
+        initializeLocationSelect2(document);
         recalcAllRows();
         pageDirty = false;
     }
@@ -81,7 +82,9 @@
         });
 
         $(document).off('click', '.js-remove-row').on('click', '.js-remove-row', function () {
-            $(this).closest('tr').remove();
+            const $row = $(this).closest('tr');
+            destroyLocationSelect2($row);
+            $row.remove();
             ensureEmptyRow();
             pageDirty = true;
         });
@@ -331,7 +334,7 @@
                 </div>
             </td>
             <td><select class="form-control form-control-sm lr-delivery vni-font">${deliveries}</select></td>
-            <td><select class="form-control form-control-sm lr-location vni-font">${locations}</select></td>
+            <td><select class="form-control form-control-sm lr-location select2 vni-font" data-placeholder="-- Select --">${locations}</select></td>
             <td><select class="form-control form-control-sm lr-linen vni-font">${linens}</select></td>
             <td class="text-center"><input type="checkbox" class="lr-express" /></td>
             <td class="text-center"><input type="checkbox" class="lr-child" /></td>
@@ -341,7 +344,46 @@
             <td class="linen-receiving-note-cell"><input type="text" maxlength="100" class="form-control form-control-sm lr-note vni-font" value="" /></td>
         </tr>`;
 
-        $('#linenReceivingDetailTable tbody').append(html);
+        const $row = $(html);
+        $('#linenReceivingDetailTable tbody').append($row);
+        initializeLocationSelect2($row);
+    }
+
+    function initializeLocationSelect2(scope) {
+        if (!$.fn.select2) {
+            return;
+        }
+
+        $(scope || document).find('select.lr-location.select2').each(function () {
+            const $element = $(this);
+            if ($element.hasClass('select2-hidden-accessible')) {
+                $element.select2('destroy');
+            }
+
+            $element.select2({
+                width: '100%',
+                placeholder: $element.data('placeholder') || '-- Select --',
+                allowClear: true,
+                minimumResultsForSearch: 0
+            });
+
+            $element.off('select2:open.linenReceiving').on('select2:open.linenReceiving', function () {
+                const searchField = document.querySelector('.select2-container--open .select2-search__field');
+                if (searchField) {
+                    searchField.focus();
+                }
+            });
+        });
+    }
+
+    function destroyLocationSelect2(scope) {
+        if (!$.fn.select2) {
+            return;
+        }
+
+        $(scope || document).find('select.lr-location.select2.select2-hidden-accessible').each(function () {
+            $(this).select2('destroy');
+        });
     }
 
     function collectDetails() {
