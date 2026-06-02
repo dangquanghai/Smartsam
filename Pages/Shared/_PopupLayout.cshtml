@@ -1,0 +1,29 @@
+@{
+    var popupBodyClass = ViewData["PopupBodyClass"] as string ?? string.Empty;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewData["Title"]</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="~/adminlte/plugins/fontawesome-free/css/all.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/adminlte/plugins/select2/css/select2.min.css" />
+    <link rel="stylesheet" href="~/adminlte/dist/css/adminlte.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
+    @RenderSection("Styles", required: false)
+</head>
+<body class="hold-transition smart-popup-layout @popupBodyClass">
+    <div class="smart-popup-wrapper">
+        @RenderBody()
+    </div>
+
+    <script src="~/adminlte/plugins/jquery/jquery.min.js"></script>
+    <script src="~/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="~/adminlte/plugins/select2/js/select2.full.min.js"></script>
+    <script src="~/adminlte/dist/js/adminlte.min.js"></script>
+    <script src="~/js/common/common.js"></script>
+    @RenderSection("Scripts", required: false)
+</body>
+</html>

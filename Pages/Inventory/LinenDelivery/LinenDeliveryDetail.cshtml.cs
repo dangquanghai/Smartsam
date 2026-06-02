@@ -36,7 +36,7 @@ public class LinenDeliveryDetailModel : BasePageModel
 
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
     public bool CanSave { get; private set; }
-    public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
+    public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase) || Header.Closed;
     public bool IsTypeLocked => IsViewMode || !string.Equals(Mode, "edit", StringComparison.OrdinalIgnoreCase) || Header.DeliveryType.HasValue;
     public bool IsSpecialLocked => IsViewMode || Header.DeliveryType.HasValue;
     public bool IsPantryNoteLocked { get; private set; }
@@ -50,10 +50,11 @@ public class LinenDeliveryDetailModel : BasePageModel
     public string LinenOptionsJson { get; set; } = "[]";
     public bool CanToBill => Header.DeliveryID > 0 && CanHeaderCreateBill(Header);
 
-    public IActionResult OnGet(int? id, string mode = "view")
+    public IActionResult OnGet(int? id, string mode = "view", string? returnUrl = null)
     {
         PagePerm = GetUserPermissions();
         Mode = NormalizeMode(mode);
+        RedirectUrl = NormalizeReturnUrl(returnUrl);
 
         if (Mode == "add")
         {
@@ -75,7 +76,7 @@ public class LinenDeliveryDetailModel : BasePageModel
                 throw;
             }
 
-            return RedirectToPage("./LinenDeliveryDetail", new { id = Header.DeliveryID, mode = "edit" });
+            return RedirectToPage("./LinenDeliveryDetail", new { id = Header.DeliveryID, mode = "edit", returnUrl = RedirectUrl });
         }
 
         if (!id.HasValue || id.Value <= 0)
@@ -98,10 +99,15 @@ public class LinenDeliveryDetailModel : BasePageModel
             Mode = "view";
         }
 
+        if (Mode == "edit" && Header.Closed)
+        {
+            Mode = "view";
+        }
+
         LoadDetails();
         LoadLookupData();
         DetailsJson = JsonSerializer.Serialize(Details);
-        CanSave = Mode != "view" && PagePerm.HasPermission(PermissionUpdate);
+        CanSave = !IsViewMode && PagePerm.HasPermission(PermissionUpdate);
         return Page();
     }
 
@@ -136,6 +142,14 @@ public class LinenDeliveryDetailModel : BasePageModel
             {
                 trans.Rollback();
                 return NotFound();
+            }
+
+            if (currentHeader.Closed)
+            {
+                trans.Rollback();
+                ModelState.AddModelError(string.Empty, "Linen delivery is locked and cannot be edited.");
+                ReloadCurrentPage(Header.DeliveryID, viewMode: true);
+                return Page();
             }
 
             var shouldCreatePantryDetails = Header.DeliveryType == 1
@@ -925,7 +939,8 @@ SELECT DeliveryID,
        NoteID,
        SupplierID,
        ISNULL(IsSpecialLaundry, 0) AS IsSpecialLaundry,
-       ISNULL(ToBill, 0) AS ToBill
+       ISNULL(ToBill, 0) AS ToBill,
+       ISNULL(Closed, 0) AS Closed
 FROM dbo.LN_DeliveryMT
 WHERE DeliveryID = @DeliveryID;", conn, trans);
         cmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = deliveryId;
@@ -942,8 +957,19 @@ WHERE DeliveryID = @DeliveryID;", conn, trans);
             NoteID = rd["NoteID"] == DBNull.Value ? null : Convert.ToInt32(rd["NoteID"]),
             SupplierID = rd["SupplierID"] == DBNull.Value ? null : Convert.ToInt32(rd["SupplierID"]),
             IsSpecialLaundry = ToBool(rd["IsSpecialLaundry"]),
-            ToBill = ToBool(rd["ToBill"])
+            ToBill = ToBool(rd["ToBill"]),
+            Closed = ToBool(rd["Closed"])
         };
+    }
+
+    private void ReloadCurrentPage(int deliveryId, bool viewMode)
+    {
+        LoadHeader(deliveryId);
+        LoadDetails();
+        LoadLookupData();
+        DetailsJson = JsonSerializer.Serialize(Details);
+        Mode = viewMode ? "view" : Mode;
+        CanSave = !IsViewMode && PagePerm.HasPermission(PermissionUpdate);
     }
 
     private List<LinenDeliveryBillRow> LoadBills(SqlConnection conn, SqlTransaction? trans, int deliveryId)
@@ -1342,6 +1368,21 @@ VALUES
     private string NormalizeMode(string? mode)
     {
         return string.IsNullOrWhiteSpace(mode) ? "view" : mode.Trim().ToLowerInvariant();
+    }
+
+    private string? NormalizeReturnUrl(string? returnUrl)
+    {
+        if (string.IsNullOrWhiteSpace(returnUrl))
+        {
+            return null;
+        }
+
+        if (!Url.IsLocalUrl(returnUrl))
+        {
+            return null;
+        }
+
+        return returnUrl;
     }
 
     private bool TryGetCurrentEmployeeId(out int employeeId)

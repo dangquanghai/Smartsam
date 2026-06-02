@@ -27,6 +27,9 @@ public class DailyServiceBillDetailModel : BasePageModel
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public bool Popup { get; set; }
+
     [BindProperty]
     public DailyServiceBillHeader Bill { get; set; } = new DailyServiceBillHeader();
 
@@ -34,8 +37,9 @@ public class DailyServiceBillDetailModel : BasePageModel
     public List<DailyServiceBillDetailRow> DetailRows { get; set; } = new List<DailyServiceBillDetailRow>();
 
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
-    public bool IsViewMode => !string.Equals(Mode, "edit", StringComparison.OrdinalIgnoreCase);
+    public bool IsViewMode => Popup || !string.Equals(Mode, "edit", StringComparison.OrdinalIgnoreCase);
     public bool CanEdit { get; private set; }
+    public bool IsPopup => Popup;
     public string SafeReturnUrl { get; private set; } = "/Cus/DailyServiceBill";
 
     public IActionResult OnGet()
@@ -55,7 +59,7 @@ public class DailyServiceBillDetailModel : BasePageModel
             return NotFound();
         }
 
-        CanEdit = PagePerm.HasPermission(PermissionEditDetail) && Bill.BillStatus == 1;
+        CanEdit = !Popup && PagePerm.HasPermission(PermissionEditDetail) && Bill.BillStatus == 1;
         if (!CanEdit)
         {
             Mode = "view";
@@ -153,6 +157,12 @@ WHERE BillID = @BillID;", conn, trans);
         {
             trans.Rollback();
             throw;
+        }
+
+        if (Popup)
+        {
+            TempData["SuccessMessage"] = "Saved successfully.";
+            return RedirectToPage("./DailyServiceBillDetail", new { id = currentBill.BillID, mode = Mode, returnUrl = SafeReturnUrl, popup = true });
         }
 
         var redirectUrl = AppendFlag(SafeReturnUrl, "billUpdated=1");

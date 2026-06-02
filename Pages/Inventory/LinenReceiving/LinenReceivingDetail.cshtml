@@ -110,6 +110,15 @@
             max-width: 25%;
         }
 
+        .linen-receiving-header .lr-note-view .btn {
+            width: 92px;
+            min-width: 78px;
+            height: 28px;
+            padding-top: 2px;
+            padding-bottom: 2px;
+            text-align: center;
+        }
+
         .linen-receiving-header .lr-special-field {
             flex: 0 0 78%;
             max-width: 78%;
@@ -142,7 +151,7 @@
         }
 
         .linen-receiving-action-cell {
-            width: 28px;
+            width: 36px;
             padding: 0 !important;
             vertical-align: middle;
         }
@@ -153,6 +162,7 @@
             justify-content: center;
             width: 100%;
             height: 100%;
+            font-weight: 600;
         }
 
         .linen-receiving-note-cell {
@@ -220,6 +230,19 @@
 
         .linen-receiving-report-mode-item input {
             margin: 0;
+        }
+
+        .linen-receiving-report-mode-item input:checked + span {
+            color: #198754;
+            font-weight: 700;
+            background: #e8f5ee;
+            border: 1px solid #198754;
+            border-radius: 3px;
+            padding: 1px 4px;
+        }
+
+        .linen-receiving-report-mode-item:has(input:checked) {
+            color: #198754;
         }
 
         .linen-receiving-report-toolbar label {
@@ -376,7 +399,7 @@
                                 <div class="col-sm-3 lr-note-view">
                                     @if (Model.Header.SendID.HasValue && Model.Header.SendID.Value > 0)
                                     {
-                                        <a class="btn btn-info btn-sm btn-block"
+                                        <a class="btn btn-info btn-sm"
                                            href="/Inventory/LinenDelivery/LinenDeliveryDetail?id=@Model.Header.SendID.Value&mode=view"
                                            target="_blank"
                                            rel="noopener noreferrer">
@@ -385,14 +408,14 @@
                                     }
                                     else
                                     {
-                                        <button type="button" class="btn btn-info btn-sm btn-block" disabled>View</button>
+                                        <button type="button" class="btn btn-info btn-sm" disabled>View</button>
                                     }
                                 </div>
                             </div>
 
                             <div class="form-group row mb-0 align-items-center linen-receiving-options-wrap">
                                 <label class="col-sm-3 col-form-label col-form-label-sm lr-label-main">Options</label>
-                                <div class="col-sm-9 linen-receiving-header-checks lr-special-field">
+                                <div class="col-sm-6 linen-receiving-header-checks lr-note-select">
                                     <div class="custom-control custom-checkbox d-inline-block mr-3">
                                         <input asp-for="Header.IsRent" class="custom-control-input" disabled="@isView" />
                                         <label asp-for="Header.IsRent" class="custom-control-label">Rent</label>
@@ -402,17 +425,16 @@
                                         <label asp-for="Header.IsLocked" class="custom-control-label">Lock</label>
                                     </div>
                                 </div>
+                                <div class="col-sm-3 lr-note-view">
+                                    @if (Model.CanSave)
+                                    {
+                                        <button type="submit" class="btn btn-primary btn-sm">
+                                            <i class="fas fa-save"></i> Save
+                                        </button>
+                                    }
+                                </div>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="purchase-order-action-bar mt-3">
-                        @if (Model.CanSave)
-                        {
-                            <button type="submit" class="btn btn-sm btn-primary mr-2">
-                                <i class="fas fa-save"></i> Save
-                            </button>
-                        }
                     </div>
                 </div>
 
@@ -420,7 +442,7 @@
                     <div class="table-responsive">
                         <table class="table table-bordered table-sm mb-0 linen-receiving-grid" id="linenReceivingDetailTable">
                             <colgroup>
-                                <col style="width: 28px;" />
+                                <col style="width: 36px;" />
                                 <col style="min-width: 180px;" />
                                 <col style="min-width: 160px;" />
                                 <col style="min-width: 160px;" />
@@ -433,7 +455,7 @@
                             </colgroup>
                             <thead class="thead-light">
                                 <tr>
-                                    <th class="linen-receiving-action-cell"></th>
+                                    <th class="linen-receiving-action-cell text-center">@(isView ? "STT" : string.Empty)</th>
                                     <th>Delivery</th>
                                     <th>Location</th>
                                     <th>Linen</th>
@@ -454,8 +476,10 @@
                                 }
                                 else
                                 {
+                                    var rowIndex = 0;
                                     foreach (var row in Model.Details)
                                     {
+                                        rowIndex++;
                                         <tr class="linen-receiving-detail-row" data-id="@row.ID">
                                             <td class="linen-receiving-action-cell">
                                                 @if (!isView)
@@ -464,6 +488,12 @@
                                                         <button type="button" class="btn btn-xs btn-outline-danger border js-remove-row" title="Remove">
                                                             <i class="fas fa-trash"></i>
                                                         </button>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="linen-receiving-action-wrap">
+                                                        @rowIndex
                                                     </div>
                                                 }
                                             </td>

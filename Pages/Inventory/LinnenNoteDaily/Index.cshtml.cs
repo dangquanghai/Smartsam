@@ -128,11 +128,15 @@ SELECT mt.ID,
        ISNULL(mt.IsClose, 0) AS IsClose,
        ISNULL(mt.Start, 0) AS Start,
        ISNULL(mt.IsRent, 0) AS IsRent,
-       COUNT(dt.ID) AS DetailCount
+       ISNULL(delivery.Des, '') AS DeliveryDes
 FROM dbo.LN_DeAndReMT mt
-LEFT JOIN dbo.LN_DeAndRe_DT dt ON mt.ID = dt.IDDeAndRe
+OUTER APPLY (
+    SELECT TOP 1 d.Des
+    FROM dbo.LN_DeliveryMT d
+    WHERE d.NoteID = mt.ID
+    ORDER BY d.DeliveryID DESC
+) delivery
 WHERE {whereSql}
-GROUP BY mt.ID, mt.Des, mt.DateCreate, mt.IsClose, mt.Start, mt.IsRent
 ORDER BY mt.DateCreate DESC, mt.ID DESC
 OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;", conn))
         {
@@ -151,7 +155,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;", conn))
                     IsClose = ToBool(rd["IsClose"]),
                     Start = ToBool(rd["Start"]),
                     IsRent = ToBool(rd["IsRent"]),
-                    DetailCount = Convert.ToInt32(rd["DetailCount"])
+                    DeliveryDescription = Convert.ToString(rd["DeliveryDes"]) ?? string.Empty
                 });
             }
         }
@@ -274,5 +278,6 @@ public class LinnenNoteDailyRow
     public bool Start { get; set; }
     public bool IsRent { get; set; }
     public int DetailCount { get; set; }
-    public string DateCreateText => DateCreate.HasValue ? DateCreate.Value.ToString("dd/MM/yyyy") : string.Empty;
+    public string DeliveryDescription { get; set; } = string.Empty;
+    public string DateCreateText => DateCreate.HasValue ? DateCreate.Value.ToString("MM/dd/yyyy") : string.Empty;
 }

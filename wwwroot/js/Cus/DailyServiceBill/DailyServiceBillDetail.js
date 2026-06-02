@@ -25,7 +25,7 @@
         const qty = parseDecimal($row.find('.js-bill-qty').val());
         const price = parseDecimal($row.find('.js-bill-price').val());
         const amount = qty * price;
-        $row.find('.js-bill-amount').val(amount.toFixed(4));
+        $row.find('.js-bill-amount').val(formatDecimal(amount));
         recalcTotal();
     }
 
@@ -44,7 +44,30 @@
         $('#billAfterVat').val(formatDecimal(afterVat));
     }
 
+
+    function formatDetailNumbers() {
+        $('#dailyServiceBillDetailTable .js-bill-qty, #dailyServiceBillDetailTable .js-bill-price, #dailyServiceBillDetailTable .js-bill-amount').each(function () {
+            $(this).val(formatDecimal(parseDecimal($(this).val())));
+        });
+    }
+
+    function initPopupMode() {
+        if (window.dailyServiceBillPage?.isPopup) {
+            document.body.classList.add("daily-service-bill-popup-body");
+            document.body.classList.remove("sidebar-mini", "sidebar-collapse", "layout-fixed");
+        }
+    }
+
+    function initClosePopupButton() {
+        $("#btnClosePopupBillDetail").off("click").on("click", function () {
+            if (window.parent && window.parent.$) {
+                window.parent.$("#linenDeliveryBillDetailModal").modal("hide");
+            }
+        });
+    }
     function initializePage() {
+        formatDetailNumbers();
+
         if (window.dailyServiceBillPage?.isView === true) {
             return;
         }
@@ -53,8 +76,17 @@
             .off('input', '.js-bill-qty, .js-bill-price')
             .on('input', '.js-bill-qty, .js-bill-price', function () {
                 recalcRow($(this).closest('tr'));
+            })
+            .off('blur', '.js-bill-qty, .js-bill-price')
+            .on('blur', '.js-bill-qty, .js-bill-price', function () {
+                $(this).val(formatDecimal(parseDecimal($(this).val())));
+                recalcRow($(this).closest('tr'));
             });
     }
 
-    $(document).ready(initializePage);
+    $(document).ready(function () {
+        initPopupMode();
+        initClosePopupButton();
+        initializePage();
+    });
 })();

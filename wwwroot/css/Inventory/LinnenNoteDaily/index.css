@@ -139,11 +139,13 @@
     white-space: nowrap;
 }
 
-#linnenNoteTable > thead > tr > th:nth-child(4),
-#linnenNoteTable > tbody > tr > td:nth-child(4) {
-    width: 240px;
-    min-width: 240px;
-    max-width: 240px;
+#linnenNoteTable > thead > tr > th:nth-child(3),
+#linnenNoteTable > tbody > tr > td:nth-child(3),
+#linnenNoteTable > thead > tr > th:nth-child(5),
+#linnenNoteTable > tbody > tr > td:nth-child(5) {
+    width: 280px;
+    min-width: 280px;
+    max-width: 280px;
 }
 
 .app-table-ellipsis {

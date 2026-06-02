@@ -68,9 +68,9 @@ public class IndexModel : BasePageModel
                 actions = new
                 {
                     canAccess,
-                    accessMode = canEdit ? "edit" : "view",
+                    accessMode = canEdit && !row.IsLocked ? "edit" : "view",
                     canView = canAccess,
-                    canEdit
+                    canEdit = canEdit && !row.IsLocked
                 }
             }),
             total = totalRecords,
@@ -103,6 +103,19 @@ public class IndexModel : BasePageModel
         using var trans = conn.BeginTransaction();
         try
         {
+            using (var lockCmd = new SqlCommand("SELECT ISNULL([Lock], 0) FROM dbo.LN_ReceiveMT WHERE ReceiveID = @ReceiveID;", conn, trans))
+            {
+                lockCmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = request.ReceiveId;
+                if (ToBool(lockCmd.ExecuteScalar() ?? 0))
+                {
+                    trans.Rollback();
+                    return new JsonResult(new { success = false, message = "Linen receiving is locked and cannot be deleted." })
+                    {
+                        StatusCode = StatusCodes.Status400BadRequest
+                    };
+                }
+            }
+
             using (var detailCmd = new SqlCommand("DELETE FROM dbo.LN_ReceiveDT WHERE ReceiveID = @ReceiveID;", conn, trans))
             {
                 detailCmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = request.ReceiveId;
