@@ -326,7 +326,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;", conn);
     {
         using var workbook = new XLWorkbook();
         var worksheet = workbook.Worksheets.Add("Inventory Stores");
-        var headers = new[] { "STT", "Store Name", "Address", "INV Group", "Co Store" };
+        var headers = new[] { "#", "Store Name", "Address", "INV Group", "Co Store" };
 
         for (var col = 0; col < headers.Length; col++)
         {

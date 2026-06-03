@@ -137,7 +137,7 @@ internal static class PurchaseOrderQuestPdfReport
 
             table.Header(header =>
             {
-                header.Cell().Element(HeaderCell).Text("STT\n(No)").Bold().FontSize(10);
+                header.Cell().Element(HeaderCell).Text("#").Bold().FontSize(10);
                 header.Cell().Element(HeaderCell).Text("Mã hàng\n(Item code)").Bold().FontSize(10);
                 header.Cell().Element(HeaderCell).Text("Mô tả mặt hàng\n(Description)").Bold().FontSize(10);
                 header.Cell().Element(HeaderCell).Text("ĐVT\n(Unit)").Bold().FontSize(10);
