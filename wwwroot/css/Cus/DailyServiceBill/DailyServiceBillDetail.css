@@ -83,6 +83,47 @@ body.daily-service-bill-popup-body {
     display: contents;
 }
 
+.daily-service-bill-header-body .daily-service-bill-money-row {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.42rem 0.9rem;
+}
+
+.daily-service-bill-header-body .daily-service-bill-money-row > .form-group {
+    width: auto;
+    max-width: none;
+    min-width: 0;
+    padding-left: 0;
+    padding-right: 0;
+    margin-bottom: 0;
+}
+
+.daily-service-bill-before-vat-field {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.daily-service-bill-vat-pair {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+.daily-service-bill-after-vat-field {
+    grid-column: 3;
+    grid-row: 1;
+}
+
+.daily-service-bill-operator-field {
+    grid-column: 1;
+    grid-row: 2;
+}
+
+.daily-service-bill-personal-field {
+    grid-column: 2;
+    grid-row: 2;
+}
+
 #dailyServiceBillDetailTable .daily-service-bill-row-number {
     text-align: center !important;
 }
@@ -134,5 +175,18 @@ body.daily-service-bill-popup-body {
         grid-template-columns: 118px minmax(0, 1fr);
         column-gap: 0.55rem;
         align-items: center;
+    }
+
+    .daily-service-bill-header-body .daily-service-bill-money-row {
+        grid-template-columns: 1fr;
+    }
+
+    .daily-service-bill-before-vat-field,
+    .daily-service-bill-vat-pair,
+    .daily-service-bill-after-vat-field,
+    .daily-service-bill-operator-field,
+    .daily-service-bill-personal-field {
+        grid-column: 1;
+        grid-row: auto;
     }
 }
