@@ -10,7 +10,7 @@ namespace SmartSam.Pages.Inventory.ItemChecking;
 
 public class IndexModel : BasePageModel
 {
-    private const int FunctionId = 147;
+    private const int FunctionId = 151;
     private const int PermissionViewList = 1;
     private const int PermissionViewDetail = 2;
     private const int PermissionAdd = 3;
@@ -182,9 +182,9 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn);
     private PagePermissions GetUserPermissions() => IsAdminRole() ? new PagePermissions { AllowedNos = Enumerable.Range(1, 20).ToList() } : new PagePermissions { AllowedNos = _permissionService.GetPermissionsForPage(GetCurrentRoleId(), FunctionId) };
     private int GetCurrentRoleId() => int.TryParse(User.FindFirst("RoleID")?.Value, out var roleId) ? roleId : 0;
     private bool IsAdminRole() => User.FindFirst("IsAdminRole")?.Value == "True";
-    public bool CanAdd => IsAdminRole() && !_userScope.IsHeadDept && PagePerm.HasPermission(PermissionAdd);
-    public bool CanEdit => PagePerm.HasPermission(PermissionEdit);
-    public bool CanView => PagePerm.HasPermission(PermissionViewDetail);
+    public bool CanAdd => IsAdminRole() || PagePerm.HasPermission(PermissionAdd);
+    public bool CanEdit => IsAdminRole() || PagePerm.HasPermission(PermissionEdit);
+    public bool CanView => IsAdminRole() || PagePerm.HasPermission(PermissionViewDetail);
     public bool CanEditRow(int statusId)
     {
         if (!PagePerm.HasPermission(PermissionEdit)) return false;

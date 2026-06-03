@@ -7,6 +7,21 @@
 }
 
 <style>
+    /* Ép cho phần nội dung chính sát lên trên thanh bar */
+    .content {
+        padding-top: 0px !important;
+        margin-top: -10px !important; /* Dịch chuyển ngược lên nếu cần */
+    }
+
+        /* Nếu container-fluid có padding-top lớn, đưa về 0 */
+    .content > .container-fluid {
+        padding-top: 0px !important;
+    }
+
+     .table-primary-selected {
+        background-color: rgba(0, 123, 255, 0.15) !important;
+    }
+
     .table-row-selectable {
         user-select: none;
     }
