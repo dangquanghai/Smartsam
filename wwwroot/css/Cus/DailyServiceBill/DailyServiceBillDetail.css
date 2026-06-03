@@ -54,7 +54,7 @@ body.daily-service-bill-popup-body {
     display: grid;
     grid-template-columns: 62px minmax(0, 1fr);
     align-items: center;
-    column-gap: 0.28rem;
+    column-gap: 0.65rem;
     min-width: 0;
 }
 
@@ -82,11 +82,17 @@ body.daily-service-bill-popup-body {
     min-width: 86px;
 }
 
+.daily-service-bill-vb-span-2.daily-service-bill-vb-half-control .form-control-sm {
+    width: 68%;
+    min-width: 220px;
+}
+
 .daily-service-bill-vb-checks {
     display: flex;
     align-items: center;
     gap: 1.25rem;
     min-height: 21px;
+    padding-left: calc(62px + 0.65rem);
 }
 
 .daily-service-bill-vb-checks .custom-control,
@@ -122,6 +128,15 @@ body.daily-service-bill-popup-body {
 }
 
 @media (max-width: 767.98px) {
+    .daily-service-bill-vb-span-2.daily-service-bill-vb-half-control .form-control-sm {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .daily-service-bill-vb-checks {
+        padding-left: 0;
+    }
+
     .daily-service-bill-vb-row {
         grid-template-columns: 1fr;
     }
