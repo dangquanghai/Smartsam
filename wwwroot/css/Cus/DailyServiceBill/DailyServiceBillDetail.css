@@ -27,7 +27,7 @@ body.daily-service-bill-popup-body {
 
 .daily-service-bill-header-body {
     padding: 0.25rem 0.35rem !important;
-    background: #f1f1f1;
+    background: #fff;
 }
 
 .daily-service-bill-vb-form {
@@ -78,12 +78,17 @@ body.daily-service-bill-popup-body {
     height: 21px;
     min-height: 21px;
     padding: 0.05rem 0.28rem;
-    border-radius: 0;
-    border: 1px solid #b7b7b7;
-    background-color: #e9ecef;
-    color: #1f2b33;
     font-size: 12px;
     line-height: 1.1;
+}
+
+.daily-service-bill-vb-half-control .form-control-sm {
+    width: 50%;
+    min-width: 86px;
+}
+
+.daily-service-bill-vb-half-control .text-right {
+    margin-left: auto;
 }
 
 .daily-service-bill-vb-checks {

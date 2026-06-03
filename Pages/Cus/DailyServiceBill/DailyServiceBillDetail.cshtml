@@ -47,7 +47,7 @@
                                 <label>Status:</label>
                                 <input class="form-control form-control-sm" value="@Model.Bill.BillStatusName" readonly />
                             </div>
-                            <div class="daily-service-bill-vb-field">
+                            <div class="daily-service-bill-vb-field daily-service-bill-vb-half-control">
                                 <label>Before VAT</label>
                                 <input id="billBeforeVat" class="form-control form-control-sm text-right" value="@Model.Bill.VNDAmountBefVAT.ToString("#,0.##")" readonly />
                             </div>
@@ -61,7 +61,7 @@
                                 <label>%VAT</label>
                                 <input id="billPctTax" class="form-control form-control-sm text-right" value="@Model.Bill.PctTax.ToString("#,0.##")" readonly />
                             </div>
-                            <div class="daily-service-bill-vb-field">
+                            <div class="daily-service-bill-vb-field daily-service-bill-vb-half-control">
                                 <label>VAT</label>
                                 <input id="billVat" class="form-control form-control-sm text-right" value="@Model.Bill.DisplayVNDAmountVAT.ToString("#,0.##")" readonly />
                             </div>
@@ -79,7 +79,7 @@
                                 <label>Ex. Rate:</label>
                                 <input class="form-control form-control-sm text-right" value="@Model.Bill.ExRate.ToString("#,0.##")" readonly />
                             </div>
-                            <div class="daily-service-bill-vb-field">
+                            <div class="daily-service-bill-vb-field daily-service-bill-vb-half-control">
                                 <label>After VAT</label>
                                 <input id="billAfterVat" class="form-control form-control-sm text-right" value="@Model.Bill.DisplayVNDAmount.ToString("#,0.##")" readonly />
                             </div>
@@ -89,7 +89,7 @@
                                 <label>Cust Name:</label>
                                 <input class="form-control form-control-sm vni-font" value="@Model.Bill.CustomerName" readonly />
                             </div>
-                            <div class="daily-service-bill-vb-field daily-service-bill-vb-span-2">
+                            <div class="daily-service-bill-vb-field daily-service-bill-vb-span-2 daily-service-bill-vb-half-control">
                                 <label>Description</label>
                                 <input asp-for="Bill.Description" class="form-control form-control-sm vni-font" readonly="@isView" />
                             </div>
@@ -99,7 +99,7 @@
                                 <label>Company</label>
                                 <input class="form-control form-control-sm vni-font" value="@Model.Bill.CompanyName" readonly />
                             </div>
-                            <div class="daily-service-bill-vb-field daily-service-bill-vb-span-2">
+                            <div class="daily-service-bill-vb-field daily-service-bill-vb-span-2 daily-service-bill-vb-half-control">
                                 <label>Note:</label>
                                 <input asp-for="Bill.Note" class="form-control form-control-sm vni-font" readonly="@isView" />
                             </div>
