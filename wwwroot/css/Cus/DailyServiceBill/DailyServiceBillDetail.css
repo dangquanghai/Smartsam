@@ -166,6 +166,8 @@ body.daily-service-bill-popup-body {
 }
 #dailyServiceBillDetailTable .daily-service-bill-row-number {
     text-align: center !important;
+    padding-left: 0px !important;
+    font-weight:bold;
 }
 
 #dailyServiceBillDetailTable .daily-service-bill-detail-note-cell {
