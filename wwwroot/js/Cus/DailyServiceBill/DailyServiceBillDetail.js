@@ -36,7 +36,7 @@
         });
 
         const pctTax = parseDecimal(window.dailyServiceBillPage?.pctTax || 0);
-        const vat = pctTax > 0 ? beforeVat / pctTax : 0;
+        const vat = pctTax > 0 ? beforeVat / 100 * pctTax : 0;
         const afterVat = Math.round(beforeVat + vat);
 
         $('#billBeforeVat').val(formatDecimal(beforeVat));

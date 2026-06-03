@@ -65,7 +65,29 @@ body.daily-service-bill-popup-body {
     width: 100%;
     min-width: 0;
 }
+.daily-service-bill-vat-pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+}
 
+.daily-service-bill-vat-field label {
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.daily-service-bill-popup .daily-service-bill-vat-pair {
+    grid-template-columns: 118px minmax(0, 1fr) 118px minmax(0, 1fr);
+    column-gap: 0.55rem;
+}
+
+.daily-service-bill-popup .daily-service-bill-vat-field {
+    display: contents;
+}
+
+.daily-service-bill-popup .daily-service-bill-vat-field label {
+    margin-bottom: 0;
+}
 #dailyServiceBillDetailTable .daily-service-bill-row-number {
     text-align: center !important;
 }

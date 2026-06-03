@@ -50,13 +50,9 @@
                             <label>Status</label>
                             <input class="form-control form-control-sm" value="@Model.Bill.BillStatusName" readonly />
                         </div>
-                        <div class="form-group col-md-1">
-                            <label>%VAT</label>
-                            <input class="form-control form-control-sm text-right" value="@Model.Bill.PctTax.ToString("0.##")" readonly />
-                        </div>
-                        <div class="form-group col-md-2">
+                        <div class="form-group col-md-3">
                             <label>Ex. Rate</label>
-                            <input class="form-control form-control-sm text-right" value="@Model.Bill.ExRate.ToString("0.##")" readonly />
+                            <input class="form-control form-control-sm text-right" value="@Model.Bill.ExRate.ToString("#,0.##")" readonly />
                         </div>
                     </div>
 
@@ -101,17 +97,23 @@
                     <div class="form-row align-items-end">
                         <div class="form-group col-md-2">
                             <label>Before VAT</label>
-                            <input id="billBeforeVat" class="form-control form-control-sm text-right" value="@Model.Bill.VNDAmountBefVAT.ToString("0.##")" readonly />
+                            <input id="billBeforeVat" class="form-control form-control-sm text-right" value="@Model.Bill.VNDAmountBefVAT.ToString("#,0.##")" readonly />
                         </div>
-                        <div class="form-group col-md-2">
-                            <label>VAT</label>
-                            <input id="billVat" class="form-control form-control-sm text-right" value="@Model.Bill.VNDAmountVAT.ToString("0.##")" readonly />
+                        <div class="form-group col-md-3 daily-service-bill-vat-pair">
+                            <div class="daily-service-bill-vat-field">
+                                <label>%VAT</label>
+                                <input id="billPctTax" class="form-control form-control-sm text-right" value="@Model.Bill.PctTax.ToString("#,0.##")" readonly />
+                            </div>
+                            <div class="daily-service-bill-vat-field">
+                                <label>VAT</label>
+                                <input id="billVat" class="form-control form-control-sm text-right" value="@Model.Bill.DisplayVNDAmountVAT.ToString("#,0.##")" readonly />
+                            </div>
                         </div>
                         <div class="form-group col-md-2">
                             <label>After VAT</label>
-                            <input id="billAfterVat" class="form-control form-control-sm text-right" value="@Model.Bill.VNDAmount.ToString("0.##")" readonly />
+                            <input id="billAfterVat" class="form-control form-control-sm text-right" value="@Model.Bill.DisplayVNDAmount.ToString("#,0.##")" readonly />
                         </div>
-                        <div class="form-group col-md-3">
+                        <div class="form-group col-md-2">
                             <div class="custom-control custom-checkbox mt-4">
                                 <input asp-for="Bill.IsPersonalPayment" class="custom-control-input" disabled="@isView" />
                                 <label class="custom-control-label" asp-for="Bill.IsPersonalPayment">Is Personal</label>
