@@ -140,6 +140,27 @@
             padding-right: 0 !important;
         }
 
+        #linenReceivingDetailTable .select2-container {
+            width: 100% !important;
+        }
+
+        #linenReceivingDetailTable .select2-container--default .select2-selection--single {
+            height: 31px;
+            min-height: 31px;
+            border: 1px solid #ced4da;
+            border-radius: 0.2rem;
+        }
+
+        #linenReceivingDetailTable .select2-container--default .select2-selection--single .select2-selection__rendered {
+            line-height: 29px;
+            padding-left: 0.5rem;
+            padding-right: 1.5rem;
+        }
+
+        #linenReceivingDetailTable .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 29px;
+        }
+
         .linen-receiving-grid .form-control-sm,
         .linen-receiving-grid .custom-select-sm {
             min-width: 50px;
@@ -182,6 +203,61 @@
             display: flex;
             flex-direction: column;
             padding: 0;
+        }
+
+        .linen-receiving-delivery-detail-modal-dialog {
+            max-width: 90vw;
+            width: 90vw;
+            margin: 0.5rem auto;
+        }
+
+        .linen-receiving-delivery-detail-modal-dialog .modal-content {
+            height: 90vh;
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+        }
+
+        #linenReceivingDeliveryDetailModal.fade .modal-dialog {
+            opacity: 0;
+            transform: translate(0, 0) scaleY(0.04);
+            transform-origin: center center;
+            transition: transform 0.22s ease-out, opacity 0.14s ease-out;
+        }
+
+        #linenReceivingDeliveryDetailModal.show .modal-dialog {
+            opacity: 1;
+            transform: translate(0, 0) scaleY(1);
+        }
+
+        #linenReceivingDeliveryDetailModal .modal-content {
+            transform-origin: center center;
+        }
+
+        @@media (prefers-reduced-motion: reduce) {
+            #linenReceivingDeliveryDetailModal.fade .modal-dialog,
+            #linenReceivingDeliveryDetailModal.show .modal-dialog {
+                opacity: 1;
+                transform: none;
+                transition: none;
+            }
+        }
+
+        .linen-receiving-delivery-detail-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            padding: 0;
+        }
+
+        .linen-receiving-delivery-detail-frame {
+            display: block;
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+            border: 0;
+            background: #fff;
         }
 
         .linen-receiving-report-body {
@@ -397,19 +473,14 @@
                                     }
                                 </div>
                                 <div class="col-sm-3 lr-note-view">
-                                    @if (Model.Header.SendID.HasValue && Model.Header.SendID.Value > 0)
-                                    {
-                                        <a class="btn btn-info btn-sm"
-                                           href="/Inventory/LinenDelivery/LinenDeliveryDetail?id=@Model.Header.SendID.Value&mode=view"
-                                           target="_blank"
-                                           rel="noopener noreferrer">
-                                            View
-                                        </a>
-                                    }
-                                    else
-                                    {
-                                        <button type="button" class="btn btn-info btn-sm" disabled>View</button>
-                                    }
+                                    <button type="button"
+                                            class="btn btn-info btn-sm js-view-delivery-detail"
+                                            id="btnViewLinenReceivingDelivery"
+                                            data-delivery-url="@(Model.Header.SendID.HasValue && Model.Header.SendID.Value > 0 ? Url.Page("/Inventory/LinenDelivery/LinenDeliveryDetail", new { id = Model.Header.SendID.Value, mode = "view", popup = true }) : string.Empty)"
+                                            data-delivery-url-template="@Url.Page("/Inventory/LinenDelivery/LinenDeliveryDetail", new { id = "__DELIVERY_ID__", mode = "view", popup = true })"
+                                            disabled="@(!Model.Header.SendID.HasValue || Model.Header.SendID.Value <= 0)">
+                                        View
+                                    </button>
                                 </div>
                             </div>
 
@@ -513,7 +584,7 @@
                                                 </select>
                                             </td>
                                             <td>
-                                                <select class="form-control form-control-sm lr-location vni-font" @(isView ? "disabled" : null)>
+                                                <select class="form-control form-control-sm lr-location select2 vni-font" data-placeholder="-- Select --" @(isView ? "disabled" : null)>
                                                     @foreach (var option in Model.LocationOptions)
                                                     {
                                                         if (option.Value == Convert.ToString(row.LocationID))
@@ -652,6 +723,23 @@
     </div>
 </div>
 
+<div class="modal fade" id="linenReceivingDeliveryDetailModal" tabindex="-1" role="dialog" aria-labelledby="linenReceivingDeliveryDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog linen-receiving-delivery-detail-modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="linenReceivingDeliveryDetailModalLabel">Linen Delivery Detail</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body linen-receiving-delivery-detail-body">
+                <iframe id="linenReceivingDeliveryDetailFrame"
+                        class="linen-receiving-delivery-detail-frame"
+                        title="Linen Delivery Detail"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
 @section Scripts {
     <script>
         window.linenReceivingPage = {

@@ -376,21 +376,44 @@ ORDER BY DeliveryID DESC;";
         return items;
     }
 
-    private static List<SelectListItem> LoadLocations(SqlConnection conn)
+    private List<SelectListItem> LoadLocations(SqlConnection conn)
     {
         var items = new List<SelectListItem>
         {
             new SelectListItem { Value = string.Empty, Text = "-- Select --" }
         };
 
-        using var cmd = new SqlCommand("SELECT locationID, Location FROM dbo.View_LN_Location ORDER BY Location;", conn);
+        using var cmd = new SqlCommand(@"
+WITH LocationSource AS
+(
+    SELECT ApmtID AS LocationID,
+           ApartmentNo AS LocationName
+    FROM dbo.AM_Apmt
+    WHERE (ExistFrom IS NULL OR ExistFrom < DATEADD(DAY, 1, CONVERT(date, GETDATE())))
+      AND (ExistTo IS NULL OR ExistTo >= CONVERT(date, GETDATE()))
+
+    UNION
+
+    SELECT LocationID,
+           Location AS LocationName
+    FROM dbo.LN_ReceiveDT
+    WHERE ReceiveID = @ReceiveID
+      AND LocationID IS NOT NULL
+      AND ISNULL(Location, '') <> ''
+)
+SELECT LocationID,
+       MAX(LocationName) AS LocationName
+FROM LocationSource
+GROUP BY LocationID
+ORDER BY MAX(LocationName);", conn);
+        cmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = Header.ReceiveID;
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
             items.Add(new SelectListItem
             {
-                Value = Convert.ToInt32(rd["locationID"]).ToString(),
-                Text = Convert.ToString(rd["Location"]) ?? string.Empty
+                Value = Convert.ToInt32(rd["LocationID"]).ToString(),
+                Text = Convert.ToString(rd["LocationName"]) ?? string.Empty
             });
         }
 
@@ -616,14 +639,36 @@ WHERE dt.ReceiveID = @ReceiveID;", conn, trans);
         parameter.Value = value;
     }
 
-    private static Dictionary<int, string> GetLocationMap(SqlConnection conn, SqlTransaction trans)
+    private Dictionary<int, string> GetLocationMap(SqlConnection conn, SqlTransaction trans)
     {
         var map = new Dictionary<int, string>();
-        using var cmd = new SqlCommand("SELECT locationID, Location FROM dbo.View_LN_Location;", conn, trans);
+        using var cmd = new SqlCommand(@"
+WITH LocationSource AS
+(
+    SELECT ApmtID AS LocationID,
+           ApartmentNo AS LocationName
+    FROM dbo.AM_Apmt
+    WHERE (ExistFrom IS NULL OR ExistFrom < DATEADD(DAY, 1, CONVERT(date, GETDATE())))
+      AND (ExistTo IS NULL OR ExistTo >= CONVERT(date, GETDATE()))
+
+    UNION
+
+    SELECT LocationID,
+           Location AS LocationName
+    FROM dbo.LN_ReceiveDT
+    WHERE ReceiveID = @ReceiveID
+      AND LocationID IS NOT NULL
+      AND ISNULL(Location, '') <> ''
+)
+SELECT LocationID,
+       MAX(LocationName) AS LocationName
+FROM LocationSource
+GROUP BY LocationID;", conn, trans);
+        cmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = Header.ReceiveID;
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
-            map[Convert.ToInt32(rd["locationID"])] = Convert.ToString(rd["Location"]) ?? string.Empty;
+            map[Convert.ToInt32(rd["LocationID"])] = Convert.ToString(rd["LocationName"]) ?? string.Empty;
         }
 
         return map;

@@ -3,7 +3,13 @@
 @{
     ViewData["Title"] = "Linen Delivery Detail";
     var isView = Model.IsViewMode;
+    var isPopup = Model.Popup;
     var indexUrl = string.IsNullOrWhiteSpace(Model.RedirectUrl) ? "/Inventory/LinenDelivery" : Model.RedirectUrl;
+    if (isPopup)
+    {
+        Layout = "_PopupLayout";
+        ViewData["PopupBodyClass"] = "linen-delivery-popup-body";
+    }
     var reportLinenCodes = Model.Details
         .Select(x => (x.LinenCode ?? string.Empty).Trim())
         .Where(x => !string.IsNullOrWhiteSpace(x))
@@ -14,6 +20,26 @@
 
 @section Styles {
     <style>
+        body.linen-delivery-popup-body {
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: hidden;
+            background: #f4f6f9;
+        }
+
+        .linen-delivery-popup,
+        .linen-delivery-popup .container-fluid {
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+        }
+
+        .linen-delivery-popup .card {
+            margin-bottom: 0;
+            border-radius: 0;
+        }
+
         .linen-delivery-header label {
             margin-bottom: 0;
             white-space: nowrap;
@@ -234,6 +260,27 @@
             min-width: 50px;
         }
 
+        #linenDeliveryDetailTable .select2-container {
+            width: 100% !important;
+        }
+
+        #linenDeliveryDetailTable .select2-container--default .select2-selection--single {
+            height: 31px;
+            min-height: 31px;
+            border: 1px solid #ced4da;
+            border-radius: 0.2rem;
+        }
+
+        #linenDeliveryDetailTable .select2-container--default .select2-selection--single .select2-selection__rendered {
+            line-height: 29px;
+            padding-left: 0.5rem;
+            padding-right: 1.5rem;
+        }
+
+        #linenDeliveryDetailTable .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 29px;
+        }
+
         .linen-delivery-grid .ld-location,
         .linen-delivery-grid .ld-linen {
             min-width: 160px;
@@ -287,6 +334,13 @@
 
         .linen-delivery-bill-table .bill-id-link {
             font-weight: 600;
+            text-decoration: underline;
+        }
+
+        .linen-delivery-bill-modal-subtitle {
+            color: #6c757d;
+            font-size: 11px;
+            line-height: 1.1;
         }
 
         .linen-delivery-bill-table .js-bill-row {
@@ -297,6 +351,35 @@
             background-color: #eef5ff;
         }
 
+        #linenDeliveryBillModal.fade .modal-dialog,
+        #linenDeliveryBillDetailModal.fade .modal-dialog {
+            opacity: 0;
+            transform: translate(0, 0) scaleY(0.04);
+            transform-origin: center center;
+            transition: transform 0.22s ease-out, opacity 0.14s ease-out;
+        }
+
+        #linenDeliveryBillModal.show .modal-dialog,
+        #linenDeliveryBillDetailModal.show .modal-dialog {
+            opacity: 1;
+            transform: translate(0, 0) scaleY(1);
+        }
+
+        #linenDeliveryBillModal .modal-content,
+        #linenDeliveryBillDetailModal .modal-content {
+            transform-origin: center center;
+        }
+
+        @@media (prefers-reduced-motion: reduce) {
+            #linenDeliveryBillModal.fade .modal-dialog,
+            #linenDeliveryBillModal.show .modal-dialog,
+            #linenDeliveryBillDetailModal.fade .modal-dialog,
+            #linenDeliveryBillDetailModal.show .modal-dialog {
+                opacity: 1;
+                transform: none;
+                transition: none;
+            }
+        }
         .linen-delivery-report-modal-dialog {
             max-width: 90vw;
             width: 90vw;
@@ -624,7 +707,7 @@
     </style>
 }
 
-<section class="content">
+<section class="content @(isPopup ? "linen-delivery-popup" : string.Empty)">
     <div class="container-fluid">
         @if (TempData["SuccessMessage"] != null)
         {
@@ -645,11 +728,15 @@
             <input type="hidden" asp-for="Mode" />
             <input type="hidden" asp-for="DetailsJson" id="DetailsJson" />
             <input type="hidden" asp-for="RedirectUrl" id="RedirectUrl" />
+            <input type="hidden" asp-for="Popup" />
 
             <div class="card card-primary card-outline">
-                <div class="card-header py-2">
-                    <h3 class="card-title">Linen Delivery Detail</h3>
-                </div>
+                @if (!isPopup)
+                {
+                    <div class="card-header py-2">
+                        <h3 class="card-title">Linen Delivery Detail</h3>
+                    </div>
+                }
                 <div class="card-body linen-delivery-header">
                     <div class="linen-delivery-header-vb">
                         <div class="ld-inline-field">
@@ -696,20 +783,23 @@
                             </div>
                         </div>
 
-                        <div class="ld-action-cell linen-delivery-note-wrap ld-field-note-view">
-                            @if (Model.Header.NoteID.HasValue && Model.Header.NoteID.Value > 0)
-                            {
-                                <button type="button"
-                                        class="btn btn-info btn-sm js-view-pantry-note"
-                                        data-note-id="@Model.Header.NoteID.Value">
-                                    View
-                                </button>
-                            }
-                            else
-                            {
-                                <button type="button" class="btn btn-info btn-sm js-view-pantry-note" disabled>View</button>
-                            }
-                        </div>
+                        @if (!isPopup)
+                        {
+                            <div class="ld-action-cell linen-delivery-note-wrap ld-field-note-view">
+                                @if (Model.Header.NoteID.HasValue && Model.Header.NoteID.Value > 0)
+                                {
+                                    <button type="button"
+                                            class="btn btn-info btn-sm js-view-pantry-note"
+                                            data-note-id="@Model.Header.NoteID.Value">
+                                        View
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-info btn-sm js-view-pantry-note" disabled>View</button>
+                                }
+                            </div>
+                        }
 
                         <div class="ld-inline-field ld-field-description">
                             <label class="ld-header-label">Description</label>
@@ -777,7 +867,7 @@
                             </colgroup>
                             <thead class="thead-light">
                                 <tr>
-                                    <th class="linen-delivery-action-cell text-center">@(isView ? "STT" : string.Empty)</th>
+                                    <th class="linen-delivery-action-cell text-center">@(isView ? "#" : string.Empty)</th>
                                     <th>Location</th>
                                     <th>Linen</th>
                                     <th style="width: 70px;">Express</th>
@@ -824,7 +914,7 @@
                                                 }
                                             </td>
                                             <td>
-                                                <select class="form-control form-control-sm ld-location vni-font" @(isView ? "disabled" : null)>
+                                                <select class="form-control form-control-sm ld-location select2 vni-font" data-placeholder="-- Select --" @(isView ? "disabled" : null)>
                                                     @foreach (var option in Model.LocationOptions)
                                                     {
                                                         if (option.Value == Convert.ToString(row.LocationID))
@@ -867,7 +957,9 @@
                         </table>
                     </div>
                 </div>
-                <div class="card-footer py-2 text-center">
+                @if (!isPopup)
+                {
+                    <div class="card-footer py-2 text-center">
                     @if (Model.CanSave)
                     {
                         <button type="button" class="btn btn-sm btn-success mr-2" id="btnAddDetailRow">
@@ -886,7 +978,8 @@
                     <button type="button" class="btn btn-sm btn-default" id="btnCloseLinenDeliveryDetail" data-index-url="@indexUrl">
                         <i class="fas fa-arrow-left"></i> Back to list
                     </button>
-                </div>
+                    </div>
+                }
             </div>
         </form>
     </div>
@@ -1039,7 +1132,10 @@
     <div class="modal-dialog modal-xl linen-delivery-bill-modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header py-2">
-                <h5 class="modal-title">Linen Delivery Bill</h5>
+                <div>
+                    <h5 class="modal-title mb-0">Linen Delivery Bill</h5>
+                    <div class="linen-delivery-bill-modal-subtitle">(Double click on a row to open detail or click on Bill ID to open detail)</div>
+                </div>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>

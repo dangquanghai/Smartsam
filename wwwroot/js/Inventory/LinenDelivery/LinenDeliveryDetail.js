@@ -76,6 +76,7 @@
         initBillDetailModal();
         refreshHeaderSections();
         updatePantryNoteViewButton();
+        initializeLocationSelect2(document);
         recalcAllRows();
         pageDirty = false;
     }
@@ -655,7 +656,7 @@
                     </button>
                 </div>
             </td>
-            <td><select class="form-control form-control-sm ld-location vni-font">${locations}</select></td>
+            <td><select class="form-control form-control-sm ld-location select2 vni-font" data-placeholder="-- Select --">${locations}</select></td>
             <td><select class="form-control form-control-sm ld-linen vni-font">${linens}</select></td>
             <td class="text-center"><input type="checkbox" class="ld-express" /></td>
             <td class="text-center"><input type="checkbox" class="ld-child" /></td>
@@ -665,7 +666,46 @@
             <td class="linen-delivery-note-cell"><input type="text" maxlength="100" class="form-control form-control-sm ld-note vni-font" value="" /></td>
         </tr>`;
 
-        $('#linenDeliveryDetailTable tbody').append(html);
+        const $row = $(html);
+        $('#linenDeliveryDetailTable tbody').append($row);
+        initializeLocationSelect2($row);
+    }
+
+    function initializeLocationSelect2(scope) {
+        if (!$.fn.select2) {
+            return;
+        }
+
+        $(scope || document).find('select.ld-location.select2').each(function () {
+            const $element = $(this);
+            if ($element.hasClass('select2-hidden-accessible')) {
+                $element.select2('destroy');
+            }
+
+            $element.select2({
+                width: '100%',
+                placeholder: $element.data('placeholder') || '-- Select --',
+                allowClear: true,
+                minimumResultsForSearch: 0
+            });
+
+            $element.off('select2:open.linenDelivery').on('select2:open.linenDelivery', function () {
+                const searchField = document.querySelector('.select2-container--open .select2-search__field');
+                if (searchField) {
+                    searchField.focus();
+                }
+            });
+        });
+    }
+
+    function destroyLocationSelect2(scope) {
+        if (!$.fn.select2) {
+            return;
+        }
+
+        $(scope || document).find('select.ld-location.select2.select2-hidden-accessible').each(function () {
+            $(this).select2('destroy');
+        });
     }
 
     function openBillModal() {
@@ -934,6 +974,7 @@
             const selectedLocation = $row.find('.ld-location').val() || '';
             const selectedLinen = $row.find('.ld-linen').val() || '';
 
+            destroyLocationSelect2($row);
             $row.find('.ld-location').html(buildOptions(locationOptions, selectedLocation, false));
             $row.find('.ld-linen').html(buildOptions(linenOptions, selectedLinen, true));
 
@@ -941,6 +982,7 @@
                 $row.find('.ld-price').val(formatDecimal(parseDecimal($row.find('.ld-linen option:selected').data('price'))));
             }
 
+            initializeLocationSelect2($row);
             recalcRow($row);
         });
     }

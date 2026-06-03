@@ -8,9 +8,11 @@
         bindFormSubmit();
         bindGridEvents();
         bindHeaderEvents();
+        bindDeliveryViewEvents();
         bindPrintEvents();
         bindDirtyTracking();
         initReportModal();
+        initializeLocationSelect2(document);
         recalcAllRows();
         pageDirty = false;
     }
@@ -80,7 +82,9 @@
         });
 
         $(document).off('click', '.js-remove-row').on('click', '.js-remove-row', function () {
-            $(this).closest('tr').remove();
+            const $row = $(this).closest('tr');
+            destroyLocationSelect2($row);
+            $row.remove();
             ensureEmptyRow();
             pageDirty = true;
         });
@@ -112,7 +116,29 @@
     }
 
     function bindHeaderEvents() {
-        $('#Header_SendID').off('change').on('change', syncDeliveryRent);
+        $('#Header_SendID').off('change').on('change', function () {
+            updateDeliveryViewButton();
+            syncDeliveryRent();
+        });
+        updateDeliveryViewButton();
+    }
+
+    function updateDeliveryViewButton() {
+        const sendId = ($('#Header_SendID').val() || '').toString();
+        const $button = $('#btnViewLinenReceivingDelivery');
+
+        if (!$button.length) {
+            return;
+        }
+
+        if (!sendId) {
+            $button.prop('disabled', true).data('delivery-url', '').attr('data-delivery-url', '');
+            return;
+        }
+
+        const template = ($button.data('delivery-url-template') || '').toString();
+        const detailUrl = template.replace('__DELIVERY_ID__', encodeURIComponent(sendId));
+        $button.prop('disabled', false).data('delivery-url', detailUrl).attr('data-delivery-url', detailUrl);
     }
 
     function bindDirtyTracking() {
@@ -128,6 +154,25 @@
             });
     }
 
+    function bindDeliveryViewEvents() {
+        $(document).off('click', '.js-view-delivery-detail').on('click', '.js-view-delivery-detail', function () {
+            const detailUrl = $(this).data('delivery-url') || '';
+            const frame = document.getElementById('linenReceivingDeliveryDetailFrame');
+            if (!detailUrl || !frame) {
+                return;
+            }
+
+            frame.src = detailUrl;
+            $('#linenReceivingDeliveryDetailModal').modal('show');
+        });
+
+        $('#linenReceivingDeliveryDetailModal').off('hidden.bs.modal').on('hidden.bs.modal', function () {
+            const frame = document.getElementById('linenReceivingDeliveryDetailFrame');
+            if (frame) {
+                frame.removeAttribute('src');
+            }
+        });
+    }
     function bindPrintEvents() {
         $('#btnPrintLinenReceivingDetail').off('click').on('click', function () {
             if (pageDirty) {
@@ -289,7 +334,7 @@
                 </div>
             </td>
             <td><select class="form-control form-control-sm lr-delivery vni-font">${deliveries}</select></td>
-            <td><select class="form-control form-control-sm lr-location vni-font">${locations}</select></td>
+            <td><select class="form-control form-control-sm lr-location select2 vni-font" data-placeholder="-- Select --">${locations}</select></td>
             <td><select class="form-control form-control-sm lr-linen vni-font">${linens}</select></td>
             <td class="text-center"><input type="checkbox" class="lr-express" /></td>
             <td class="text-center"><input type="checkbox" class="lr-child" /></td>
@@ -299,7 +344,46 @@
             <td class="linen-receiving-note-cell"><input type="text" maxlength="100" class="form-control form-control-sm lr-note vni-font" value="" /></td>
         </tr>`;
 
-        $('#linenReceivingDetailTable tbody').append(html);
+        const $row = $(html);
+        $('#linenReceivingDetailTable tbody').append($row);
+        initializeLocationSelect2($row);
+    }
+
+    function initializeLocationSelect2(scope) {
+        if (!$.fn.select2) {
+            return;
+        }
+
+        $(scope || document).find('select.lr-location.select2').each(function () {
+            const $element = $(this);
+            if ($element.hasClass('select2-hidden-accessible')) {
+                $element.select2('destroy');
+            }
+
+            $element.select2({
+                width: '100%',
+                placeholder: $element.data('placeholder') || '-- Select --',
+                allowClear: true,
+                minimumResultsForSearch: 0
+            });
+
+            $element.off('select2:open.linenReceiving').on('select2:open.linenReceiving', function () {
+                const searchField = document.querySelector('.select2-container--open .select2-search__field');
+                if (searchField) {
+                    searchField.focus();
+                }
+            });
+        });
+    }
+
+    function destroyLocationSelect2(scope) {
+        if (!$.fn.select2) {
+            return;
+        }
+
+        $(scope || document).find('select.lr-location.select2.select2-hidden-accessible').each(function () {
+            $(this).select2('destroy');
+        });
     }
 
     function collectDetails() {

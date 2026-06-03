@@ -1,0 +1,110 @@
+﻿html,
+body.daily-service-bill-popup-body {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: hidden;
+    background: #f4f6f9;
+}
+
+.daily-service-bill-popup-body .smart-popup-wrapper,
+.daily-service-bill-popup,
+.daily-service-bill-popup .container-fluid {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    overflow-x: hidden;
+}
+.daily-service-bill-popup .card {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-bottom: 0;
+    border-radius: 0;
+}
+
+.daily-service-bill-popup .card-outline .card-body {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-flow: dense;
+    gap: 0.32rem 0.75rem;
+    align-items: center;
+    padding: 0.5rem 0.75rem !important;
+}
+
+.daily-service-bill-popup .card-outline .form-row {
+    display: contents;
+}
+
+.daily-service-bill-popup .card-outline .form-row > [class*="col-"] {
+    flex: none;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+    padding-left: 0;
+    padding-right: 0;
+    margin-bottom: 0;
+}
+
+.daily-service-bill-popup .form-group {
+    display: grid;
+    grid-template-columns: 118px minmax(0, 1fr);
+    column-gap: 0.55rem;
+    align-items: center;
+}
+
+.daily-service-bill-popup .form-group label {
+    margin-bottom: 0;
+    white-space: nowrap;
+    text-align: left;
+}
+
+.daily-service-bill-popup .form-control-sm {
+    width: 100%;
+    min-width: 0;
+}
+
+#dailyServiceBillDetailTable .daily-service-bill-row-number {
+    text-align: center !important;
+}
+
+#dailyServiceBillDetailTable .daily-service-bill-detail-note-cell {
+    padding-left: 0.2rem;
+    padding-right: 0.2rem;
+}
+
+#dailyServiceBillDetailTable .daily-service-bill-detail-note-cell .daily-service-bill-detail-note {
+    display: block;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.daily-service-bill-popup .daily-service-bill-note-field {
+    grid-column: span 2;
+}
+
+.daily-service-bill-popup .custom-control {
+    grid-column: 2;
+    margin-top: 0 !important;
+    padding-left: 1.35rem;
+}
+
+@media (max-width: 1199.98px) {
+    .daily-service-bill-popup .card-outline .card-body {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 767.98px) {
+    .daily-service-bill-popup .card-outline .card-body {
+        grid-template-columns: 1fr;
+    }
+
+    .daily-service-bill-popup .daily-service-bill-note-field {
+        grid-column: auto;
+    }
+}
