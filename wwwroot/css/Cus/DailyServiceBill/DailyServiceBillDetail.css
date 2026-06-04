@@ -45,7 +45,6 @@ body.daily-service-bill-popup-body {
 }
 
 .daily-service-bill-vb-row-last {
-    border-top: 1px solid #9f9f9f;
     margin-top: 0.12rem;
     padding-top: 0.22rem;
 }
@@ -128,6 +127,7 @@ body.daily-service-bill-popup-body {
     gap: 0.35rem;
     align-items: center;
     white-space: nowrap;
+    justify-content:start;
 }
 
 .daily-service-bill-vb-operator-text {
