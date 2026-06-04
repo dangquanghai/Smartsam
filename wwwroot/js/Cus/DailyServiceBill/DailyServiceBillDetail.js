@@ -58,6 +58,17 @@
         }
     }
 
+
+    function notifyParentSaved() {
+        const params = new URLSearchParams(window.location.search || '');
+        if (params.get('saved') !== 'true') {
+            return;
+        }
+
+        if (window.parent && window.parent !== window && typeof window.parent.refreshLinenDeliveryBills === 'function') {
+            window.parent.refreshLinenDeliveryBills();
+        }
+    }
     function initClosePopupButton() {
         $("#btnClosePopupBillDetail").off("click").on("click", function () {
             if (window.parent && window.parent.$) {
@@ -87,6 +98,7 @@
     $(document).ready(function () {
         initPopupMode();
         initClosePopupButton();
+        notifyParentSaved();
         initializePage();
     });
 })();

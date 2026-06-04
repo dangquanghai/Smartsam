@@ -30,6 +30,9 @@ public class DailyServiceBillDetailModel : BasePageModel
     [BindProperty(SupportsGet = true)]
     public bool Popup { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public bool Saved { get; set; }
+
     [BindProperty]
     public DailyServiceBillHeader Bill { get; set; } = new DailyServiceBillHeader();
 
@@ -39,6 +42,7 @@ public class DailyServiceBillDetailModel : BasePageModel
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
     public bool IsViewMode => Popup || !string.Equals(Mode, "edit", StringComparison.OrdinalIgnoreCase);
     public bool CanEdit { get; private set; }
+    public bool CanSaveDescription { get; private set; }
     public bool IsPopup => Popup;
     public string SafeReturnUrl { get; private set; } = "/Cus/DailyServiceBill";
 
@@ -59,7 +63,8 @@ public class DailyServiceBillDetailModel : BasePageModel
             return NotFound();
         }
 
-        CanEdit = !Popup && PagePerm.HasPermission(PermissionEditDetail) && Bill.BillStatus == 1;
+        CanSaveDescription = PagePerm.HasPermission(PermissionEditDetail) && Bill.BillStatus == 1;
+        CanEdit = !Popup && CanSaveDescription;
         if (!CanEdit)
         {
             Mode = "view";
@@ -74,7 +79,8 @@ public class DailyServiceBillDetailModel : BasePageModel
         PagePerm = GetUserPermissions();
         SafeReturnUrl = NormalizeReturnUrl(ReturnUrl);
 
-        if (!PagePerm.HasPermission(PermissionEditDetail))
+        var hasEditPermission = PagePerm.HasPermission(PermissionEditDetail);
+        if (!hasEditPermission)
         {
             ModelState.AddModelError(string.Empty, "You do not have permission to edit this bill.");
         }
@@ -91,15 +97,35 @@ public class DailyServiceBillDetailModel : BasePageModel
             ModelState.AddModelError(string.Empty, "Only pending bills can be edited.");
         }
 
+        CanSaveDescription = hasEditPermission && currentBill.BillStatus == 1;
+
+        if (Popup)
+        {
+            var popupDescription = Request.Form["Bill.Description"].ToString();
+            if (!CanSaveDescription)
+            {
+                Bill = currentBill;
+                Bill.Description = popupDescription;
+                DetailRows = LoadBillDetails(conn, currentBill.BillID);
+                CanEdit = false;
+                Mode = "view";
+                return Page();
+            }
+
+            SavePopupDescription(conn, currentBill.BillID, popupDescription);
+            return RedirectToPage("./DailyServiceBillDetail", new { id = currentBill.BillID, mode = "view", returnUrl = SafeReturnUrl, popup = true, saved = true });
+        }
+
         if (!ModelState.IsValid)
         {
+            var postedDescription = Bill.Description;
             Bill = currentBill;
+            Bill.Description = postedDescription;
             DetailRows = LoadBillDetails(conn, currentBill.BillID);
             CanEdit = false;
             Mode = "view";
             return Page();
         }
-
         using var trans = conn.BeginTransaction();
         try
         {
@@ -159,14 +185,19 @@ WHERE BillID = @BillID;", conn, trans);
             throw;
         }
 
-        if (Popup)
-        {
-            TempData["SuccessMessage"] = "Saved successfully.";
-            return RedirectToPage("./DailyServiceBillDetail", new { id = currentBill.BillID, mode = Mode, returnUrl = SafeReturnUrl, popup = true });
-        }
-
         var redirectUrl = AppendFlag(SafeReturnUrl, "billUpdated=1");
         return Redirect(redirectUrl);
+    }
+
+    private void SavePopupDescription(SqlConnection conn, int billId, string? description)
+    {
+        using var cmd = new SqlCommand(@"
+UPDATE dbo.SV_Bill
+SET Description = @Description
+WHERE BillID = @BillID;", conn);
+        cmd.Parameters.AddWithValue("@Description", (object?)description ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@BillID", billId);
+        cmd.ExecuteNonQuery();
     }
 
     private SqlConnection OpenConnection()
