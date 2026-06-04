@@ -815,6 +815,8 @@
         $('#linenDeliveryBillListWrap').removeClass('d-none');
     }
 
+    window.refreshLinenDeliveryBills = loadBills;
+
     function openBillDetail($row) {
         const billId = $row.data('bill-id');
         const mode = $row.data('mode') || 'view';

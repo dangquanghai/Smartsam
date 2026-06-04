@@ -3,6 +3,7 @@
 @{
     ViewData["Title"] = "Daily Service Bill Detail";
     var isView = Model.IsViewMode;
+    var canSaveDescription = Model.CanSaveDescription;
     var isPopup = Model.IsPopup;
     if (isPopup)
     {
@@ -17,11 +18,21 @@
 
 <section class="content @(isPopup ? "daily-service-bill-popup" : string.Empty)">
     <div class="container-fluid">
-        <form method="post" id="dailyServiceBillDetailForm">
+        <form method="post" asp-page-handler="Save" id="dailyServiceBillDetailForm">
             <input type="hidden" asp-for="Bill.BillID" />
             <input type="hidden" asp-for="ReturnUrl" />
             <input type="hidden" asp-for="Mode" />
             <input type="hidden" asp-for="Popup" />
+
+            @if ((isPopup && Model.Saved) || TempData["SuccessMessage"] != null)
+            {
+                <div class="alert alert-success alert-dismissible fade show py-2 mb-2" role="alert">
+                    @(isPopup && Model.Saved ? "Saved successfully." : TempData["SuccessMessage"])
+                    <button type="button" class="close py-1" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            }
 
             <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
 
@@ -119,7 +130,14 @@
                             </div>
                             <div class="daily-service-bill-vb-field daily-service-bill-vb-right-span daily-service-bill-vb-wide-control">
                                 <label>Description</label>
-                                <input asp-for="Bill.Description" class="form-control form-control-sm vni-font" readonly="@isView" />
+                                @if (canSaveDescription)
+                                {
+                                    <input asp-for="Bill.Description" class="form-control form-control-sm vni-font" />
+                                }
+                                else
+                                {
+                                    <input asp-for="Bill.Description" class="form-control form-control-sm vni-font" readonly />
+                                }
                             </div>
                         </div>
                         <div class="daily-service-bill-vb-row">
@@ -147,7 +165,15 @@
                         </div>
                     </div>
                 </div>
-                @if (!isPopup)
+                @if (isPopup && canSaveDescription)
+                {
+                    <div class="card-footer py-2 text-right">
+                        <button type="submit" asp-page-handler="Save" class="btn btn-primary btn-sm">
+                            <i class="fas fa-save"></i> Save
+                        </button>
+                    </div>
+                }
+                else if (!isPopup)
                 {
                     <div class="card-footer py-2">
                         @if (!isView)
