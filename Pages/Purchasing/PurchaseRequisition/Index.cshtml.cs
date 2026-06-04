@@ -483,7 +483,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
         // 1. File export danh sách hiển thị đúng các cột đang dùng ở màn hình list.
         var headers = new[]
         {
-            "STT",
+            "#",
             "No.",
             "Date",
             "Description",
@@ -550,7 +550,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
         // 2. Sheet thứ hai chứa toàn bộ item detail của phiếu đang chọn.
         var detailHeaders = new[]
         {
-            "STT",
+            "#",
             "Item Code",
             "Item Name",
             "Unit",

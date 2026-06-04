@@ -863,7 +863,7 @@ ORDER BY store.StoreName;", conn);
         var worksheet = workbook.Worksheets.Add("Inventory Items");
         var headers = new[]
         {
-            "STT",
+            "#",
             "Item Code",
             "Item Name",
             "Catg",

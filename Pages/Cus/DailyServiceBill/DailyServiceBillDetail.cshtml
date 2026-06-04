@@ -32,94 +32,118 @@
                         <h3 class="card-title">Add/Edit Service Bill</h3>
                     </div>
                 }
-                <div class="card-body py-2">
-                    <div class="form-row">
-                        <div class="form-group col-md-2">
-                            <label>Bill ID</label>
-                            <input class="form-control form-control-sm" value="@Model.Bill.BillID" readonly />
-                        </div>
-                        <div class="form-group col-md-2">
-                            <label>Bill Date</label>
-                            <input class="form-control form-control-sm" value="@Model.Bill.BillDate.ToString("MM/dd/yyyy")" readonly />
-                        </div>
-                        <div class="form-group col-md-3">
-                            <label>Sale Point</label>
-                            <input class="form-control form-control-sm vni-font" value="@Model.Bill.SalePointName" readonly />
-                        </div>
-                        <div class="form-group col-md-2">
-                            <label>Status</label>
-                            <input class="form-control form-control-sm" value="@Model.Bill.BillStatusName" readonly />
-                        </div>
-                        <div class="form-group col-md-1">
-                            <label>%VAT</label>
-                            <input class="form-control form-control-sm text-right" value="@Model.Bill.PctTax.ToString("0.##")" readonly />
-                        </div>
-                        <div class="form-group col-md-2">
-                            <label>Ex. Rate</label>
-                            <input class="form-control form-control-sm text-right" value="@Model.Bill.ExRate.ToString("0.##")" readonly />
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group col-md-2">
-                            <label>Cust ID</label>
-                            <input class="form-control form-control-sm" value="@Model.Bill.CustomerID" readonly />
-                        </div>
-                        <div class="form-group col-md-2">
-                            <label>Apmt No.</label>
-                            <input class="form-control form-control-sm" value="@Model.Bill.ApartmentNo" readonly />
-                        </div>
-                        <div class="form-group col-md-4">
-                            <label>Cust Name</label>
-                            <input class="form-control form-control-sm vni-font" value="@Model.Bill.CustomerName" readonly />
-                        </div>
-                        <div class="form-group col-md-4">
-                            <label>Company</label>
-                            <input class="form-control form-control-sm vni-font" value="@Model.Bill.CompanyName" readonly />
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group col-md-4">
-                            <label>Description</label>
-                            <input asp-for="Bill.Description" class="form-control form-control-sm vni-font" readonly="@isView" />
-                        </div>
-                        <div class="form-group col-md-4 daily-service-bill-note-field">
-                            <label>Note</label>
-                            <input asp-for="Bill.Note" class="form-control form-control-sm vni-font" readonly="@isView" />
-                        </div>
-                        <div class="form-group col-md-2">
-                            <label>For From</label>
-                            <input asp-for="Bill.ForFromDate" type="date" class="form-control form-control-sm" readonly="@isView" />
-                        </div>
-                        <div class="form-group col-md-2">
-                            <label>To Date</label>
-                            <input asp-for="Bill.ForToDate" type="date" class="form-control form-control-sm" readonly="@isView" />
-                        </div>
-                    </div>
-
-                    <div class="form-row align-items-end">
-                        <div class="form-group col-md-2">
-                            <label>Before VAT</label>
-                            <input id="billBeforeVat" class="form-control form-control-sm text-right" value="@Model.Bill.VNDAmountBefVAT.ToString("0.##")" readonly />
-                        </div>
-                        <div class="form-group col-md-2">
-                            <label>VAT</label>
-                            <input id="billVat" class="form-control form-control-sm text-right" value="@Model.Bill.VNDAmountVAT.ToString("0.##")" readonly />
-                        </div>
-                        <div class="form-group col-md-2">
-                            <label>After VAT</label>
-                            <input id="billAfterVat" class="form-control form-control-sm text-right" value="@Model.Bill.VNDAmount.ToString("0.##")" readonly />
-                        </div>
-                        <div class="form-group col-md-3">
-                            <div class="custom-control custom-checkbox mt-4">
-                                <input asp-for="Bill.IsPersonalPayment" class="custom-control-input" disabled="@isView" />
-                                <label class="custom-control-label" asp-for="Bill.IsPersonalPayment">Is Personal</label>
+                <div class="card-body daily-service-bill-header-body">
+                    <div class="daily-service-bill-vb-form">
+                        <div class="daily-service-bill-vb-row">
+                            <div class="daily-service-bill-vb-field">
+                                <label>Bill ID:</label>
+                                <input class="form-control form-control-sm" value="@Model.Bill.BillID" readonly />
+                            </div>
+                            <div class="daily-service-bill-vb-field">
+                                <label>Bill Date:</label>
+                                <input class="form-control form-control-sm" value="@Model.Bill.BillDate.ToString("MM/dd/yyyy")" readonly />
+                            </div>
+                            <div class="daily-service-bill-vb-field">
+                                <label>Status:</label>
+                                <input class="form-control form-control-sm" value="@Model.Bill.BillStatusName" readonly />
+                            </div>
+                            <div class="daily-service-bill-vb-field daily-service-bill-vb-vat-column daily-service-bill-vb-half-control">
+                                <label>Before VAT</label>
+                                <input id="billBeforeVat" class="form-control form-control-sm text-right" value="@Model.Bill.VNDAmountBefVAT.ToString("#,0.##")" readonly />
                             </div>
                         </div>
-                        <div class="form-group col-md-3">
-                            <label>Created Operator</label>
-                            <input class="form-control form-control-sm" value="@($"{Model.Bill.CreatedOperatorCode} ({Model.Bill.CreatedOperatorName})")" readonly />
+                        <div class="daily-service-bill-vb-row">
+                            <div class="daily-service-bill-vb-field daily-service-bill-vb-span-2">
+                                <label>Sale point:</label>
+                                <input class="form-control form-control-sm vni-font" value="@Model.Bill.SalePointName" readonly />
+                            </div>
+                            <div class="daily-service-bill-vb-field">
+                                <label>Ex. Rate:</label>
+                                <input class="form-control form-control-sm text-right" value="@Model.Bill.ExRate.ToString("#,0.##")" readonly />
+                            </div>
+                            <div class="daily-service-bill-vb-field daily-service-bill-vb-vat-column daily-service-bill-vb-half-control">
+                                <label>%VAT</label>
+                                <input id="billPctTax" class="form-control form-control-sm text-right" value="@Model.Bill.PctTax.ToString("#,0.##")" readonly />
+                            </div>
+                        </div>
+                        <div class="daily-service-bill-vb-row">
+                            <div class="daily-service-bill-vb-field">
+                                <label>Cust ID:</label>
+                                <input class="form-control form-control-sm" value="@Model.Bill.CustomerID" readonly />
+                            </div>
+                            <div class="daily-service-bill-vb-field">
+                                <label>Apmt No.</label>
+                                <input class="form-control form-control-sm" value="@Model.Bill.ApartmentNo" readonly />
+                            </div>
+                            <div class="daily-service-bill-vb-field">
+                                <label>For From</label>
+                                @if (isView)
+                                {
+                                    <input class="form-control form-control-sm" value="@(Model.Bill.ForFromDate?.ToString("MM/dd/yyyy") ?? string.Empty)" readonly />
+                                }
+                                else
+                                {
+                                    <input asp-for="Bill.ForFromDate" type="date" class="form-control form-control-sm" />
+                                }
+                            </div>
+                            <div class="daily-service-bill-vb-field daily-service-bill-vb-vat-column daily-service-bill-vb-half-control">
+                                <label>VAT</label>
+                                <input id="billVat" class="form-control form-control-sm text-right" value="@Model.Bill.DisplayVNDAmountVAT.ToString("#,0.##")" readonly />
+                            </div>
+                        </div>
+                        <div class="daily-service-bill-vb-row">
+                            <div class="daily-service-bill-vb-field daily-service-bill-vb-span-2">
+                                <label>Cust Name:</label>
+                                <input class="form-control form-control-sm vni-font" value="@Model.Bill.CustomerName" readonly />
+                            </div>
+                            <div class="daily-service-bill-vb-field">
+                                <label>To Date</label>
+                                @if (isView)
+                                {
+                                    <input class="form-control form-control-sm" value="@(Model.Bill.ForToDate?.ToString("MM/dd/yyyy") ?? string.Empty)" readonly />
+                                }
+                                else
+                                {
+                                    <input asp-for="Bill.ForToDate" type="date" class="form-control form-control-sm" />
+                                }
+                            </div>
+                            <div class="daily-service-bill-vb-field daily-service-bill-vb-vat-column daily-service-bill-vb-half-control">
+                                <label>After VAT</label>
+                                <input id="billAfterVat" class="form-control form-control-sm text-right" value="@Model.Bill.DisplayVNDAmount.ToString("#,0.##")" readonly />
+                            </div>
+                        </div>
+                        <div class="daily-service-bill-vb-row">
+                            <div class="daily-service-bill-vb-field daily-service-bill-vb-span-2">
+                                <label>Company</label>
+                                <input class="form-control form-control-sm vni-font" value="@Model.Bill.CompanyName" readonly />
+                            </div>
+                            <div class="daily-service-bill-vb-field daily-service-bill-vb-right-span daily-service-bill-vb-wide-control">
+                                <label>Description</label>
+                                <input asp-for="Bill.Description" class="form-control form-control-sm vni-font" readonly="@isView" />
+                            </div>
+                        </div>
+                        <div class="daily-service-bill-vb-row">
+                            <div class="daily-service-bill-vb-field">
+                                <label>Paid Date:</label>
+                                <input class="form-control form-control-sm" value="@(Model.Bill.PaidDate?.ToString("MM/dd/yyyy") ?? string.Empty)" readonly />
+                            </div>
+                            <div class="daily-service-bill-vb-checks">
+                                <div class="custom-control custom-checkbox">
+                                    <input asp-for="Bill.IsPersonalPayment" class="custom-control-input" disabled="@isView" />
+                                    <label class="custom-control-label" asp-for="Bill.IsPersonalPayment">Is Personal</label>
+                                </div>
+                            </div>
+                            <div class="daily-service-bill-vb-field daily-service-bill-vb-right-span daily-service-bill-vb-wide-control">
+                                <label>Note:</label>
+                                <input asp-for="Bill.Note" class="form-control form-control-sm vni-font" readonly="@isView" />
+                            </div>
+                        </div>
+                        <div class="daily-service-bill-vb-row daily-service-bill-vb-row-last">
+                            <div class="daily-service-bill-vb-text daily-service-bill-vb-span-2">
+                                <span>Created Operator:</span>
+                                <strong>@Model.Bill.CreatedOperatorCode</strong>
+                                <span>@Model.Bill.CreatedOperatorName</span>
+                            </div>
                         </div>
                     </div>
                 </div>

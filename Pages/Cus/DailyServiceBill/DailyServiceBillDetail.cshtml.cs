@@ -124,7 +124,7 @@ WHERE DetailID = @DetailID
 
             var beforeVat = SumBillAmount(conn, trans, currentBill.BillID);
             var pctTax = currentBill.PctTax;
-            var vat = pctTax > 0 ? Math.Round(beforeVat / pctTax, 2) : 0;
+            var vat = pctTax > 0 ? Math.Round(beforeVat / 100 * pctTax, 2) : 0;
             var afterVat = Math.Round(beforeVat + vat, 0);
 
             using var billCmd = new SqlCommand(@"
@@ -388,6 +388,41 @@ public class DailyServiceBillHeader
     public decimal VNDAmountBefVAT { get; set; }
     public decimal VNDAmountVAT { get; set; }
     public decimal VNDAmount { get; set; }
+    public decimal DisplayVNDAmountVAT
+    {
+        get
+        {
+            if (VNDAmountVAT != 0)
+            {
+                return VNDAmountVAT;
+            }
+
+            var derivedVat = VNDAmount - VNDAmountBefVAT;
+            if (derivedVat > 0)
+            {
+                return derivedVat;
+            }
+
+            if (PctTax > 0 && VNDAmountBefVAT > 0)
+            {
+                return Math.Round(VNDAmountBefVAT / 100 * PctTax, 2);
+            }
+
+            return 0;
+        }
+    }
+    public decimal DisplayVNDAmount
+    {
+        get
+        {
+            if (VNDAmount != 0)
+            {
+                return VNDAmount;
+            }
+
+            return Math.Round(VNDAmountBefVAT + DisplayVNDAmountVAT, 0);
+        }
+    }
     public int BillStatus { get; set; }
     public string BillStatusName { get; set; } = string.Empty;
     public DateTime? PaidDate { get; set; }

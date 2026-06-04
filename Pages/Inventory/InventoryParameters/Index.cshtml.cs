@@ -282,7 +282,7 @@ WHERE KPGroupID = @KPGroupID;", conn);
         var worksheet = workbook.Worksheets.Add("Inventory Groups");
         var headers = new[]
         {
-            "STT",
+            "#",
             "Group Name",
             "Admin Group",
             "Department",

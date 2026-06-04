@@ -350,7 +350,7 @@ ORDER BY emp.EmployeeCode;", conn);
     {
         using var workbook = new XLWorkbook();
         var worksheet = workbook.Worksheets.Add("Inventory Group Members");
-        var headers = new[] { "STT", "Store Group", "Employee Code", "Employee Name", "Department", "Position", "Active" };
+        var headers = new[] { "#", "Store Group", "Employee Code", "Employee Name", "Department", "Position", "Active" };
 
         for (var col = 0; col < headers.Length; col++)
         {
