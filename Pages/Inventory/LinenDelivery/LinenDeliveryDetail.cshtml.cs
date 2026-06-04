@@ -1008,7 +1008,11 @@ SELECT dbo.SV_Bill.BillID,
        ISNULL(dbo.CM_Customer.CustomerName, '') + '(' + CAST(dbo.CM_Customer.CustomerID AS varchar(10)) + ')' AS Customer,
        ISNULL(dbo.SV_Bill.VNDAmountBefVAT, 0) AS VNDAmountBefVAT,
        ISNULL(dbo.SV_Bill.PctTax, 0) AS PctTax,
-       ISNULL(dbo.SV_Bill.VNDAmountVAT, 0) AS VNDAmountVAT,
+       CASE
+           WHEN ISNULL(dbo.SV_Bill.VNDAmountVAT, 0) <> 0 THEN ISNULL(dbo.SV_Bill.VNDAmountVAT, 0)
+           WHEN ISNULL(dbo.SV_Bill.VNDAmount, 0) <> 0 AND ISNULL(dbo.SV_Bill.VNDAmountBefVAT, 0) <> 0 THEN ISNULL(dbo.SV_Bill.VNDAmount, 0) - ISNULL(dbo.SV_Bill.VNDAmountBefVAT, 0)
+           ELSE 0
+       END AS VNDAmountVAT,
        ISNULL(dbo.SV_Bill.VNDAmount, 0) AS VNDAmount,
        ISNULL(dbo.SV_Bill.BillStatus, 0) AS BillStatus,
        ISNULL(dbo.SV_BillStatus.StatusName, '') AS BillStatusName
