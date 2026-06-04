@@ -139,7 +139,7 @@
                             </div>
                         </div>
                         <div class="daily-service-bill-vb-row daily-service-bill-vb-row-last">
-                            <div class="daily-service-bill-vb-text daily-service-bill-vb-span-2">
+                            <div class="daily-service-bill-vb-text daily-service-bill-vb-operator-text">
                                 <span>Created Operator:</span>
                                 <strong>@Model.Bill.CreatedOperatorCode</strong>
                                 <span>@Model.Bill.CreatedOperatorName</span>
@@ -192,7 +192,7 @@
                                             <input type="hidden" asp-for="DetailRows[i].BillNumber" />
                                             <input type="hidden" asp-for="DetailRows[i].ServiceItem" />
                                         </td>
-                                        <td>
+                                        <td class="vni-font">
                                             @Model.DetailRows[i].Unit
                                             <input type="hidden" asp-for="DetailRows[i].Unit" />
                                         </td>

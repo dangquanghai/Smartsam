@@ -124,7 +124,7 @@ WHERE DetailID = @DetailID
 
             var beforeVat = SumBillAmount(conn, trans, currentBill.BillID);
             var pctTax = currentBill.PctTax;
-            var vat = pctTax > 0 ? Math.Round(beforeVat / 100 * pctTax, 2) : 0;
+            var vat = pctTax > 0 ? Math.Round(beforeVat / pctTax, 2) : 0;
             var afterVat = Math.Round(beforeVat + vat, 0);
 
             using var billCmd = new SqlCommand(@"
@@ -405,7 +405,7 @@ public class DailyServiceBillHeader
 
             if (PctTax > 0 && VNDAmountBefVAT > 0)
             {
-                return Math.Round(VNDAmountBefVAT / 100 * PctTax, 2);
+                return Math.Round(VNDAmountBefVAT / PctTax, 2);
             }
 
             return 0;
