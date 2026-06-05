@@ -11,7 +11,7 @@ namespace SmartSam.Pages.Inventory.SpecialLaundryReport;
 
 public class IndexModel : BasePageModel
 {
-    private const int FunctionId = 161;
+    private const int FunctionId = 148;
     private static readonly DateTime DefaultFromDate = new DateTime(2019, 4, 1);
 
     private readonly ISecurityService _securityService;
