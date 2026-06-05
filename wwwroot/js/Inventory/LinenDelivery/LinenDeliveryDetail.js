@@ -62,6 +62,7 @@
     }
 
     function initializePage() {
+        initAutoDismissAlerts();
         bindFormSubmit();
         bindGridEvents();
         bindHeaderState();
@@ -79,6 +80,16 @@
         initializeLocationSelect2(document);
         recalcAllRows();
         pageDirty = false;
+    }
+
+    function initAutoDismissAlerts() {
+        $('.js-auto-dismiss-alert').each(function () {
+            const $alert = $(this);
+            const timeout = parseInt($alert.data('timeout'), 10) || 10000;
+            setTimeout(function () {
+                $alert.alert('close');
+            }, timeout);
+        });
     }
 
     function bindFormSubmit() {
