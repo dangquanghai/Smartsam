@@ -15,8 +15,8 @@ namespace SmartSam.Pages.Inventory.ItemChecking;
 public class ItemCheckingDetailModel : BasePageModel
 {
     private const int FunctionId = 151;
-    private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
-    // private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
+    // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
+    private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
     private const string NotifyFontFamily = "'VNI-WIN', 'VNI-Times', 'VNI-Helve', sans-serif";
     private readonly PermissionService _permissionService;
     private static readonly JsonSerializerOptions JsonCaseInsensitiveOptions = new() { PropertyNameCaseInsensitive = true };
