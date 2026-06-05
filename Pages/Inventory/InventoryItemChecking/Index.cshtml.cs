@@ -36,6 +36,9 @@ public class IndexModel : BasePageModel
     public int PageEnd => TotalRecords == 0 ? 0 : Math.Min(Filter.Page * Filter.PageSize, TotalRecords);
     public bool HasPreviousPage => Filter.Page > 1;
     public bool HasNextPage => Filter.Page < TotalPages;
+    public bool CanChangeDepartmentFilter => IsAdminRole() || _userScope.StoreGroupId == 1;
+    [TempData] public string AlertMessage { get; set; } = string.Empty;
+    [TempData] public string AlertType { get; set; } = string.Empty;
 
     public IActionResult OnGet()
     {
@@ -52,6 +55,7 @@ public class IndexModel : BasePageModel
     {
         PagePerm = GetUserPermissions();
         if (!PagePerm.HasPermission(PermissionViewList)) return Redirect("/");
+        _userScope = LoadUserScope();
         NormalizeFilter();
         LoadRows();
         using var wb = new XLWorkbook();
@@ -79,9 +83,18 @@ public class IndexModel : BasePageModel
     private void LoadLookups()
     {
         using var conn = OpenConnection();
-        using var depCmd = new SqlCommand("SELECT DeptID, DeptName FROM dbo.MS_Department ORDER BY DeptName", conn);
+        using var depCmd = new SqlCommand(CanChangeDepartmentFilter
+            ? "SELECT DeptID, DeptName FROM dbo.MS_Department ORDER BY DeptName"
+            : "SELECT DeptID, DeptName FROM dbo.MS_Department WHERE DeptID=@DeptID ORDER BY DeptName", conn);
+        if (!CanChangeDepartmentFilter)
+        {
+            depCmd.Parameters.Add("@DeptID", SqlDbType.Int).Value = Filter.DeptId ?? -1;
+        }
         using var depRd = depCmd.ExecuteReader();
-        Departments.Add(new SelectListItem("--- All ---", ""));
+        if (CanChangeDepartmentFilter)
+        {
+            Departments.Add(new SelectListItem("--- All ---", ""));
+        }
         while (depRd.Read()) Departments.Add(new SelectListItem(Convert.ToString(depRd["DeptName"]) ?? "", Convert.ToString(depRd["DeptID"]) ?? ""));
         depRd.Close();
         using var stCmd = new SqlCommand("SELECT CheckingVoucherStatusID, CheckingVoucherStatusName FROM dbo.INV_CheckingVoucherStatus ORDER BY CheckingVoucherStatusID", conn);
@@ -156,6 +169,25 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn);
         Filter.CheckedTo ??= DateTime.Today;
         Filter.ApprovedFrom ??= DateTime.Today.AddDays(-30);
         Filter.ApprovedTo ??= DateTime.Today;
+        if (!Filter.StatusId.HasValue && !Request.Query.ContainsKey("Filter.StatusId"))
+        {
+            if ((CanAdd || CanEdit) && _userScope.IsStoreKeeper)
+            {
+                Filter.StatusId = 3;
+            }
+            else if (_userScope.IsHeadDept)
+            {
+                Filter.StatusId = 2;
+            }
+            else
+            {
+                Filter.StatusId = 1;
+            }
+        }
+        if (!CanChangeDepartmentFilter)
+        {
+            Filter.DeptId = _userScope.DeptId ?? -1;
+        }
     }
     private void BindFilterParams(SqlCommand cmd)
     {
@@ -188,9 +220,13 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn);
     public bool CanEditRow(int statusId)
     {
         if (!PagePerm.HasPermission(PermissionEdit)) return false;
+        return statusId == 1 && _userScope.IsStoreKeeper;
+    }
+    public bool CanApproveRow(int statusId)
+    {
         return statusId switch
         {
-            1 => true,
+            1 => !_userScope.IsStoreKeeper && !_userScope.IsHeadDept,
             2 => _userScope.IsHeadDept,
             _ => false
         };
@@ -201,7 +237,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn);
         var employeeCode = User.Identity?.Name;
         if (string.IsNullOrWhiteSpace(employeeCode)) return scope;
         using var conn = OpenConnection();
-        using var cmd = new SqlCommand(@"SELECT TOP 1 ISNULL(HeadDept,0) AS IsHeadDept, ISNULL(IsAdminUser,0) AS IsAdminUser, DeptID FROM dbo.MS_Employee WHERE EmployeeCode=@EmployeeCode", conn);
+        using var cmd = new SqlCommand(@"SELECT TOP 1 ISNULL(HeadDept,0) AS IsHeadDept, ISNULL(IsAdminUser,0) AS IsAdminUser, DeptID, StoreGR, ISNULL(IsStoreKeeper,0) AS IsStoreKeeper FROM dbo.MS_Employee WHERE EmployeeCode=@EmployeeCode", conn);
         cmd.Parameters.Add("@EmployeeCode", SqlDbType.VarChar, 10).Value = employeeCode.Trim();
         using var rd = cmd.ExecuteReader();
         if (rd.Read())
@@ -209,6 +245,8 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn);
             scope.IsHeadDept = !rd.IsDBNull(0) && Convert.ToInt32(rd[0]) == 1;
             scope.IsAdminUser = !rd.IsDBNull(1) && Convert.ToBoolean(rd[1]);
             scope.DeptId = rd.IsDBNull(2) ? null : Convert.ToInt32(rd[2]);
+            scope.StoreGroupId = rd.IsDBNull(3) ? null : Convert.ToInt32(rd[3]);
+            scope.IsStoreKeeper = !rd.IsDBNull(4) && Convert.ToBoolean(rd[4]);
         }
         return scope;
     }
@@ -247,4 +285,6 @@ public class EmployeeItemCheckingScope
     public bool IsHeadDept { get; set; }
     public bool IsAdminUser { get; set; }
     public int? DeptId { get; set; }
+    public int? StoreGroupId { get; set; }
+    public bool IsStoreKeeper { get; set; }
 }

@@ -15,8 +15,8 @@ namespace SmartSam.Pages.Inventory.ItemChecking;
 public class ItemCheckingDetailModel : BasePageModel
 {
     private const int FunctionId = 151;
-    // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
-    private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
+    private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
+    // private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
     private const string NotifyFontFamily = "'VNI-WIN', 'VNI-Times', 'VNI-Helve', sans-serif";
     private readonly PermissionService _permissionService;
     private static readonly JsonSerializerOptions JsonCaseInsensitiveOptions = new() { PropertyNameCaseInsensitive = true };
@@ -27,6 +27,7 @@ public class ItemCheckingDetailModel : BasePageModel
     [BindProperty(SupportsGet = true)] public string Mode { get; set; } = "view";
     [BindProperty] public ItemCheckingHeaderVm Header { get; set; } = new();
     [BindProperty] public string StagedItemsJson { get; set; } = "[]";
+    [BindProperty] public bool SendCreateCheckMail { get; set; }
     public string Message { get; set; } = string.Empty;
     public string MessageType { get; set; } = "info";
     [BindProperty] public List<ItemCheckingDetailRowVm> DetailRows { get; set; } = new();
@@ -34,7 +35,10 @@ public class ItemCheckingDetailModel : BasePageModel
     public List<SelectListItem> Statuses { get; set; } = new();
     public List<SelectListItem> Pos { get; set; } = new();
     public List<SelectListItem> Employees { get; set; } = new();
-    public bool IsReadOnly => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
+    public List<SelectListItem> CheckByEmployees { get; set; } = new();
+    public bool LockDeptCheck { get; set; }
+    public bool IsApprovedMode => string.Equals(Mode, "approved", StringComparison.OrdinalIgnoreCase);
+    public bool IsReadOnly => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase) || IsApprovedMode;
     public string ActionCaption { get; set; } = "Save";
     public bool CanDisapprove { get; set; }
     public bool CanAction { get; set; }
@@ -46,15 +50,24 @@ public class ItemCheckingDetailModel : BasePageModel
     {
         PagePerm = GetUserPermissions();
         if (!PagePerm.HasPermission(2) && !PagePerm.HasPermission(3) && !PagePerm.HasPermission(4)) return Redirect("/");
-        LoadLookups();
         if (Id > 0)
         {
             LoadMaster(Id);
+            ApplyDeptCheckScope();
+            LoadLookups();
+            if (!CanAccessVoucherDepartment(Header.DeptChecked))
+            {
+                TempData["AlertMessage"] = "You do not have permission to access this checking voucher.";
+                TempData["AlertType"] = "warning";
+                return RedirectToPage("./Index");
+            }
             LoadDetail(Id);
         }
         else
         {
             InitData();
+            ApplyDeptCheckScope();
+            LoadLookups();
         }
         ComputeActionUi();
         return Page();
@@ -69,7 +82,8 @@ dbo.GetQuantityFromPOMinusInAllChecking(@POID,a1.ItemID,a1.MRDetailID) AS Quanti
 a1.UnitPrice, a1.Note, a1.MRDetailID
 FROM dbo.PC_PODetail a1
 INNER JOIN dbo.INV_ItemList a2 ON a1.ItemID = a2.ItemID
-WHERE a1.POID = @POID", conn);
+WHERE a1.POID = @POID
+  AND dbo.GetQuantityFromPOMinusInAllChecking(@POID,a1.ItemID,a1.MRDetailID) > 0", conn);
         cmd.Parameters.Add("@POID", SqlDbType.Int).Value = poid;
         using var rd = cmd.ExecuteReader();
         var list = new List<object>();
@@ -86,6 +100,21 @@ WHERE a1.POID = @POID", conn);
             });
         }
         return new JsonResult(list);
+    }
+
+    public IActionResult OnGetCheckUsers(int? deptId)
+    {
+        ApplyDeptCheckScope();
+        if (LockDeptCheck)
+        {
+            deptId = Header.DeptChecked;
+        }
+        if (!CanAccessVoucherDepartment(deptId)) return new JsonResult(Array.Empty<object>());
+        var items = LoadCheckByEmployees(deptId)
+            .Where(x => !string.IsNullOrWhiteSpace(x.Value))
+            .Select(x => new { value = x.Value, text = x.Text })
+            .ToList();
+        return new JsonResult(items);
     }
 
     public IActionResult OnPostSaveSelectedItems([FromBody] SaveSelectedItemsRequest request)
@@ -134,13 +163,20 @@ WHERE a1.POID = @POID", conn);
     public IActionResult OnPostAction()
     {
         PagePerm = GetUserPermissions();
+        ApplyDeptCheckScope();
         var createdInThisAction = false;
         var currentStatus = Header.StatusId;
         if (Header.CheckingId > 0)
         {
+            if (!CanAccessCheckingVoucher(Header.CheckingId)) return RedirectNoVoucherAccess();
             using var statusConn = OpenConnection();
             currentStatus = GetCurrentStatus(statusConn, Header.CheckingId);
         }
+        var scope = LoadCurrentEmployeeScope();
+        var isStoreman = IsAdminRole() || (scope.IsStoreKeeper && !scope.IsHeadDept);
+        var isDepartmentUser = !scope.IsStoreKeeper && !scope.IsHeadDept;
+        var isDepartmentHead = scope.IsHeadDept;
+        if ((currentStatus == 1 && Header.CheckingId <= 0 && !isStoreman) || (currentStatus == 1 && Header.CheckingId > 0 && !isDepartmentUser) || (currentStatus == 2 && !isDepartmentHead)) return RedirectNoVoucherAccess();
         if (!Header.POID.HasValue || Header.POID.Value <= 0)
         {
             LoadLookups();
@@ -165,6 +201,10 @@ WHERE a1.POID = @POID", conn);
             Header.CheckingId = createdCheckingId;
             createdInThisAction = true;
             StagedItemsJson = "[]";
+            if (SendCreateCheckMail)
+            {
+                _ = TryQueueNotifyCheckedUserAsync(createdCheckingId, Header.DeptChecked, Header.NotifyCheckedBy);
+            }
         }
 
         if (currentStatus == 1 && !createdInThisAction && HasStagedItems())
@@ -180,7 +220,7 @@ WHERE a1.POID = @POID", conn);
             }
         }
 
-        if (currentStatus == 1 && !createdInThisAction && Header.CheckingId > 0 && DetailRows.Count > 0)
+        if (currentStatus == 1 && !createdInThisAction && Header.CheckingId > 0 && DetailRows.Count > 0 && isStoreman)
         {
             if (!TryUpdateExistingDetailRows(Header.CheckingId, out var updateErr))
             {
@@ -220,6 +260,13 @@ WHERE CheckingID=@CheckingID";
     public IActionResult OnPostSave()
     {
         PagePerm = GetUserPermissions();
+        ApplyDeptCheckScope();
+        if (Header.CheckingId > 0 && !CanAccessCheckingVoucher(Header.CheckingId)) return RedirectNoVoucherAccess();
+
+        var scope = LoadCurrentEmployeeScope();
+        var isStoreman = IsAdminRole() || (scope.IsStoreKeeper && !scope.IsHeadDept);
+        if (!isStoreman) return RedirectNoVoucherAccess();
+
         if (Header.StatusId >= 2)
         {
             LoadLookups();
@@ -244,7 +291,7 @@ WHERE CheckingID=@CheckingID";
 
         if (Header.CheckingId <= 0)
         {
-            if (!TryPersistStagedItems(out _, out var errMsg))
+            if (!TryPersistStagedItems(out var createdCheckingId, out var errMsg))
             {
                 LoadLookups();
                 Header.CreatedDate = Header.CreatedDate == default ? DateTime.Now : Header.CreatedDate;
@@ -254,6 +301,10 @@ WHERE CheckingID=@CheckingID";
                 Message = errMsg;
                 MessageType = "error";
                 return Page();
+            }
+            if (SendCreateCheckMail)
+            {
+                _ = TryQueueNotifyCheckedUserAsync(createdCheckingId, Header.DeptChecked, Header.NotifyCheckedBy);
             }
             return RedirectToPage("./Index");
         }
@@ -296,6 +347,10 @@ WHERE CheckingID=@CheckingID", conn);
         cmd.Parameters.Add("@Result", SqlDbType.NVarChar, 100).Value = string.IsNullOrWhiteSpace(Header.Result) ? string.Empty : Header.Result.Trim();
         cmd.Parameters.Add("@CheckingID", SqlDbType.Int).Value = Header.CheckingId;
         cmd.ExecuteNonQuery();
+        if (SendCreateCheckMail)
+        {
+            _ = TryQueueNotifyCheckedUserAsync(Header.CheckingId, Header.DeptChecked, Header.NotifyCheckedBy);
+        }
         return RedirectToPage("./Index");
     }
 
@@ -408,6 +463,11 @@ VALUES(@CheckingID,@ItemID,@QuantityCheck,@QuantityPassed,@Price,@Amount,@Notes,
             return false;
         }
 
+        var scope = LoadCurrentEmployeeScope();
+
+
+
+
         if (!Header.POID.HasValue || Header.POID.Value <= 0) { errorMessage = "Please select a PO."; return false; }
         if (!Header.DeptChecked.HasValue || Header.DeptChecked.Value <= 0) { errorMessage = "Please select Department to check item."; return false; }
         if (stagedItems.Count == 0) { errorMessage = "Please add at least one item from PO."; return false; }
@@ -454,6 +514,10 @@ VALUES(@CheckingID,@ItemID,@QuantityCheck,@QuantityPassed,@Price,@Amount,@Notes,
 
     public IActionResult OnPostDisapprove()
     {
+        PagePerm = GetUserPermissions();
+        if (Header.CheckingId > 0 && !CanAccessCheckingVoucher(Header.CheckingId)) return RedirectNoVoucherAccess();
+        var scope = LoadCurrentEmployeeScope();
+        if (!scope.IsHeadDept && !IsAdminRole()) return RedirectNoVoucherAccess();
         if (Header.CheckingId > 0)
         {
             using var conn = OpenConnection();
@@ -469,25 +533,27 @@ VALUES(@CheckingID,@ItemID,@QuantityCheck,@QuantityPassed,@Price,@Amount,@Notes,
         }
         return RedirectToPage("./Index");
     }
-
     private void ComputeActionUi()
     {
-        CanAction = !IsReadOnly && (Mode == "add" || Mode == "edit");
-        CanSaveDraft = !IsReadOnly && (Mode == "add" || Mode == "edit") && Header.StatusId == 1;
+        var scope = LoadCurrentEmployeeScope();
+        var isStoreman = IsAdminRole() || (scope.IsStoreKeeper && !scope.IsHeadDept);
+        var isDepartmentUser = !scope.IsStoreKeeper && !scope.IsHeadDept;
+        var isDepartmentHead = scope.IsHeadDept;
+        CanAction = !string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase) && (Mode == "add" || Mode == "edit" || IsApprovedMode);
+        CanSaveDraft = isStoreman && !IsReadOnly && (Mode == "add" || Mode == "edit") && Header.StatusId == 1;
         CanCheckAction = false;
         CanApproveAction = false;
         CanDisapprove = false;
         if (Header.StatusId == 1)
         {
             ActionCaption = Mode == "add" ? "Save" : "Check";
-            CanCheckAction = string.Equals(Mode, "edit", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(Mode, "add", StringComparison.OrdinalIgnoreCase);
+            CanCheckAction = isDepartmentUser && (string.Equals(Mode, "edit", StringComparison.OrdinalIgnoreCase) || IsApprovedMode);
         }
         else if (Header.StatusId == 2)
         {
             ActionCaption = "Approve";
-            CanApproveAction = IsHeadDept();
-            CanDisapprove = IsHeadDept();
+            CanApproveAction = isDepartmentHead;
+            CanDisapprove = isDepartmentHead;
         }
         else if (Header.StatusId == 3 || Header.StatusId == 4 || Header.StatusId == 5)
         {
@@ -498,10 +564,64 @@ VALUES(@CheckingID,@ItemID,@QuantityCheck,@QuantityPassed,@Price,@Amount,@Notes,
 
     private void LoadLookups()
     {
-        Departments = LoadListFromSql("SELECT DeptID, DeptName FROM dbo.MS_Department ORDER BY DeptName", "DeptID", "DeptName");
+        var scope = LoadCurrentEmployeeScope();
+        Departments = LoadDepartmentLookup(IsAdminRole() || scope.StoreGroupId == 1 ? null : scope.DeptId);
+        if ((!Header.DeptChecked.HasValue || Header.DeptChecked.Value <= 0) && Departments.Count > 0 && int.TryParse(Departments[0].Value, out var firstDeptId))
+        {
+            Header.DeptChecked = firstDeptId;
+        }
         Statuses = LoadListFromSql("SELECT CheckingVoucherStatusID, CheckingVoucherStatusName FROM dbo.INV_CheckingVoucherStatus ORDER BY CheckingVoucherStatusID", "CheckingVoucherStatusID", "CheckingVoucherStatusName");
         Employees = LoadListFromSql("SELECT EmployeeID, EmployeeName FROM dbo.MS_Employee ORDER BY EmployeeName", "EmployeeID", "EmployeeName");
+        CheckByEmployees = LoadCheckByEmployees(Header.DeptChecked);
         Pos = LoadPoList();
+    }
+
+    private List<SelectListItem> LoadDepartmentLookup(int? deptId)
+    {
+        var items = new List<SelectListItem>();
+        using var conn = OpenConnection();
+        using var cmd = new SqlCommand(deptId.HasValue
+            ? "SELECT DeptID, DeptName FROM dbo.MS_Department WHERE DeptID=@DeptID ORDER BY DeptName"
+            : "SELECT DeptID, DeptName FROM dbo.MS_Department ORDER BY DeptName", conn);
+        if (deptId.HasValue) cmd.Parameters.Add("@DeptID", SqlDbType.Int).Value = deptId.Value;
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            items.Add(new SelectListItem(Convert.ToString(rd["DeptName"]) ?? string.Empty, Convert.ToString(rd["DeptID"]) ?? string.Empty));
+        }
+        return items;
+    }
+
+    private List<SelectListItem> LoadCheckByEmployees(int? deptId)
+    {
+        var items = new List<SelectListItem> { new("--- Select ---", string.Empty) };
+        if (!deptId.HasValue || deptId.Value <= 0) return items;
+        using var conn = OpenConnection();
+        using var cmd = new SqlCommand(@"SELECT EmployeeID, EmployeeName
+FROM dbo.MS_Employee
+WHERE DeptID=@DeptID
+  AND ISNULL(IsActive,0)=1
+  AND ISNULL(IsStoreKeeper,0)<>1
+  AND ISNULL(HeadDept,0)<>1
+  AND EmployeeCode NOT LIKE '%X'
+ORDER BY EmployeeName", conn);
+        cmd.Parameters.Add("@DeptID", SqlDbType.Int).Value = deptId.Value;
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            items.Add(new SelectListItem(Convert.ToString(rd["EmployeeName"]) ?? string.Empty, Convert.ToString(rd["EmployeeID"]) ?? string.Empty));
+        }
+        return items;
+    }
+
+    private void ApplyDeptCheckScope()
+    {
+        var scope = LoadCurrentEmployeeScope();
+        LockDeptCheck = !IsAdminRole() && scope.StoreGroupId != 1;
+        if (LockDeptCheck && scope.DeptId.HasValue)
+        {
+            Header.DeptChecked = scope.DeptId.Value;
+        }
     }
 
     private List<SelectListItem> LoadPoList()
@@ -509,14 +629,20 @@ VALUES(@CheckingID,@ItemID,@QuantityCheck,@QuantityPassed,@Price,@Amount,@Notes,
         var items = new List<SelectListItem>();
         using var conn = OpenConnection();
         using var cmd = new SqlCommand(@"SELECT p.POID, p.PONo,
-CASE WHEN EXISTS (
-    SELECT 1
-    FROM dbo.PC_PODetail d
-    WHERE d.POID = p.POID
-      AND dbo.GetQuantityFromPOMinusInAllChecking(p.POID, d.ItemID, d.MRDetailID) > 0
-) THEN 0 ELSE 1 END AS IsExhausted
+       CASE WHEN p.POID=@CurrentPOID THEN 1 ELSE 0 END AS IsCurrentPO
 FROM dbo.PC_PO p
+WHERE (
+        p.StatusID IN (3,4,6)
+        AND EXISTS (
+            SELECT 1
+            FROM dbo.PC_PODetail d
+            WHERE d.POID = p.POID
+              AND dbo.GetQuantityFromPOMinusInAllChecking(p.POID, d.ItemID, d.MRDetailID) > 0
+        )
+      )
+   OR p.POID=@CurrentPOID
 ORDER BY p.PODate DESC", conn);
+        cmd.Parameters.Add("@CurrentPOID", SqlDbType.Int).Value = Header.POID.HasValue && Header.POID > 0 ? Header.POID.Value : DBNull.Value;
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
@@ -524,7 +650,7 @@ ORDER BY p.PODate DESC", conn);
             {
                 Value = Convert.ToString(rd["POID"]) ?? string.Empty,
                 Text = Convert.ToString(rd["PONo"]) ?? string.Empty,
-                Disabled = !rd.IsDBNull(2) && Convert.ToInt32(rd["IsExhausted"]) == 1
+                Disabled = false
             });
         }
         return items;
@@ -539,13 +665,13 @@ ORDER BY p.PODate DESC", conn);
     private void LoadMaster(int checkingId)
     {
         using var conn = OpenConnection();
-        using var cmd = new SqlCommand("SELECT CheckingID, CreateDate, CreatedBy, POID, ExpectDate, DeptChecked, StatusID, MRInfor, CheckingMethod, Result, CheckedBy, CheckedDate, ApprovedBy, ApprovedDate, FlowNo FROM dbo.INV_RecevingChekingVoucher WHERE CheckingID=@CheckingID", conn);
+        using var cmd = new SqlCommand("SELECT CheckingID, CreateDate, CreatedBy, POID, ExpectDate, DeptChecked, StatusID, MRInfor, CheckingMethod, Result, CheckedBy, CheckedDate, ApprovedBy, ApprovedDate FROM dbo.INV_RecevingChekingVoucher WHERE CheckingID=@CheckingID", conn);
         cmd.Parameters.Add("@CheckingID", SqlDbType.Int).Value = checkingId;
         using var rd = cmd.ExecuteReader();
         if (!rd.Read()) return;
         Header.CheckingId = checkingId;
         Header.CreatedDate = rd.IsDBNull(1) ? DateTime.Now : Convert.ToDateTime(rd[1]);
-        Header.CreatedBy = rd.IsDBNull(2) ? null : Convert.ToInt32(rd[2]);
+        Header.CreatedBy = ResolveEmployeeId(rd.IsDBNull(2) ? null : rd[2]);
         Header.POID = rd.IsDBNull(3) ? null : Convert.ToInt32(rd[3]);
         Header.ExpectDate = rd.IsDBNull(4) ? DateTime.Now : Convert.ToDateTime(rd[4]);
         Header.DeptChecked = rd.IsDBNull(5) ? null : Convert.ToInt32(rd[5]);
@@ -557,7 +683,21 @@ ORDER BY p.PODate DESC", conn);
         Header.CheckedDate = rd.IsDBNull(11) ? null : Convert.ToDateTime(rd[11]);
         Header.ApprovedBy = rd.IsDBNull(12) ? null : Convert.ToInt32(rd[12]);
         Header.ApprovedDate = rd.IsDBNull(13) ? null : Convert.ToDateTime(rd[13]);
-        Header.FlowNo = NormalizeLegacyText(rd.IsDBNull(14) ? "" : Convert.ToString(rd[14]) ?? "");
+        Header.NotifyCheckedBy = Header.CheckedBy;
+    }
+    private int? ResolveEmployeeId(object? value)
+    {
+        if (value == null || value == DBNull.Value) return null;
+        if (int.TryParse(Convert.ToString(value)?.Trim(), out var employeeId)) return employeeId;
+
+        var employeeCode = Convert.ToString(value)?.Trim();
+        if (string.IsNullOrWhiteSpace(employeeCode)) return null;
+
+        using var conn = OpenConnection();
+        using var cmd = new SqlCommand("SELECT TOP 1 EmployeeID FROM dbo.MS_Employee WHERE LTRIM(RTRIM(EmployeeCode))=@EmployeeCode", conn);
+        cmd.Parameters.Add("@EmployeeCode", SqlDbType.VarChar, 50).Value = employeeCode;
+        var result = cmd.ExecuteScalar();
+        return result == null || result == DBNull.Value ? null : Convert.ToInt32(result);
     }
     private void LoadDetail(int checkingId)
     {
@@ -674,7 +814,7 @@ WHERE d.POID=@POID
         if (string.IsNullOrWhiteSpace(senderEmail) || string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(mailServer) || mailPort <= 0)
             return "Email settings missing.";
 
-        var detailUrl = Url.Page("/Inventory/InventoryItemChecking/ItemCheckingDetail", values: new { id = checkingId, mode = "edit" });
+        var detailUrl = Url.Page("/Inventory/InventoryItemChecking/ItemCheckingDetail", values: new { id = checkingId, mode = "approved" });
         var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl) ? string.Empty : $"{Request.Scheme}://{Request.Host}{detailUrl}";
         var deptName = GetDepartmentName(deptId.Value);
         var subject = ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve checking ID {checkingId}");
@@ -712,6 +852,98 @@ WHERE d.POID=@POID
         using var cmd = new SqlCommand(@"SELECT DISTINCT LTRIM(RTRIM(TheEmail)) AS Email, LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode, LTRIM(RTRIM(EmployeeName)) AS EmployeeName, LTRIM(RTRIM(ISNULL(Title, ''))) AS Title
 FROM dbo.MS_Employee
 WHERE HeadDept = 1 AND DeptID = @DeptID AND ISNULL(IsActive,0)=1 AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> '' AND EmployeeCode NOT LIKE '%X'", conn);
+        cmd.Parameters.Add("@DeptID", SqlDbType.Int).Value = deptId;
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            rows.Add(new ItemCheckingNotifyRecipient
+            {
+                Email = Convert.ToString(rd["Email"])?.Trim() ?? string.Empty,
+                EmployeeCode = Convert.ToString(rd["EmployeeCode"])?.Trim() ?? string.Empty,
+                EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty,
+                Title = Convert.ToString(rd["Title"])?.Trim() ?? string.Empty
+            });
+        }
+        return rows;
+    }
+
+    private async Task<string?> TryQueueNotifyCheckedUserAsync(int checkingId, int? deptId, int? checkedBy)
+    {
+        if (!deptId.HasValue || deptId.Value <= 0) return "Department not found.";
+        var recipients = checkedBy.HasValue && checkedBy.Value > 0
+            ? GetCheckedUserRecipientOrInventoryControl(deptId.Value, checkedBy.Value)
+            : GetInventoryControlRecipients(deptId.Value);
+        if (recipients.Count == 0) return "No checking email recipients found.";
+        var senderEmail = _config.GetValue<string>("EmailSettings:SenderEmail") ?? string.Empty;
+        var password = _config.GetValue<string>("EmailSettings:Password") ?? string.Empty;
+        var mailServer = _config.GetValue<string>("EmailSettings:MailServer") ?? string.Empty;
+        var mailPort = _config.GetValue<int?>("EmailSettings:MailPort") ?? 0;
+        if (string.IsNullOrWhiteSpace(senderEmail) || string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(mailServer) || mailPort <= 0)
+            return "Email settings missing.";
+
+        var detailUrl = Url.Page("/Inventory/InventoryItemChecking/ItemCheckingDetail", values: new { id = checkingId, mode = "approved" });
+        var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl) ? string.Empty : $"{Request.Scheme}://{Request.Host}{detailUrl}";
+        var deptName = GetDepartmentName(deptId.Value);
+        var subject = ApplyMailSubjectPrefix($"[Inventory Item Checking] Please check checking ID {checkingId}");
+        var body = $@"
+<p>Dear {{RECIPIENT_LABEL}},</p>
+<p>A receiving checking voucher is waiting for your checking.</p>
+<ul>
+    <li>Checking ID: <b>{checkingId}</b></li>
+    <li>Department: <b>{WebUtility.HtmlEncode(deptName)}</b></li>
+    <li>Date: <b>{DateTime.Now.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)}</b></li>
+</ul>
+<p><b>Click Here to Check:</b> <a href='{WebUtility.HtmlEncode(absoluteUrl)}'>Open checking voucher</a></p>
+<p>Best regards,<br/>SmartSam System</p>";
+        body = WrapNotifyMessageBody(body);
+        var htmlBody = EmailTemplateHelper.WrapInNotifyTemplate("INVENTORY ITEM CHECKING", "#007bff", DateTime.Now, body);
+        await SendNotifyEmailAsync(new ItemCheckingNotifyRequest
+        {
+            SenderEmail = senderEmail,
+            Password = password,
+            MailServer = mailServer,
+            MailPort = mailPort,
+            Subject = subject,
+            HtmlBody = htmlBody,
+            RecipientDetails = recipients,
+            DefaultRecipientLabel = string.Join(", ", recipients.Select(BuildRecipientDisplayName)),
+            SendIndividually = true
+        });
+        return null;
+    }
+
+    private List<ItemCheckingNotifyRecipient> GetCheckedUserRecipientOrInventoryControl(int deptId, int employeeId)
+    {
+        var recipient = GetEmployeeMailRecipient(employeeId, deptId);
+        return recipient == null ? GetInventoryControlRecipients(deptId) : new List<ItemCheckingNotifyRecipient> { recipient };
+    }
+
+    private ItemCheckingNotifyRecipient? GetEmployeeMailRecipient(int employeeId, int deptId)
+    {
+        using var conn = OpenConnection();
+        using var cmd = new SqlCommand(@"SELECT TOP 1 LTRIM(RTRIM(TheEmail)) AS Email, LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode, LTRIM(RTRIM(EmployeeName)) AS EmployeeName, LTRIM(RTRIM(ISNULL(Title, ''))) AS Title
+FROM dbo.MS_Employee
+WHERE EmployeeID=@EmployeeID AND DeptID=@DeptID AND ISNULL(IsActive,0)=1 AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> '' AND EmployeeCode NOT LIKE '%X'", conn);
+        cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId;
+        cmd.Parameters.Add("@DeptID", SqlDbType.Int).Value = deptId;
+        using var rd = cmd.ExecuteReader();
+        if (!rd.Read()) return null;
+        return new ItemCheckingNotifyRecipient
+        {
+            Email = Convert.ToString(rd["Email"])?.Trim() ?? string.Empty,
+            EmployeeCode = Convert.ToString(rd["EmployeeCode"])?.Trim() ?? string.Empty,
+            EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty,
+            Title = Convert.ToString(rd["Title"])?.Trim() ?? string.Empty
+        };
+    }
+
+    private List<ItemCheckingNotifyRecipient> GetInventoryControlRecipients(int deptId)
+    {
+        var rows = new List<ItemCheckingNotifyRecipient>();
+        using var conn = OpenConnection();
+        using var cmd = new SqlCommand(@"SELECT DISTINCT LTRIM(RTRIM(TheEmail)) AS Email, LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode, LTRIM(RTRIM(EmployeeName)) AS EmployeeName, LTRIM(RTRIM(ISNULL(Title, ''))) AS Title
+FROM dbo.MS_Employee
+WHERE DeptID=@DeptID AND ISNULL(IsInventoryControlInDep,0)=1 AND ISNULL(IsActive,0)=1 AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> '' AND EmployeeCode NOT LIKE '%X'", conn);
         cmd.Parameters.Add("@DeptID", SqlDbType.Int).Value = deptId;
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
@@ -788,10 +1020,59 @@ WHERE HeadDept = 1 AND DeptID = @DeptID AND ISNULL(IsActive,0)=1 AND ISNULL(LTRI
             ? employeeName
             : $"{employeeName} ({recipient.EmployeeCode})";
     }
+    private IActionResult RedirectNoVoucherAccess()
+    {
+        TempData["AlertMessage"] = "You do not have permission to access this checking voucher.";
+        TempData["AlertType"] = "warning";
+        return RedirectToPage("./Index");
+    }
+    private bool CanAccessCheckingVoucher(int checkingId)
+    {
+        if (checkingId <= 0 || IsAdminRole()) return true;
+        using var conn = OpenConnection();
+        using var cmd = new SqlCommand("SELECT TOP 1 DeptChecked FROM dbo.INV_RecevingChekingVoucher WHERE CheckingID=@CheckingID", conn);
+        cmd.Parameters.Add("@CheckingID", SqlDbType.Int).Value = checkingId;
+        var result = cmd.ExecuteScalar();
+        var deptChecked = result == null || result == DBNull.Value ? (int?)null : Convert.ToInt32(result);
+        return CanAccessVoucherDepartment(deptChecked);
+    }
+    private bool CanAccessVoucherDepartment(int? deptChecked)
+    {
+        if (IsAdminRole()) return true;
+        var scope = LoadCurrentEmployeeScope();
+        if (scope.StoreGroupId == 1) return true;
+        return scope.DeptId.HasValue && deptChecked.HasValue && scope.DeptId.Value == deptChecked.Value;
+    }
+    private ItemCheckingEmployeeScope LoadCurrentEmployeeScope()
+    {
+        var scope = new ItemCheckingEmployeeScope();
+        var employeeCode = User.Identity?.Name;
+        if (string.IsNullOrWhiteSpace(employeeCode)) return scope;
+        using var conn = OpenConnection();
+        using var cmd = new SqlCommand("SELECT TOP 1 DeptID, StoreGR, ISNULL(IsStoreKeeper,0) AS IsStoreKeeper, ISNULL(HeadDept,0) AS HeadDept FROM dbo.MS_Employee WHERE EmployeeCode=@EmployeeCode", conn);
+        cmd.Parameters.Add("@EmployeeCode", SqlDbType.VarChar, 10).Value = employeeCode.Trim();
+        using var rd = cmd.ExecuteReader();
+        if (rd.Read())
+        {
+            scope.DeptId = rd.IsDBNull(0) ? null : Convert.ToInt32(rd[0]);
+            scope.StoreGroupId = rd.IsDBNull(1) ? null : Convert.ToInt32(rd[1]);
+            scope.IsStoreKeeper = !rd.IsDBNull(2) && Convert.ToBoolean(rd[2]);
+            scope.IsHeadDept = !rd.IsDBNull(3) && Convert.ToInt32(rd[3]) == 1;
+        }
+        return scope;
+    }
     private SqlConnection OpenConnection() { var c = new SqlConnection(_config.GetConnectionString("DefaultConnection")); c.Open(); return c; }
     private PagePermissions GetUserPermissions() => IsAdminRole() ? new PagePermissions { AllowedNos = Enumerable.Range(1, 20).ToList() } : new PagePermissions { AllowedNos = _permissionService.GetPermissionsForPage(GetCurrentRoleId(), FunctionId) };
     private int GetCurrentRoleId() => int.TryParse(User.FindFirst("RoleID")?.Value, out var roleId) ? roleId : 0;
     private bool IsAdminRole() => User.FindFirst("IsAdminRole")?.Value == "True";
+}
+
+public class ItemCheckingEmployeeScope
+{
+    public int? DeptId { get; set; }
+    public int? StoreGroupId { get; set; }
+    public bool IsStoreKeeper { get; set; }
+    public bool IsHeadDept { get; set; }
 }
 
 public class ItemCheckingHeaderVm
@@ -806,11 +1087,11 @@ public class ItemCheckingHeaderVm
     public string MRInfor { get; set; } = string.Empty;
     public string CheckingMethod { get; set; } = string.Empty;
     public string Result { get; set; } = string.Empty;
+    public int? NotifyCheckedBy { get; set; }
     public int? CheckedBy { get; set; }
     public DateTime? CheckedDate { get; set; }
     public int? ApprovedBy { get; set; }
     public DateTime? ApprovedDate { get; set; }
-    public string FlowNo { get; set; } = string.Empty;
 }
 
 public class ItemCheckingDetailRowVm
@@ -867,3 +1148,5 @@ public class ItemCheckingNotifyRecipient
     public string EmployeeName { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
 }
+
+

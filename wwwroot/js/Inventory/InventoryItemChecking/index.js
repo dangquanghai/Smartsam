@@ -24,8 +24,8 @@
     if (pageSize) {
         pageSize.addEventListener('change', function () {
             var url = new URL(window.location.href);
-            url.searchParams.set('PageSize', pageSize.value);
-            url.searchParams.set('Page', '1');
+            url.searchParams.set('Filter.PageSize', pageSize.value);
+            url.searchParams.set('Filter.Page', '1');
             window.location.href = url.toString();
         });
     }
@@ -47,3 +47,4 @@
         });
     }
 })();
+

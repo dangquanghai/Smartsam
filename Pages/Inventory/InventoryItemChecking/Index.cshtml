@@ -16,31 +16,58 @@
             pageItems.Add(null);
         }
     }
-    Func<int, string> pageUrl = (page) => Url.Page("./Index", new
+    Func<int, string> pageUrl = page => Url.Page("./Index", new Dictionary<string, object?>
     {
-        DeptId = Model.Filter.DeptId,
-        StatusId = Model.Filter.StatusId,
-        UseCheckedDate = Model.Filter.UseCheckedDate,
-        CheckedFrom = Model.Filter.CheckedFrom?.ToString("yyyy-MM-dd"),
-        CheckedTo = Model.Filter.CheckedTo?.ToString("yyyy-MM-dd"),
-        UseApprovedDate = Model.Filter.UseApprovedDate,
-        ApprovedFrom = Model.Filter.ApprovedFrom?.ToString("yyyy-MM-dd"),
-        ApprovedTo = Model.Filter.ApprovedTo?.ToString("yyyy-MM-dd"),
-        LateChecking = Model.Filter.LateChecking,
-        Page = page,
-        PageSize = Model.Filter.PageSize
+        ["Filter.DeptId"] = Model.Filter.DeptId,
+        ["Filter.StatusId"] = Model.Filter.StatusId,
+        ["Filter.UseCheckedDate"] = Model.Filter.UseCheckedDate,
+        ["Filter.CheckedFrom"] = Model.Filter.CheckedFrom?.ToString("yyyy-MM-dd"),
+        ["Filter.CheckedTo"] = Model.Filter.CheckedTo?.ToString("yyyy-MM-dd"),
+        ["Filter.UseApprovedDate"] = Model.Filter.UseApprovedDate,
+        ["Filter.ApprovedFrom"] = Model.Filter.ApprovedFrom?.ToString("yyyy-MM-dd"),
+        ["Filter.ApprovedTo"] = Model.Filter.ApprovedTo?.ToString("yyyy-MM-dd"),
+        ["Filter.LateChecking"] = Model.Filter.LateChecking,
+        ["Filter.Page"] = page,
+        ["Filter.PageSize"] = Model.Filter.PageSize
     }) ?? "#";
 }
 
 <section class="content vni-font inventory-item-checking-page">
     <div class="container-fluid">
+        @if (!string.IsNullOrWhiteSpace(Model.AlertMessage))
+        {
+            var alertClass = Model.AlertType switch
+            {
+                "success" => "alert-success",
+                "warning" => "alert-warning",
+                "error" => "alert-danger",
+                _ => "alert-info"
+            };
+            <div class="alert @alertClass alert-dismissible fade show mb-2" role="alert">
+                @Model.AlertMessage
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+        }
         <div class="row">
             <div class="col-md-2">
                 <div class="card card-info">
                     <div class="card-header"><h3 class="card-title"><i class="fas fa-search"></i> Search</h3></div>
                     <div class="card-body">
                         <form method="get">
-                            <div class="form-group mb-2"><label>Department</label><select asp-for="Filter.DeptId" asp-items="Model.Departments" class="form-control form-control-sm select2 vni-font" data-placeholder="--- All ---"></select></div>
+                            <input type="hidden" name="Filter.Page" value="1" />
+                            <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+                            <div class="form-group mb-2">
+                                <label>Department</label>
+                                @if (Model.CanChangeDepartmentFilter)
+                                {
+                                    <select asp-for="Filter.DeptId" asp-items="Model.Departments" class="form-control form-control-sm select2 vni-font" data-placeholder="--- All ---"></select>
+                                }
+                                else
+                                {
+                                    <input type="hidden" asp-for="Filter.DeptId" />
+                                    <select asp-for="Filter.DeptId" asp-items="Model.Departments" class="form-control form-control-sm select2 vni-font" data-placeholder="--- All ---" disabled></select>
+                                }
+                            </div>
                             <div class="form-group mb-2"><label>Status</label><select asp-for="Filter.StatusId" asp-items="Model.Statuses" class="form-control form-control-sm select2 vni-font" data-placeholder="--- All ---"></select></div>
                             <div class="form-group mb-1"><div class="custom-control custom-checkbox"><input asp-for="Filter.UseCheckedDate" class="custom-control-input" /><label asp-for="Filter.UseCheckedDate" class="custom-control-label">Checked Date</label></div></div>
                             <div class="form-group mb-2"><label>From</label><input asp-for="Filter.CheckedFrom" type="date" class="form-control form-control-sm" /></div>
@@ -116,7 +143,7 @@
                                             5 => "badge-danger",
                                             _ => "badge-secondary"
                                         };
-                                        var detailMode = Model.CanEditRow(row.StatusId) ? "edit" : (Model.CanView ? "view" : string.Empty);
+                                        var detailMode = Model.CanEditRow(row.StatusId) ? "edit" : (Model.CanApproveRow(row.StatusId) ? "approved" : (Model.CanView ? "view" : string.Empty));
                                         var detailUrl = string.IsNullOrEmpty(detailMode) ? string.Empty : (Url.Page("./ItemCheckingDetail", new { id = row.CheckingId, mode = detailMode }) ?? "#");
                                         <tr class="inventory-item-checking-row" data-id="@row.CheckingId" data-status-id="@row.StatusId"><td>@if (!string.IsNullOrEmpty(detailMode)) { <a href="@detailUrl" class="inventory-item-checking-po-link font-weight-bold">@row.PONo</a> } else { <span class="font-weight-bold">@row.PONo</span> }</td><td><span class="badge @statusBadgeClass">@row.StatusName</span></td><td>@row.CheckedBy</td><td>@(row.CheckedDate?.ToString("dd/MM/yyyy"))</td><td>@row.ApprovedBy</td><td>@(row.ApprovedDate?.ToString("dd/MM/yyyy"))</td><td>@row.ReceiveNo</td></tr>
                                     }
@@ -159,3 +186,6 @@
     <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Inventory/InventoryItemChecking/index.css" asp-append-version="true" />
 }
+
+
+
