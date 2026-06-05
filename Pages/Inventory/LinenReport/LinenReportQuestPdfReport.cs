@@ -256,12 +256,12 @@ public static class LinenReportQuestPdfReport
                 table.ColumnsDefinition(def =>
                 {
                     def.ConstantColumn(24);
-                    def.RelativeColumn(1.3f);
-                    def.ConstantColumn(70);
-                    def.ConstantColumn(55);
-                    def.ConstantColumn(55);
-                    def.ConstantColumn(65);
-                    def.RelativeColumn();
+                    def.ConstantColumn(58);
+                    def.RelativeColumn(3.2f);
+                    def.ConstantColumn(42);
+                    def.ConstantColumn(44);
+                    def.ConstantColumn(52);
+                    def.RelativeColumn(1.2f);
                 });
 
                 foreach (var label in new[] { "No.", "Location", "LinenCode", "Quantity", "Price", "Amount", "Note" })
@@ -527,9 +527,7 @@ public static class LinenReportQuestPdfReport
 
     private static string FormatNumber(decimal value)
     {
-        return value == decimal.Truncate(value)
-            ? value.ToString("0", CultureInfo.InvariantCulture)
-            : value.ToString("0.##", CultureInfo.InvariantCulture);
+        return value.ToString("#,##0.##", CultureInfo.InvariantCulture);
     }
 
     private static string FormatBlankZero(decimal value)
