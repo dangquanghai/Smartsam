@@ -527,9 +527,7 @@ public static class LinenReportQuestPdfReport
 
     private static string FormatNumber(decimal value)
     {
-        return value == decimal.Truncate(value)
-            ? value.ToString("0", CultureInfo.InvariantCulture)
-            : value.ToString("0.##", CultureInfo.InvariantCulture);
+        return value.ToString("#,##0.##", CultureInfo.InvariantCulture);
     }
 
     private static string FormatBlankZero(decimal value)
