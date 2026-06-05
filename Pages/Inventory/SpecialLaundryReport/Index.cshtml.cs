@@ -408,29 +408,19 @@ public class IndexModel : BasePageModel
         ApartmentOptions = new List<SelectListItem>();
 
         var sql = @"
-SELECT c.CurrentApartmentNo
-FROM dbo.CM_Contract c
-INNER JOIN dbo.CM_ContractService cs ON c.ContractID = cs.ContractID
-INNER JOIN dbo.AM_Apmt a ON c.CurrentApartmentNo = a.ApartmentNo
-WHERE cs.ServiceID IN (1217, 1219)
-  AND c.ContractStatus IN (1, 2, 3)
-  AND a.ExistFrom <= GETDATE()
-  AND a.ExistTo >= GETDATE()
-  AND @FromDate <= cs.ServiceFromDate
-  AND @ToDate >= cs.ServiceFromDate
-  AND @FromDate <= cs.ServiceToDate
-  AND @ToDate <= cs.ServiceToDate
-GROUP BY c.CurrentApartmentNo, a.FloorNo, a.BlockNo
-ORDER BY a.FloorNo, a.BlockNo, c.CurrentApartmentNo;";
+SELECT ApmtID,
+       ApartmentNo
+FROM dbo.AM_Apmt
+WHERE ExistFrom <= GETDATE()
+  AND ExistTo >= GETDATE()
+ORDER BY FloorNo, BlockNo, ApartmentNo;";
 
         using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.Add("@FromDate", SqlDbType.DateTime).Value = fromDate;
-        cmd.Parameters.Add("@ToDate", SqlDbType.DateTime).Value = toDate;
 
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
-            var aptNo = Convert.ToString(rd["CurrentApartmentNo"]) ?? string.Empty;
+            var aptNo = Convert.ToString(rd["ApartmentNo"]) ?? string.Empty;
             ApartmentOptions.Add(new SelectListItem
             {
                 Value = aptNo,
