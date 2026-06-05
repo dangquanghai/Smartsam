@@ -123,13 +123,30 @@
         .linen-report-date-range-control {
             display: flex;
             align-items: center;
-            gap: 0.35rem;
             width: 100%;
         }
 
         .linen-report-date-range-control > .form-control {
             flex: 1 1 auto;
             min-width: 0;
+            background-color: #fff;
+            cursor: pointer;
+        }
+
+        .linen-report-date-range-control > .form-control:disabled {
+            background-color: #e9ecef;
+            cursor: not-allowed;
+        }
+
+        .linen-report-date-range-control .date-clear-btn {
+            flex: 0 0 28px;
+            width: 28px;
+            height: 26px;
+            min-height: 26px;
+            margin-left: 4px !important;
+            padding: 0;
+            line-height: 24px;
+            border-radius: 0;
         }
 
         .linen-report-viewerbar {
