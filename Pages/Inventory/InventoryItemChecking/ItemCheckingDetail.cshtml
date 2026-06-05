@@ -289,6 +289,7 @@
             const confirmActionModal = $('#confirmActionModal');
             let pendingSubmitButton = null;
             let confirmBypass = false;
+            let formSubmitting = false;
             const tbody = document.querySelector('#poItemsTable tbody');
             const selectAll = document.getElementById('poSelectAll');
             const confirmBtn = document.getElementById('btnConfirmPoItems');
@@ -339,6 +340,11 @@
             const detailForm = document.getElementById('detailForm');
             const deptCheckedSelect = document.getElementById('Header_DeptChecked');
             const checkBySelect = document.getElementById('Header_NotifyCheckedBy');
+            function disableFormActionButtons() {
+                detailForm?.querySelectorAll('button[type="submit"]').forEach(function (button) { button.disabled = true; });
+                const confirmOk = document.getElementById('btnConfirmActionOk');
+                if (confirmOk) confirmOk.disabled = true;
+            }
             function toNumber(v) { const n = parseFloat((v || '').toString().replace(/,/g, '')); return Number.isFinite(n) ? n : 0; }
             function formatInt(v) { return Math.round(toNumber(v)).toLocaleString('en-US'); }
             function normalizeRow(r) { return { itemId: parseInt(r.itemId || '0'), itemText: (r.itemText || '').toString(), quantity: toNumber(r.quantity), quantityPassed: toNumber(r.quantityPassed), price: toNumber(r.price), note: (r.note || '').toString(), mrDetailId: parseInt(r.mrDetailId || '0') }; }
@@ -490,7 +496,13 @@
                 const amount = normalizedQty * price;
                 amountCell.textContent = formatInt(amount);
             });
-            detailForm?.addEventListener('submit', function () {
+            detailForm?.addEventListener('submit', function (e) {
+                if (formSubmitting) {
+                    e.preventDefault();
+                    return;
+                }
+                formSubmitting = true;
+                disableFormActionButtons();
                 detailBody.querySelectorAll('.stage-qty-passed, .stage-price, .po-qty-passed, .existing-price').forEach(function (input) {
                     input.value = Math.round(toNumber(input.value || '0')).toString();
                 });
@@ -520,7 +532,9 @@
                 });
             });
             document.getElementById('btnConfirmActionOk')?.addEventListener('click', function(){
+                if (formSubmitting) return;
                 if (!pendingSubmitButton) return;
+                this.disabled = true;
                 confirmBypass = true;
                 confirmActionModal.modal('hide');
                 pendingSubmitButton.click();

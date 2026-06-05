@@ -304,7 +304,12 @@ WHERE CheckingID=@CheckingID";
             }
             if (SendCreateCheckMail)
             {
-                _ = TryQueueNotifyCheckedUserAsync(createdCheckingId, Header.DeptChecked, Header.NotifyCheckedBy);
+                var notifyResult = TryQueueNotifyCheckedUserAsync(createdCheckingId, Header.DeptChecked, Header.NotifyCheckedBy).GetAwaiter().GetResult();
+                if (!string.IsNullOrWhiteSpace(notifyResult.Message))
+                {
+                    TempData["AlertMessage"] = notifyResult.Message;
+                    TempData["AlertType"] = notifyResult.AlertType;
+                }
             }
             return RedirectToPage("./Index");
         }
@@ -349,7 +354,12 @@ WHERE CheckingID=@CheckingID", conn);
         cmd.ExecuteNonQuery();
         if (SendCreateCheckMail)
         {
-            _ = TryQueueNotifyCheckedUserAsync(Header.CheckingId, Header.DeptChecked, Header.NotifyCheckedBy);
+            var notifyResult = TryQueueNotifyCheckedUserAsync(Header.CheckingId, Header.DeptChecked, Header.NotifyCheckedBy).GetAwaiter().GetResult();
+            if (!string.IsNullOrWhiteSpace(notifyResult.Message))
+            {
+                TempData["AlertMessage"] = notifyResult.Message;
+                TempData["AlertType"] = notifyResult.AlertType;
+            }
         }
         return RedirectToPage("./Index");
     }
@@ -867,19 +877,17 @@ WHERE HeadDept = 1 AND DeptID = @DeptID AND ISNULL(IsActive,0)=1 AND ISNULL(LTRI
         return rows;
     }
 
-    private async Task<string?> TryQueueNotifyCheckedUserAsync(int checkingId, int? deptId, int? checkedBy)
+    private async Task<ItemCheckingNotifyOutcome> TryQueueNotifyCheckedUserAsync(int checkingId, int? deptId, int? checkedBy)
     {
-        if (!deptId.HasValue || deptId.Value <= 0) return "Department not found.";
-        var recipients = checkedBy.HasValue && checkedBy.Value > 0
-            ? GetCheckedUserRecipientOrInventoryControl(deptId.Value, checkedBy.Value)
-            : GetInventoryControlRecipients(deptId.Value);
-        if (recipients.Count == 0) return "No checking email recipients found.";
+        if (!deptId.HasValue || deptId.Value <= 0) return new(false, "Department not found.", "warning");
+        var resolveResult = ResolveCheckedUserNotification(deptId.Value, checkedBy);
+        if (resolveResult.Recipients.Count == 0) return new(false, resolveResult.Message, "warning");
         var senderEmail = _config.GetValue<string>("EmailSettings:SenderEmail") ?? string.Empty;
         var password = _config.GetValue<string>("EmailSettings:Password") ?? string.Empty;
         var mailServer = _config.GetValue<string>("EmailSettings:MailServer") ?? string.Empty;
         var mailPort = _config.GetValue<int?>("EmailSettings:MailPort") ?? 0;
         if (string.IsNullOrWhiteSpace(senderEmail) || string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(mailServer) || mailPort <= 0)
-            return "Email settings missing.";
+            return new(false, "Email settings missing.", "warning");
 
         var detailUrl = Url.Page("/Inventory/InventoryItemChecking/ItemCheckingDetail", values: new { id = checkingId, mode = "approved" });
         var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl) ? string.Empty : $"{Request.Scheme}://{Request.Host}{detailUrl}";
@@ -897,19 +905,58 @@ WHERE HeadDept = 1 AND DeptID = @DeptID AND ISNULL(IsActive,0)=1 AND ISNULL(LTRI
 <p>Best regards,<br/>SmartSam System</p>";
         body = WrapNotifyMessageBody(body);
         var htmlBody = EmailTemplateHelper.WrapInNotifyTemplate("INVENTORY ITEM CHECKING", "#007bff", DateTime.Now, body);
-        await SendNotifyEmailAsync(new ItemCheckingNotifyRequest
+        try
         {
-            SenderEmail = senderEmail,
-            Password = password,
-            MailServer = mailServer,
-            MailPort = mailPort,
-            Subject = subject,
-            HtmlBody = htmlBody,
-            RecipientDetails = recipients,
-            DefaultRecipientLabel = string.Join(", ", recipients.Select(BuildRecipientDisplayName)),
-            SendIndividually = true
-        });
-        return null;
+            await SendNotifyEmailAsync(new ItemCheckingNotifyRequest
+            {
+                SenderEmail = senderEmail,
+                Password = password,
+                MailServer = mailServer,
+                MailPort = mailPort,
+                Subject = subject,
+                HtmlBody = htmlBody,
+                RecipientDetails = resolveResult.Recipients,
+                DefaultRecipientLabel = string.Join(", ", resolveResult.Recipients.Select(BuildRecipientDisplayName)),
+                SendIndividually = true
+            });
+            return new(true, resolveResult.Message, resolveResult.AlertType);
+        }
+        catch (Exception ex)
+        {
+            return new(false, $"Cannot send email notification. {ex.Message}", "warning");
+        }
+    }
+
+    private ItemCheckingNotifyResolveResult ResolveCheckedUserNotification(int deptId, int? checkedBy)
+    {
+        if (checkedBy.HasValue && checkedBy.Value > 0)
+        {
+            var checkedUser = GetEmployeeNotifyLookup(checkedBy.Value, deptId);
+            if (checkedUser.Exists && checkedUser.Recipient != null)
+            {
+                return new(new List<ItemCheckingNotifyRecipient> { checkedUser.Recipient }, "Notification email sent to Checked By.", "success");
+            }
+
+            var manager = GetInventoryControlRecipientLookup(deptId);
+            if (manager.Recipients.Count > 0)
+            {
+                return new(manager.Recipients, "Cannot find Checked By email, notification email was sent to inventory controller.", "warning");
+            }
+
+            var checkedUserMessage = checkedUser.Exists
+                ? "Cannot find Checked By email."
+                : "Cannot find Checked By user."
+                ;
+            return new(new List<ItemCheckingNotifyRecipient>(), $"{checkedUserMessage} {manager.Message}", "warning");
+        }
+
+        var inventoryController = GetInventoryControlRecipientLookup(deptId);
+        if (inventoryController.Recipients.Count > 0)
+        {
+            return new(inventoryController.Recipients, "Checked By is empty, notification email was sent to inventory controller.", "warning");
+        }
+
+        return new(new List<ItemCheckingNotifyRecipient>(), $"Checked By is empty. {inventoryController.Message}", "warning");
     }
 
     private List<ItemCheckingNotifyRecipient> GetCheckedUserRecipientOrInventoryControl(int deptId, int employeeId)
@@ -935,6 +982,56 @@ WHERE EmployeeID=@EmployeeID AND DeptID=@DeptID AND ISNULL(IsActive,0)=1 AND ISN
             EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty,
             Title = Convert.ToString(rd["Title"])?.Trim() ?? string.Empty
         };
+    }
+
+    private (bool Exists, ItemCheckingNotifyRecipient? Recipient) GetEmployeeNotifyLookup(int employeeId, int deptId)
+    {
+        using var conn = OpenConnection();
+        using var cmd = new SqlCommand(@"SELECT TOP 1 LTRIM(RTRIM(ISNULL(TheEmail,''))) AS Email, LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode, LTRIM(RTRIM(EmployeeName)) AS EmployeeName, LTRIM(RTRIM(ISNULL(Title, ''))) AS Title
+FROM dbo.MS_Employee
+WHERE EmployeeID=@EmployeeID AND DeptID=@DeptID AND ISNULL(IsActive,0)=1 AND EmployeeCode NOT LIKE '%X'", conn);
+        cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId;
+        cmd.Parameters.Add("@DeptID", SqlDbType.Int).Value = deptId;
+        using var rd = cmd.ExecuteReader();
+        if (!rd.Read()) return (false, null);
+        var email = Convert.ToString(rd["Email"])?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(email)) return (true, null);
+        return (true, new ItemCheckingNotifyRecipient
+        {
+            Email = email,
+            EmployeeCode = Convert.ToString(rd["EmployeeCode"])?.Trim() ?? string.Empty,
+            EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty,
+            Title = Convert.ToString(rd["Title"])?.Trim() ?? string.Empty
+        });
+    }
+
+    private ItemCheckingNotifyResolveResult GetInventoryControlRecipientLookup(int deptId)
+    {
+        var rows = new List<ItemCheckingNotifyRecipient>();
+        var userCount = 0;
+        using var conn = OpenConnection();
+        using var cmd = new SqlCommand(@"SELECT DISTINCT LTRIM(RTRIM(ISNULL(TheEmail,''))) AS Email, LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode, LTRIM(RTRIM(EmployeeName)) AS EmployeeName, LTRIM(RTRIM(ISNULL(Title, ''))) AS Title
+FROM dbo.MS_Employee
+WHERE DeptID=@DeptID AND ISNULL(IsInventoryControlInDep,0)=1 AND ISNULL(IsActive,0)=1 AND EmployeeCode NOT LIKE '%X'", conn);
+        cmd.Parameters.Add("@DeptID", SqlDbType.Int).Value = deptId;
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            userCount++;
+            var email = Convert.ToString(rd["Email"])?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(email)) continue;
+            rows.Add(new ItemCheckingNotifyRecipient
+            {
+                Email = email,
+                EmployeeCode = Convert.ToString(rd["EmployeeCode"])?.Trim() ?? string.Empty,
+                EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty,
+                Title = Convert.ToString(rd["Title"])?.Trim() ?? string.Empty
+            });
+        }
+
+        if (rows.Count > 0) return new(rows, "Notification email sent to inventory controller.", "success");
+        if (userCount == 0) return new(rows, "There is no inventory controller user in this department.", "warning");
+        return new(rows, "There are inventory controller users in this department, but none has an email address.", "warning");
     }
 
     private List<ItemCheckingNotifyRecipient> GetInventoryControlRecipients(int deptId)
@@ -1149,4 +1246,7 @@ public class ItemCheckingNotifyRecipient
     public string Title { get; set; } = string.Empty;
 }
 
+public record ItemCheckingNotifyOutcome(bool Success, string Message, string AlertType);
+
+public record ItemCheckingNotifyResolveResult(List<ItemCheckingNotifyRecipient> Recipients, string Message, string AlertType);
 

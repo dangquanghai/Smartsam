@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Net;
 using System.Net.Mail;
@@ -226,7 +226,9 @@ WHERE FlowID=@FlowID", conn, tran);
                 return ExecuteConfirm(flowId, "edit");
             }
 
-            return RedirectToPage("./Index");
+            return !id.HasValue
+                ? RedirectToPage(new { id = flowId, mode = "edit" })
+                : RedirectToPage("./Index");
         }
         catch
         {
@@ -414,7 +416,13 @@ ORDER BY TheDateTime DESC", conn);
             InsertFlowAction(conn, id, nextLevel, GetCurrentEmployeeId(), GetStatusDescriptionForSupplier(nextLevel));
             if (nextLevel < 4)
             {
-                NotifyNextByReceiveVoucherLevel(conn, flow.KPGroup, nextLevel + 1, flow.FlowNo);
+                var mailNotice = NotifyNextByReceiveVoucherLevel(conn, flow.KPGroup, nextLevel + 1, flow.FlowNo);
+                if (!string.IsNullOrWhiteSpace(mailNotice))
+                {
+                    TempData["Message"] = $"Confirm successfully. {mailNotice}";
+                    TempData["MessageType"] = "warning";
+                    return RedirectToPage("./Index");
+                }
             }
             TempData["Message"] = "Confirm successfully.";
             TempData["MessageType"] = "success";
@@ -446,19 +454,24 @@ ORDER BY TheDateTime DESC", conn);
             moveCmd.Parameters.Add("@Reason", SqlDbType.NVarChar, 500).Value = $"({flow.FlowNo})";
             moveCmd.Parameters.Add("@FlowID", SqlDbType.BigInt).Value = id;
             moveCmd.ExecuteNonQuery();
-            NotifyCompanyStoreReturnApprovers(conn, newFlowNo);
-            TempData["Message"] = "Confirm and move to CPN Store successfully.";
-            TempData["MessageType"] = "success";
+            var mailNotice = NotifyCompanyStoreReturnApprovers(conn, newFlowNo);
+            TempData["Message"] = string.IsNullOrWhiteSpace(mailNotice)
+                ? "Confirm and move to CPN Store successfully."
+                : $"Confirm and move to CPN Store successfully. {mailNotice}";
+            TempData["MessageType"] = string.IsNullOrWhiteSpace(mailNotice) ? "success" : "warning";
             return RedirectToPage("./Index");
         }
 
+        string mailNoticeReturn = string.Empty;
         if (nextLevel < 4)
         {
-            NotifyNextByReturnVoucherLevel(conn, GetCurrentKpGroupId(), nextLevel + 1, flow.FlowNo);
+            mailNoticeReturn = NotifyNextByReturnVoucherLevel(conn, GetCurrentKpGroupId(), nextLevel + 1, flow.FlowNo);
         }
 
-        TempData["Message"] = "Confirm successfully.";
-        TempData["MessageType"] = "success";
+        TempData["Message"] = string.IsNullOrWhiteSpace(mailNoticeReturn)
+            ? "Confirm successfully."
+            : $"Confirm successfully. {mailNoticeReturn}";
+        TempData["MessageType"] = string.IsNullOrWhiteSpace(mailNoticeReturn) ? "success" : "warning";
         return RedirectToPage("./Index");
     }
 
@@ -538,84 +551,126 @@ VALUES(@FlowID,@UserID,GETDATE(),@ActionTypeID,@ComputerName,@Des)", conn);
         _ => "Confirmed"
     };
 
-    private void NotifyNextByReceiveVoucherLevel(SqlConnection conn, int storeGr, int level, string flowNo)
+    private string NotifyNextByReceiveVoucherLevel(SqlConnection conn, int storeGr, int level, string flowNo)
     {
         using var cmd = new SqlCommand(@"SELECT TheEmail, EmployeeCode, EmployeeName, ISNULL(Title,'') AS Title FROM dbo.MS_Employee
-WHERE ISNULL(TheEmail,'')<>'' AND StoreGR=@StoreGR AND ReceiveVoucher=@Level
+WHERE StoreGR=@StoreGR AND ReceiveVoucher=@Level
 ORDER BY ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
         cmd.Parameters.Add("@StoreGR", SqlDbType.Int).Value = storeGr;
         cmd.Parameters.Add("@Level", SqlDbType.Int).Value = level;
         using var rd = cmd.ExecuteReader();
-        var hasRecipient = false;
+        var hasUser = false;
+        var hasEmailRecipient = false;
+        var missingEmailCodes = new List<string>();
         while (rd.Read())
         {
+            hasUser = true;
             var email = Convert.ToString(rd["TheEmail"]) ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(email)) continue;
-            hasRecipient = true;
             var code = Convert.ToString(rd["EmployeeCode"]) ?? string.Empty;
             var name = Convert.ToString(rd["EmployeeName"]) ?? string.Empty;
             var title = Convert.ToString(rd["Title"]) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                missingEmailCodes.Add(string.IsNullOrWhiteSpace(code) ? name : code);
+                continue;
+            }
+
+            hasEmailRecipient = true;
             var recipientLabel = BuildRecipientDisplayName(title, name, code, email);
             var statusName = GetStatusName(level - 1, 1);
             QueueConfirmMail(email, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Receive Voucher", true, recipientLabel, code, statusName);
         }
-        if (!hasRecipient)
-        {
-            var fallbackStatusName = GetStatusName(level - 1, 1);
-            QueueConfirmMail(NotifyCcEmail, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Receive Voucher", false, statusName: fallbackStatusName);
-        }
+
+        if (hasEmailRecipient) return BuildMissingEmailNotice(missingEmailCodes, "ReceiveVoucher", level, storeGr);
+
+        var fallbackStatusName = GetStatusName(level - 1, 1);
+        QueueConfirmMail(NotifyCcEmail, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Receive Voucher", false, statusName: fallbackStatusName);
+        return hasUser
+            ? $"Cannot find email for user ReceiveVoucher={level}, Store Group={storeGr}; fallback email was sent to {NotifyCcEmail}."
+            : $"Cannot find user ReceiveVoucher={level}, Store Group={storeGr}; fallback email was sent to {NotifyCcEmail}.";
     }
 
-    private void NotifyNextByReturnVoucherLevel(SqlConnection conn, int storeGr, int level, string flowNo)
+    private string NotifyNextByReturnVoucherLevel(SqlConnection conn, int storeGr, int level, string flowNo)
     {
         using var cmd = new SqlCommand(@"SELECT TheEmail, EmployeeCode, EmployeeName, ISNULL(Title,'') AS Title FROM dbo.MS_Employee
-WHERE ISNULL(TheEmail,'')<>'' AND StoreGR=@StoreGR AND ReturnVoucher=@Level
+WHERE StoreGR=@StoreGR AND ReturnVoucher=@Level
 ORDER BY ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
         cmd.Parameters.Add("@StoreGR", SqlDbType.Int).Value = storeGr;
         cmd.Parameters.Add("@Level", SqlDbType.Int).Value = level;
         using var rd = cmd.ExecuteReader();
-        var hasRecipient = false;
+        var hasUser = false;
+        var hasEmailRecipient = false;
+        var missingEmailCodes = new List<string>();
         while (rd.Read())
         {
+            hasUser = true;
             var email = Convert.ToString(rd["TheEmail"]) ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(email)) continue;
-            hasRecipient = true;
             var code = Convert.ToString(rd["EmployeeCode"]) ?? string.Empty;
             var name = Convert.ToString(rd["EmployeeName"]) ?? string.Empty;
             var title = Convert.ToString(rd["Title"]) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                missingEmailCodes.Add(string.IsNullOrWhiteSpace(code) ? name : code);
+                continue;
+            }
+
+            hasEmailRecipient = true;
             var recipientLabel = BuildRecipientDisplayName(title, name, code, email);
             var statusName = GetStatusName(level - 1, 2);
             QueueConfirmMail(email, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Return Voucher", true, recipientLabel, code, statusName);
         }
-        if (!hasRecipient)
-        {
-            var fallbackStatusName = GetStatusName(level - 1, 2);
-            QueueConfirmMail(NotifyCcEmail, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Return Voucher", false, statusName: fallbackStatusName);
-        }
+
+        if (hasEmailRecipient) return BuildMissingEmailNotice(missingEmailCodes, "ReturnVoucher", level, storeGr);
+
+        var fallbackStatusName = GetStatusName(level - 1, 2);
+        QueueConfirmMail(NotifyCcEmail, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Return Voucher", false, statusName: fallbackStatusName);
+        return hasUser
+            ? $"Cannot find email for user ReturnVoucher={level}, Store Group={storeGr}; fallback email was sent to {NotifyCcEmail}."
+            : $"Cannot find user ReturnVoucher={level}, Store Group={storeGr}; fallback email was sent to {NotifyCcEmail}.";
     }
 
-    private void NotifyCompanyStoreReturnApprovers(SqlConnection conn, string flowNo)
+    private string NotifyCompanyStoreReturnApprovers(SqlConnection conn, string flowNo)
     {
-        using var cmd = new SqlCommand(@"SELECT TheEmail, EmployeeCode, EmployeeName, ISNULL(Title,'') AS Title FROM dbo.MS_Employee
-WHERE ISNULL(TheEmail,'')<>'' AND StoreGR=1 AND ISNULL(ReturnVoucher,0) IN (2,4)
+        using var cmd = new SqlCommand(@"SELECT TheEmail, EmployeeCode, EmployeeName, ISNULL(Title,'') AS Title, ISNULL(ReturnVoucher,0) AS ReturnVoucher FROM dbo.MS_Employee
+WHERE StoreGR=1 AND ISNULL(ReturnVoucher,0) IN (2,4)
 ORDER BY ReturnVoucher ASC, ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
         using var rd = cmd.ExecuteReader();
-        var hasRecipient = false;
+        var hasUser = false;
+        var hasEmailRecipient = false;
+        var missingEmailCodes = new List<string>();
         while (rd.Read())
         {
+            hasUser = true;
             var email = Convert.ToString(rd["TheEmail"]) ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(email)) continue;
-            hasRecipient = true;
             var code = Convert.ToString(rd["EmployeeCode"]) ?? string.Empty;
             var name = Convert.ToString(rd["EmployeeName"]) ?? string.Empty;
             var title = Convert.ToString(rd["Title"]) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                var returnVoucher = Convert.ToString(rd["ReturnVoucher"]) ?? string.Empty;
+                missingEmailCodes.Add(string.IsNullOrWhiteSpace(code) ? $"{name}(ReturnVoucher={returnVoucher})" : $"{code}(ReturnVoucher={returnVoucher})");
+                continue;
+            }
+
+            hasEmailRecipient = true;
             var recipientLabel = BuildRecipientDisplayName(title, name, code, email);
             QueueConfirmMail(email, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please check and confirm return voucher {flowNo}"), flowNo, "Return Voucher", true, recipientLabel, code, "Moved to Company Store");
         }
-        if (!hasRecipient)
-        {
-            QueueConfirmMail(NotifyCcEmail, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please check and confirm return voucher {flowNo}"), flowNo, "Return Voucher", false, statusName: "Moved to Company Store");
-        }
+
+        if (hasEmailRecipient) return BuildMissingEmailNotice(missingEmailCodes, "main-store ReturnVoucher=2/4", 0, 1);
+
+        QueueConfirmMail(NotifyCcEmail, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please check and confirm return voucher {flowNo}"), flowNo, "Return Voucher", false, statusName: "Moved to Company Store");
+        return hasUser
+            ? $"Cannot find email for main-store users with ReturnVoucher=2 or ReturnVoucher=4; fallback email was sent to {NotifyCcEmail}."
+            : $"Cannot find main-store users with ReturnVoucher=2 or ReturnVoucher=4; fallback email was sent to {NotifyCcEmail}.";
+    }
+
+    private static string BuildMissingEmailNotice(List<string> missingEmailCodes, string roleName, int level, int storeGr)
+    {
+        var missing = missingEmailCodes.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
+        if (missing.Count == 0) return string.Empty;
+        var roleText = level > 0 ? $"{roleName}={level}, Store Group={storeGr}" : roleName;
+        return $"Some users in {roleText} do not have email addresses, so notification could not be sent to: {string.Join(", ", missing)}.";
     }
     private string GenerateMoveToCpnFlowNo(SqlConnection conn, string oldFlowNo)
     {
@@ -2060,6 +2115,11 @@ public class ConfirmFlowInfo
     public int? MoveToCPNStore { get; set; }
     public int? RetDept { get; set; }
 }
+
+
+
+
+
 
 
 

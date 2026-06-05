@@ -633,6 +633,11 @@
             let pendingAttachments = [];
             let deletedAttachmentDocIds = [];
             let isSubmittingConfirmAfterSave = false;
+            let isInventoryReceivedSubmitting = false;
+
+            function disableInventoryReceivedActionButtons() {
+                $('#inventoryReceivedDetailForm button[type="submit"], #btnOpenConfirmVoucher, #btnConfirmVoucherAction').prop('disabled', true);
+            }
             let issueReceiveList = [];
             let issueReceiveDetails = [];
             let selectedIssueFlowId = Number($('#SelectedIssueFlowId').val() || 0);
@@ -1302,6 +1307,11 @@
             });
 
             $('#btnConfirmVoucherAction').on('click', function () {
+                if (isInventoryReceivedSubmitting) {
+                    return;
+                }
+                isInventoryReceivedSubmitting = true;
+                disableInventoryReceivedActionButtons();
                 const mode = ($('input[name="mode"]').val() || '').toLowerCase();
                 if (mode === 'add' || mode === 'edit') {
                     isSubmittingConfirmAfterSave = true;
@@ -1309,11 +1319,29 @@
                     $('#ConfirmAfterSave').val('true');
                     $('#confirmInventoryReceivedModal').modal('hide');
                     $('#inventoryReceivedDetailForm').attr('action', '?handler=SaveAndConfirm');
+                    $('#inventoryReceivedDetailForm').data('allow-submit-once', true);
                     $('#inventoryReceivedDetailForm').trigger('submit');
                     return;
                 }
 
                 $('#confirmInventoryReceivedForm').trigger('submit');
+            });
+
+            $('#inventoryReceivedDetailForm').on('submit', function (e) {
+                if (isInventoryReceivedSubmitting) {
+                    if ($(this).data('allow-submit-once') === true) {
+                        $(this).data('allow-submit-once', false);
+                        return;
+                    }
+                    e.preventDefault();
+                    return false;
+                }
+                isInventoryReceivedSubmitting = true;
+                disableInventoryReceivedActionButtons();
+            });
+
+            $('#inventoryReceivedDetailForm button[type="submit"]').on('click', function () {
+                $('#inventoryReceivedDetailForm').data('allow-submit-once', true);
             });
 
             $('#confirmInventoryReceivedModal').on('hidden.bs.modal', function () {
@@ -1753,6 +1781,7 @@
         })();
     </script>
 }
+
 
 
 
