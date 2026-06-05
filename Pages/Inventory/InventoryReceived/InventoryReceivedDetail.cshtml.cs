@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Net;
 using System.Net.Mail;
@@ -17,7 +17,6 @@ public class InventoryReceivedDetailModel : BasePageModel
     private const int PermissionViewDetail = 2;
     private const int PermissionAdd = 3;
     private const int PermissionEdit = 4;
-    private const int PermissionApproved = 5;
     // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
     // private const string ReturnMoveToCpnNotifyEmail = "maiquangvinhi4@gmail.com";
     private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
@@ -41,6 +40,8 @@ public class InventoryReceivedDetailModel : BasePageModel
     public int MaxAttachmentSizeMb => _config.GetValue<int?>("FileUploads:MaxFileSizeMb") ?? 10;
     public string CurrentEmployeeCode => GetCurrentEmployeeCode();
     public int CurrentKpGroupIdValue => GetCurrentKpGroupId();
+    public int CurrentReceiveVoucherLevel => GetCurrentReceiveVoucherLevel();
+    public int CurrentReturnVoucherLevel => GetCurrentReturnVoucherLevel();
 
     public List<SelectListItem> ReceiveTypes { get; set; } = new();
     public List<SelectListItem> Stores { get; set; } = new();
@@ -61,6 +62,7 @@ public class InventoryReceivedDetailModel : BasePageModel
     public bool CanSave => IsAddMode ? PagePerm.HasPermission(PermissionAdd) : IsEditMode && PagePerm.HasPermission(PermissionEdit);
     public bool CanEditVoucherBusiness => EvaluateCanEditVoucherBusiness();
     public bool CanConfirmVoucherBusiness => EvaluateCanConfirmVoucherBusiness();
+    public bool CanConfirmNewVoucherBusiness => EvaluateCanConfirmNewVoucherBusiness();
 
     public IActionResult OnGet(long? id, string mode = "view", string? message = null, string? messageType = null)
     {
@@ -70,7 +72,8 @@ public class InventoryReceivedDetailModel : BasePageModel
         MessageType = string.IsNullOrWhiteSpace(messageType) ? "info" : messageType;
         if (id.HasValue && IsViewMode && !PagePerm.HasPermission(PermissionViewDetail)) return Redirect("/");
         if (!id.HasValue && !PagePerm.HasPermission(PermissionAdd)) return Redirect("/");
-        if (IsApprovedMode && !PagePerm.HasPermission(PermissionApproved)) return Redirect("/");
+        if (id.HasValue && !CanAccessVoucher(id.Value)) return RedirectToPage("./Index");
+        if (IsApprovedMode && !EvaluateCanConfirmVoucherBusiness(id)) return Redirect("/");
         if (IsEditMode && !PagePerm.HasPermission(PermissionEdit)) return Redirect("/");
 
         if (id.HasValue)
@@ -87,7 +90,7 @@ public class InventoryReceivedDetailModel : BasePageModel
             LoadLookups();
             Header.FlowDate = DateTime.Today;
             Header.StatusID = 1;
-            Header.FlowNo = GetNextVoucherNo(Header.FlowSubType);
+            Header.FlowNo = GetNextVoucherNoForSave(Header.FlowSubType, Header.MoveToCPNStore);
             Header.StatusName = GetStatusName(Header.StatusID, Header.FlowSubType);
             DetailsJson = "[]";
         }
@@ -100,6 +103,7 @@ public class InventoryReceivedDetailModel : BasePageModel
         Mode = string.IsNullOrWhiteSpace(mode) ? "view" : mode.Trim().ToLowerInvariant();
         if ((id.HasValue && !PagePerm.HasPermission(PermissionEdit)) || (!id.HasValue && !PagePerm.HasPermission(PermissionAdd))) return Redirect("/");
         if (IsApprovedMode) return Redirect("/");
+        if (id.HasValue && !CanAccessVoucher(id.Value)) return RedirectToPage("./Index");
 
         if (id.HasValue && !EvaluateCanEditVoucherBusiness())
         {
@@ -113,7 +117,7 @@ public class InventoryReceivedDetailModel : BasePageModel
         Header.StatusID = GetDefaultStatusId(Header.FlowSubType);
         if (!id.HasValue)
         {
-            Header.FlowNo = GetNextVoucherNo(Header.FlowSubType);
+            Header.FlowNo = GetNextVoucherNoForSave(Header.FlowSubType, Header.MoveToCPNStore);
         }
         Header.StatusName = GetStatusName(Header.StatusID, Header.FlowSubType);
         var attachmentValidationMessages = AttachmentUploads
@@ -240,7 +244,6 @@ WHERE FlowID=@FlowID", conn, tran);
     public IActionResult OnPostSaveAndConfirm(long? id, string mode)
     {
         PagePerm = GetUserPermissions();
-        if (!PagePerm.HasPermission(PermissionApproved)) return Redirect("/");
         ConfirmAfterSave = true;
         return OnPostSave(id, mode);
     }
@@ -249,7 +252,7 @@ WHERE FlowID=@FlowID", conn, tran);
     {
         PagePerm = GetUserPermissions();
         Mode = string.IsNullOrWhiteSpace(mode) ? "edit" : mode.Trim().ToLowerInvariant();
-        if (!PagePerm.HasPermission(PermissionApproved)) return Redirect("/");
+        if (!CanAccessVoucher(id)) return RedirectToPage("./Index");
         if (!EvaluateCanConfirmVoucherBusiness(id))
         {
             TempData["Message"] = "You have no right to confirm this voucher at current status.";
@@ -267,6 +270,7 @@ WHERE FlowID=@FlowID", conn, tran);
     {
         PagePerm = GetUserPermissions();
         if (!PagePerm.HasPermission(PermissionViewDetail)) return Redirect("/");
+        if (!CanAccessVoucher(id)) return RedirectToPage("./Index");
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
@@ -390,6 +394,7 @@ ORDER BY TheDateTime DESC", conn);
     private async Task<IActionResult> ExecuteConfirmAsync(long id, string mode)
     {
         Mode = string.IsNullOrWhiteSpace(mode) ? "edit" : mode.Trim().ToLowerInvariant();
+        if (!CanAccessVoucher(id)) return RedirectToPage("./Index");
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
@@ -441,7 +446,7 @@ ORDER BY TheDateTime DESC", conn);
             moveCmd.Parameters.Add("@Reason", SqlDbType.NVarChar, 500).Value = $"({flow.FlowNo})";
             moveCmd.Parameters.Add("@FlowID", SqlDbType.BigInt).Value = id;
             moveCmd.ExecuteNonQuery();
-            NotifyNextByReturnVoucherLevel(conn, flow.KPGroup, nextLevel + 1, newFlowNo);
+            NotifyCompanyStoreReturnApprovers(conn, newFlowNo);
             TempData["Message"] = "Confirm and move to CPN Store successfully.";
             TempData["MessageType"] = "success";
             return RedirectToPage("./Index");
@@ -589,6 +594,29 @@ ORDER BY ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
         }
     }
 
+    private void NotifyCompanyStoreReturnApprovers(SqlConnection conn, string flowNo)
+    {
+        using var cmd = new SqlCommand(@"SELECT TheEmail, EmployeeCode, EmployeeName, ISNULL(Title,'') AS Title FROM dbo.MS_Employee
+WHERE ISNULL(TheEmail,'')<>'' AND StoreGR=1 AND ISNULL(ReturnVoucher,0) IN (2,4)
+ORDER BY ReturnVoucher ASC, ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
+        using var rd = cmd.ExecuteReader();
+        var hasRecipient = false;
+        while (rd.Read())
+        {
+            var email = Convert.ToString(rd["TheEmail"]) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(email)) continue;
+            hasRecipient = true;
+            var code = Convert.ToString(rd["EmployeeCode"]) ?? string.Empty;
+            var name = Convert.ToString(rd["EmployeeName"]) ?? string.Empty;
+            var title = Convert.ToString(rd["Title"]) ?? string.Empty;
+            var recipientLabel = BuildRecipientDisplayName(title, name, code, email);
+            QueueConfirmMail(email, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please check and confirm return voucher {flowNo}"), flowNo, "Return Voucher", true, recipientLabel, code, "Moved to Company Store");
+        }
+        if (!hasRecipient)
+        {
+            QueueConfirmMail(NotifyCcEmail, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please check and confirm return voucher {flowNo}"), flowNo, "Return Voucher", false, statusName: "Moved to Company Store");
+        }
+    }
     private string GenerateMoveToCpnFlowNo(SqlConnection conn, string oldFlowNo)
     {
         var head = (oldFlowNo ?? string.Empty).Trim();
@@ -603,7 +631,7 @@ ORDER BY ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
     private void QueueConfirmMail(string toEmail, string subject, string voucherNo, string voucherType, bool addDefaultCc = true, string recipientLabel = "", string employeeCode = "", string statusName = "")
     {
         var flowId = GetFlowIdByNo(voucherNo);
-        var detailUrl = Url.Page("/Inventory/InventoryReceived/InventoryReceivedDetail", values: new { id = flowId, mode = "edit" });
+        var detailUrl = Url.Page("/Inventory/InventoryReceived/InventoryReceivedDetail", values: new { id = flowId, mode = "approved" });
         var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl) ? string.Empty : $"{Request.Scheme}://{Request.Host}{detailUrl}";
         var submittedBy = GetCurrentEmployeeDisplayName();
 
@@ -729,7 +757,6 @@ ORDER BY ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
 
     private bool EvaluateCanConfirmVoucherBusiness(long? flowId = null)
     {
-        if (!PagePerm.HasPermission(PermissionApproved)) return false;
         var targetId = flowId ?? Id;
         if (!targetId.HasValue || targetId.Value <= 0) return false;
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -751,6 +778,32 @@ ORDER BY ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
         return returnLevel == nextLevel || (flow.KPGroup == 1 && returnLevel * 2 == nextLevel);
     }
 
+    private bool EvaluateCanConfirmNewVoucherBusiness()
+    {
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        var employeeId = GetCurrentEmployeeId();
+        if (IsCurrentEmployeeAdmin(conn, employeeId)) return true;
+        var kpGroupId = GetCurrentKpGroupId();
+        var receiveLevel = GetEmployeeReceiveVoucherLevel(conn, employeeId);
+        var returnLevel = GetEmployeeReturnVoucherLevel(conn, employeeId);
+        return receiveLevel == 2 || returnLevel == 2 || (kpGroupId == 1 && returnLevel == 1);
+    }
+
+    private int GetCurrentReceiveVoucherLevel()
+    {
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        return GetEmployeeReceiveVoucherLevel(conn, GetCurrentEmployeeId());
+    }
+
+    private int GetCurrentReturnVoucherLevel()
+    {
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        return GetEmployeeReturnVoucherLevel(conn, GetCurrentEmployeeId());
+    }
+
     private string ApplyMailSubjectPrefix(string subject)
     {
         var prefix = _config.GetValue<string>("EmailSettings:PrefixSubject")?.Trim();
@@ -767,6 +820,8 @@ ORDER BY ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
 
     public IActionResult OnGetDownloadAttachment(long id, int docId)
     {
+        if (!CanAccessVoucher(id)) return RedirectToPage("./Index");
+
         var fileName = GetAttachmentFileName(id, docId);
         if (string.IsNullOrWhiteSpace(fileName)) return NotFound();
 
@@ -781,6 +836,16 @@ ORDER BY ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
     public IActionResult OnPostDeleteAttachment(long id, int docId)
     {
         return RedirectToPage(new { id, mode = "edit" });
+    }
+
+    public JsonResult OnGetMoveToCompanyStoreFlowNo(int? flowSubType, int? moveToCompanyStore)
+    {
+        return new JsonResult(new
+        {
+            flowNo = ShouldUseMoveToCompanyStoreFlowNo(flowSubType, moveToCompanyStore)
+                ? GetNextMoveToCompanyStoreVoucherNo()
+                : GetNextVoucherNo(flowSubType)
+        });
     }
 
     public JsonResult OnGetReceiveContext(int? flowSubType)
@@ -929,14 +994,22 @@ WHERE ifd.FlowID = @FlowID", conn);
 
     private void LoadLookups()
     {
-        ReceiveTypes = LoadListFromSql("SELECT FlowSubTypeID, FlowSubTypeName FROM dbo.INV_FlowSubType WHERE FlowTypeID=2 ORDER BY FlowSubTypeID", "FlowSubTypeID", "FlowSubTypeName");
+        var isKpAdmin = IsCurrentReceiveTypeKpAdmin();
+        ReceiveTypes = LoadListFromSql($@"SELECT FlowSubTypeID, FlowSubTypeName
+FROM dbo.INV_FlowSubType
+WHERE FlowTypeID=2 AND {(isKpAdmin ? "ISNULL(isKPAdmin,0)=1" : "ISNULL(isKPOther,0)=1")}
+ORDER BY FlowSubTypeID", "FlowSubTypeID", "FlowSubTypeName");
         Departments = LoadListFromSql("SELECT DeptID, DeptName FROM dbo.MS_Department ORDER BY DeptName", "DeptID", "DeptName");
         Locations = LoadListFromSql("SELECT LocationID, LocationName FROM dbo.MS_CoLocation ORDER BY LocationName", "LocationID", "LocationName");
-        PONos = LoadListFromSql(@"SELECT DISTINCT po.POID, po.PONo
+        var poSql = @"SELECT po.POID, po.PONo
 FROM dbo.PC_PO po
-INNER JOIN dbo.INV_RecevingChekingVoucher h ON h.POID = po.POID AND h.StatusID = 3
-INNER JOIN dbo.INV_ReceivingChekingVoucherDT dt ON dt.CheckingID = h.CheckingID AND ISNULL(dt.QuantityPassed,0) > ISNULL(dt.QuantityRec,0)
-ORDER BY po.PONo DESC", "POID", "PONo");
+LEFT JOIN dbo.PC_Suppliers supplier ON po.SupplierID = supplier.SupplierID";
+        if (IsAddMode)
+        {
+            poSql += " WHERE po.StatusID IN (4,5,6)";
+        }
+        poSql += " ORDER BY po.PODate DESC";
+        PONos = LoadListFromSql(poSql, "POID", "PONo");
         if (Header.POID.HasValue && Header.POID.Value > 0 && PONos.All(x => x.Value != Header.POID.Value.ToString()))
         {
             var poNo = GetPoNo(Header.POID.Value);
@@ -1080,10 +1153,15 @@ GROUP BY ChekingDTID", conn);
         var results = new List<SelectListItem>();
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
+        var isAdminUser = IsAdminRole() || IsCurrentEmployeeAdmin(conn, GetCurrentEmployeeId());
+        var currentKpGroupId = GetCurrentKpGroupId();
         using var cmd = new SqlCommand(@"SELECT g.KPGroupID, g.KPGroupName, s.StoreID, s.StoreName
 FROM dbo.INV_KPGroup g
 INNER JOIN dbo.INV_StoreList s ON s.DeptID = g.KPGroupID
+WHERE (@IsAdminUser = 1 OR s.DeptID = @KPGroupID)
 ORDER BY g.KPGroupName, s.StoreName", conn);
+        cmd.Parameters.Add("@IsAdminUser", SqlDbType.Bit).Value = isAdminUser;
+        cmd.Parameters.Add("@KPGroupID", SqlDbType.Int).Value = currentKpGroupId;
         using var rd = cmd.ExecuteReader();
         var groupMap = new Dictionary<int, SelectListGroup>();
         while (rd.Read())
@@ -1175,6 +1253,11 @@ ORDER BY i.ItemCode", conn);
         }
     }
 
+    private bool IsCurrentReceiveTypeKpAdmin()
+    {
+        return GetCurrentKpGroupId() == 1;
+    }
+
     private void ValidateBusinessRules(long? flowId)
     {
         if (string.IsNullOrWhiteSpace(Header.FlowNo))
@@ -1200,17 +1283,22 @@ ORDER BY i.ItemCode", conn);
         if (Header.FlowSubType == 1)
         {
             Header.MoveToCPNStore = null;
+            Header.RetDept = null;
+            Header.RetAssetLocation = null;
         }
         else if (Header.FlowSubType.HasValue && Header.FlowSubType.Value > 0 && Header.FlowSubType.Value != 6)
         {
             Header.POID = null;
-            Header.RetDept = null;
-            Header.RetAssetLocation = null;
-
-            if (!Header.MoveToCPNStore.HasValue || Header.MoveToCPNStore.Value <= 0)
+            if (GetCurrentKpGroupId() == 1)
             {
-                ModelState.AddModelError("Header.MoveToCPNStore", "Move to Company Store is required.");
+                Header.MoveToCPNStore = null;
             }
+            if (GetCurrentKpGroupId() != 1 && (Header.FlowSubType.Value == 0 || Header.FlowSubType.Value == 5))
+            {
+                Header.RetDept = null;
+                Header.RetAssetLocation = null;
+            }
+
         }
 
         if (Details == null || Details.Count == 0)
@@ -1525,6 +1613,40 @@ VALUES(@FlowID,@UserID,GETDATE(),3,@ComputerName,'Receiver Confirmed')", conn, t
         cmd.Parameters.Add("@StatusID", SqlDbType.Int).Value = Header.StatusID > 0 ? Header.StatusID : 1;
     }
 
+    private string GetNextVoucherNoForSave(int? flowSubType, int? moveToCompanyStore)
+    {
+        return ShouldUseMoveToCompanyStoreFlowNo(flowSubType, moveToCompanyStore)
+            ? GetNextMoveToCompanyStoreVoucherNo()
+            : GetNextVoucherNo(flowSubType);
+    }
+
+    private bool ShouldUseMoveToCompanyStoreFlowNo(int? flowSubType, int? moveToCompanyStore)
+    {
+        return GetCurrentKpGroupId() != 1
+            && flowSubType.HasValue
+            && flowSubType.Value > 0
+            && flowSubType.Value != 1
+            && flowSubType.Value != 5
+            && flowSubType.Value != 6
+            && moveToCompanyStore.HasValue
+            && moveToCompanyStore.Value > 0;
+    }
+
+    private string GetNextMoveToCompanyStoreVoucherNo()
+    {
+        var now = DateTime.Now;
+        var locationPrefix = BuildVoucherPrefix(now, GetCurrentKpGroupId(), string.Empty);
+        var movePrefix = locationPrefix[..Math.Min(6, locationPrefix.Length)] + "MV";
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        using var cmd = new SqlCommand("SELECT ISNULL(MAX(RIGHT(FlowNo,3)),'000') FROM dbo.INV_ItemFlow WHERE MONTH(FlowDate)=@Month AND YEAR(FlowDate)=@Year AND LEFT(FlowNo,8)=@Prefix", conn);
+        cmd.Parameters.Add("@Month", SqlDbType.Int).Value = now.Month;
+        cmd.Parameters.Add("@Year", SqlDbType.Int).Value = now.Year;
+        cmd.Parameters.Add("@Prefix", SqlDbType.NVarChar, 8).Value = movePrefix;
+        var seq = Convert.ToInt32(cmd.ExecuteScalar() ?? 0) + 1;
+        return $"{movePrefix}-{seq:000}";
+    }
+
     private string GetNextVoucherNo(int? flowSubType)
     {
         var now = DateTime.Now;
@@ -1781,6 +1903,21 @@ ORDER BY d.UploadDate DESC, d.DocID DESC", conn);
         };
     }
 
+    private bool CanAccessVoucher(long flowId)
+    {
+        if (IsAdminRole()) return true;
+
+        var currentKpGroupId = GetCurrentKpGroupId();
+        if (currentKpGroupId <= 0) return false;
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand("SELECT COUNT(1) FROM dbo.INV_ItemFlow WHERE FlowID=@FlowID AND FlowType=2 AND KPGroup=@KPGroupID", conn);
+        cmd.Parameters.Add("@FlowID", SqlDbType.BigInt).Value = flowId;
+        cmd.Parameters.Add("@KPGroupID", SqlDbType.Int).Value = currentKpGroupId;
+        conn.Open();
+        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0) > 0;
+    }
+
     private void UpdatePriceByDetails(SqlConnection conn, SqlTransaction tran, List<InventoryReceivedDetailRow> details)
     {
         foreach (var detail in details.Where(x => x.ItemId > 0 && x.UnitPrice > 0).GroupBy(x => x.ItemId).Select(x => x.First()))
@@ -1923,6 +2060,14 @@ public class ConfirmFlowInfo
     public int? MoveToCPNStore { get; set; }
     public int? RetDept { get; set; }
 }
+
+
+
+
+
+
+
+
 
 
 
