@@ -413,7 +413,7 @@ SELECT ApmtID,
 FROM dbo.AM_Apmt
 WHERE ExistFrom <= GETDATE()
   AND ExistTo >= GETDATE()
-ORDER BY FloorNo, BlockNo, ApartmentNo;";
+ORDER BY FloorNo, BlockNo;";
 
         using var cmd = new SqlCommand(sql, conn);
 
