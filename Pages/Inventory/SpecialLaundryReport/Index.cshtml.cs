@@ -408,16 +408,20 @@ public class IndexModel : BasePageModel
         ApartmentOptions = new List<SelectListItem>();
 
         var sql = @"
-SELECT DISTINCT c.CurrentApartmentNo
+SELECT c.CurrentApartmentNo
 FROM dbo.CM_Contract c
 INNER JOIN dbo.CM_ContractService cs ON c.ContractID = cs.ContractID
+INNER JOIN dbo.AM_Apmt a ON c.CurrentApartmentNo = a.ApartmentNo
 WHERE cs.ServiceID IN (1217, 1219)
   AND c.ContractStatus IN (1, 2, 3)
+  AND a.ExistFrom <= GETDATE()
+  AND a.ExistTo >= GETDATE()
   AND @FromDate <= cs.ServiceFromDate
   AND @ToDate >= cs.ServiceFromDate
   AND @FromDate <= cs.ServiceToDate
   AND @ToDate <= cs.ServiceToDate
-ORDER BY c.CurrentApartmentNo;";
+GROUP BY c.CurrentApartmentNo, a.FloorNo, a.BlockNo
+ORDER BY a.FloorNo, a.BlockNo, c.CurrentApartmentNo;";
 
         using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.Add("@FromDate", SqlDbType.DateTime).Value = fromDate;
