@@ -1,4 +1,4 @@
-﻿@page
+@page
 @model SmartSam.Pages.Inventory.InventoryReceived.IndexModel
 @{
     ViewData["Title"] = "Item Received List";
@@ -10,17 +10,17 @@
         if (p == 1 || p == totalPages || (p >= currentPage - 2 && p <= currentPage + 2)) pageItems.Add(p);
         else if (pageItems.Count == 0 || pageItems[^1].HasValue) pageItems.Add(null);
     }
-    Func<int, string> pageUrl = page => Url.Page("./Index", new
+        Func<int, string> pageUrl = page => Url.Page("./Index", new Dictionary<string, object?>
     {
-        FlowNo = Model.Filter.FlowNo,
-        PONo = Model.Filter.PONo,
-        ToStoreId = Model.Filter.ToStoreId,
-        RecTypeId = Model.Filter.RecTypeId,
-        StatusId = Model.Filter.StatusId,
-        FromDate = Model.Filter.FromDate?.ToString("yyyy-MM-dd"),
-        ToDate = Model.Filter.ToDate?.ToString("yyyy-MM-dd"),
-        Page = page,
-        PageSize = Model.Filter.PageSize
+        ["Filter.FlowNo"] = Model.Filter.FlowNo,
+        ["Filter.PONo"] = Model.Filter.PONo,
+        ["Filter.KpGroupId"] = Model.Filter.KpGroupId,
+        ["Filter.RecTypeId"] = Model.Filter.RecTypeId,
+        ["Filter.StatusId"] = Model.Filter.StatusId,
+        ["Filter.FromDate"] = Model.Filter.FromDate?.ToString("yyyy-MM-dd"),
+        ["Filter.ToDate"] = Model.Filter.ToDate?.ToString("yyyy-MM-dd"),
+        ["Filter.Page"] = page,
+        ["Filter.PageSize"] = Model.Filter.PageSize
     }) ?? "#";
 }
 
@@ -30,7 +30,7 @@
             <input type="hidden" name="id" id="deleteFlowId" />
             <input type="hidden" name="Filter.FlowNo" value="@Model.Filter.FlowNo" />
             <input type="hidden" name="Filter.PONo" value="@Model.Filter.PONo" />
-            <input type="hidden" name="Filter.ToStoreId" value="@Model.Filter.ToStoreId" />
+            <input type="hidden" name="Filter.KpGroupId" value="@Model.Filter.KpGroupId" />
             <input type="hidden" name="Filter.RecTypeId" value="@Model.Filter.RecTypeId" />
             <input type="hidden" name="Filter.StatusId" value="@Model.Filter.StatusId" />
             <input type="hidden" name="Filter.FromDate" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" />
@@ -44,15 +44,25 @@
                     <div class="card-header"><h3 class="card-title"><i class="fas fa-search"></i> Search</h3></div>
                     <div class="card-body">
                         <form method="get">
-                            <input type="hidden" name="Page" value="1" />
-                            <input type="hidden" name="PageSize" value="@Model.Filter.PageSize" />
-                            <div class="form-group mb-2"><label>Doc No.</label><input asp-for="Filter.FlowNo" name="FlowNo" class="form-control form-control-sm vni-font" /></div>
-                            <div class="form-group mb-2"><label>PO No.</label><input asp-for="Filter.PONo" name="PONo" class="form-control form-control-sm vni-font" /></div>
-                            <div class="form-group mb-2"><label>From</label><input asp-for="Filter.FromDate" name="FromDate" type="date" class="form-control form-control-sm" /></div>
-                            <div class="form-group mb-2"><label>To</label><input asp-for="Filter.ToDate" name="ToDate" type="date" class="form-control form-control-sm" /></div>
-                            <div class="form-group mb-2"><label>Rec. Type</label><select asp-for="Filter.RecTypeId" name="RecTypeId" asp-items="Model.ReceiveTypes" class="form-control form-control-sm select2 vni-font"></select></div>
-                            <div class="form-group mb-2"><label>Status</label><select asp-for="Filter.StatusId" name="StatusId" asp-items="Model.Statuses" class="form-control form-control-sm select2 vni-font"></select></div>
-                            <div class="form-group mb-2"><label>To St House</label><select asp-for="Filter.ToStoreId" name="ToStoreId" asp-items="Model.Stores" class="form-control form-control-sm select2 vni-font"></select></div>
+                            <input type="hidden" name="Filter.Page" value="1" />
+                            <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+                            <div class="form-group mb-2"><label>Doc No.</label><input asp-for="Filter.FlowNo" name="Filter.FlowNo" class="form-control form-control-sm vni-font" /></div>
+                            <div class="form-group mb-2"><label>PO No.</label><input asp-for="Filter.PONo" name="Filter.PONo" class="form-control form-control-sm vni-font" /></div>
+                            <div class="form-group mb-2"><label>From</label><input asp-for="Filter.FromDate" name="Filter.FromDate" type="date" class="form-control form-control-sm" /></div>
+                            <div class="form-group mb-2"><label>To</label><input asp-for="Filter.ToDate" name="Filter.ToDate" type="date" class="form-control form-control-sm" /></div>
+                            <div class="form-group mb-2"><label>Rec. Type</label><select asp-for="Filter.RecTypeId" name="Filter.RecTypeId" asp-items="Model.ReceiveTypes" class="form-control form-control-sm select2 vni-font"></select></div>
+                            <div class="form-group mb-2"><label>Status</label><select asp-for="Filter.StatusId" name="Filter.StatusId" asp-items="Model.Statuses" class="form-control form-control-sm select2 vni-font"></select></div>
+                            <div class="form-group mb-2">
+                                <label>Store Group</label>
+                                @if (Model.IsAdminUser)
+                                {
+                                    <select asp-for="Filter.KpGroupId" name="Filter.KpGroupId" asp-items="Model.StoreGroups" class="form-control form-control-sm select2 vni-font"></select>
+                                }
+                                else
+                                {
+                                    <input type="text" class="form-control form-control-sm vni-font" value="@Model.CurrentStoreGroupName" readonly />
+                                }
+                            </div>
                             <button type="submit" class="btn btn-primary btn-block btn-sm border mb-2"><i class="fas fa-search"></i> Search</button>
                         </form>
                     </div>
@@ -137,9 +147,9 @@
                                         <tr class="receive-row" data-flowid="@row.FlowID" data-statusid="@row.StatusID" data-view-url="@Url.Page("./InventoryReceivedDetail", new { id = row.FlowID, mode = "view" })" data-edit-url="@Url.Page("./InventoryReceivedDetail", new { id = row.FlowID, mode = "edit" })" data-approved-url="@Url.Page("./InventoryReceivedDetail", new { id = row.FlowID, mode = "approved" })">
                                             <td><input type="radio" class="receive-selector" name="selectedInventoryReceived" aria-label="Select row" /></td>
                                             <td>
-                                                @if (Model.PagePerm.HasPermission(2) || Model.PagePerm.HasPermission(4) || Model.PagePerm.HasPermission(5))
+                                                @if (Model.PagePerm.HasPermission(2) || Model.PagePerm.HasPermission(4) || row.CanApprove)
                                                 {
-                                                    var accessMode = Model.PagePerm.HasPermission(4) ? "edit" : (Model.PagePerm.HasPermission(5) ? "approved" : "view");
+                                                    var accessMode = Model.PagePerm.HasPermission(4) ? "edit" : (row.CanApprove ? "approved" : "view");
                                                     <a href="@Url.Page("./InventoryReceivedDetail", new { id = row.FlowID, mode = accessMode })" class="prq-row-link prq-row-link-request-no text-bold">@row.FlowNo</a>
                                                 }
                                                 else
@@ -148,7 +158,7 @@
                                                 }
                                             </td>
                                             <td>@row.FlowDate.ToString("dd/MM/yyyy")</td>
-                                            <td>@row.StatusName</td>
+                                            <td><button type="button" class="p-0 border-0 prq-row-link prq-row-link-request-no text-bold receive-status-history-link" data-flowid="@row.FlowID" data-flowno="@row.FlowNo">@row.StatusName</button></td>
                                             <td>@row.StoreName</td>
                                             <td>@row.PONo</td>
                                             <td>@row.SupplierName</td>
@@ -233,6 +243,35 @@
     </div>
 </div>
 
+<div class="modal fade vni-font" id="receiveStatusHistoryModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title">History</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body p-2">
+                <div class="small text-muted mb-2" id="receiveStatusHistoryDocNo"></div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0 receive-status-history-table">
+                        <thead>
+                            <tr>
+                                <th>Employee</th>
+                                <th>Date Time</th>
+                                <th>Status Action</th>
+                                <th>Computer</th>
+                            </tr>
+                        </thead>
+                        <tbody id="receiveStatusHistoryRows">
+                            <tr><td colspan="4" class="text-center text-muted">No history found.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer py-2"><button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Close</button></div>
+        </div>
+    </div>
+</div>
 <div class="modal fade vni-font" id="receiveDeleteConfirmModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content border-danger">
@@ -269,6 +308,14 @@
         .inventory-received-report-preview-modal-dialog .modal-content { height: 100vh; border-radius: 0; display: flex; flex-direction: column; }
         .inventory-received-report-preview-body { flex: 1 1 auto; overflow: auto; min-height: 0; }
         .inventory-received-report-preview-frame { display: block; width: 100%; height: 100%; min-height: calc(100vh - 106px); border: 0; background: #fff; }
+        #receiveStatusHistoryModal { z-index: 2050; }
+        #receiveStatusHistoryModal .modal-dialog { z-index: 2051; }
+        #receiveStatusHistoryModal .modal-content { z-index: 2052; }
+        .receive-status-history-link { background: transparent; border: 0; padding: 0; }
+        .receive-status-history-link:hover { text-decoration: none; }
+        .receive-status-history-table thead th { background: #0070c0; color: #fff; padding: 3px 6px; }
+        .receive-status-history-table tbody td { padding: 3px 6px; }
+        .receive-status-history-table tbody tr:nth-child(even) { background: #fdebd8; }
         #receiveDeleteConfirmModal { z-index: 2050; }
         #receiveDeleteConfirmModal .modal-dialog { z-index: 2051; }
         #receiveDeleteConfirmModal .modal-content { z-index: 2052; }
@@ -284,6 +331,7 @@
         (function () {
             const $searchDetailModal = $('#receiveSearchDetailModal');
             const $deleteConfirmModal = $('#receiveDeleteConfirmModal');
+            const $statusHistoryModal = $('#receiveStatusHistoryModal');
             let receiveDetailState = { page: 1, pageSize: 10, totalPages: 1, totalRecords: 0, keyword: '' };
 
             if ($.fn.select2) {
@@ -369,6 +417,37 @@
                 return row ? row.closest('tr.receive-row') : null;
             }
 
+            function escapeHtml(value) {
+                return String(value ?? '').replace(/[&<>'"]/g, function (char) {
+                    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char];
+                });
+            }
+
+            async function showStatusHistory(flowId, flowNo) {
+                const $rows = $('#receiveStatusHistoryRows');
+                $('#receiveStatusHistoryDocNo').text(flowNo ? `Doc No.: ${flowNo}` : '');
+                $rows.html('<tr><td colspan="4" class="text-center text-muted">Loading...</td></tr>');
+                $statusHistoryModal.modal('show');
+
+                try {
+                    const response = await fetch(`?handler=StatusHistory&id=${encodeURIComponent(flowId)}`);
+                    const data = await response.json();
+                    $rows.empty();
+                    if (!response.ok) {
+                        $rows.append(`<tr><td colspan="4" class="text-center text-danger">${escapeHtml(data.message || 'Cannot load history.')}</td></tr>`);
+                        return;
+                    }
+                    if (!data.rows || data.rows.length === 0) {
+                        $rows.append('<tr><td colspan="4" class="text-center text-muted">No history found.</td></tr>');
+                        return;
+                    }
+                    data.rows.forEach(row => {
+                        $rows.append(`<tr><td>${escapeHtml(row.employeeName)}</td><td>${escapeHtml(row.theDateTime)}</td><td>${escapeHtml(row.action)}</td><td>${escapeHtml(row.computerName)}</td></tr>`);
+                    });
+                } catch (error) {
+                    $rows.html('<tr><td colspan="4" class="text-center text-danger">Cannot load history.</td></tr>');
+                }
+            }
             function syncDeleteButtonState() {
                 const row = getSelectedRow();
                 if (!row) {
@@ -381,6 +460,13 @@
                 $('#btnPrintReceived').prop('disabled', false);
             }
 
+            $(document).on('click', '.receive-status-history-link', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const flowId = this.getAttribute('data-flowid');
+                const flowNo = this.getAttribute('data-flowno') || '';
+                if (flowId) showStatusHistory(flowId, flowNo);
+            });
             $(document).on('click', '#receiveTable tbody tr.receive-row', function (e) {
                 if (!$(e.target).is('a')) {
                     const $radio = $(this).find('input.receive-selector');
@@ -467,7 +553,7 @@
                 }
             });
 
-            $searchDetailModal.add($deleteConfirmModal).on('show.bs.modal', function () {
+            $searchDetailModal.add($deleteConfirmModal).add($statusHistoryModal).on('show.bs.modal', function () {
                 destroyBackgroundSelect2();
             });
 
@@ -475,15 +561,15 @@
                 loadDetail(1);
             });
 
-            $searchDetailModal.add($deleteConfirmModal).on('hidden.bs.modal', function () {
-                if (!$('#receiveSearchDetailModal').hasClass('show') && !$('#receiveDeleteConfirmModal').hasClass('show')) {
+            $searchDetailModal.add($deleteConfirmModal).add($statusHistoryModal).on('hidden.bs.modal', function () {
+                if (!$('#receiveSearchDetailModal').hasClass('show') && !$('#receiveDeleteConfirmModal').hasClass('show') && !$('#receiveStatusHistoryModal').hasClass('show')) {
                     initBackgroundSelect2();
                 }
             });
 
             $(document).on('select2:opening', 'select.select2', function (e) {
-                const isModalOpen = $('#receiveSearchDetailModal.show').length > 0 || $('#receiveDeleteConfirmModal.show').length > 0;
-                const isInsideModal = $(this).closest('#receiveSearchDetailModal.show, #receiveDeleteConfirmModal.show').length > 0;
+                const isModalOpen = $('#receiveSearchDetailModal.show').length > 0 || $('#receiveDeleteConfirmModal.show').length > 0 || $('#receiveStatusHistoryModal.show').length > 0;
+                const isInsideModal = $(this).closest('#receiveSearchDetailModal.show, #receiveDeleteConfirmModal.show, #receiveStatusHistoryModal.show').length > 0;
                 if (isModalOpen && !isInsideModal) {
                     e.preventDefault();
                     return false;
@@ -492,6 +578,13 @@
         })();
     </script>
 }
+
+
+
+
+
+
+
 
 
 
