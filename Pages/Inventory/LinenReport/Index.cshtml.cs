@@ -57,14 +57,14 @@ public class IndexModel : BasePageModel
 
         using var conn = OpenConnection();
         LinenOptions = LoadLinenOptions(conn);
-        var modeState = BuildModeState(conn, Filter.ReportType, Filter.DescriptionId);
+        var modeState = BuildModeState(conn, Filter.ReportType, Filter.DescriptionId, Filter.FromDate, Filter.ToDate);
         ApplyModeState(modeState);
         Filter.DescriptionId = modeState.SelectedDescriptionId;
 
         return Page();
     }
 
-    public JsonResult OnGetModeOptions(string? reportType, int? descriptionId)
+    public JsonResult OnGetModeOptions(string? reportType, int? descriptionId, DateTime? fromDate, DateTime? toDate)
     {
         PagePerm = GetUserPermissions();
         if (!HasPageAccess())
@@ -76,7 +76,14 @@ public class IndexModel : BasePageModel
         try
         {
             using var conn = OpenConnection();
-            var modeState = BuildModeState(conn, ResolveRequestedReportType(reportType), descriptionId);
+            var normalizedFromDate = (fromDate ?? DateTime.Today.AddDays(-30)).Date;
+            var normalizedToDate = (toDate ?? DateTime.Today).Date;
+            if (normalizedFromDate > normalizedToDate)
+            {
+                normalizedToDate = normalizedFromDate;
+            }
+
+            var modeState = BuildModeState(conn, ResolveRequestedReportType(reportType), descriptionId, normalizedFromDate, normalizedToDate);
             return new JsonResult(new
             {
                 success = true,
@@ -794,8 +801,15 @@ ORDER BY DeliveryDate DESC, DeliveryID DESC, LinenCode ASC;", conn))
         });
     }
 
-    private LinenReportModeState BuildModeState(SqlConnection conn, string reportType, int? requestedDescriptionId)
+    private LinenReportModeState BuildModeState(SqlConnection conn, string reportType, int? requestedDescriptionId, DateTime? fromDate, DateTime? toDate)
     {
+        var normalizedFromDate = (fromDate ?? DateTime.Today.AddDays(-30)).Date;
+        var normalizedToDate = (toDate ?? DateTime.Today).Date;
+        if (normalizedFromDate > normalizedToDate)
+        {
+            normalizedToDate = normalizedFromDate;
+        }
+
         var state = new LinenReportModeState
         {
             ReportType = reportType
@@ -805,31 +819,43 @@ ORDER BY DeliveryDate DESC, DeliveryID DESC, LinenCode ASC;", conn))
         {
             state.DescriptionEnabled = true;
             state.LinenEnabled = true;
+            state.FromEnabled = true;
+            state.ToEnabled = true;
             state.DescriptionLabel = "Des";
             state.DescriptionOptions = LoadDescriptionOptions(conn, @"
 SELECT ID, Des
 FROM dbo.LN_DeAndReMT
-ORDER BY ID DESC;", requestedDescriptionId);
+WHERE CAST(DateCreate AS date) >= @FromDate
+  AND CAST(DateCreate AS date) <= @ToDate
+ORDER BY DateCreate DESC, ID DESC;", requestedDescriptionId, normalizedFromDate, normalizedToDate);
         }
         else if (reportType == LinenReportTypes.Delivery)
         {
             state.DescriptionEnabled = true;
             state.LinenEnabled = true;
+            state.FromEnabled = true;
+            state.ToEnabled = true;
             state.DescriptionLabel = "Des";
             state.DescriptionOptions = LoadDescriptionOptions(conn, @"
 SELECT DeliveryID AS ID, Des
 FROM dbo.LN_DeliveryMT
-ORDER BY DeliveryID DESC;", requestedDescriptionId);
+WHERE CAST(DeliveryDate AS date) >= @FromDate
+  AND CAST(DeliveryDate AS date) <= @ToDate
+ORDER BY DeliveryDate DESC, DeliveryID DESC;", requestedDescriptionId, normalizedFromDate, normalizedToDate);
         }
         else if (reportType == LinenReportTypes.Receive)
         {
             state.DescriptionEnabled = true;
             state.LinenEnabled = true;
+            state.FromEnabled = true;
+            state.ToEnabled = true;
             state.DescriptionLabel = "Des";
             state.DescriptionOptions = LoadDescriptionOptions(conn, @"
 SELECT ReceiveID AS ID, Des
 FROM dbo.LN_ReceiveMT
-ORDER BY ReceiveID DESC;", requestedDescriptionId);
+WHERE CAST(ReceiveDate AS date) >= @FromDate
+  AND CAST(ReceiveDate AS date) <= @ToDate
+ORDER BY ReceiveDate DESC, ReceiveID DESC;", requestedDescriptionId, normalizedFromDate, normalizedToDate);
         }
         else if (reportType == LinenReportTypes.LaundryRecord)
         {
@@ -894,10 +920,12 @@ ORDER BY ReceiveID DESC;", requestedDescriptionId);
         DescriptionOptions = state.DescriptionOptions;
     }
 
-    private static List<SelectListItem> LoadDescriptionOptions(SqlConnection conn, string sql, int? requestedValue)
+    private static List<SelectListItem> LoadDescriptionOptions(SqlConnection conn, string sql, int? requestedValue, DateTime fromDate, DateTime toDate)
     {
         var items = new List<SelectListItem>();
         using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.Add("@FromDate", SqlDbType.Date).Value = fromDate.Date;
+        cmd.Parameters.Add("@ToDate", SqlDbType.Date).Value = toDate.Date;
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
@@ -1075,7 +1103,7 @@ FROM dbo.MS_Parameters;", conn);
         }
 
         Filter.LinenCode = (Filter.LinenCode ?? string.Empty).Trim();
-        Filter.FromDate ??= DateTime.Today;
+        Filter.FromDate ??= DateTime.Today.AddDays(-30);
         Filter.ToDate ??= DateTime.Today;
         if (Filter.FromDate > Filter.ToDate)
         {
