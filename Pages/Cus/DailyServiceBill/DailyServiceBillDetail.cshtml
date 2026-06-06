@@ -52,7 +52,14 @@
                             </div>
                             <div class="daily-service-bill-vb-field">
                                 <label>Bill Date:</label>
-                                <input class="form-control form-control-sm" value="@Model.Bill.BillDate.ToString("MM/dd/yyyy")" readonly />
+                                @if (isPopup && canSaveDescription)
+                                {
+                                    <input asp-for="Bill.BillDate" type="date" class="form-control form-control-sm" />
+                                }
+                                else
+                                {
+                                    <input class="form-control form-control-sm" value="@Model.Bill.BillDate.ToString("MM/dd/yyyy")" readonly />
+                                }
                             </div>
                             <div class="daily-service-bill-vb-field">
                                 <label>Status:</label>

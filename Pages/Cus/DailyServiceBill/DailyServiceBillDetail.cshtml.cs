@@ -102,17 +102,19 @@ public class DailyServiceBillDetailModel : BasePageModel
         if (Popup)
         {
             var popupDescription = Request.Form["Bill.Description"].ToString();
+            var popupBillDate = Bill.BillDate == default ? currentBill.BillDate : Bill.BillDate.Date;
             if (!CanSaveDescription)
             {
                 Bill = currentBill;
                 Bill.Description = popupDescription;
+                Bill.BillDate = popupBillDate;
                 DetailRows = LoadBillDetails(conn, currentBill.BillID);
                 CanEdit = false;
                 Mode = "view";
                 return Page();
             }
 
-            SavePopupDescription(conn, currentBill.BillID, popupDescription);
+            SavePopupFields(conn, currentBill.BillID, popupDescription, popupBillDate);
             return RedirectToPage("./DailyServiceBillDetail", new { id = currentBill.BillID, mode = "view", returnUrl = SafeReturnUrl, popup = true, saved = true });
         }
 
@@ -189,13 +191,15 @@ WHERE BillID = @BillID;", conn, trans);
         return Redirect(redirectUrl);
     }
 
-    private void SavePopupDescription(SqlConnection conn, int billId, string? description)
+    private void SavePopupFields(SqlConnection conn, int billId, string? description, DateTime billDate)
     {
         using var cmd = new SqlCommand(@"
 UPDATE dbo.SV_Bill
-SET Description = @Description
+SET Description = @Description,
+    BillDate = @BillDate
 WHERE BillID = @BillID;", conn);
         cmd.Parameters.AddWithValue("@Description", (object?)description ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@BillDate", billDate.Date);
         cmd.Parameters.AddWithValue("@BillID", billId);
         cmd.ExecuteNonQuery();
     }

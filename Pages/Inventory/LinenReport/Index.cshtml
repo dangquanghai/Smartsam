@@ -123,13 +123,40 @@
         .linen-report-date-range-control {
             display: flex;
             align-items: center;
-            gap: 0.35rem;
             width: 100%;
         }
 
         .linen-report-date-range-control > .form-control {
             flex: 1 1 auto;
             min-width: 0;
+            background-color: #fff;
+            cursor: pointer;
+        }
+
+        .linen-report-date-range-control > .form-control:disabled {
+            background-color: #e9ecef;
+            cursor: not-allowed;
+        }
+
+        .linen-report-date-range-control .date-clear-btn {
+            flex: 0 0 28px;
+            width: 28px;
+            height: 26px;
+            min-height: 26px;
+            margin-left: 4px !important;
+            padding: 0;
+            line-height: 24px;
+            border-radius: 0;
+            color: #dc3545;
+            border-color: #dc3545;
+            background-color: #fff;
+        }
+
+        .linen-report-date-range-control .date-clear-btn:hover,
+        .linen-report-date-range-control .date-clear-btn:focus {
+            color: #fff;
+            background-color: #dc3545;
+            border-color: #dc3545;
         }
 
         .linen-report-viewerbar {
@@ -415,6 +442,24 @@
                     </div>
 
                     <div class="row linen-report-filter-row">
+                        <div class="col-lg-4 col-md-8">
+                            <div class="linen-report-inline-field">
+                                <label for="linenReportDateRange" class="linen-report-inline-label">From - To</label>
+                                <div class="linen-report-date-range-control">
+                                    <input type="text"
+                                           class="form-control form-control-sm"
+                                           id="linenReportDateRange"
+                                           readonly
+                                           disabled="@(!(Model.FromEnabled || Model.ToEnabled))" />
+                                </div>
+                                <input type="hidden"
+                                       id="linenReportFromDate"
+                                       value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" />
+                                <input type="hidden"
+                                       id="linenReportToDate"
+                                       value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" />
+                            </div>
+                        </div>
                         <div class="col-lg-4 col-md-6">
                             <div class="linen-report-inline-field">
                                 <label for="linenReportDescription" class="linen-report-inline-label" id="linenReportDescriptionLabel">@Model.DescriptionLabel</label>
@@ -453,24 +498,6 @@
                                         }
                                     }
                                 </select>
-                            </div>
-                        </div>
-                        <div class="col-lg-4 col-md-8">
-                            <div class="linen-report-inline-field">
-                                <label for="linenReportDateRange" class="linen-report-inline-label">From - To</label>
-                                <div class="linen-report-date-range-control">
-                                    <input type="text"
-                                           class="form-control form-control-sm"
-                                           id="linenReportDateRange"
-                                           readonly
-                                           disabled="@(!(Model.FromEnabled || Model.ToEnabled))" />
-                                </div>
-                                <input type="hidden"
-                                       id="linenReportFromDate"
-                                       value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" />
-                                <input type="hidden"
-                                       id="linenReportToDate"
-                                       value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" />
                             </div>
                         </div>
                         <div class="col-lg-1 col-md-4">

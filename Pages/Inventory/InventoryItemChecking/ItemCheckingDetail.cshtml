@@ -1,4 +1,4 @@
-﻿@page
+@page
 @model SmartSam.Pages.Inventory.ItemChecking.ItemCheckingDetailModel
 @{
     ViewData["Title"] = "Receiving Checking Voucher";
@@ -32,33 +32,80 @@
             <div class="card card-primary card-outline">
                 <div class="card-header py-2"><h3 class="card-title">Receiving Checking Voucher</h3></div>
                 <div class="card-body pb-2">
-                    <div class="form-row">
-                        <div class="form-group col-md-4 mb-2"><label>Created Date</label><input class="form-control form-control-sm" value="@Model.Header.CreatedDate.ToString("dd/MM/yyyy")" readonly /></div>
-                        <div class="form-group col-md-4 mb-2"><label>Created By</label><select asp-for="Header.CreatedBy" asp-items="Model.Employees" class="form-control form-control-sm select2 vni-font" disabled></select></div>
-                        <div class="form-group col-md-4 mb-2"><label>Status</label><select asp-for="Header.StatusId" asp-items="Model.Statuses" class="form-control form-control-sm select2 vni-font" disabled></select></div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group col-md-4 mb-2"><label>PO No<span class="text-danger">*</span></label><select asp-for="Header.POID" asp-items="Model.Pos" class="form-control form-control-sm select2 vni-font" data-placeholder="--- Select ---" disabled="@(Model.Header.CheckingId > 0 || Model.IsReadOnly)"></select></div>
-                        <div class="form-group col-md-4 mb-2"><label>Expect Date<span class="text-danger">*</span></label><input asp-for="Header.ExpectDate" type="date" class="form-control form-control-sm" readonly="@Model.IsReadOnly" /></div>
-                        <div class="form-group col-md-4 mb-2"><label>Dept Check<span class="text-danger">*</span></label><select asp-for="Header.DeptChecked" asp-items="Model.Departments" class="form-control form-control-sm select2 vni-font" data-placeholder="--- Select ---" disabled="@Model.IsReadOnly"></select></div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group col-md-4 mb-2"><label>Flow No</label><input asp-for="Header.FlowNo" class="form-control form-control-sm" readonly="@Model.IsReadOnly" /></div>
-                        <div class="form-group col-md-4 mb-2"><label>MR Infor</label><input asp-for="Header.MRInfor" class="form-control form-control-sm" readonly="@Model.IsReadOnly" /></div>
-                        <div class="form-group col-md-4 mb-2"><label>Checking Method</label><input asp-for="Header.CheckingMethod" class="form-control form-control-sm" readonly="@Model.IsReadOnly" /></div>
-                    </div>
-                    <div class="form-row mb-0">
-                        <div class="form-group col-md-12 mb-2"><label>Result</label><input asp-for="Header.Result" class="form-control form-control-sm" readonly="@Model.IsReadOnly" /></div>
-                    </div>
-                    @if (!string.Equals(Model.Mode, "add", StringComparison.OrdinalIgnoreCase))
-                    {
-                        <div class="form-row mt-2">
-                            <div class="form-group col-md-3 mb-2"><label>Checked By</label><input class="form-control form-control-sm" value="@Model.Employees.FirstOrDefault(x => x.Value == (Model.Header.CheckedBy?.ToString() ?? string.Empty))?.Text" readonly /></div>
-                            <div class="form-group col-md-3 mb-2"><label>Checked Date</label><input class="form-control form-control-sm" value="@(Model.Header.CheckedDate?.ToString("dd/MM/yyyy") ?? string.Empty)" readonly /></div>
-                            <div class="form-group col-md-3 mb-2"><label>Approved By</label><input class="form-control form-control-sm" value="@Model.Employees.FirstOrDefault(x => x.Value == (Model.Header.ApprovedBy?.ToString() ?? string.Empty))?.Text" readonly /></div>
-                            <div class="form-group col-md-3 mb-2"><label>Approved Date</label><input class="form-control form-control-sm" value="@(Model.Header.ApprovedDate?.ToString("dd/MM/yyyy") ?? string.Empty)" readonly /></div>
+                    <div class="iic-header-grid">
+                        <div class="iic-header-field">
+                            <label>Check No</label>
+                            <input class="form-control form-control-sm" value="@(Model.Header.CheckingId > 0 ? Model.Header.CheckingId.ToString() : string.Empty)" disabled />
                         </div>
-                    }
+                        <div class="iic-header-field">
+                            <label>MR Info</label>
+                            <input asp-for="Header.MRInfor" class="form-control form-control-sm" readonly="@(!Model.CanSaveDraft)" />
+                        </div>
+                        <div class="iic-header-field">
+                            <label>Status</label>
+                            <input class="form-control form-control-sm" value="@Model.Statuses.FirstOrDefault(x => x.Value == Model.Header.StatusId.ToString())?.Text" disabled />
+                        </div>
+                        <div class="iic-header-field">
+                            <label>Created Date</label>
+                            <input class="form-control form-control-sm" value="@Model.Header.CreatedDate.ToString("dd/MM/yyyy")" readonly />
+                        </div>
+                        <div class="iic-header-field">
+                            <label>PO No<span class="text-danger">*</span></label>
+                            <select asp-for="Header.POID" asp-items="Model.Pos" class="form-control form-control-sm select2 vni-font" data-placeholder="--- Select ---" disabled="@(Model.Header.CheckingId > 0 || !Model.CanSaveDraft)"></select>
+                        </div>
+                        <div class="iic-header-field">
+                            <label>Dept Check<span class="text-danger">*</span></label>
+                            <select asp-for="Header.DeptChecked" asp-items="Model.Departments" class="form-control form-control-sm select2 vni-font" data-placeholder="--- Select ---" disabled="@(!Model.CanSaveDraft || Model.LockDeptCheck)"></select>
+                            @if (!Model.CanSaveDraft || Model.LockDeptCheck)
+                            {
+                                <input type="hidden" asp-for="Header.DeptChecked" />
+                            }
+                        </div>
+                        <div class="iic-header-field">
+                            <label>Created By</label>
+                            <select asp-for="Header.CreatedBy" asp-items="Model.Employees" class="form-control form-control-sm select2 vni-font" disabled></select>
+                        </div>
+                        <div class="iic-header-field">
+                            <label>Expect Date<span class="text-danger">*</span></label>
+                            <input asp-for="Header.ExpectDate" type="date" class="form-control form-control-sm" readonly="@(!Model.CanSaveDraft)" />
+                        </div>
+                        <div class="iic-header-field">
+                            <label>Checked By</label>
+                            <div class="d-flex align-items-center">
+                                <select asp-for="Header.NotifyCheckedBy" asp-items="Model.CheckByEmployees" class="form-control form-control-sm select2 vni-font flex-grow-1" data-placeholder="--- Select ---" disabled="@(!Model.CanSaveDraft)"></select>
+                                @if (Model.CanSaveDraft)
+                                {
+                                    <div class="custom-control custom-checkbox ml-2 flex-shrink-0">
+                                        <input asp-for="SendCreateCheckMail" class="custom-control-input" />
+                                        <label asp-for="SendCreateCheckMail" class="custom-control-label text-nowrap">Send mail</label>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        @if (!string.Equals(Model.Mode, "add", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <div class="iic-header-field">
+                                <label>Checked Date</label>
+                                <input class="form-control form-control-sm" value="@(Model.Header.CheckedDate?.ToString("dd/MM/yyyy") ?? string.Empty)" readonly />
+                            </div>
+                            <div class="iic-header-field">
+                                <label>Approved By</label>
+                                <input class="form-control form-control-sm" value="@Model.Employees.FirstOrDefault(x => x.Value == (Model.Header.ApprovedBy?.ToString() ?? string.Empty))?.Text" readonly />
+                            </div>
+                            <div class="iic-header-field">
+                                <label>Approved Date</label>
+                                <input class="form-control form-control-sm" value="@(Model.Header.ApprovedDate?.ToString("dd/MM/yyyy") ?? string.Empty)" readonly />
+                            </div>
+                        }
+                        <div class="iic-header-field iic-header-field-wide">
+                            <label>Checking Method</label>
+                            <input asp-for="Header.CheckingMethod" class="form-control form-control-sm" readonly="@(!Model.CanSaveDraft)" />
+                        </div>
+                        <div class="iic-header-field iic-header-field-wide">
+                            <label>Result</label>
+                            <input asp-for="Header.Result" class="form-control form-control-sm" readonly="@(!Model.CanSaveDraft)" />
+                        </div>
+                    </div>
                     <div class="d-flex align-items-center flex-wrap">
                     @if (Model.CanSaveDraft)
                     {
@@ -242,6 +289,7 @@
             const confirmActionModal = $('#confirmActionModal');
             let pendingSubmitButton = null;
             let confirmBypass = false;
+            let formSubmitting = false;
             const tbody = document.querySelector('#poItemsTable tbody');
             const selectAll = document.getElementById('poSelectAll');
             const confirmBtn = document.getElementById('btnConfirmPoItems');
@@ -290,11 +338,43 @@
                 notifyModal.modal('show');
             }
             const detailForm = document.getElementById('detailForm');
+            const deptCheckedSelect = document.getElementById('Header_DeptChecked');
+            const checkBySelect = document.getElementById('Header_NotifyCheckedBy');
+            function disableFormActionButtons() {
+                detailForm?.querySelectorAll('button[type="submit"]').forEach(function (button) { button.disabled = true; });
+                const confirmOk = document.getElementById('btnConfirmActionOk');
+                if (confirmOk) confirmOk.disabled = true;
+            }
             function toNumber(v) { const n = parseFloat((v || '').toString().replace(/,/g, '')); return Number.isFinite(n) ? n : 0; }
             function formatInt(v) { return Math.round(toNumber(v)).toLocaleString('en-US'); }
             function normalizeRow(r) { return { itemId: parseInt(r.itemId || '0'), itemText: (r.itemText || '').toString(), quantity: toNumber(r.quantity), quantityPassed: toNumber(r.quantityPassed), price: toNumber(r.price), note: (r.note || '').toString(), mrDetailId: parseInt(r.mrDetailId || '0') }; }
             function getStageKey(row) { return `${row.itemId}|${row.mrDetailId || 0}`; }
             function escapeAttr(v) { return (v || '').toString().replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+            async function reloadCheckByOptions() {
+                if (!deptCheckedSelect || !checkBySelect || deptCheckedSelect.disabled) return;
+                const deptId = parseInt(deptCheckedSelect.value || '0');
+                const previousValue = checkBySelect.value || '';
+                checkBySelect.innerHTML = '<option value="">--- Select ---</option>';
+                if (!deptId) {
+                    if (window.jQuery && $(checkBySelect).hasClass('select2-hidden-accessible')) $(checkBySelect).trigger('change.select2');
+                    return;
+                }
+                const checkUsersUrl = '@Url.Page("./ItemCheckingDetail", "CheckUsers")';
+                const url = checkUsersUrl + (checkUsersUrl.indexOf('?') >= 0 ? '&' : '?') + `deptId=${deptId}`;
+                const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                const rows = await res.json();
+                (rows || []).forEach(function (row) {
+                    const opt = document.createElement('option');
+                    opt.value = row.value || '';
+                    opt.textContent = row.text || '';
+                    if (previousValue && previousValue === opt.value) opt.selected = true;
+                    checkBySelect.appendChild(opt);
+                });
+                if (previousValue && !checkBySelect.value) {
+                    checkBySelect.selectedIndex = 0;
+                }
+                if (window.jQuery && $(checkBySelect).hasClass('select2-hidden-accessible')) $(checkBySelect).trigger('change.select2');
+            }
             function syncStagedInput() { stagedInput.value = JSON.stringify(stagedRows.map(r => ({ itemId: r.itemId, quantityPassed: r.quantityPassed, price: r.price, note: r.note, mrDetailId: r.mrDetailId }))); }
             function renderStagedRows() {
                 const stagedHtml = stagedRows.map((r, idx) => `<tr data-stage-index="${idx}">
@@ -416,13 +496,26 @@
                 const amount = normalizedQty * price;
                 amountCell.textContent = formatInt(amount);
             });
-            detailForm?.addEventListener('submit', function () {
+            detailForm?.addEventListener('submit', function (e) {
+                if (formSubmitting) {
+                    e.preventDefault();
+                    return;
+                }
+                formSubmitting = true;
+                disableFormActionButtons();
                 detailBody.querySelectorAll('.stage-qty-passed, .stage-price, .po-qty-passed, .existing-price').forEach(function (input) {
                     input.value = Math.round(toNumber(input.value || '0')).toString();
                 });
             });
             if (showBtn) showBtn.addEventListener('click', loadPoItems);
             if (confirmBtn) confirmBtn.addEventListener('click', saveSelectedItems);
+            if (deptCheckedSelect) {
+                deptCheckedSelect.addEventListener('change', reloadCheckByOptions);
+                if (window.jQuery) {
+                    $(deptCheckedSelect).on('change', reloadCheckByOptions);
+                    $(deptCheckedSelect).on('select2:select', reloadCheckByOptions);
+                }
+            }
             document.querySelectorAll('.btn-require-confirm').forEach(function(btn){
                 btn.addEventListener('click', function(e){
                     if (confirmBypass) { confirmBypass = false; return; }
@@ -439,7 +532,9 @@
                 });
             });
             document.getElementById('btnConfirmActionOk')?.addEventListener('click', function(){
+                if (formSubmitting) return;
                 if (!pendingSubmitButton) return;
+                this.disabled = true;
                 confirmBypass = true;
                 confirmActionModal.modal('hide');
                 pendingSubmitButton.click();
@@ -475,4 +570,58 @@
 @section Styles {
     <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Inventory/InventoryItemChecking/index.css" asp-append-version="true" />
+    <style>
+        .iic-header-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px 16px;
+            margin-bottom: 12px;
+        }
+        .iic-header-field {
+            display: grid;
+            grid-template-columns: 135px minmax(0, 1fr);
+            gap: 8px;
+            align-items: center;
+            margin: 0;
+        }
+        .iic-header-field label {
+            margin: 0;
+            font-weight: 600;
+        }
+        .iic-header-field-wide {
+            grid-column: 1 / -1;
+        }
+        .iic-header-field .form-control,
+        .iic-header-field .select2-container--default .select2-selection--single {
+            min-height: 38px;
+        }
+        .iic-status-text-wrap {
+            min-height: 38px;
+            display: flex;
+            align-items: center;
+        }
+        .iic-header-field .select2-container {
+            width: 100% !important;
+        }
+        @@media (max-width: 1199.98px) {
+            .iic-header-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+        @@media (max-width: 991.98px) {
+            .iic-header-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        @@media (max-width: 767.98px) {
+            .iic-header-field {
+                grid-template-columns: 1fr;
+                gap: 6px;
+            }
+        }
+    </style>
 }
+
+
+
+

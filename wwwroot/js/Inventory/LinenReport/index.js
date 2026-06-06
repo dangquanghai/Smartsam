@@ -33,6 +33,10 @@
         $('#btnPreviewLinenReportPage').off('click').on('click', function () {
             loadPreview();
         });
+
+        $('#linenReportDateRange').on('apply.daterangepicker cancel.daterangepicker', function () {
+            loadModeOptions();
+        });
     }
 
     function loadModeOptions() {
@@ -41,7 +45,9 @@
             type: 'GET',
             data: {
                 reportType: getSelectedReportType(),
-                descriptionId: $('#linenReportDescription').val() || ''
+                descriptionId: $('#linenReportDescription').val() || '',
+                fromDate: $('#linenReportFromDate').val() || '',
+                toDate: $('#linenReportToDate').val() || ''
             },
             success: function (response) {
                 if (!response || response.success !== true) {
