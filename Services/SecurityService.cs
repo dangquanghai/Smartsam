@@ -1,5 +1,6 @@
-﻿﻿using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Mvc.Filters;
 using SmartSam.Services; // QUAN TRỌNG: Namespace này chứa PermissionService
 using SmartSam.Services.Interfaces; // Nếu anh để ISecurityService ở thư mục Interfaces
 
@@ -19,22 +20,20 @@ namespace SmartSam.Services.Implementations
         {
             18,  // Admin/Employee
             71,  // Supplier list
-            74,  // Supplier-PO Report
+            74,  // Supplier-PO Report	
             75,  // Analyzing Suppliers
             60,  // Inventory Parameters
             64,  // Item list
-            //66,  // Item Issue
-            //67,  // Item Receice
-            //68,  // Item Transfer
             70,  // Inventory Report
             90 , // Inventory Make  New year=> tạo số liệu tồn đầu năm cho các kho
             114, // Laundty & Linen  list
             115, // Linen  Note Daily
-            116, // Laundry Linen Delivery
+            116, // Laundry Linen Delivery 
             117, // Laundry Linen Receiving
             118, // Laundry Linen Report
             148, // Special Laudry Report
             149, // Post Invoice to Vinhy
+           
         };
 
         public List<int> GetEffectivePermissions(int functionId, int roleId, int objectStatus)
@@ -68,24 +67,60 @@ namespace SmartSam.Services.Implementations
                 case 73: // Purchase Order
                     return FilterPurchaseOrder(raw, objectStatus);
 
+                case 151:  // Item Checking
+                    return FilterItemChecking(raw, objectStatus);
+
                 case 66: // Item Issue
                     return FilterItemIssue(raw, objectStatus);
-                case 67:  // Item Receice
+                case 67:  // Item Receice 
                     return FilterItemReceice(raw, objectStatus);
-                case 68:  // Item Transfer
+                case 68:  // Item Transfer 
                     return FilterItemTransfer(raw, objectStatus);
 
                 default:
                     return raw;
             }
         }
+        private List<int> FilterItemChecking(List<int> raw, int status)
+        {
+            /* 
+               Mã quyền (Action):
+               1: View List, 2: View Detail, 3: Add, 4: Edit
+
+               Trạng thái ItemChecking: 
+               1: Just Created, 2: Checked, 3: Approved, 4: Received, 5: Cancel
+            */
+
+            // Bước 1: Khởi tạo danh sách quyền mặc định (Lúc nào cũng được xem List và thêm mới)
+            // Sử dụng Distinct để tránh trùng lặp nếu trong raw đã có sẵn nhiều quyền giống nhau
+            var effective = raw.Where(p => p == 1 || p == 3).Distinct().ToList();
+
+            // Bước 2: Xét quyền xem chi tiết (View Detail - 2) 
+            // Thường thì trạng thái nào cũng được xem chi tiết nếu có quyền
+            if (raw.Contains(2))
+            {
+                effective.Add(2);
+            }
+
+            // Bước 3: Xét quyền đặc thù theo trạng thái
+            if (status == 1) // Chỉ trạng thái Just Created mới được Edit
+            {
+                if (raw.Contains(4))
+                {
+                    effective.Add(4);
+                }
+            }
+            // Các trạng thái 2, 3, 4, 5 sẽ không rơi vào if này -> Không có quyền 4 (Edit)
+
+            return effective.Distinct().ToList();
+        }
         private List<int> FilterItemTransfer(List<int> raw, int status)
         {
             /* Mã quyền (Action):
-                1: View, 2: View Detail, 3 Add, 4: Edit, 5: Delete
+                1: View, 2: View Detail, 3 Add, 4: Edit, 5: Delete 
 
-                Trạng thái ItemIssue:
-                1: Just Created, 2: Storeman Confirmed, 3: Head Confirmed
+                Trạng thái ItemIssue: 
+                1: Just Created, 2: Storeman Confirmed, 3: Head Confirmed 
             */
             // Các quyền luôn có: Xem và Thêm mới
             var effective = raw.Where(p => p == 2 || p == 3).ToList();
@@ -110,9 +145,9 @@ namespace SmartSam.Services.Implementations
         private List<int> FilterItemReceice(List<int> raw, int status)
         {
             /* Mã quyền (Action):
-                1: View, 2: View Detail, 3 Add, 4: Edit, 5: Delete
+                1: View, 2: View Detail, 3 Add, 4: Edit, 5: Delete 
 
-                Trạng thái ItemIssue:
+                Trạng thái ItemIssue: 
                 1: Create Voucher, 2: Storeman Confirmed, 3: Head Checked & Confirmed, 4: PU Confirmed
             */
             // Các quyền luôn có: Xem và Thêm mới
@@ -137,9 +172,9 @@ namespace SmartSam.Services.Implementations
         private List<int> FilterItemIssue(List<int> raw, int status)
         {
             /* Mã quyền (Action):
-                1: View, 2: View Detail, 3 Add, 4: Edit, 5: Delete
+                1: View, 2: View Detail, 3 Add, 4: Edit, 5: Delete 
 
-                Trạng thái ItemIssue:
+                Trạng thái ItemIssue: 
                 1: Was Created, 2: Storeman Confirmed, 3: Receiver Confirmed
             */
 
@@ -152,25 +187,25 @@ namespace SmartSam.Services.Implementations
                 if (raw.Contains(3)) effective.Add(3);
                 if (raw.Contains(4)) effective.Add(4);
                 if (raw.Contains(5)) effective.Add(5);
-            }
+            } 
             else// 2,3
             {
                 if (raw.Contains(2)) effective.Add(2);
                 if (raw.Contains(3)) effective.Add(3);
 
-            }
-
+            }    
+           
             return effective;
         }
-
+    
         private List<int> FilterSTContract(List<int> raw, int status)
         {
             /* Mã quyền (Action):
-                2: View, 3: Add, 4: Edit, 5: Edit Member, 6: Cancel,
+                2: View, 3: Add, 4: Edit, 5: Edit Member, 6: Cancel, 
                 7: ChangeStatus, 8: Adjust Out Date, 9: Copy
                 10: Create Deposit, 11: Check In, 12: Check Out
 
-                Trạng thái ST Contract:
+                Trạng thái ST Contract: 
                 1: Reser, 2: Living, 3: Done, 4: Cancelled, 9: Exception
             */
             // Các quyền luôn có: Xem chi tiết và Thêm mới
@@ -209,12 +244,12 @@ namespace SmartSam.Services.Implementations
 
         private List<int> FilterPurchaseOrder(List<int> raw, int status)
         {
-            /* Trạng thái PO thực tế:
+            /* Trạng thái PO thực tế: 
                1: Processing(Purchaser đánh giá thì nó chuyển sang 2)
                 Nó gửi cập nhật thông tin Purchaser đánh giá vào bảng PO_Estimate và thông tin Purchaser approve vào bảng PC_PO rồi gửi mail cho CFO
                2: Waiting for approval
                 CFO approve nó cập nhật thông tin approve vào PC_PO rồi gửi cho BOD
-                BOD approve nó cập nhật thông tin approve vào PC_PO rồi gửi cho Purchaser
+                BOD approve nó cập nhật thông tin approve vào PC_PO rồi gửi cho Purchaser 
                3: BOD approved
 
                Mã hành động:
@@ -229,7 +264,7 @@ namespace SmartSam.Services.Implementations
             {
                 effective.Add(6);
             }
-
+            
 
             switch (status)
             {
@@ -274,7 +309,7 @@ namespace SmartSam.Services.Implementations
                     break;
 
                 case 2: // TRẠNG THÁI: WAITING FOR APPROVE (Chờ CFO/BOD)
-                        // ĐƯỢC: Approve (5)
+                        // ĐƯỢC: Approve (5) 
                         // KHÔNG ĐƯỢC: Edit (4), Change Status (6)
                     if (raw.Contains(5)) effective.Add(5);
                     break;
@@ -306,7 +341,7 @@ namespace SmartSam.Services.Implementations
             5: Submit/ Approve
             Purchaer, CFO,BOD,ADMIN được xem MR của tất cả các bộ phận ==> Không lock select Bộ phận với các user này
 
-            có các trạng thái
+            có các trạng thái 
             -1  Just Createed
             0	Submited To Head
             1	Head Approved
@@ -315,8 +350,8 @@ namespace SmartSam.Services.Implementations
             4	Collected to PR
             5	Rejected
             6	ISSUED
-
-             Chỉ có trạng thái -1 là được edit, Reject Item
+             
+             Chỉ có trạng thái -1 là được edit, Reject Item 
              */
 
             var validActions = new List<int> { 1, 2 };
