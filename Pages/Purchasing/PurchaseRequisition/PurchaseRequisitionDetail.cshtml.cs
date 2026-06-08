@@ -19,7 +19,7 @@ namespace SmartSam.Pages.Purchasing.PurchaseRequisition;
 public class PurchaseRequisitionDetailModel : BasePageModel
 {
     private static readonly HashSet<int> AllowedPageSizes = [10, 20, 50, 100, 200];
-    // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com"; 
+    // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
     private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
     private const int FUNCTION_ID = 72;
     private const int PermissionViewDetail = 2;
@@ -106,7 +106,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
             }
 
             var effectivePermissions = GetEffectivePermissionsByStatus(Requisition.Status);
-            if (!effectivePermissions.Contains(PermissionViewDetail))
+            if (!effectivePermissions.Contains(PermissionViewDetail) || !CanViewCurrentWorkflowStep())
             {
                 TempData["Message"] = "You have no permission to access this requisition.";
                 TempData["MessageType"] = "warning";
@@ -1727,6 +1727,29 @@ WHERE EmployeeCode = @EmployeeCode", conn);
         };
     }
 
+    private bool CanViewCurrentWorkflowStep()
+    {
+        if (IsAdminRole() || _workflowUser.IsPurchaser)
+        {
+            return true;
+        }
+
+        if (_workflowUser.IsCFO)
+        {
+            return Requisition.Status == 2
+                && Requisition.PurId.HasValue
+                && !Requisition.CAId.HasValue;
+        }
+
+        if (_workflowUser.IsBOD)
+        {
+            return Requisition.Status == 2
+                && Requisition.CAId.HasValue
+                && !Requisition.GDId.HasValue;
+        }
+
+        return false;
+    }
     // Xác định edit thật sự dữ liệu chứng từ chỉ được phép ở trạng thái New.
     private bool CanEditDocument(List<int> effectivePermissions)
     {

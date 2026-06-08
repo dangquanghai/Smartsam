@@ -19,11 +19,10 @@ public class InventoryIssueDetailModel : BasePageModel
     private const int PermissionViewDetail = 2;
     private const int PermissionAdd = 3;
     private const int PermissionEdit = 4;
-    private const int PermissionApproved = 5;
-    // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
-    // private const string ReturnMoveToCpnNotifyEmail = "maiquangvinhi4@gmail.com";
-    private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
-    private const string ReturnMoveToCpnNotifyEmail = "hai.dq@saigonskygarden.com.vn";
+    private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
+    private const string ReturnMoveToCpnNotifyEmail = "maiquangvinhi4@gmail.com";
+    // private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
+    // private const string ReturnMoveToCpnNotifyEmail = "hai.dq@saigonskygarden.com.vn";
     private readonly PermissionService _permissionService;
 
     public InventoryIssueDetailModel(IConfiguration config, PermissionService permissionService) : base(config) { _permissionService = permissionService; }
@@ -45,6 +44,7 @@ public class InventoryIssueDetailModel : BasePageModel
     public int MaxAttachmentSizeMb => _config.GetValue<int?>("FileUploads:MaxFileSizeMb") ?? 10;
     public string CurrentEmployeeCode => GetCurrentEmployeeCode();
     public int CurrentKpGroupIdValue => GetCurrentKpGroupId();
+    public bool IsIssueHouseLocked { get; private set; }
 
     public List<SelectListItem> IssueTypes { get; set; } = new();
     public List<SelectListItem> Stores { get; set; } = new();
@@ -79,7 +79,7 @@ public class InventoryIssueDetailModel : BasePageModel
             : ((TempData["MessageType"] as string) ?? "info");
         if (id.HasValue && IsViewMode && !PagePerm.HasPermission(PermissionViewDetail)) return Redirect("/");
         if (!id.HasValue && !PagePerm.HasPermission(PermissionAdd)) return Redirect("/");
-        if (IsApprovedMode && !PagePerm.HasPermission(PermissionApproved)) return Redirect("/");
+        if (IsApprovedMode && !HasIssueApprovalAccess()) return Redirect("/");
         if (IsEditMode && !PagePerm.HasPermission(PermissionEdit)) return Redirect("/");
 
         if (id.HasValue)
@@ -96,7 +96,9 @@ public class InventoryIssueDetailModel : BasePageModel
             LoadLookups();
             Header.FlowDate = DateTime.Today;
             Header.StatusID = 1;
-            Header.FlowNo = GetNextVoucherNo(Header.FlowSubType);
+            Header.FlowNo = Header.FlowSubType.HasValue && Header.FlowSubType.Value > 0
+                ? GetNextVoucherNo(Header.FlowSubType)
+                : string.Empty;
             Header.StatusName = GetStatusName(Header.StatusID, Header.FlowSubType);
             DetailsJson = "[]";
         }
@@ -145,7 +147,9 @@ public class InventoryIssueDetailModel : BasePageModel
         Header.StatusID = 1;
         if (!id.HasValue)
         {
-            Header.FlowNo = GetNextVoucherNo(Header.FlowSubType);
+            Header.FlowNo = Header.FlowSubType.HasValue && Header.FlowSubType.Value > 0
+                ? GetNextVoucherNo(Header.FlowSubType)
+                : string.Empty;
         }
         else if (!Header.FlowSubType.HasValue || Header.FlowSubType.Value <= 0)
         {
@@ -290,7 +294,7 @@ WHERE FlowID=@FlowID", conn, tran);
     public IActionResult OnPostSaveAndConfirm(long? id, string mode)
     {
         PagePerm = GetUserPermissions();
-        if (!PagePerm.HasPermission(PermissionApproved)) return Redirect("/");
+        if (!HasIssueApprovalAccess()) return Redirect("/");
         ConfirmAfterSave = true;
         return OnPostSave(id, mode);
     }
@@ -299,7 +303,7 @@ WHERE FlowID=@FlowID", conn, tran);
     {
         PagePerm = GetUserPermissions();
         Mode = string.IsNullOrWhiteSpace(mode) ? "edit" : mode.Trim().ToLowerInvariant();
-        if (!PagePerm.HasPermission(PermissionApproved)) return Redirect("/");
+        if (!HasIssueApprovalAccess()) return Redirect("/");
         if (!EvaluateCanConfirmVoucherBusiness(id))
         {
             TempData["Message"] = "You have no right to confirm this voucher at current status.";
@@ -314,7 +318,7 @@ WHERE FlowID=@FlowID", conn, tran);
     {
         PagePerm = GetUserPermissions();
         Mode = string.IsNullOrWhiteSpace(mode) ? "approved" : mode.Trim().ToLowerInvariant();
-        if (!PagePerm.HasPermission(PermissionApproved)) return Redirect("/");
+        if (!HasIssueApprovalAccess()) return Redirect("/");
         if (!EvaluateCanConfirmVoucherBusiness(id))
         {
             TempData["Message"] = "You have no right to sign this voucher at current status.";
@@ -328,7 +332,7 @@ WHERE FlowID=@FlowID", conn, tran);
     public IActionResult OnGetReport(long id, bool inline = false, bool previewSign = false)
     {
         PagePerm = GetUserPermissions();
-        if (!PagePerm.HasPermission(PermissionViewList) && !PagePerm.HasPermission(PermissionViewDetail) && !PagePerm.HasPermission(PermissionApproved) && !PagePerm.HasPermission(PermissionEdit))
+        if (!PagePerm.HasPermission(PermissionViewList) && !PagePerm.HasPermission(PermissionViewDetail) && !HasIssueApprovalAccess() && !PagePerm.HasPermission(PermissionEdit))
         {
             return RedirectToPage("./Index");
         }
@@ -357,7 +361,7 @@ WHERE FlowID=@FlowID", conn, tran);
     {
         PagePerm = GetUserPermissions();
         Mode = string.IsNullOrWhiteSpace(mode) ? "edit" : mode.Trim().ToLowerInvariant();
-        if (!PagePerm.HasPermission(PermissionEdit) && !PagePerm.HasPermission(PermissionApproved)) return Redirect("/");
+        if (!PagePerm.HasPermission(PermissionEdit) && !HasIssueApprovalAccess()) return Redirect("/");
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
@@ -481,16 +485,21 @@ WHERE FlowID=@FlowID", conn, tran);
         UpdateFlowStatus(conn, id, nextLevel);
         InsertFlowAction(conn, id, nextLevel, GetCurrentEmployeeId(), "Storeman Confirmed issue");
 
+        string? mailWarning = null;
         if (nextLevel > 1)
         {
             if (flow.ReceivedBy.HasValue && flow.ReceivedBy.Value > 0)
             {
-                NotifyReceiverByLegacyRule(conn, flow.ReceivedBy.Value, nextLevel + 1, flow.FlowNo, flow.FlowSubType != 1);
+                mailWarning = NotifyReceiverByLegacyRule(conn, flow.ReceivedBy.Value, nextLevel + 1, flow.FlowNo, flow.FlowSubType != 1);
+            }
+            else
+            {
+                mailWarning = "Confirm successfully, but notification email was not sent because Receiver By is not selected.";
             }
         }
 
-        TempData["Message"] = "Confirm successfully.";
-        TempData["MessageType"] = "success";
+        TempData["Message"] = mailWarning ?? "Confirm successfully.";
+        TempData["MessageType"] = mailWarning == null ? "success" : "warning";
         return RedirectToPage("./Index");
     }
 
@@ -556,37 +565,49 @@ VALUES(@FlowID,@UserID,GETDATE(),@ActionTypeID,@ComputerName,@Des)", conn);
     }
 
 
-    private void NotifyReceiverByLegacyRule(SqlConnection conn, int receivedByEmployeeId, int level, string flowNo, bool includeApprovalLink = true)
+    private string? NotifyReceiverByLegacyRule(SqlConnection conn, int receivedByEmployeeId, int level, string flowNo, bool includeApprovalLink = true)
     {
-        using var cmd = new SqlCommand(@"SELECT TOP 1 e.TheEmail, e.EmployeeCode, e.EmployeeName, ISNULL(e.Title,'') AS Title
-FROM dbo.MS_Employee receiver
-INNER JOIN dbo.MS_Employee e ON e.StoreGR = receiver.StoreGR
-WHERE receiver.EmployeeID = @ReceivedByEmployeeID
-  AND e.EmployeeID = @ReceivedByEmployeeID
-  AND e.IssueVoucher = @Level
-  AND ISNULL(e.TheEmail,'') <> ''", conn);
+        using var cmd = new SqlCommand(@"SELECT TOP 1 ISNULL(TheEmail,'') AS TheEmail,
+       ISNULL(EmployeeCode,'') AS EmployeeCode,
+       ISNULL(EmployeeName,'') AS EmployeeName,
+       ISNULL(Title,'') AS Title,
+       ISNULL(IssueVoucher,0) AS IssueVoucher
+FROM dbo.MS_Employee
+WHERE EmployeeID = @ReceivedByEmployeeID", conn);
         cmd.Parameters.Add("@ReceivedByEmployeeID", SqlDbType.Int).Value = receivedByEmployeeId;
-        cmd.Parameters.Add("@Level", SqlDbType.Int).Value = level;
         using var rd = cmd.ExecuteReader();
-        if (rd.Read())
+        if (!rd.Read())
         {
-            var email = Convert.ToString(rd["TheEmail"]) ?? string.Empty;
-            if (!string.IsNullOrWhiteSpace(email))
-            {
-                var code = Convert.ToString(rd["EmployeeCode"]) ?? string.Empty;
-                var name = Convert.ToString(rd["EmployeeName"]) ?? string.Empty;
-                var title = Convert.ToString(rd["Title"]) ?? string.Empty;
-                var recipientLabel = BuildRecipientDisplayName(title, name, code, email);
-                var statusName = GetStatusName(level - 1, 1);
-                var subject = includeApprovalLink
-                    ? ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}")
-                    : ApplyMailSubjectPrefix($"[Inventory Item Checking] Issue voucher {flowNo} has been confirmed by storeman");
-                QueueConfirmMail(email, subject, flowNo, "Issue Voucher", true, recipientLabel, code, statusName, includeApprovalLink);
-                return;
-            }
+            return $"Confirm successfully, but notification email was not sent because selected Receiver By (EmployeeID {receivedByEmployeeId}) was not found.";
         }
 
+        var email = Convert.ToString(rd["TheEmail"]) ?? string.Empty;
+        var code = Convert.ToString(rd["EmployeeCode"]) ?? string.Empty;
+        var name = Convert.ToString(rd["EmployeeName"]) ?? string.Empty;
+        var title = Convert.ToString(rd["Title"]) ?? string.Empty;
+        var issueVoucherLevel = Convert.ToInt32(rd["IssueVoucher"] == DBNull.Value ? 0 : rd["IssueVoucher"]);
+
+        if (issueVoucherLevel != level)
+        {
+            var receiverName = string.IsNullOrWhiteSpace(name) ? $"EmployeeID {receivedByEmployeeId}" : $"{name} ({code})";
+            return $"Confirm successfully, but notification email was not sent because selected Receiver By {receiverName} has IssueVoucher level {issueVoucherLevel}, expected {level}.";
+        }
+
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            var receiverName = string.IsNullOrWhiteSpace(name) ? $"EmployeeID {receivedByEmployeeId}" : $"{name} ({code})";
+            return $"Confirm successfully, but notification email was not sent because selected Receiver By {receiverName} has no TheEmail.";
+        }
+
+        var recipientLabel = BuildRecipientDisplayName(title, name, code, email);
+        var statusName = GetStatusName(level - 1, 1);
+        var subject = includeApprovalLink
+            ? ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}")
+            : ApplyMailSubjectPrefix($"[Inventory Item Checking] Issue voucher {flowNo} has been confirmed by storeman");
+        QueueConfirmMail(email, subject, flowNo, "Issue Voucher", true, recipientLabel, code, statusName, includeApprovalLink);
+        return null;
     }
+
     private void NotifyNextByIssueVoucherLevel(SqlConnection conn, int storeGr, int level, string flowNo)
     {
         using var cmd = new SqlCommand(@"SELECT TheEmail, EmployeeCode, EmployeeName, ISNULL(Title,'') AS Title FROM dbo.MS_Employee
@@ -748,9 +769,21 @@ ORDER BY ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
         return true;
     }
 
+    public bool HasIssueApprovalAccess()
+    {
+        return PagePerm.HasPermission(PermissionViewList) && GetCurrentEmployeeIssueVoucherLevel() > 0;
+    }
+
+    private int GetCurrentEmployeeIssueVoucherLevel()
+    {
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        return GetEmployeeIssueVoucherLevel(conn, GetCurrentEmployeeId());
+    }
+
     private bool EvaluateCanConfirmVoucherBusiness(long? flowId = null)
     {
-        if (!PagePerm.HasPermission(PermissionApproved)) return false;
+        if (!HasIssueApprovalAccess()) return false;
         var targetId = flowId ?? Id;
         if (!targetId.HasValue || targetId.Value <= 0) return false;
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -1098,18 +1131,32 @@ ORDER BY i.ItemCode", conn))
         return new JsonResult(rows);
     }
 
+
+    public JsonResult OnGetMrDepartments()
+    {
+        var rows = LoadListFromSql("SELECT KPGroupID, KPGroupName FROM dbo.INV_KPGroup WHERE KPGroupID > 1 AND KPGroupID < 15 ORDER BY KPGroupName", "KPGroupID", "KPGroupName")
+            .Where(x => !string.IsNullOrWhiteSpace(x.Value))
+            .Select(x => new { value = x.Value, text = x.Text })
+            .ToList();
+
+        return new JsonResult(rows);
+    }
+
     public JsonResult OnGetMrList(string? requestNo, string? itemCode, string? according, int? deptId, string? fromDate, string? toDate)
     {
         var from = DateTime.TryParse(fromDate, out var fd) ? fd.Date : DateTime.Today.AddDays(-60);
         var to = DateTime.TryParse(toDate, out var td) ? td.Date : DateTime.Today;
-        var kp = GetCurrentKpGroupId();
         var rows = new List<object>();
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
-        using var cmd = new SqlCommand(@"SELECT TOP 200 m.REQUEST_NO, m.DATE_CREATE, ISNULL(m.ACCORDINGTO,'') AS ACCORDINGTO, ISNULL(k.KPGroupName,'') AS DeptName
+        using var cmd = new SqlCommand(@"SELECT TOP 200 m.REQUEST_NO, m.DATE_CREATE, ISNULL(m.ACCORDINGTO,'') AS ACCORDINGTO,
+       ISNULL(k.KPGroupName,'') AS DeptName,
+       ISNULL(s.MaterialStatusName,'') AS MaterialStatusName
 FROM dbo.MATERIAL_REQUEST m
-LEFT JOIN dbo.INV_KPGroup k ON k.KPGroupID = m.STORE_GROUP
-WHERE m.STORE_GROUP = @StoreGroup
+INNER JOIN dbo.INV_KPGroup k ON m.STORE_GROUP = k.KPGroupID
+INNER JOIN dbo.MaterialStatus s ON m.MATERIALSTATUSID = s.MaterialStatusID
+WHERE ((m.MATERIALSTATUSID >= 1) OR (m.MATERIALSTATUSID >= 1 AND ISNULL(m.IS_AUTO,0) = 1))
+  AND m.MATERIALSTATUSID < 5
   AND m.DATE_CREATE >= @FromDate AND m.DATE_CREATE < DATEADD(day, 1, @ToDate)
   AND (@RequestNo IS NULL OR CAST(m.REQUEST_NO AS varchar(50)) LIKE '%' + @RequestNo + '%')
   AND (@According IS NULL OR ISNULL(m.ACCORDINGTO,'') LIKE '%' + @According + '%')
@@ -1117,7 +1164,6 @@ WHERE m.STORE_GROUP = @StoreGroup
   AND EXISTS (SELECT 1 FROM dbo.MATERIAL_REQUEST_DETAIL d WHERE d.REQUEST_NO=m.REQUEST_NO AND ISNULL(d.NEW_ORDER,0) > ISNULL(d.ISSUED,0)
         AND (@ItemCode IS NULL OR ISNULL(d.ITEMCODE,'') LIKE '%' + @ItemCode + '%'))
 ORDER BY m.DATE_CREATE DESC, m.REQUEST_NO DESC", conn);
-        cmd.Parameters.Add("@StoreGroup", SqlDbType.Int).Value = kp;
         cmd.Parameters.Add("@FromDate", SqlDbType.Date).Value = from;
         cmd.Parameters.Add("@ToDate", SqlDbType.Date).Value = to;
         cmd.Parameters.Add("@RequestNo", SqlDbType.NVarChar, 50).Value = string.IsNullOrWhiteSpace(requestNo) ? DBNull.Value : requestNo.Trim();
@@ -1127,47 +1173,87 @@ ORDER BY m.DATE_CREATE DESC, m.REQUEST_NO DESC", conn);
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
-            rows.Add(new { requestNo = Convert.ToInt64(rd["REQUEST_NO"]), dateCreate = Convert.ToDateTime(rd["DATE_CREATE"]).ToString("yyyy-MM-dd"), according = Convert.ToString(rd["ACCORDINGTO"]) ?? string.Empty, deptName = Convert.ToString(rd["DeptName"]) ?? string.Empty });
+            rows.Add(new
+            {
+                requestNo = Convert.ToInt64(rd["REQUEST_NO"]),
+                dateCreate = Convert.ToDateTime(rd["DATE_CREATE"]).ToString("yyyy-MM-dd"),
+                according = Convert.ToString(rd["ACCORDINGTO"]) ?? string.Empty,
+                deptName = Convert.ToString(rd["DeptName"]) ?? string.Empty,
+                materialStatusName = Convert.ToString(rd["MaterialStatusName"]) ?? string.Empty
+            });
         }
         return new JsonResult(rows);
     }
 
-    public JsonResult OnGetMrDetails(long requestNo)
+    public JsonResult OnGetMrDetails(long requestNo, int? fromStore)
     {
         var rows = new List<object>();
+        var rawRows = new List<(long Id, long RequestNo, int ItemId, string ItemCode, string ItemName, bool MissingItemName, string Unit, decimal RemainQty)>();
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
-        using var cmd = new SqlCommand(@"SELECT d.ID, d.ITEMCODE,
-       COALESCE(NULLIF(LTRIM(RTRIM(kp.ItemName)),''), NULLIF(LTRIM(RTRIM(i.ItemName)),'')) AS ItemName,
+        using var cmd = new SqlCommand(@"SELECT m.REQUEST_NO,
+       m.DATE_CREATE,
+       d.ITEMCODE,
+       i.ItemID,
+       i.ItemName,
        ISNULL(d.UNIT,'') AS UNIT,
        ISNULL(d.NEW_ORDER,0)-ISNULL(d.ISSUED,0) AS REMAIN_QTY,
-       i.ItemID,
-       CASE WHEN COALESCE(NULLIF(LTRIM(RTRIM(kp.ItemName)),''), NULLIF(LTRIM(RTRIM(i.ItemName)),'')) IS NULL THEN 1 ELSE 0 END AS MissingItemName
-FROM dbo.MATERIAL_REQUEST_DETAIL d
-LEFT JOIN dbo.INV_ItemList i ON LTRIM(RTRIM(i.ItemCode)) = LTRIM(RTRIM(d.ITEMCODE))
-LEFT JOIN dbo.INV_KPGroupIndex kp ON kp.ItemID = i.ItemID AND kp.KPGroupID = @KPGroupID
-WHERE d.REQUEST_NO=@RequestNo AND ISNULL(d.NEW_ORDER,0) > ISNULL(d.ISSUED,0)
+       d.ID,
+       CASE WHEN i.ItemID IS NULL OR NULLIF(LTRIM(RTRIM(i.ItemName)),'') IS NULL THEN 1 ELSE 0 END AS MissingItemName
+FROM dbo.MATERIAL_REQUEST m
+INNER JOIN dbo.MATERIAL_REQUEST_DETAIL d ON m.REQUEST_NO = d.REQUEST_NO
+INNER JOIN dbo.INV_KPGroup k ON m.STORE_GROUP = k.KPGroupID
+INNER JOIN dbo.MaterialStatus s ON m.MATERIALSTATUSID = s.MaterialStatusID
+LEFT JOIN dbo.INV_ItemList i ON LTRIM(RTRIM(d.ITEMCODE)) = LTRIM(RTRIM(i.ItemCode))
+WHERE m.REQUEST_NO=@RequestNo
+  AND ISNULL(d.NEW_ORDER,0) > ISNULL(d.ISSUED,0)
 ORDER BY d.ID", conn);
         cmd.Parameters.Add("@RequestNo", SqlDbType.BigInt).Value = requestNo;
-        cmd.Parameters.Add("@KPGroupID", SqlDbType.Int).Value = GetCurrentKpGroupId();
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
-            rows.Add(new { id = Convert.ToInt64(rd["ID"]), itemId = rd["ItemID"]==DBNull.Value?0:Convert.ToInt32(rd["ItemID"]), itemCode = Convert.ToString(rd["ITEMCODE"]) ?? string.Empty, itemName = Convert.ToString(rd["ItemName"]) ?? string.Empty, missingItemName = Convert.ToInt32(rd["MissingItemName"]) == 1, unit = Convert.ToString(rd["UNIT"]) ?? string.Empty, remainQty = Convert.ToDecimal(rd["REMAIN_QTY"]) });
+            rawRows.Add((
+                Convert.ToInt64(rd["ID"]),
+                Convert.ToInt64(rd["REQUEST_NO"]),
+                rd["ItemID"] == DBNull.Value ? 0 : Convert.ToInt32(rd["ItemID"]),
+                Convert.ToString(rd["ITEMCODE"]) ?? string.Empty,
+                Convert.ToString(rd["ItemName"]) ?? string.Empty,
+                Convert.ToInt32(rd["MissingItemName"]) == 1,
+                Convert.ToString(rd["UNIT"]) ?? string.Empty,
+                Convert.ToDecimal(rd["REMAIN_QTY"])
+            ));
         }
+        rd.Dispose();
+
+        foreach (var raw in rawRows)
+        {
+            rows.Add(new
+            {
+                id = raw.Id,
+                requestNo = raw.RequestNo,
+                itemId = raw.ItemId,
+                itemCode = raw.ItemCode,
+                itemName = raw.ItemName,
+                missingItemName = raw.MissingItemName,
+                unit = raw.Unit,
+                remainQty = raw.RemainQty,
+                stockQty = raw.ItemId > 0 && fromStore.HasValue && fromStore.Value > 0 ? CheckStore(conn, raw.ItemId, fromStore.Value) : (decimal?)null
+            });
+        }
+
         return new JsonResult(rows);
     }
 
-
-
-
-    private int GetCurrentDeptId()
+    public JsonResult OnGetCheckStore(int itemId, int fromStore)
     {
+        if (itemId <= 0 || fromStore <= 0)
+        {
+            return new JsonResult(new { ok = true, stockQty = 0m });
+        }
+
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
-        using var cmd = new SqlCommand("SELECT ISNULL(DeptID,0) FROM dbo.MS_Employee WHERE EmployeeID=@EmployeeID", conn);
-        cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = GetCurrentEmployeeId();
-        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
+        return new JsonResult(new { ok = true, stockQty = CheckStore(conn, itemId, fromStore) });
     }
 
     private List<InventoryIssueDetailRow> ParseDetails(string json)
@@ -1193,16 +1279,11 @@ ORDER BY d.ID", conn);
        ISNULL(e.EmployeeName,'') AS EmployeeName,
        ISNULL(e.EmployeeCode,'') AS EmployeeCode
 FROM dbo.MS_Employee e
-INNER JOIN dbo.SYS_RoleMember rm ON rm.Operator = e.EmployeeID
-INNER JOIN dbo.SYS_RolePermission rp ON rp.RoleID = rm.RoleID AND rp.FunctionID = @FunctionID
 WHERE ISNULL(e.IsActive,0)=1
   AND ISNULL(e.IssueVoucher,0)=3
   AND e.DeptID=@DeptID
-  AND (',' + ISNULL(rp.Permission,'') + ',') LIKE '%,' + CAST(@ApprovedPermission AS varchar(10)) + ',%'
 ORDER BY EmployeeName", conn);
         cmd.Parameters.Add("@DeptID", SqlDbType.Int).Value = deptId.Value;
-        cmd.Parameters.Add("@FunctionID", SqlDbType.Int).Value = FunctionId;
-        cmd.Parameters.Add("@ApprovedPermission", SqlDbType.Int).Value = PermissionApproved;
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
@@ -1224,13 +1305,25 @@ ORDER BY EmployeeName", conn);
 
     private void LoadLookups()
     {
-        IssueTypes = LoadListFromSql("SELECT FlowSubTypeID, FlowSubTypeName FROM dbo.INV_FlowSubType WHERE FlowTypeID=1 ORDER BY FlowSubTypeID", "FlowSubTypeID", "FlowSubTypeName");
+        var isKpAdmin = IsCurrentIssueTypeKpAdmin();
+        IssueTypes = LoadListFromSql($@"SELECT FlowSubTypeID, FlowSubTypeName
+FROM dbo.INV_FlowSubType
+WHERE FlowTypeID=1 AND {(isKpAdmin ? "ISNULL(isKPAdmin,0)=1" : "ISNULL(isKPOther,0)=1")}
+ORDER BY FlowSubTypeID", "FlowSubTypeID", "FlowSubTypeName");
         Departments = LoadListFromSql("SELECT DeptID, DeptName FROM dbo.MS_Department ORDER BY DeptName", "DeptID", "DeptName");
         MrDepartments = LoadListFromSql("SELECT KPGroupID, KPGroupName FROM dbo.INV_KPGroup WHERE KPGroupID > 1 AND KPGroupID < 15 ORDER BY KPGroupName", "KPGroupID", "KPGroupName");
         Locations = LoadListFromSql("SELECT LocationID, LocationName FROM dbo.MS_CoLocation ORDER BY LocationName", "LocationID", "LocationName");
         LoadItemCatalog();
         ItemOptions = ItemCatalog.Select(x => new SelectListItem($"{x.ItemCode} - {x.ItemName}", x.ItemId.ToString())).ToList();
         Stores = BuildStoreTreeOptions();
+        if (IsIssueHouseLocked && (!Header.FromStore.HasValue || Header.FromStore.Value <= 0))
+        {
+            var firstStore = Stores.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.Value));
+            if (firstStore != null && int.TryParse(firstStore.Value, out var storeId) && storeId > 0)
+            {
+                Header.FromStore = storeId;
+            }
+        }
         Statuses = LoadVoucherStatuses(Header.FlowSubType);
                 Header.StatusName = GetStatusName(Header.StatusID, Header.FlowSubType);
 
@@ -1253,6 +1346,10 @@ ORDER BY EmployeeName", conn);
         ItemOptions.Insert(0, new SelectListItem("--- Select Item ---", ""));
     }
 
+    private bool IsCurrentIssueTypeKpAdmin()
+    {
+        return GetCurrentKpGroupId() == 1;
+    }
     private List<SelectListItem> LoadVoucherStatuses(int? flowSubType)
     {
         return LoadListFromSql("SELECT StatusID, StatusName FROM dbo.INV_ItemFlowIssueStatus ORDER BY StatusID", "StatusID", "StatusName");
@@ -1297,12 +1394,19 @@ ORDER BY COALESCE(NULLIF(LTRIM(RTRIM(a2.ItemCode)),''), NULLIF(LTRIM(RTRIM(a1.It
     private List<SelectListItem> BuildStoreTreeOptions()
     {
         var results = new List<SelectListItem>();
+        var currentKpGroupId = GetCurrentKpGroupId();
+        var isKpAdmin = IsCurrentIssueTypeKpAdmin();
+        IsIssueHouseLocked = !isKpAdmin && currentKpGroupId > 0;
+
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
         using var cmd = new SqlCommand(@"SELECT g.KPGroupID, g.KPGroupName, s.StoreID, s.StoreName
 FROM dbo.INV_KPGroup g
 INNER JOIN dbo.INV_StoreList s ON s.DeptID = g.KPGroupID
+WHERE (@IsKpAdmin = 1 OR s.DeptID = @KPGroupID)
 ORDER BY g.KPGroupName, s.StoreName", conn);
+        cmd.Parameters.Add("@IsKpAdmin", SqlDbType.Bit).Value = isKpAdmin;
+        cmd.Parameters.Add("@KPGroupID", SqlDbType.Int).Value = currentKpGroupId;
         using var rd = cmd.ExecuteReader();
         var groupMap = new Dictionary<int, SelectListGroup>();
         while (rd.Read())
@@ -1363,7 +1467,7 @@ ORDER BY g.KPGroupName, s.StoreName", conn);
         Details.Clear();
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
-        using var cmd = new SqlCommand(@"SELECT d.ItemID,d.ChekingID,d.ChekingDTID,d.MRDetailID,i.ItemCode,i.ItemName,d.Unit,d.Doc_Qty,d.Act_Qty,d.UnitPrice,d.Amount,d.LocationID,l.LocationName
+        using var cmd = new SqlCommand(@"SELECT d.ItemID,d.RequestNo,d.ChekingID,d.ChekingDTID,d.MRDetailID,i.ItemCode,i.ItemName,d.Unit,d.Doc_Qty,d.Act_Qty,d.UnitPrice,d.Amount,d.LocationID,l.LocationName
 FROM dbo.INV_ItemFlowDetail d
 INNER JOIN dbo.INV_ItemList i ON i.ItemID=d.ItemID
 LEFT JOIN dbo.MS_CoLocation l ON l.LocationID=d.LocationID
@@ -1376,6 +1480,7 @@ ORDER BY i.ItemCode", conn);
             Details.Add(new InventoryIssueDetailRow
             {
                 ItemId = Convert.ToInt32(rd["ItemID"]),
+                RequestNo = rd["RequestNo"] == DBNull.Value ? null : Convert.ToInt64(rd["RequestNo"]),
                 ChekingID = rd["ChekingID"] == DBNull.Value ? null : Convert.ToInt64(rd["ChekingID"]),
                 ChekingDTID = rd["ChekingDTID"] == DBNull.Value ? null : Convert.ToInt64(rd["ChekingDTID"]),
                 MRDetailID = rd["MRDetailID"] == DBNull.Value ? null : Convert.ToInt64(rd["MRDetailID"]),
@@ -1390,6 +1495,15 @@ ORDER BY i.ItemCode", conn);
                 LocationName = Convert.ToString(rd["LocationName"]) ?? ""
             });
         }
+    }
+
+    private bool LocationExists(int locationId)
+    {
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        using var cmd = new SqlCommand("SELECT COUNT(1) FROM dbo.MS_CoLocation WHERE LocationID=@LocationID", conn);
+        cmd.Parameters.Add("@LocationID", SqlDbType.Int).Value = locationId;
+        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0) > 0;
     }
 
     private void ValidateBusinessRules(long? flowId)
@@ -1409,18 +1523,11 @@ ORDER BY i.ItemCode", conn);
             ModelState.AddModelError("Header.FromStore", "Issue House is required.");
         }
 
-        if (Header.FlowSubType.HasValue && Header.FlowSubType.Value > 0 && Header.FlowSubType.Value < 4)
+        if (Header.AssetLocation.HasValue && Header.AssetLocation.Value > 0 && !LocationExists(Header.AssetLocation.Value))
         {
-            if (!Header.RecDept.HasValue || Header.RecDept.Value <= 0)
-            {
-                ModelState.AddModelError("Header.RecDept", "Received Department is required.");
-            }
-
-            if (!Header.ReceivedBy.HasValue || Header.ReceivedBy.Value <= 0)
-            {
-                ModelState.AddModelError("Header.ReceivedBy", "Receiver By is required.");
-            }
+            ModelState.AddModelError("Header.AssetLocation", "Invalid Location.");
         }
+
 
         if (Details == null || Details.Count == 0)
         {
@@ -1446,12 +1553,50 @@ ORDER BY i.ItemCode", conn);
                 ModelState.AddModelError(string.Empty, $"Item '{detail.ItemCode}' Doc. Qty must be greater than or equal Act. Qty.");
             }
         }
+
+        if (Header.FromStore.HasValue && Header.FromStore.Value > 0)
+        {
+            using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+            conn.Open();
+            foreach (var group in Details.Where(x => x.ItemId > 0).GroupBy(x => x.ItemId))
+            {
+                var totalActQty = group.Sum(x => x.ActQty);
+                var stockQty = CheckStore(conn, group.Key, Header.FromStore.Value);
+                if (totalActQty > stockQty)
+                {
+                    var itemName = GetItemDisplayName(group.Key);
+                    ModelState.AddModelError(string.Empty, $"Item '{itemName}' stock quantity is {stockQty:N2}.");
+                }
+            }
+        }
+    }
+
+    private decimal CheckStore(SqlConnection conn, int itemId, int storeId)
+    {
+        if (itemId <= 0 || storeId <= 0) return 0m;
+        using var cmd = new SqlCommand("EXEC dbo.HaiCheckItemInStore @ItemID, @StoreID, NULL", conn);
+        cmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = itemId;
+        cmd.Parameters.Add("@StoreID", SqlDbType.Int).Value = storeId;
+        using var rd = cmd.ExecuteReader();
+        if (!rd.Read()) return 0m;
+        var value = rd["EndQty"];
+        return value == DBNull.Value ? 0m : Convert.ToDecimal(value);
+    }
+
+    private string GetItemDisplayName(int itemId)
+    {
+        if (itemId <= 0) return itemId.ToString();
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        using var cmd = new SqlCommand("SELECT TOP 1 ISNULL(ItemCode,'') + CASE WHEN ISNULL(ItemName,'')='' THEN '' ELSE ' - ' + ISNULL(ItemName,'') END FROM dbo.INV_ItemList WHERE ItemID=@ItemID", conn);
+        cmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = itemId;
+        return Convert.ToString(cmd.ExecuteScalar()) ?? itemId.ToString();
     }
 
     private List<InventoryIssueDetailRow> LoadDetailsForTransaction(SqlConnection conn, SqlTransaction tran, long flowId)
     {
         var results = new List<InventoryIssueDetailRow>();
-        using var cmd = new SqlCommand(@"SELECT ItemID, ChekingID, ChekingDTID, MRDetailID, Doc_Qty, Act_Qty, UnitPrice, Amount, LocationID
+        using var cmd = new SqlCommand(@"SELECT ItemID, RequestNo, ChekingID, ChekingDTID, MRDetailID, Doc_Qty, Act_Qty, UnitPrice, Amount, LocationID
 FROM dbo.INV_ItemFlowDetail
 WHERE FlowID = @FlowID", conn, tran);
         cmd.Parameters.Add("@FlowID", SqlDbType.BigInt).Value = flowId;
@@ -1461,6 +1606,7 @@ WHERE FlowID = @FlowID", conn, tran);
             results.Add(new InventoryIssueDetailRow
             {
                 ItemId = Convert.ToInt32(rd["ItemID"]),
+                RequestNo = rd["RequestNo"] == DBNull.Value ? null : Convert.ToInt64(rd["RequestNo"]),
                 ChekingID = rd["ChekingID"] == DBNull.Value ? null : Convert.ToInt64(rd["ChekingID"]),
                 ChekingDTID = rd["ChekingDTID"] == DBNull.Value ? null : Convert.ToInt64(rd["ChekingDTID"]),
                 MRDetailID = rd["MRDetailID"] == DBNull.Value ? null : Convert.ToInt64(rd["MRDetailID"]),
@@ -1476,8 +1622,8 @@ WHERE FlowID = @FlowID", conn, tran);
 
     private void InsertDetail(SqlConnection conn, SqlTransaction tran, long flowId, InventoryIssueDetailRow d)
     {
-        using var ins = new SqlCommand(@"INSERT INTO dbo.INV_ItemFlowDetail(ItemID,Unit,Doc_Qty,Act_Qty,UnitPrice,Amount,FlowID,LocationID,ChekingID,ChekingDTID,MRDetailID)
-SELECT @ItemID, ISNULL(i.Unit,''), @DocQty, @ActQty, @UnitPrice, @Amount, @FlowID, @LocationID, @ChekingID, @ChekingDTID, @MRDetailID
+        using var ins = new SqlCommand(@"INSERT INTO dbo.INV_ItemFlowDetail(ItemID,Unit,Doc_Qty,Act_Qty,UnitPrice,Amount,FlowID,LocationID,ChekingID,ChekingDTID,MRDetailID,RequestNo)
+SELECT @ItemID, ISNULL(i.Unit,''), @DocQty, @ActQty, @UnitPrice, @Amount, @FlowID, @LocationID, @ChekingID, @ChekingDTID, @MRDetailID, @RequestNo
 FROM dbo.INV_ItemList i WHERE i.ItemID=@ItemID", conn, tran);
         ins.Parameters.Add("@ItemID", SqlDbType.Int).Value = d.ItemId;
         ins.Parameters.Add("@DocQty", SqlDbType.Decimal).Value = d.DocQty;
@@ -1489,6 +1635,7 @@ FROM dbo.INV_ItemList i WHERE i.ItemID=@ItemID", conn, tran);
         ins.Parameters.Add("@ChekingID", SqlDbType.BigInt).Value = d.ChekingID.HasValue ? d.ChekingID.Value : DBNull.Value;
         ins.Parameters.Add("@ChekingDTID", SqlDbType.BigInt).Value = d.ChekingDTID.HasValue ? d.ChekingDTID.Value : DBNull.Value;
         ins.Parameters.Add("@MRDetailID", SqlDbType.BigInt).Value = d.MRDetailID.HasValue ? d.MRDetailID.Value : DBNull.Value;
+        ins.Parameters.Add("@RequestNo", SqlDbType.BigInt).Value = d.RequestNo.HasValue ? d.RequestNo.Value : DBNull.Value;
         ins.ExecuteNonQuery();
     }
     private void ApplyMrIssued(SqlConnection conn, SqlTransaction tran, InventoryIssueDetailRow d)
@@ -1501,7 +1648,6 @@ WHERE ID = @Id", conn, tran);
         cmd.Parameters.Add("@Id", SqlDbType.BigInt).Value = d.MRDetailID.Value;
         cmd.ExecuteNonQuery();
     }
-
     private void RollbackMrIssued(SqlConnection conn, SqlTransaction tran, List<InventoryIssueDetailRow> details)
     {
         foreach (var d in details)
@@ -1515,17 +1661,21 @@ WHERE ID = @Id", conn, tran);
             cmd.ExecuteNonQuery();
         }
     }
-
     private HashSet<long> GetRequestNosByMrDetails(SqlConnection conn, SqlTransaction tran, List<InventoryIssueDetailRow> details)
     {
         var result = new HashSet<long>();
         foreach (var d in details)
         {
+            if (d.RequestNo.HasValue && d.RequestNo.Value > 0)
+            {
+                result.Add(d.RequestNo.Value);
+                continue;
+            }
+
             AddRequestNoByMrDetail(conn, tran, result, d.MRDetailID);
         }
         return result;
     }
-
     private void AddRequestNoByMrDetail(SqlConnection conn, SqlTransaction tran, HashSet<long> requestNos, long? mrDetailId)
     {
         if (!mrDetailId.HasValue || mrDetailId.Value <= 0) return;
@@ -2083,6 +2233,7 @@ public class InventoryIssueAttachmentViewModel
 public class InventoryIssueDetailRow
 {
     public int ItemId { get; set; }
+    public long? RequestNo { get; set; }
     public long? ChekingID { get; set; }
     public long? ChekingDTID { get; set; }
     public long? MRDetailID { get; set; }
@@ -2139,12 +2290,6 @@ public class AdjustApartmentMailItem
     public decimal ActQty { get; set; }
     public string LocationName { get; set; } = string.Empty;
 }
-
-
-
-
-
-
 
 
 
