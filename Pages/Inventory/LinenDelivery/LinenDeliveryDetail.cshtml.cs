@@ -852,14 +852,19 @@ ORDER BY MAX(Location);";
             if (Header.IsSpecialLaundry)
             {
                 return @"
-    SELECT dbo.AM_Apmt.ApmtID AS locationID, dbo.CM_Contract.CurrentApartmentNo AS Location
+    SELECT ApmtID AS locationID,
+           ApartmentNo AS Location
     FROM dbo.AM_Apmt
-    INNER JOIN dbo.CM_Contract ON dbo.AM_Apmt.ApartmentNo = dbo.CM_Contract.CurrentApartmentNo
-    INNER JOIN dbo.CM_ContractService ON dbo.CM_Contract.ContractID = dbo.CM_ContractService.ContractID
-    WHERE dbo.CM_ContractService.ServiceID IN (1217, 1219)
-      AND dbo.CM_Contract.ContractStatus = 2
-      AND GETDATE() >= dbo.CM_ContractService.ServiceFromDate
-      AND GETDATE() <= DATEADD(second, 86399, CAST(dbo.CM_ContractService.ServiceToDate AS datetime))";
+    WHERE ApartmentNo IN
+    (
+        SELECT c.ContractApartmentNo
+        FROM dbo.CM_Contract c
+        INNER JOIN dbo.CM_ContractService cts ON c.ContractID = cts.ContractID
+        INNER JOIN dbo.SV_ServiceList s ON cts.ServiceID = s.ServiceID
+        WHERE s.IsLaundryPackage = 1
+          AND c.ContractStatus <= 2
+    )
+    ORDER BY FloorNo, BlockNo";
             }
 
             return "    SELECT locationID, Location FROM dbo.ViewLNLocation_New WHERE locationID < 1000";
