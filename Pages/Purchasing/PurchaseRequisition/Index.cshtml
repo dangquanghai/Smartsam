@@ -65,11 +65,7 @@
 
                             <div class="form-group mb-2">
                                 <label>Status</label>
-                                @if (Model.IsStatusFilterLocked)
-                                {
-                                    <input type="hidden" name="StatusId" value="2" />
-                                }
-                                <select id="Filter_StatusId" name="StatusId" class="form-control form-control-sm" disabled="@(Model.IsStatusFilterLocked ? "disabled" : null)">
+                                <select id="Filter_StatusId" name="StatusId" class="form-control form-control-sm">
                                     @foreach (var status in Model.StatusList)
                                     {
                                         var isSelectedStatus = string.IsNullOrWhiteSpace(status.Value)

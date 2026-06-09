@@ -106,7 +106,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
             }
 
             var effectivePermissions = GetEffectivePermissionsByStatus(Requisition.Status);
-            if (!effectivePermissions.Contains(PermissionViewDetail) || !CanViewCurrentWorkflowStep())
+            if (!effectivePermissions.Contains(PermissionViewDetail))
             {
                 TempData["Message"] = "You have no permission to access this requisition.";
                 TempData["MessageType"] = "warning";

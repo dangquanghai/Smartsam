@@ -93,7 +93,6 @@ public class IndexModel : BasePageModel
     public int PageEnd => TotalRecords == 0 ? 0 : Math.Min(Filter.Page * Filter.PageSize, TotalRecords);
     public bool HasPreviousPage => Filter.Page > 1;
     public bool HasNextPage => Filter.Page < TotalPages;
-    public bool IsStatusFilterLocked => _workflowUser.IsCFO || _workflowUser.IsBOD;
 
     private PurchaseRequisitionWorkflowUserInfo _workflowUser = new PurchaseRequisitionWorkflowUserInfo();
 
@@ -110,8 +109,9 @@ public class IndexModel : BasePageModel
 
         // 2. Chuẩn hóa filter trước khi nạp dữ liệu để danh sách và phân trang luôn đồng bộ.
         NormalizeQueryInputs();
+        ApplyDefaultStatusFilter();
+        ApplyDefaultDateFilter();
         NormalizeFilter();
-        EnforceWorkflowStatusFilter(Filter);
         LoadStatusList();
         LoadLookups();
         LoadPurchaseRequisitionRows();
@@ -134,7 +134,6 @@ public class IndexModel : BasePageModel
 
             // 2. Build filter tìm kiếm và lấy danh sách dữ liệu theo đúng điều kiện người dùng chọn.
             var filter = BuildSearchFilter(request);
-            EnforceWorkflowStatusFilter(filter);
             var (rows, totalRecords) = SearchPurchaseRequisitionRows(filter);
 
             var data = rows.Select(row => new
@@ -1164,7 +1163,7 @@ ORDER BY d.RecordID", conn);
         var page = filter.Page <= 0 ? 1 : filter.Page;
         var pageSize = NormalizePageSize(filter.PageSize);
         var offset = (page - 1) * pageSize;
-        var workflowWhereClause = BuildWorkflowVisibilityWhereClause();
+        var workflowWhereClause = BuildWorkflowVisibilityWhereClause(filter.StatusId);
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
 
@@ -1809,6 +1808,34 @@ WHERE ID = @MRDetailID", conn, trans);
     }
 
     // Thực hiện xử lý cho hàm NormalizeFilter theo nghiệp vụ của màn hình.
+    private void ApplyDefaultStatusFilter()
+    {
+        if (Request.Query.ContainsKey(nameof(Filter.StatusId)))
+        {
+            return;
+        }
+
+        if (_workflowUser.IsCFO || _workflowUser.IsBOD)
+        {
+            Filter.StatusId = 2;
+        }
+    }
+
+    private void ApplyDefaultDateFilter()
+    {
+        if (Request.Query.ContainsKey(nameof(Filter.UseDateRange))
+            || Request.Query.ContainsKey(nameof(Filter.FromDate))
+            || Request.Query.ContainsKey(nameof(Filter.ToDate)))
+        {
+            return;
+        }
+
+        var toDate = DateTime.Today.AddDays(1);
+        Filter.UseDateRange = true;
+        Filter.ToDate = toDate;
+        Filter.FromDate = toDate.AddDays(-30);
+    }
+
     private void NormalizeFilter()
     {
         Filter.PageSize = NormalizePageSize(Filter.PageSize);
@@ -1849,14 +1876,6 @@ WHERE ID = @MRDetailID", conn, trans);
             Page = request.Page <= 0 ? 1 : request.Page,
             PageSize = NormalizePageSize(request.PageSize)
         };
-    }
-
-    private void EnforceWorkflowStatusFilter(PurchaseRequisitionFilter filter)
-    {
-        if (_workflowUser.IsCFO || _workflowUser.IsBOD)
-        {
-            filter.StatusId = 2;
-        }
     }
 
     private IReadOnlyList<int> GetConfiguredPageSizeOptions()
@@ -2269,21 +2288,31 @@ WHERE ID = @MRDetailID", conn, trans);
         return false;
     }
 
-    private string BuildWorkflowVisibilityWhereClause()
+    private string BuildWorkflowVisibilityWhereClause(int? statusId)
     {
         if (IsAdminRole() || _workflowUser.IsPurchaser)
         {
             return "1 = 1";
         }
 
+        if (!_workflowUser.IsCFO && !_workflowUser.IsBOD)
+        {
+            return "1 = 0";
+        }
+
+        if (statusId != 2)
+        {
+            return "1 = 1";
+        }
+
         if (_workflowUser.IsCFO)
         {
-            return "ISNULL(p.[Status], 0) = 2 AND p.PurId IS NOT NULL AND p.CAId IS NULL";
+            return "p.PurId IS NOT NULL AND p.CAId IS NULL";
         }
 
         if (_workflowUser.IsBOD)
         {
-            return "ISNULL(p.[Status], 0) = 2 AND p.CAId IS NOT NULL AND p.GDId IS NULL";
+            return "p.CAId IS NOT NULL AND p.GDId IS NULL";
         }
 
         return "1 = 0";

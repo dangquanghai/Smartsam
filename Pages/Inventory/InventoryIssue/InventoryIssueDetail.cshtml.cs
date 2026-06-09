@@ -19,10 +19,10 @@ public class InventoryIssueDetailModel : BasePageModel
     private const int PermissionViewDetail = 2;
     private const int PermissionAdd = 3;
     private const int PermissionEdit = 4;
-    private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
-    private const string ReturnMoveToCpnNotifyEmail = "maiquangvinhi4@gmail.com";
-    // private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
-    // private const string ReturnMoveToCpnNotifyEmail = "hai.dq@saigonskygarden.com.vn";
+    // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
+    // private const string ReturnMoveToCpnNotifyEmail = "maiquangvinhi4@gmail.com";
+    private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
+    private const string ReturnMoveToCpnNotifyEmail = "hai.dq@saigonskygarden.com.vn";
     private readonly PermissionService _permissionService;
 
     public InventoryIssueDetailModel(IConfiguration config, PermissionService permissionService) : base(config) { _permissionService = permissionService; }
