@@ -408,11 +408,10 @@ ORDER BY DeliveryID DESC;", conn);
             new SelectListItem { Value = string.Empty, Text = "-- Select --" }
         };
 
-        var sql = currentDeliveryId.HasValue
-            ? @"
-SELECT DeliveryID, Des
+        var sql = @"
+SELECT TOP (100) DeliveryID, Des
 FROM dbo.LN_DeliveryMT
-WHERE DeliveryID = @CurrentDeliveryID
+WHERE (@CurrentDeliveryID IS NOT NULL AND DeliveryID = @CurrentDeliveryID)
    OR NOT EXISTS (
        SELECT 1
        FROM dbo.LN_ReceiveMT mt
@@ -420,17 +419,7 @@ WHERE DeliveryID = @CurrentDeliveryID
          AND EXISTS (SELECT 1 FROM dbo.LN_ReceiveDT dt WHERE dt.ReceiveID = mt.ReceiveID)
    )
 ORDER BY CASE WHEN DeliveryID = @CurrentDeliveryID THEN 0 ELSE 1 END,
-         DeliveryID DESC;"
-            : @"
-SELECT DeliveryID, Des
-FROM dbo.LN_DeliveryMT
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM dbo.LN_ReceiveMT mt
-    WHERE mt.SendID = dbo.LN_DeliveryMT.DeliveryID
-      AND EXISTS (SELECT 1 FROM dbo.LN_ReceiveDT dt WHERE dt.ReceiveID = mt.ReceiveID)
-)
-ORDER BY DeliveryID DESC;";
+         DeliveryID DESC;";
 
         using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.Add("@CurrentDeliveryID", SqlDbType.Int).Value = currentDeliveryId.HasValue ? currentDeliveryId.Value : (object)DBNull.Value;
@@ -447,6 +436,7 @@ ORDER BY DeliveryID DESC;";
 
         return items;
     }
+
     private List<SelectListItem> LoadLocations(SqlConnection conn)
     {
         var items = new List<SelectListItem>

@@ -18,6 +18,7 @@
         initializeLocationSelect2(document);
         recalcAllRows();
         pageDirty = false;
+        preloadRowDeliveryOptions();
     }
 
     function initAutoDismissAlerts() {
@@ -92,7 +93,7 @@
         $('#btnAddDetailRow').off('click').on('click', function () {
             const $button = $(this);
             $button.prop('disabled', true);
-            ensureRowDeliveryOptions(getHeaderDeliveryOption())
+            ensureRowDeliveryOptions(getHeaderDeliveryOption(), true)
                 .done(function (deliveryOptions) {
                     addDetailRow(deliveryOptions);
                     pageDirty = true;
@@ -360,7 +361,7 @@
         }
 
         const currentOption = getCurrentDeliveryOption($select);
-        ensureRowDeliveryOptions(currentOption)
+        ensureRowDeliveryOptions(currentOption, false)
             .done(function (deliveryOptions) {
                 renderDeliveryOptions($select, deliveryOptions, currentOption.value);
                 $select.data('delivery-loaded', true).attr('data-delivery-loaded', 'true');
@@ -370,7 +371,11 @@
             });
     }
 
-    function ensureRowDeliveryOptions(currentOption) {
+    function preloadRowDeliveryOptions() {
+        return ensureRowDeliveryOptions(getHeaderDeliveryOption(), true);
+    }
+
+    function ensureRowDeliveryOptions(currentOption, allowFetch) {
         const current = currentOption || { value: '', text: '' };
         const deferred = $.Deferred();
 
@@ -387,6 +392,11 @@
                 .fail(function () {
                     deferred.reject(new Error('Cannot load delivery list.'));
                 });
+            return deferred.promise();
+        }
+
+        if (allowFetch !== true) {
+            deferred.reject(new Error('Delivery list is still loading.'));
             return deferred.promise();
         }
 
