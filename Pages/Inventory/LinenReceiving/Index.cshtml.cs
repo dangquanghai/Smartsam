@@ -144,8 +144,7 @@ public class IndexModel : BasePageModel
         {
             "mt.ReceiveDate >= @FromDate",
             "mt.ReceiveDate <= @ToDate",
-            "ISNULL(mt.[Lock], 0) = @Lock",
-            "EXISTS (SELECT 1 FROM dbo.LN_ReceiveDT dt WHERE dt.ReceiveID = mt.ReceiveID)"
+            "ISNULL(mt.[Lock], 0) = @Lock"
         };
 
         if (request.ReceiveId.HasValue)
@@ -163,6 +162,11 @@ public class IndexModel : BasePageModel
         using (var countCmd = new SqlCommand($@"
 SELECT COUNT(1)
 FROM dbo.LN_ReceiveMT mt
+INNER JOIN (
+    SELECT ReceiveID
+    FROM dbo.LN_ReceiveDT
+    GROUP BY ReceiveID
+) dt ON dt.ReceiveID = mt.ReceiveID
 INNER JOIN dbo.LN_DeliveryMT de ON mt.SendID = de.DeliveryID
 WHERE {whereSql};", conn))
         {
@@ -177,6 +181,11 @@ SELECT mt.ReceiveID,
        ISNULL(mt.[Lock], 0) AS IsLocked,
        ISNULL(de.Des, '') AS DeliveryInfor
 FROM dbo.LN_ReceiveMT mt
+INNER JOIN (
+    SELECT ReceiveID
+    FROM dbo.LN_ReceiveDT
+    GROUP BY ReceiveID
+) dt ON dt.ReceiveID = mt.ReceiveID
 INNER JOIN dbo.LN_DeliveryMT de ON mt.SendID = de.DeliveryID
 WHERE {whereSql}
 ORDER BY mt.ReceiveDate DESC, mt.ReceiveID DESC
