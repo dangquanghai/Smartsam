@@ -39,7 +39,7 @@ body.daily-service-bill-popup-body {
 
 .daily-service-bill-vb-row {
     display: grid;
-    grid-template-columns: 180px 190px 270px 420px;
+    grid-template-columns: 180px 220px 270px 420px;
     gap: 0.35rem 1rem;
     align-items: center;
 }

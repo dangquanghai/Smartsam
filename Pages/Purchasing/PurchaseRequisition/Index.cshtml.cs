@@ -599,7 +599,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
 
-        using var cmd = new SqlCommand(@"
+        using var cmd = new SqlCommand($@"
 SELECT
     p.PRID,
     ISNULL(p.RequestNo, '') AS RequestNo,
@@ -963,7 +963,7 @@ ORDER BY p.PRID DESC", conn);
             return null;
         }
 
-        using var cmd = new SqlCommand(@"
+        using var cmd = new SqlCommand($@"
 SELECT ISNULL(UrlNomalSign, '') AS UrlNomalSign
 FROM dbo.MS_Employee
 WHERE EmployeeID = @EmployeeID", conn);
@@ -1051,7 +1051,7 @@ WHERE EmployeeID = @EmployeeID", conn);
     {
         var rows = new List<PurchaseRequisitionDetailInput>();
 
-        using var cmd = new SqlCommand(@"
+        using var cmd = new SqlCommand($@"
 SELECT d.RecordID,
        d.ItemID,
        ISNULL(i.ItemCode, '') AS ItemCode,
@@ -1161,11 +1161,12 @@ ORDER BY d.RecordID", conn);
         var page = filter.Page <= 0 ? 1 : filter.Page;
         var pageSize = NormalizePageSize(filter.PageSize);
         var offset = (page - 1) * pageSize;
+        var workflowWhereClause = BuildWorkflowVisibilityWhereClause();
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
 
         // 1. Đếm tổng số bản ghi trước để phục vụ phân trang.
-        using (var countCmd = new SqlCommand(@"
+        using (var countCmd = new SqlCommand($@"
         SELECT COUNT(1)
         FROM dbo.PC_PR p
         LEFT JOIN dbo.PC_PRStatus st ON p.Status = st.PRStatusID
@@ -1175,6 +1176,7 @@ ORDER BY d.RecordID", conn);
         WHERE (@RequestNo IS NULL OR p.RequestNo LIKE '%' + @RequestNo + '%')
         AND (@StatusID IS NULL OR p.[Status] = @StatusID)
         AND (@Description IS NULL OR p.[Description] LIKE '%' + @Description + '%')
+        AND ({workflowWhereClause})
         AND (
                 @UseDateRange = 0
                 OR (@FromDate IS NULL OR p.RequestDate >= @FromDate)
@@ -1186,7 +1188,7 @@ ORDER BY d.RecordID", conn);
         }
 
         // 2. Lấy danh sách dữ liệu theo đúng trang đang xem.
-        using var cmd = new SqlCommand(@"
+        using var cmd = new SqlCommand($@"
         SELECT
             p.PRID,
             ISNULL(p.RequestNo, '') AS RequestNo,
@@ -1211,6 +1213,7 @@ ORDER BY d.RecordID", conn);
         WHERE (@RequestNo IS NULL OR p.RequestNo LIKE '%' + @RequestNo + '%')
         AND (@StatusID IS NULL OR p.[Status] = @StatusID)
         AND (@Description IS NULL OR p.[Description] LIKE '%' + @Description + '%')
+        AND ({workflowWhereClause})
         AND (
                 @UseDateRange = 0
                 OR (@FromDate IS NULL OR p.RequestDate >= @FromDate)
@@ -1266,7 +1269,7 @@ ORDER BY d.RecordID", conn);
         };
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
-        using var cmd = new SqlCommand(@"
+        using var cmd = new SqlCommand($@"
 SELECT PRStatusID, ISNULL(PRStatusName, '') AS PRStatusName
 FROM dbo.PC_PRStatus
 ORDER BY PRStatusID", conn);
@@ -1296,7 +1299,7 @@ ORDER BY PRStatusID", conn);
         ItemList = new List<PurchaseRequisitionItemLookup>();
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
-        using var cmd = new SqlCommand(@"
+        using var cmd = new SqlCommand($@"
 SELECT TOP 200
     ItemID,
     ISNULL(ItemCode, '') AS ItemCode,
@@ -1326,7 +1329,7 @@ ORDER BY ItemCode", conn);
         SupplierList = new List<PurchaseRequisitionSupplierLookup>();
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
-        using var cmd = new SqlCommand(@"
+        using var cmd = new SqlCommand($@"
 SELECT TOP 200
     SupplierID,
     ISNULL(SupplierCode, '') AS SupplierCode,
@@ -1355,7 +1358,7 @@ ORDER BY SupplierCode", conn);
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
 
-        using var cmd = new SqlCommand(@"
+        using var cmd = new SqlCommand($@"
 SELECT
     d.REQUEST_NO,
     i.ItemID,
@@ -2255,6 +2258,26 @@ WHERE ID = @MRDetailID", conn, trans);
         return false;
     }
 
+    private string BuildWorkflowVisibilityWhereClause()
+    {
+        if (IsAdminRole() || _workflowUser.IsPurchaser)
+        {
+            return "1 = 1";
+        }
+
+        if (_workflowUser.IsCFO)
+        {
+            return "ISNULL(p.[Status], 0) = 2 AND p.PurId IS NOT NULL AND p.CAId IS NULL";
+        }
+
+        if (_workflowUser.IsBOD)
+        {
+            return "ISNULL(p.[Status], 0) = 2 AND p.CAId IS NOT NULL AND p.GDId IS NULL";
+        }
+
+        return "1 = 0";
+    }
+
     // Gán tham số filter cho popup View Detail của đúng PR đang chọn.
     private static void BindViewDetailFilterParams(SqlCommand cmd, PurchaseRequisitionListViewDetailFilterRequest request)
     {
@@ -2306,7 +2329,7 @@ WHERE ID = @MRDetailID", conn, trans);
         }
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
-        using var cmd = new SqlCommand(@"
+        using var cmd = new SqlCommand($@"
 SELECT TOP 1 EmployeeID,
        ISNULL(IsPurchaser, 0) AS IsPurchaser,
        ISNULL(IsCFO, 0) AS IsCFO,
@@ -2515,10 +2538,4 @@ public class PurchaseRequisitionListViewDetailResponse
     public int TotalRecords { get; set; }
     public int TotalPages { get; set; } = 1;
 }
-
-
-
-
-
-
 
