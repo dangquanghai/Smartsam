@@ -184,7 +184,7 @@ public class LinenReceivingDetailModel : BasePageModel
         return RedirectToPage("./LinenReceivingDetail", new { id = Header.ReceiveID, mode = "edit", returnUrl = ReturnUrl });
     }
 
-    public JsonResult OnGetRowDeliveryOptions(int? currentDeliveryId)
+    public JsonResult OnGetRowDeliveryOptions(int? currentDeliveryId, string? term)
     {
         PagePerm = GetUserPermissions();
         if (!PagePerm.HasPermission(PermissionUpdate))
@@ -194,7 +194,7 @@ public class LinenReceivingDetailModel : BasePageModel
         }
 
         using var conn = OpenConnection();
-        var options = LoadAvailableDeliveryOptions(conn, currentDeliveryId)
+        var options = LoadAvailableDeliveryOptions(conn, currentDeliveryId, term)
             .Select(x => new { value = x.Value, text = x.Text })
             .ToList();
 
@@ -398,32 +398,37 @@ ORDER BY DeliveryID DESC;", conn);
             return items;
         }
 
-        return LoadAvailableDeliveryOptions(conn, Header.SendID);
+        return LoadAvailableDeliveryOptions(conn, Header.SendID, null);
     }
 
-    private List<SelectListItem> LoadAvailableDeliveryOptions(SqlConnection conn, int? currentDeliveryId)
+    private List<SelectListItem> LoadAvailableDeliveryOptions(SqlConnection conn, int? currentDeliveryId, string? term)
     {
         var items = new List<SelectListItem>
         {
             new SelectListItem { Value = string.Empty, Text = "-- Select --" }
         };
 
+        var keyword = (term ?? string.Empty).Trim();
         var sql = @"
 SELECT TOP (100) DeliveryID, Des
 FROM dbo.LN_DeliveryMT
 WHERE (@CurrentDeliveryID IS NOT NULL AND DeliveryID = @CurrentDeliveryID)
-   OR NOT EXISTS (
-       SELECT 1
-       FROM dbo.LN_ReceiveMT mt
-       WHERE mt.SendID = dbo.LN_DeliveryMT.DeliveryID
-         AND EXISTS (SELECT 1 FROM dbo.LN_ReceiveDT dt WHERE dt.ReceiveID = mt.ReceiveID)
+   OR (
+       (@SearchText = '' OR Des LIKE @SearchPattern OR CONVERT(varchar(20), DeliveryID) LIKE @SearchPattern)
+       AND NOT EXISTS (
+           SELECT 1
+           FROM dbo.LN_ReceiveMT mt
+           WHERE mt.SendID = dbo.LN_DeliveryMT.DeliveryID
+             AND EXISTS (SELECT 1 FROM dbo.LN_ReceiveDT dt WHERE dt.ReceiveID = mt.ReceiveID)
+       )
    )
 ORDER BY CASE WHEN DeliveryID = @CurrentDeliveryID THEN 0 ELSE 1 END,
          DeliveryID DESC;";
 
         using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.Add("@CurrentDeliveryID", SqlDbType.Int).Value = currentDeliveryId.HasValue ? currentDeliveryId.Value : (object)DBNull.Value;
-
+        cmd.Parameters.Add("@SearchText", SqlDbType.VarChar, 100).Value = keyword;
+        cmd.Parameters.Add("@SearchPattern", SqlDbType.VarChar, 110).Value = $"%{keyword}%";
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {

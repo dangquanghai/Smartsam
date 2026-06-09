@@ -16,6 +16,7 @@
         bindDirtyTracking();
         initReportModal();
         initializeLocationSelect2(document);
+        initializeDeliverySelect2(document);
         recalcAllRows();
         pageDirty = false;
         preloadRowDeliveryOptions();
@@ -121,9 +122,6 @@
             pageDirty = true;
         });
 
-        $(document).off('focus click', '.lr-delivery').on('focus click', '.lr-delivery', function () {
-            hydrateDeliverySelect($(this));
-        });
 
         $(document).off('change', '.lr-delivery').on('change', '.lr-delivery', function () {
             pageDirty = true;
@@ -340,6 +338,78 @@
         }
     }
 
+    function initializeDeliverySelect2(scope) {
+        if (!$.fn.select2) {
+            return;
+        }
+
+        $(scope || document).find('select.lr-delivery').each(function () {
+            const $element = $(this);
+            if ($element.hasClass('select2-hidden-accessible')) {
+                $element.select2('destroy');
+            }
+
+            $element.select2({
+                width: '100%',
+                placeholder: '-- Select --',
+                minimumInputLength: 0,
+                ajax: {
+                    delay: 250,
+                    transport: function (params, success, failure) {
+                        const term = (params.data?.term || '').toString().trim();
+                        const currentOption = getCurrentDeliveryOption($element);
+
+                        if (!term) {
+                            ensureRowDeliveryOptions(currentOption, false)
+                                .done(function (deliveryOptions) {
+                                    success({ success: true, options: deliveryOptions });
+                                })
+                                .fail(function () {
+                                    success({ success: true, options: mergeDeliveryOptions(rowDeliveryOptionsCache || [], currentOption) });
+                                });
+
+                            return { abort: function () { } };
+                        }
+
+                        return $.ajax({
+                            url: `${window.location.pathname}?handler=RowDeliveryOptions`,
+                            type: 'GET',
+                            data: {
+                                currentDeliveryId: currentOption.value || '',
+                                term: term
+                            }
+                        }).done(success).fail(failure);
+                    },
+                    processResults: function (response) {
+                        return {
+                            results: mapDeliveryResults(response?.options || [])
+                        };
+                    }
+                }
+            });
+
+            $element.off('select2:open.linenReceivingDelivery').on('select2:open.linenReceivingDelivery', function () {
+                const searchField = document.querySelector('.select2-container--open .select2-search__field');
+                if (searchField) {
+                    searchField.focus();
+                }
+            });
+        });
+    }
+
+    function mapDeliveryResults(options) {
+        return (options || [])
+            .filter(function (item) {
+                return item.value !== undefined && item.value !== null && item.value !== '';
+            })
+            .map(function (item) {
+                return {
+                    id: item.value.toString(),
+                    text: item.text || item.value.toString()
+                };
+            });
+    }
+
     function getHeaderDeliveryOption() {
         const $header = $('#Header_SendID');
         return {
@@ -353,22 +423,6 @@
             value: ($select.val() || '').toString(),
             text: ($select.find('option:selected').text() || '').toString()
         };
-    }
-
-    function hydrateDeliverySelect($select) {
-        if (!$select.length || $select.prop('disabled') || $select.data('delivery-loaded') === true) {
-            return;
-        }
-
-        const currentOption = getCurrentDeliveryOption($select);
-        ensureRowDeliveryOptions(currentOption, false)
-            .done(function (deliveryOptions) {
-                renderDeliveryOptions($select, deliveryOptions, currentOption.value);
-                $select.data('delivery-loaded', true).attr('data-delivery-loaded', 'true');
-            })
-            .fail(function (error) {
-                alert(error?.message || 'Cannot load delivery list.');
-            });
     }
 
     function preloadRowDeliveryOptions() {
@@ -499,6 +553,7 @@
         const $row = $(html);
         $('#linenReceivingDetailTable tbody').append($row);
         initializeLocationSelect2($row);
+        initializeDeliverySelect2($row);
     }
 
     function initializeLocationSelect2(scope) {
