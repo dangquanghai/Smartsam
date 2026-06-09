@@ -570,7 +570,7 @@
                                                 }
                                             </td>
                                             <td>
-                                                <select class="form-control form-control-sm lr-delivery vni-font" @((isView || Model.IsDeliveryLocked) ? "disabled" : null)>
+                                                <select class="form-control form-control-sm lr-delivery vni-font" data-delivery-loaded="false" @(isView ? "disabled" : null)>
                                                     @foreach (var option in Model.DeliveryOptions)
                                                     {
                                                         if (option.Value == Convert.ToString(rowSendId))

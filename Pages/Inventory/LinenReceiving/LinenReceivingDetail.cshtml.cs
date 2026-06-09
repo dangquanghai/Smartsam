@@ -184,6 +184,23 @@ public class LinenReceivingDetailModel : BasePageModel
         return RedirectToPage("./LinenReceivingDetail", new { id = Header.ReceiveID, mode = "edit", returnUrl = ReturnUrl });
     }
 
+    public JsonResult OnGetRowDeliveryOptions(int? currentDeliveryId)
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionUpdate))
+        {
+            Response.StatusCode = StatusCodes.Status403Forbidden;
+            return new JsonResult(new { success = false, message = "Forbidden" });
+        }
+
+        using var conn = OpenConnection();
+        var options = LoadAvailableDeliveryOptions(conn, currentDeliveryId)
+            .Select(x => new { value = x.Value, text = x.Text })
+            .ToList();
+
+        return new JsonResult(new { success = true, options });
+    }
+
     public JsonResult OnGetDeliveryInfo(int id)
     {
         PagePerm = GetUserPermissions();
@@ -381,7 +398,17 @@ ORDER BY DeliveryID DESC;", conn);
             return items;
         }
 
-        var sql = Header.SendID.HasValue
+        return LoadAvailableDeliveryOptions(conn, Header.SendID);
+    }
+
+    private List<SelectListItem> LoadAvailableDeliveryOptions(SqlConnection conn, int? currentDeliveryId)
+    {
+        var items = new List<SelectListItem>
+        {
+            new SelectListItem { Value = string.Empty, Text = "-- Select --" }
+        };
+
+        var sql = currentDeliveryId.HasValue
             ? @"
 SELECT DeliveryID, Des
 FROM dbo.LN_DeliveryMT
@@ -406,10 +433,7 @@ WHERE NOT EXISTS (
 ORDER BY DeliveryID DESC;";
 
         using var cmd = new SqlCommand(sql, conn);
-        if (Header.SendID.HasValue)
-        {
-            cmd.Parameters.Add("@CurrentDeliveryID", SqlDbType.Int).Value = Header.SendID.Value;
-        }
+        cmd.Parameters.Add("@CurrentDeliveryID", SqlDbType.Int).Value = currentDeliveryId.HasValue ? currentDeliveryId.Value : (object)DBNull.Value;
 
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
