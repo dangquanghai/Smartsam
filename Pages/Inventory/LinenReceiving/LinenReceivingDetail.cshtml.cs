@@ -172,13 +172,6 @@ public class LinenReceivingDetailModel : BasePageModel
                 SaveDetailRows(conn, trans);
             }
 
-            if (Header.SendID.HasValue)
-            {
-                using var markCmd = new SqlCommand("exec LN_MarkFullReceiveOnDelevery @DeliveryID", conn, trans);
-                markCmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = Header.SendID.Value;
-                markCmd.ExecuteNonQuery();
-            }
-
             trans.Commit();
         }
         catch
