@@ -93,6 +93,7 @@ public class IndexModel : BasePageModel
     public int PageEnd => TotalRecords == 0 ? 0 : Math.Min(Filter.Page * Filter.PageSize, TotalRecords);
     public bool HasPreviousPage => Filter.Page > 1;
     public bool HasNextPage => Filter.Page < TotalPages;
+    public bool IsStatusFilterLocked => _workflowUser.IsCFO || _workflowUser.IsBOD;
 
     private PurchaseRequisitionWorkflowUserInfo _workflowUser = new PurchaseRequisitionWorkflowUserInfo();
 
@@ -110,6 +111,7 @@ public class IndexModel : BasePageModel
         // 2. Chuẩn hóa filter trước khi nạp dữ liệu để danh sách và phân trang luôn đồng bộ.
         NormalizeQueryInputs();
         NormalizeFilter();
+        EnforceWorkflowStatusFilter(Filter);
         LoadStatusList();
         LoadLookups();
         LoadPurchaseRequisitionRows();
@@ -132,6 +134,7 @@ public class IndexModel : BasePageModel
 
             // 2. Build filter tìm kiếm và lấy danh sách dữ liệu theo đúng điều kiện người dùng chọn.
             var filter = BuildSearchFilter(request);
+            EnforceWorkflowStatusFilter(filter);
             var (rows, totalRecords) = SearchPurchaseRequisitionRows(filter);
 
             var data = rows.Select(row => new
@@ -1846,6 +1849,14 @@ WHERE ID = @MRDetailID", conn, trans);
             Page = request.Page <= 0 ? 1 : request.Page,
             PageSize = NormalizePageSize(request.PageSize)
         };
+    }
+
+    private void EnforceWorkflowStatusFilter(PurchaseRequisitionFilter filter)
+    {
+        if (_workflowUser.IsCFO || _workflowUser.IsBOD)
+        {
+            filter.StatusId = 2;
+        }
     }
 
     private IReadOnlyList<int> GetConfiguredPageSizeOptions()

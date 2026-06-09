@@ -294,7 +294,7 @@ WHERE FlowID=@FlowID", conn, tran);
     public IActionResult OnPostSaveAndConfirm(long? id, string mode)
     {
         PagePerm = GetUserPermissions();
-        if (!HasIssueApprovalAccess()) return Redirect("/");
+        if (!HasIssueApprovalAccess()) return RedirectNoConfirmAccess(id, mode);
         ConfirmAfterSave = true;
         return OnPostSave(id, mode);
     }
@@ -303,7 +303,7 @@ WHERE FlowID=@FlowID", conn, tran);
     {
         PagePerm = GetUserPermissions();
         Mode = string.IsNullOrWhiteSpace(mode) ? "edit" : mode.Trim().ToLowerInvariant();
-        if (!HasIssueApprovalAccess()) return Redirect("/");
+        if (!HasIssueApprovalAccess()) return RedirectNoConfirmAccess(id, Mode);
         if (!EvaluateCanConfirmVoucherBusiness(id))
         {
             TempData["Message"] = "You have no right to confirm this voucher at current status.";
@@ -318,7 +318,7 @@ WHERE FlowID=@FlowID", conn, tran);
     {
         PagePerm = GetUserPermissions();
         Mode = string.IsNullOrWhiteSpace(mode) ? "approved" : mode.Trim().ToLowerInvariant();
-        if (!HasIssueApprovalAccess()) return Redirect("/");
+        if (!HasIssueApprovalAccess()) return RedirectNoConfirmAccess(id, Mode, "You have no right to sign this voucher.");
         if (!EvaluateCanConfirmVoucherBusiness(id))
         {
             TempData["Message"] = "You have no right to sign this voucher at current status.";
@@ -541,6 +541,18 @@ WHERE FlowID=@FlowID", conn);
     {
         TempData["Message"] = message;
         TempData["MessageType"] = type;
+        return RedirectToPage("./Index");
+    }
+
+    private IActionResult RedirectNoConfirmAccess(long? id, string? mode, string message = "You have no right to confirm this voucher.")
+    {
+        TempData["Message"] = message;
+        TempData["MessageType"] = "warning";
+        if (id.HasValue && id.Value > 0)
+        {
+            return RedirectToPage(new { id = id.Value, mode = string.IsNullOrWhiteSpace(mode) ? "edit" : mode });
+        }
+
         return RedirectToPage("./Index");
     }
 
@@ -800,12 +812,6 @@ ORDER BY ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
         var nextLevel = flow.StatusID + 1;
         var issueLevel = GetEmployeeIssueVoucherLevel(conn, currentEmployeeId);
         if (issueLevel != nextLevel) return false;
-
-        if (flow.FlowSubType == 2)
-        {
-            if (!flow.ReceivedBy.HasValue || flow.ReceivedBy.Value <= 0) return false;
-            if (flow.ReceivedBy.Value != currentEmployeeId) return false;
-        }
 
         return true;
     }
@@ -1142,11 +1148,12 @@ ORDER BY i.ItemCode", conn))
         return new JsonResult(rows);
     }
 
-    public JsonResult OnGetMrList(string? requestNo, string? itemCode, string? according, int? deptId, string? fromDate, string? toDate)
+    public JsonResult OnGetMrList(string? requestNo, string? itemCode, string? according, int? deptId, string? fromDate, string? toDate, int? fromStore)
     {
         var from = DateTime.TryParse(fromDate, out var fd) ? fd.Date : DateTime.Today.AddDays(-60);
         var to = DateTime.TryParse(toDate, out var td) ? td.Date : DateTime.Today;
         var rows = new List<object>();
+        var rawRows = new List<(long RequestNo, DateTime DateCreate, string According, string DeptName, string MaterialStatusName)>();
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
         using var cmd = new SqlCommand(@"SELECT TOP 200 m.REQUEST_NO, m.DATE_CREATE, ISNULL(m.ACCORDINGTO,'') AS ACCORDINGTO,
@@ -1173,13 +1180,26 @@ ORDER BY m.DATE_CREATE DESC, m.REQUEST_NO DESC", conn);
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
+            rawRows.Add((
+                Convert.ToInt64(rd["REQUEST_NO"]),
+                Convert.ToDateTime(rd["DATE_CREATE"]),
+                Convert.ToString(rd["ACCORDINGTO"]) ?? string.Empty,
+                Convert.ToString(rd["DeptName"]) ?? string.Empty,
+                Convert.ToString(rd["MaterialStatusName"]) ?? string.Empty
+            ));
+        }
+        rd.Dispose();
+
+        foreach (var raw in rawRows)
+        {
             rows.Add(new
             {
-                requestNo = Convert.ToInt64(rd["REQUEST_NO"]),
-                dateCreate = Convert.ToDateTime(rd["DATE_CREATE"]).ToString("yyyy-MM-dd"),
-                according = Convert.ToString(rd["ACCORDINGTO"]) ?? string.Empty,
-                deptName = Convert.ToString(rd["DeptName"]) ?? string.Empty,
-                materialStatusName = Convert.ToString(rd["MaterialStatusName"]) ?? string.Empty
+                requestNo = raw.RequestNo,
+                dateCreate = raw.DateCreate.ToString("yyyy-MM-dd"),
+                according = raw.According,
+                deptName = raw.DeptName,
+                materialStatusName = raw.MaterialStatusName,
+                allItemsOutOfStock = fromStore.HasValue && fromStore.Value > 0 && AreAllMrItemsOutOfStock(conn, raw.RequestNo, fromStore.Value)
             });
         }
         return new JsonResult(rows);
@@ -1581,6 +1601,29 @@ ORDER BY i.ItemCode", conn);
         if (!rd.Read()) return 0m;
         var value = rd["EndQty"];
         return value == DBNull.Value ? 0m : Convert.ToDecimal(value);
+    }
+
+    private bool AreAllMrItemsOutOfStock(SqlConnection conn, long requestNo, int storeId)
+    {
+        if (requestNo <= 0 || storeId <= 0) return false;
+        var itemIds = new List<int>();
+        using (var cmd = new SqlCommand(@"SELECT DISTINCT i.ItemID
+FROM dbo.MATERIAL_REQUEST_DETAIL d
+INNER JOIN dbo.INV_ItemList i ON LTRIM(RTRIM(d.ITEMCODE)) = LTRIM(RTRIM(i.ItemCode))
+WHERE d.REQUEST_NO=@RequestNo
+  AND ISNULL(d.NEW_ORDER,0) > ISNULL(d.ISSUED,0)
+  AND i.ItemID IS NOT NULL", conn))
+        {
+            cmd.Parameters.Add("@RequestNo", SqlDbType.BigInt).Value = requestNo;
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read())
+            {
+                itemIds.Add(Convert.ToInt32(rd["ItemID"]));
+            }
+        }
+
+        if (itemIds.Count == 0) return false;
+        return itemIds.All(itemId => CheckStore(conn, itemId, storeId) <= 0m);
     }
 
     private string GetItemDisplayName(int itemId)
