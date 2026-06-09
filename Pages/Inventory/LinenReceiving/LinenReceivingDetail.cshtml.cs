@@ -343,6 +343,44 @@ ORDER BY dt.ID;", conn, trans);
             new SelectListItem { Value = string.Empty, Text = "-- Select --" }
         };
 
+        var selectedDeliveryIds = Details
+            .Where(x => x.SendID.HasValue)
+            .Select(x => x.SendID!.Value)
+            .ToList();
+
+        if (Header.SendID.HasValue)
+        {
+            selectedDeliveryIds.Add(Header.SendID.Value);
+        }
+
+        selectedDeliveryIds = selectedDeliveryIds.Distinct().ToList();
+        if (Details.Count > 0 && selectedDeliveryIds.Count > 0)
+        {
+            var parameterNames = selectedDeliveryIds.Select((_, index) => $"@DeliveryID{index}").ToList();
+            using var selectedCmd = new SqlCommand($@"
+SELECT DeliveryID, Des
+FROM dbo.LN_DeliveryMT
+WHERE DeliveryID IN ({string.Join(", ", parameterNames)})
+ORDER BY DeliveryID DESC;", conn);
+
+            for (var i = 0; i < selectedDeliveryIds.Count; i++)
+            {
+                selectedCmd.Parameters.Add(parameterNames[i], SqlDbType.Int).Value = selectedDeliveryIds[i];
+            }
+
+            using var selectedRd = selectedCmd.ExecuteReader();
+            while (selectedRd.Read())
+            {
+                items.Add(new SelectListItem
+                {
+                    Value = Convert.ToInt32(selectedRd["DeliveryID"]).ToString(),
+                    Text = Convert.ToString(selectedRd["Des"]) ?? string.Empty
+                });
+            }
+
+            return items;
+        }
+
         var sql = Header.SendID.HasValue
             ? @"
 SELECT DeliveryID, Des
@@ -385,7 +423,6 @@ ORDER BY DeliveryID DESC;";
 
         return items;
     }
-
     private List<SelectListItem> LoadLocations(SqlConnection conn)
     {
         var items = new List<SelectListItem>

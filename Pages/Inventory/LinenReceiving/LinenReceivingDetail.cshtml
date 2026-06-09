@@ -551,6 +551,7 @@
                                     foreach (var row in Model.Details)
                                     {
                                         rowIndex++;
+                                        var rowSendId = row.SendID ?? Model.Header.SendID;
                                         <tr class="linen-receiving-detail-row" data-id="@row.ID">
                                             <td class="linen-receiving-action-cell">
                                                 @if (!isView)
@@ -569,10 +570,10 @@
                                                 }
                                             </td>
                                             <td>
-                                                <select class="form-control form-control-sm lr-delivery vni-font" @(isView ? "disabled" : null)>
+                                                <select class="form-control form-control-sm lr-delivery vni-font" @((isView || Model.IsDeliveryLocked) ? "disabled" : null)>
                                                     @foreach (var option in Model.DeliveryOptions)
                                                     {
-                                                        if (option.Value == Convert.ToString(row.SendID))
+                                                        if (option.Value == Convert.ToString(rowSendId))
                                                         {
                                                             <option value="@option.Value" selected>@option.Text</option>
                                                         }
