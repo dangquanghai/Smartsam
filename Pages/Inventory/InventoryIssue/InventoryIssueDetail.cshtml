@@ -102,11 +102,13 @@
                     {
                         <button type="submit" class="btn btn-sm btn-action-save btn-success border mx-1 my-1"><i class="fas fa-save"></i> Save</button>
                     }
-                    @if ((Model.IsAddMode && Model.CanEditVoucherBusiness) || Model.CanConfirmVoucherBusiness)
+                    @{ var userHasConfirmAccess = Model.HasIssueApprovalAccess(); }
+                    @if ((Model.IsAddMode && Model.CanEditVoucherBusiness) || (!Model.IsAddMode && Model.CanConfirmVoucherBusiness))
                     {
                         var disableConfirmForApartmentAdd = Model.IsAddMode && Model.Header.FlowSubType == 2;
+                        var disableConfirmForNoAccess = Model.IsAddMode && !userHasConfirmAccess;
                         var confirmButtonText = Model.IsApprovedMode ? "Sign" : "Confirm";
-                        <button type="button" id="btnOpenConfirmVoucher" class="btn btn-sm btn-success border mx-1 my-1" data-toggle="modal" data-target="#confirmInventoryIssueModal" disabled="@(disableConfirmForApartmentAdd ? "disabled" : null)"><i class="fas fa-check"></i> @confirmButtonText</button>
+                        <button type="button" id="btnOpenConfirmVoucher" class="btn btn-sm btn-success border mx-1 my-1" data-toggle="modal" data-target="#confirmInventoryIssueModal" data-has-confirm-access="@(userHasConfirmAccess ? "true" : "false")" disabled="@((disableConfirmForApartmentAdd || disableConfirmForNoAccess) ? "disabled" : null)"><i class="fas fa-check"></i> @confirmButtonText</button>
                     }
                     <a class="btn btn-sm btn-action-close border mx-1 my-1" asp-page="./Index"><i class="fas fa-arrow-left"></i> Back to List</a>
                 </div>
@@ -314,7 +316,7 @@
                 </div>
                 <div class="border-top pt-3 pb-2 mt-2 mb-2 font-weight-bold text-left">Material Request</div>
                 <div class="table-responsive" style="max-height:220px;overflow:auto;">
-                    <table class="table table-sm table-bordered table-hover mb-2 text-nowrap align-middle">
+                    <table class="table table-sm table-bordered table-hover mb-2 text-nowrap align-middle inventory-issue-mr-scroll-table">
                         <thead class="thead-light"><tr><th style="width:40px;" class="text-center"></th><th style="width:120px;">Request No.</th><th style="width:120px;">Date</th><th>According To</th><th style="width:180px;">Dept</th><th style="width:160px;">Status</th></tr></thead>
                         <tbody id="mrRows"><tr><td colspan="6" class="text-center text-muted">No data</td></tr></tbody>
                     </table>
@@ -322,13 +324,28 @@
                 <div class="border-top pt-3 pb-2 mt-2 mb-2 font-weight-bold text-left">Material Request Detail</div>
                 <div id="mrAlert" class="alert alert-danger py-2 d-none mb-2"></div>
                 <div class="table-responsive" style="max-height:260px;overflow:auto;">
-                    <table class="table table-sm table-bordered table-hover mb-1 text-nowrap align-middle">
-                        <thead class="thead-light"><tr><th style="width:40px;" class="text-center"><input type="checkbox" id="mrCheckAll" class="align-middle" /></th><th>Item Code</th><th>Item Name</th><th style="width:90px;">Unit</th><th style="width:100px;" class="text-right">Remain</th><th style="width:110px;" class="text-right">Issue Qty</th><th style="width:120px;" class="text-right">Price</th></tr></thead>
-                        <tbody id="mrDetailRows"><tr><td colspan="7" class="text-center text-muted">Select MR</td></tr></tbody>
+                    <table class="table table-sm table-bordered table-hover mb-1 text-nowrap align-middle inventory-issue-mr-scroll-table">
+                        <thead class="thead-light"><tr><th style="width:40px;" class="text-center"><input type="checkbox" id="mrCheckAll" class="align-middle" /></th><th>Item Code</th><th>Item Name</th><th style="width:90px;">Unit</th><th style="width:100px;" class="text-right">Remain</th><th style="width:100px;" class="text-right">Stock</th><th style="width:110px;" class="text-right">Issue Qty</th><th style="width:120px;" class="text-right">Price</th></tr></thead>
+                        <tbody id="mrDetailRows"><tr><td colspan="8" class="text-center text-muted">Select MR</td></tr></tbody>
                     </table>
                 </div>
             </div>
             <div class="modal-footer py-2"><button type="button" id="btnFromMrOk" class="btn btn-sm btn-primary"><i class="fas fa-check"></i> OK</button><button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Close</button></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade vni-font" id="fromMrWarningModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-warning">
+            <div class="modal-header bg-warning py-2">
+                <h5 class="modal-title text-dark">Warning</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body" id="fromMrWarningText">Please select Issue House before choosing Material Request.</div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-warning" data-dismiss="modal">OK</button>
+            </div>
         </div>
     </div>
 </div>
@@ -401,6 +418,11 @@
         .inventory-issue-mr-filter-item { display: grid; grid-template-columns: 105px minmax(0, 1fr); gap: 8px; align-items: center; }
         .inventory-issue-mr-filter-item label { margin: 0; font-size: 12px; font-weight: 600; color: #212529; white-space: nowrap; }
         .inventory-issue-mr-search-wrap { display: flex; align-items: center; }
+        #mrRows tr.mr-row-out-of-stock,
+        #mrDetailRows tr.mr-item-out-of-stock { background-color: #fff3cd; }
+        #mrRows tr.mr-row-out-of-stock td,
+        #mrDetailRows tr.mr-item-out-of-stock td { color: #856404; }
+        #FromMrModal .inventory-issue-mr-scroll-table thead th { position: sticky; top: 0; z-index: 2; background: #e9ecef; }
         @@media (max-width: 1199.98px) { .inventory-issue-mr-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @@media (max-width: 767.98px) { .inventory-issue-mr-filter-grid { grid-template-columns: 1fr; } .inventory-issue-mr-search-wrap { display: block; } .inventory-issue-mr-search-wrap button { width: 100%; margin-left: 0 !important; margin-top: 6px; } }
         #prqAttachmentModal { z-index: 1060 !important; }
@@ -662,9 +684,10 @@
             function syncConfirmButtonState() {
                 const mode = ($('input[name="mode"]').val() || '').toLowerCase();
                 const flowSubType = Number($('#Header_FlowSubType').val() || 0);
-                const disable = mode === 'add' && flowSubType === 2;
+                const hasConfirmAccess = ($('#btnOpenConfirmVoucher').attr('data-has-confirm-access') || '').toLowerCase() === 'true';
+                const disable = mode === 'add' && (!hasConfirmAccess || flowSubType === 2);
                 $('#btnOpenConfirmVoucher').prop('disabled', disable);
-                $('#issueType2Hint').toggleClass('d-none', !disable);
+                $('#issueType2Hint').toggleClass('d-none', !(mode === 'add' && flowSubType === 2));
             }
 
             function applyFieldRuleByFlowSubType() {
@@ -1556,13 +1579,17 @@
                     return;
                 }
 
-                alert(message || '');
+                $('#fromMrWarningText').text(message || '');
+                $('#fromMrWarningModal').modal('show');
             }
 
             function renderMrRows(items) {
                 const $b = $('#mrRows'); $b.empty();
                 if (!items.length) { $b.html('<tr><td colspan="6" class="text-center text-muted">No data</td></tr>'); return; }
-                items.forEach(x => $b.append(`<tr class="mr-row" data-request-no="${x.requestNo}" style="cursor:pointer;"><td class="text-center"><input type="radio" name="mrSelect" class="mr-select" value="${x.requestNo}" /></td><td>${x.requestNo}</td><td>${x.dateCreate || ''}</td><td>${x.according || ''}</td><td>${x.deptName || ''}</td><td>${x.materialStatusName || ''}</td></tr>`));
+                items.forEach(x => {
+                    const rowClass = x.allItemsOutOfStock ? 'mr-row mr-row-out-of-stock' : 'mr-row';
+                    $b.append(`<tr class="${rowClass}" data-request-no="${x.requestNo}" style="cursor:pointer;"><td class="text-center"><input type="radio" name="mrSelect" class="mr-select" value="${x.requestNo}" /></td><td>${x.requestNo}</td><td>${x.dateCreate || ''}</td><td>${x.according || ''}</td><td>${x.deptName || ''}</td><td>${x.materialStatusName || ''}</td></tr>`);
+                });
             }
 
             function renderMrDetailRows(items) {
@@ -1570,14 +1597,17 @@
                 $b.empty();
                 $('#mrCheckAll').prop('checked', false);
                 if (!items.length) {
-                    $b.html('<tr><td colspan="7" class="text-center text-muted">No data</td></tr>');
+                    $b.html('<tr><td colspan="8" class="text-center text-muted">No data</td></tr>');
                     setMrAlert('');
                     return;
                 }
                 items.forEach(x => {
                     const hasStockQty = x.stockQty !== null && x.stockQty !== undefined;
                     const defaultIssueQty = hasStockQty ? Math.min(Number(x.remainQty || 0), Number(x.stockQty || 0)) : Number(x.remainQty || 0);
-                    $b.append(`<tr><td class="text-center"><input type="checkbox" class="mr-detail-check" data-id="${x.id}" /></td><td>${x.itemCode || ''}</td><td class="tcvn3-font">${toTcvn3WebText(x.itemName || '')}</td><td>${x.unit || ''}</td><td class="text-right">${Number(x.remainQty || 0).toLocaleString()}</td><td><input type="text" class="form-control form-control-sm text-right mr-issue-qty" data-id="${x.id}" value="${formatNumber(defaultIssueQty)}" disabled /></td><td><input type="text" class="form-control form-control-sm text-right mr-price" data-id="${x.id}" value="0" disabled /></td></tr>`);
+                    const outOfStock = hasStockQty && Number(x.stockQty || 0) <= 0;
+                    const rowClass = outOfStock ? 'mr-item-out-of-stock' : '';
+                    const disabledAttr = outOfStock ? 'disabled' : '';
+                    $b.append(`<tr class="${rowClass}"><td class="text-center"><input type="checkbox" class="mr-detail-check" data-id="${x.id}" ${disabledAttr} /></td><td>${x.itemCode || ''}</td><td class="tcvn3-font">${toTcvn3WebText(x.itemName || '')}</td><td>${x.unit || ''}</td><td class="text-right">${Number(x.remainQty || 0).toLocaleString()}</td><td class="text-right">${hasStockQty ? Number(x.stockQty || 0).toLocaleString() : ''}</td><td><input type="text" class="form-control form-control-sm text-right mr-issue-qty" data-id="${x.id}" value="${formatNumber(defaultIssueQty)}" disabled /></td><td><input type="text" class="form-control form-control-sm text-right mr-price" data-id="${x.id}" value="0" disabled /></td></tr>`);
                 });
                 const missing = items.filter(x => x.missingItemName);
                 if (missing.length) {
@@ -1619,7 +1649,8 @@
                 const deptId = $('#mrDept').val() || '';
                 const fromDate = $('#mrFromDate').val() || '';
                 const toDate = $('#mrToDate').val() || '';
-                return fetch(`?handler=MrList&requestNo=${encodeURIComponent(requestNo)}&itemCode=${encodeURIComponent(itemCode)}&according=${encodeURIComponent(according)}&deptId=${encodeURIComponent(deptId)}&fromDate=${encodeURIComponent(fromDate)}&toDate=${encodeURIComponent(toDate)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                const fromStore = $('#Header_FromStore').val() || '';
+                return fetch(`?handler=MrList&requestNo=${encodeURIComponent(requestNo)}&itemCode=${encodeURIComponent(itemCode)}&according=${encodeURIComponent(according)}&deptId=${encodeURIComponent(deptId)}&fromDate=${encodeURIComponent(fromDate)}&toDate=${encodeURIComponent(toDate)}&fromStore=${encodeURIComponent(fromStore)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                     .then(r => r.ok ? r.json() : []).then(renderMrRows);
             }
 
@@ -1634,6 +1665,11 @@
 
             $('#btnOpenFromMr, #btnOpenFromMrAction').on('click', function () {
                 if (hasAdjustedApartmentItems) return;
+                const fromStore = Number($('#Header_FromStore').val() || 0);
+                if (fromStore <= 0) {
+                    showMrMessage('Please select Issue House before choosing Material Request.');
+                    return;
+                }
                 const today = new Date();
                 const from = new Date();
                 from.setDate(today.getDate() - 60);
@@ -1673,8 +1709,12 @@
 
             $('#mrCheckAll').on('change', function () {
                 const checked = $(this).is(':checked');
-                $('.mr-detail-check').prop('checked', checked);
-                $('.mr-issue-qty, .mr-price').prop('disabled', !checked);
+                $('.mr-detail-check:not(:disabled)').prop('checked', checked);
+                $('.mr-detail-check').each(function () {
+                    const id = Number($(this).data('id') || 0);
+                    const isChecked = $(this).is(':checked');
+                    $(`.mr-issue-qty[data-id='${id}'], .mr-price[data-id='${id}']`).prop('disabled', !isChecked);
+                });
                 if (checked) {
                     mrDetails.forEach(item => {
                         const hasStockQty = item.stockQty !== null && item.stockQty !== undefined;
