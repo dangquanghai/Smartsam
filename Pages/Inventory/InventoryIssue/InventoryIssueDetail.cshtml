@@ -35,64 +35,24 @@
                     }
                     <div id="clientValidationAlert" class="alert alert-danger mb-2 py-2 d-none"></div>
 
-                    <div class="row prq-detail-form-row mb-3">
-                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
-                            <label class="prq-detail-label">Doc No.<span class="required-mark">*</span></label>
-                            <input asp-for="Header.FlowNo" class="form-control form-control-sm vni-font" readonly="@(Model.IsAddMode && Model.CanEditVoucherBusiness ? null : "readonly")" />
-                            <span asp-validation-for="Header.FlowNo" class="text-danger small"></span>
+                    <div class="inventory-issue-header-section mb-3">
+                        <div class="row inventory-issue-header-grid-row">
+                            <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Doc No.<span class="required-mark">*</span></label><div class="inventory-issue-header-control-wrap"><input asp-for="Header.FlowNo" class="form-control form-control-sm vni-font" readonly="@(Model.IsAddMode && Model.CanEditVoucherBusiness ? null : "readonly")" /><span asp-validation-for="Header.FlowNo" class="text-danger small"></span></div></div></div>
+                            <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Issue Date</label><div class="inventory-issue-header-control-wrap"><input asp-for="Header.FlowDate" type="date" class="form-control form-control-sm" readonly="@(Model.CanEditVoucherBusiness ? null : "readonly")" /></div></div></div>
+                            <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Issue Type<span class="required-mark">*</span></label><div class="inventory-issue-header-control-wrap"><small id="issueType2Hint" class="d-none inventory-issue-type-hint">Save first to open Adjust Item in Apmt, then Confirm in edit mode.</small><select asp-for="Header.FlowSubType" asp-items="Model.IssueTypes" class="form-control form-control-sm select2" disabled="@((Model.CanEditVoucherBusiness && !Model.HasAdjustedApartmentItems) ? null : "disabled")"></select>@if (Model.HasAdjustedApartmentItems){<input type="hidden" name="Header.FlowSubType" value="@Model.Header.FlowSubType" />}<span asp-validation-for="Header.FlowSubType" class="text-danger small"></span></div></div></div>
+                            <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Issue House<span class="required-mark">*</span></label><div class="inventory-issue-header-control-wrap"><select asp-for="Header.FromStore" asp-items="Model.Stores" class="form-control form-control-sm select2" disabled="@((Model.CanEditVoucherBusiness && !Model.IsIssueHouseLocked) ? null : "disabled")"></select>@if (Model.IsIssueHouseLocked)
+                                        {
+                                            <input type="hidden" name="Header.FromStore" value="@Model.Header.FromStore" />
+                                        }<span asp-validation-for="Header.FromStore" class="text-danger small"></span></div></div></div>
+                            <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">According To</label><div class="inventory-issue-header-control-wrap"><input asp-for="Header.According" class="form-control form-control-sm vni-font" readonly="@(Model.CanEditVoucherBusiness ? null : "readonly")" /></div></div></div>
+                            <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Received Department</label><div class="inventory-issue-header-control-wrap"><select asp-for="Header.RecDept" asp-items="Model.Departments" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select><span asp-validation-for="Header.RecDept" class="text-danger small"></span></div></div></div>
+                            <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Receiver By</label><div class="inventory-issue-header-control-wrap"><select asp-for="Header.ReceivedBy" asp-items="Model.ReceiverBys" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select><span asp-validation-for="Header.ReceivedBy" class="text-danger small"></span></div></div></div>
+                            <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Location</label><div class="inventory-issue-header-control-wrap"><select asp-for="Header.AssetLocation" asp-items="Model.Locations" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select></div></div></div>
+                            <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Status</label><div class="inventory-issue-header-control-wrap inventory-issue-status-text-wrap"><input id="statusTextStrong" class="form-control form-control-sm font-weight-bold" value="@Model.Header.StatusName" disabled /></div></div></div>
                         </div>
-                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
-                            <label class="prq-detail-label">Issue Date</label>
-                            <input asp-for="Header.FlowDate" type="date" class="form-control form-control-sm" readonly="@(Model.CanEditVoucherBusiness ? null : "readonly")" />
+                        <div class="row inventory-issue-header-grid-row">
+                            <div class="col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Reason</label><div class="inventory-issue-header-control-wrap"><input asp-for="Header.Reason" class="form-control form-control-sm vni-font" readonly="@(Model.CanEditVoucherBusiness ? null : "readonly")" /></div></div></div>
                         </div>
-                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
-                            <label class="prq-detail-label">Issue Type<span class="required-mark">*</span></label>
-                            <small id="issueType2Hint" class="ml-2 d-none" style="color:#ff0707;">Save first to open Adjust Item in Apmt, then Confirm in edit mode.</small>
-                            <select asp-for="Header.FlowSubType" asp-items="Model.IssueTypes" class="form-control form-control-sm select2" disabled="@((Model.CanEditVoucherBusiness && !Model.HasAdjustedApartmentItems) ? null : "disabled")"></select>
-                            @if (Model.HasAdjustedApartmentItems)
-                            {
-                                <input type="hidden" name="Header.FlowSubType" value="@Model.Header.FlowSubType" />
-                            }
-                            <span asp-validation-for="Header.FlowSubType" class="text-danger small"></span>
-                        </div>
-                    </div>
-
-                    <div class="row prq-detail-form-row mb-3">
-                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
-                            <label class="prq-detail-label">Issue House<span class="required-mark">*</span></label>
-                            <select asp-for="Header.FromStore" asp-items="Model.Stores" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
-                            <span asp-validation-for="Header.FromStore" class="text-danger small"></span>
-                        </div>
-                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
-                            <label class="prq-detail-label">According To</label>
-                            <input asp-for="Header.According" class="form-control form-control-sm vni-font" readonly="@(Model.CanEditVoucherBusiness ? null : "readonly")" />
-                        </div>
-                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
-                            <label class="prq-detail-label">Received Department</label>
-                            <select asp-for="Header.RecDept" asp-items="Model.Departments" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
-                            <span asp-validation-for="Header.RecDept" class="text-danger small"></span>
-                        </div>
-                    </div>
-
-                    <div class="row prq-detail-form-row mb-3">
-                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
-                            <label class="prq-detail-label">Receiver By</label>
-                            <select asp-for="Header.ReceivedBy" asp-items="Model.ReceiverBys" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
-                            <span asp-validation-for="Header.ReceivedBy" class="text-danger small"></span>
-                        </div>
-                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
-                            <label class="prq-detail-label">Location</label>
-                            <select asp-for="Header.AssetLocation" asp-items="Model.Locations" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
-                        </div>
-                        <div class="col-lg-4 col-md-6 prq-detail-form-col">
-                            <label class="prq-detail-label">Reason</label>
-                            <input asp-for="Header.Reason" class="form-control form-control-sm vni-font" readonly="@(Model.CanEditVoucherBusiness ? null : "readonly")" />
-                        </div>
-                        @* <div class="col-lg-4 col-md-6 prq-detail-form-col d-flex align-items-end">
-                            <button type="button" id="btnOpenAttachmentModal" class="btn btn-sm btn-action-secondary border mb-2 text-nowrap" data-toggle="modal" data-target="#prqAttachmentModal">
-                                <i class="fas fa-paperclip"></i> Attached Files (<span id="attachmentCountText">@Model.AttachmentList.Count</span>)
-                            </button>
-                        </div> *@
                         <input type="hidden" asp-for="Header.StatusID" />
                         <input type="hidden" asp-for="Header.StatusName" />
                     </div>
@@ -110,7 +70,6 @@
                             {
                                 <button type="button" id="btnOpenAttachmentModal" class="btn btn-sm btn-action-close border mr-2 mb-1" data-toggle="modal" data-target="#prqAttachmentModal"><i class="fas fa-folder-open"></i> Liquidation File(<span id="attachmentCountText">@Model.AttachmentList.Count</span>)</button>
                             }
-                            <span class="font-weight-bold">Status: <span id="statusTextStrong" class="font-weight-bold">@Model.Header.StatusName</span></span>
                         </div>
                     </div>
 
@@ -161,7 +120,7 @@
                     <input type="hidden" name="ApplyAllApartment" id="ApplyAllApartmentInput" value="false" />
                 </form>
             }
-            @if (Model.Id.HasValue && Model.PagePerm.HasPermission(5))
+            @if (Model.Id.HasValue && Model.HasIssueApprovalAccess())
             {
                 <form method="post" asp-page-handler="@(Model.IsApprovedMode ? "Sign" : "Confirm")" id="confirmInventoryIssueForm" class="d-none">
                     <input type="hidden" name="id" value="@Model.Id" />
@@ -345,23 +304,19 @@
         <div class="modal-content">
             <div class="modal-header py-2"><h5 class="modal-title">Select Material Request</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
             <div class="modal-body">
-                <div class="form-row align-items-end mb-2">
-                    <div class="col-md-3"><label>Request No.</label><input id="mrRequestNo" class="form-control form-control-sm" /></div>
-                    <div class="col-md-3"><label>Item Code</label><input id="mrItemCode" class="form-control form-control-sm" /></div>
-                    <div class="col-md-3"><label>According To</label><input id="mrAccording" class="form-control form-control-sm" /></div>
-                    <div class="col-md-3"><label>Dept</label><select id="mrDept" class="form-control form-control-sm select2"><option value="">All</option>@foreach (var dept in Model.MrDepartments.Where(x => !string.IsNullOrWhiteSpace(x.Value))) {<option value="@dept.Value">@dept.Text</option>}</select></div>
-                </div>
-                <div class="form-row align-items-end mb-3">
-                    <div class="col-md-3"><label>From</label><input id="mrFromDate" type="date" class="form-control form-control-sm" /></div>
-                    <div class="col-md-3"><label>To</label><input id="mrToDate" type="date" class="form-control form-control-sm" /></div>
-                    <div class="col-md-3"><button id="btnSearchMr" type="button" class="btn btn-sm btn-primary"><i class="fas fa-search"></i> Search</button></div>
-                    <div class="col-md-3"></div>
+                <div class="inventory-issue-mr-filter-grid mb-3">
+                    <div class="inventory-issue-mr-filter-item"><label>Request No.</label><input id="mrRequestNo" class="form-control form-control-sm" /></div>
+                    <div class="inventory-issue-mr-filter-item"><label>Item Code</label><input id="mrItemCode" class="form-control form-control-sm" /></div>
+                    <div class="inventory-issue-mr-filter-item"><label>According To</label><input id="mrAccording" class="form-control form-control-sm" /></div>
+                    <div class="inventory-issue-mr-filter-item"><label>Dept</label><select id="mrDept" class="form-control form-control-sm select2"><option value="">All</option>@foreach (var dept in Model.MrDepartments.Where(x => !string.IsNullOrWhiteSpace(x.Value))) {<option value="@dept.Value">@dept.Text</option>}</select></div>
+                    <div class="inventory-issue-mr-filter-item"><label>From</label><input id="mrFromDate" type="date" class="form-control form-control-sm" /></div>
+                    <div class="inventory-issue-mr-filter-item inventory-issue-mr-filter-item-search"><label>To</label><div class="inventory-issue-mr-search-wrap"><input id="mrToDate" type="date" class="form-control form-control-sm" /><button id="btnSearchMr" type="button" class="btn btn-sm btn-primary ml-2 flex-shrink-0"><i class="fas fa-search"></i> Search</button></div></div>
                 </div>
                 <div class="border-top pt-3 pb-2 mt-2 mb-2 font-weight-bold text-left">Material Request</div>
                 <div class="table-responsive" style="max-height:220px;overflow:auto;">
                     <table class="table table-sm table-bordered table-hover mb-2 text-nowrap align-middle">
-                        <thead class="thead-light"><tr><th style="width:40px;" class="text-center"></th><th style="width:120px;">Request No.</th><th style="width:120px;">Date</th><th>According To</th><th style="width:180px;">Dept</th></tr></thead>
-                        <tbody id="mrRows"><tr><td colspan="5" class="text-center text-muted">No data</td></tr></tbody>
+                        <thead class="thead-light"><tr><th style="width:40px;" class="text-center"></th><th style="width:120px;">Request No.</th><th style="width:120px;">Date</th><th>According To</th><th style="width:180px;">Dept</th><th style="width:160px;">Status</th></tr></thead>
+                        <tbody id="mrRows"><tr><td colspan="6" class="text-center text-muted">No data</td></tr></tbody>
                     </table>
                 </div>
                 <div class="border-top pt-3 pb-2 mt-2 mb-2 font-weight-bold text-left">Material Request Detail</div>
@@ -435,11 +390,35 @@
         #InventoryIssueDetailForm .modal .select2-dropdown { z-index: 1081 !important; }
         #FromMrModal { z-index: 1075 !important; }
         #FromMrModal .modal-dialog { z-index: 1076 !important; }
+        #FromMrModal .select2-container { width: 100% !important; display: block; }
+        #FromMrModal .select2-container--default .select2-selection--single { height: calc(1.8125rem + 2px); border: 1px solid #ced4da; }
+        #FromMrModal .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: calc(1.8125rem + 2px); padding-left: .5rem; }
+        #FromMrModal .select2-container--default .select2-selection--single .select2-selection__arrow { height: calc(1.8125rem + 2px); }
+        .select2-container--open.inventory-issue-mr-dept-dropdown .select2-search--dropdown { display: block !important; }
+        .select2-container--open.inventory-issue-mr-dept-dropdown .select2-search__field { width: 100% !important; }
+        .select2-container--open { z-index: 2000 !important; }
+        .inventory-issue-mr-filter-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 16px; align-items: start; }
+        .inventory-issue-mr-filter-item { display: grid; grid-template-columns: 105px minmax(0, 1fr); gap: 8px; align-items: center; }
+        .inventory-issue-mr-filter-item label { margin: 0; font-size: 12px; font-weight: 600; color: #212529; white-space: nowrap; }
+        .inventory-issue-mr-search-wrap { display: flex; align-items: center; }
+        @@media (max-width: 1199.98px) { .inventory-issue-mr-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @@media (max-width: 767.98px) { .inventory-issue-mr-filter-grid { grid-template-columns: 1fr; } .inventory-issue-mr-search-wrap { display: block; } .inventory-issue-mr-search-wrap button { width: 100%; margin-left: 0 !important; margin-top: 6px; } }
         #prqAttachmentModal { z-index: 1060 !important; }
         #confirmInventoryIssueModal { z-index: 1070 !important; }
         #confirmInventoryIssueModal .modal-dialog { z-index: 1071 !important; }
         .modal-backdrop { z-index: 1040; }
         body.inventory-Issue-confirm-open .select2-container { z-index: 1035 !important; }
+        .inventory-issue-header-grid-row { margin-left: -8px; margin-right: -8px; }
+        .inventory-issue-header-grid-row > [class*="col-"] { padding-left: 8px; padding-right: 8px; }
+        .inventory-issue-header-field { display: flex; align-items: center; min-height: 40px; margin-bottom: 8px; }
+        .inventory-issue-header-label { flex: 0 0 150px; max-width: 150px; margin-bottom: 0; padding-right: 8px; white-space: nowrap; }
+        .inventory-issue-header-control-wrap { flex: 1 1 auto; min-width: 0; }
+        .inventory-issue-header-control-wrap .select2-container { width: 100% !important; }
+        .inventory-issue-type-hint { display: block; color: #ff0707; line-height: 1.2; margin-bottom: 2px; }
+        @@media (max-width: 575.98px) {
+            .inventory-issue-header-field { display: block; min-height: 0; }
+            .inventory-issue-header-label { display: block; max-width: none; margin-bottom: 3px; }
+        }
         .inventory-Issue-detail-scroll { max-height: 500px; overflow-y: auto; }
         .inventory-Issue-detail-scroll-x { overflow-x: auto; }
         .inventory-Issue-add-detail-scroll, .inventory-received-add-detail-scroll { max-height: calc(100vh - 220px); overflow-y: auto; }
@@ -622,7 +601,7 @@
                         if (!data) return;
                         $('#Header_StatusID').val(data.statusId || '');
                         $('#Header_StatusName').val(data.statusName || '');
-                        $('#statusTextStrong').text(data.statusName || '');
+                        $('#statusTextStrong').val(data.statusName || '');
                         if (mode === 'add' && data.flowNo) {
                             $('#Header_FlowNo').val(data.flowNo);
                         } else if (mode === 'add' && !flowSubType) {
@@ -689,6 +668,15 @@
             }
 
             function applyFieldRuleByFlowSubType() {
+                const flowSubType = Number($('#Header_FlowSubType').val() || 0);
+                const isManualIssueType = flowSubType >= 4;
+                const canAddNew = isManualIssueType && !hasAdjustedApartmentItems;
+
+                setFieldEnabled($('#Header_RecDept'), !isManualIssueType, isManualIssueType);
+                setFieldEnabled($('#Header_ReceivedBy'), !isManualIssueType, isManualIssueType);
+                setFieldEnabled($('#Header_AssetLocation'), !isManualIssueType, isManualIssueType);
+                $('#btnOpenAddDetail, #btnOpenAddNewAction').prop('disabled', !canAddNew);
+
                 syncIssueFromIssueButton();
                 syncConfirmButtonState();
             }
@@ -1091,6 +1079,11 @@
                         dropdownParent: $modal
                     };
 
+                    if ($select.attr('id') === 'mrDept') {
+                        config.minimumResultsForSearch = 0;
+                        config.dropdownCssClass = 'inventory-issue-mr-dept-dropdown';
+                    }
+
                     if ($select.attr('id') === 'detailItemId' || $select.attr('id') === 'manualAddItemId') {
                         config.templateResult = function (state) {
                             if (!state.id) return state.text;
@@ -1145,7 +1138,16 @@
                 }
                 initModalSelect2($modal);
             });
-
+            $('.modal').filter(InventoryIssueModalSelector).on('shown.bs.modal', function () {
+                const $modal = $(this);
+                if ($modal.is('#FromMrModal')) {
+                    const $dept = $('#mrDept');
+                    if ($dept.data('select2')) {
+                        $dept.select2('destroy');
+                    }
+                    $dept.select2({ width: '100%', dropdownParent: $modal, minimumResultsForSearch: 0, dropdownCssClass: 'inventory-issue-mr-dept-dropdown' });
+                }
+            });
             $('.modal').filter(InventoryIssueModalSelector).on('hidden.bs.modal', function () {
                 if ($(this).is('#confirmInventoryIssueModal')) {
                     $('body').removeClass('inventory-Issue-confirm-open');
@@ -1548,10 +1550,19 @@
                 }
             }
 
+            function showMrMessage(message) {
+                if ($('#FromMrModal').hasClass('show')) {
+                    setMrAlert(message);
+                    return;
+                }
+
+                alert(message || '');
+            }
+
             function renderMrRows(items) {
                 const $b = $('#mrRows'); $b.empty();
-                if (!items.length) { $b.html('<tr><td colspan="5" class="text-center text-muted">No data</td></tr>'); return; }
-                items.forEach(x => $b.append(`<tr class="mr-row" data-request-no="${x.requestNo}" style="cursor:pointer;"><td class="text-center"><input type="radio" name="mrSelect" class="mr-select" value="${x.requestNo}" /></td><td>${x.requestNo}</td><td>${x.dateCreate || ''}</td><td>${x.according || ''}</td><td>${x.deptName || ''}</td></tr>`));
+                if (!items.length) { $b.html('<tr><td colspan="6" class="text-center text-muted">No data</td></tr>'); return; }
+                items.forEach(x => $b.append(`<tr class="mr-row" data-request-no="${x.requestNo}" style="cursor:pointer;"><td class="text-center"><input type="radio" name="mrSelect" class="mr-select" value="${x.requestNo}" /></td><td>${x.requestNo}</td><td>${x.dateCreate || ''}</td><td>${x.according || ''}</td><td>${x.deptName || ''}</td><td>${x.materialStatusName || ''}</td></tr>`));
             }
 
             function renderMrDetailRows(items) {
@@ -1563,13 +1574,42 @@
                     setMrAlert('');
                     return;
                 }
-                items.forEach(x => $b.append(`<tr><td class="text-center"><input type="checkbox" class="mr-detail-check" data-id="${x.id}" /></td><td>${x.itemCode || ''}</td><td class="tcvn3-font">${toTcvn3WebText(x.itemName || '')}</td><td>${x.unit || ''}</td><td class="text-right">${Number(x.remainQty || 0).toLocaleString()}</td><td><input type="text" class="form-control form-control-sm text-right mr-issue-qty" data-id="${x.id}" value="0" disabled /></td><td><input type="text" class="form-control form-control-sm text-right mr-price" data-id="${x.id}" value="0" disabled /></td></tr>`));
+                items.forEach(x => {
+                    const hasStockQty = x.stockQty !== null && x.stockQty !== undefined;
+                    const defaultIssueQty = hasStockQty ? Math.min(Number(x.remainQty || 0), Number(x.stockQty || 0)) : Number(x.remainQty || 0);
+                    $b.append(`<tr><td class="text-center"><input type="checkbox" class="mr-detail-check" data-id="${x.id}" /></td><td>${x.itemCode || ''}</td><td class="tcvn3-font">${toTcvn3WebText(x.itemName || '')}</td><td>${x.unit || ''}</td><td class="text-right">${Number(x.remainQty || 0).toLocaleString()}</td><td><input type="text" class="form-control form-control-sm text-right mr-issue-qty" data-id="${x.id}" value="${formatNumber(defaultIssueQty)}" disabled /></td><td><input type="text" class="form-control form-control-sm text-right mr-price" data-id="${x.id}" value="0" disabled /></td></tr>`);
+                });
                 const missing = items.filter(x => x.missingItemName);
                 if (missing.length) {
                     setMrAlert(`Missing Item Name master data for ${missing.length} item(s). Please update item master.`);
                 } else {
                     setMrAlert('');
                 }
+            }
+
+            function loadMrDepartments() {
+                return fetch(`?handler=MrDepartments`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(r => r.ok ? r.json() : null)
+                    .then(items => {
+                        if (!Array.isArray(items) || items.length === 0) {
+                            return;
+                        }
+
+                        const $dept = $('#mrDept');
+                        const current = $dept.val() || '';
+                        $dept.empty();
+                        $dept.append('<option value="">All</option>');
+                        items.forEach(x => {
+                            $dept.append(`<option value="${x.value || ''}">${x.text || ''}</option>`);
+                        });
+                        if (current && items.some(x => String(x.value || '') === String(current))) {
+                            $dept.val(current);
+                        }
+                        if ($dept.data('select2')) {
+                            $dept.trigger('change.select2');
+                        }
+                    })
+                    .catch(() => { });
             }
 
             function loadMrList() {
@@ -1584,7 +1624,8 @@
             }
 
             function loadMrDetails(requestNo) {
-                return fetch(`?handler=MrDetails&requestNo=${encodeURIComponent(requestNo)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                const fromStore = $('#Header_FromStore').val() || '';
+                return fetch(`?handler=MrDetails&requestNo=${encodeURIComponent(requestNo)}&fromStore=${encodeURIComponent(fromStore)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                     .then(r => r.ok ? r.json() : []).then(list => {
                         mrDetails = Array.isArray(list) ? list : [];
                         renderMrDetailRows(mrDetails);
@@ -1602,7 +1643,7 @@
                 mrDetails = [];
                 setMrAlert('');
                 renderMrDetailRows([]);
-                loadMrList();
+                loadMrDepartments().then(() => loadMrList());
                 $('#FromMrModal').modal('show');
             });
 
@@ -1634,7 +1675,15 @@
                 const checked = $(this).is(':checked');
                 $('.mr-detail-check').prop('checked', checked);
                 $('.mr-issue-qty, .mr-price').prop('disabled', !checked);
-                if (!checked) { $('.mr-issue-qty, .mr-price').val('0'); }
+                if (checked) {
+                    mrDetails.forEach(item => {
+                        const hasStockQty = item.stockQty !== null && item.stockQty !== undefined;
+                        const defaultIssueQty = hasStockQty ? Math.min(Number(item.remainQty || 0), Number(item.stockQty || 0)) : Number(item.remainQty || 0);
+                        $(`.mr-issue-qty[data-id='${item.id}']`).val(formatNumber(defaultIssueQty));
+                    });
+                } else {
+                    $('.mr-issue-qty, .mr-price').val('0');
+                }
             });
 
             $('#Header_RecDept').on('change', function () {
@@ -1651,7 +1700,32 @@
                 const priceSelector = ".mr-price[data-id='" + id + "']";
                 $(qtySelector).prop('disabled', !isChecked);
                 $(priceSelector).prop('disabled', !isChecked);
-                if (!isChecked) { $(qtySelector).val('0'); $(priceSelector).val('0'); }
+                if (isChecked) {
+                    const item = mrDetails.find(x => Number(x.id) === id);
+                    const hasStockQty = item && item.stockQty !== null && item.stockQty !== undefined;
+                    const defaultIssueQty = hasStockQty ? Math.min(Number(item?.remainQty || 0), Number(item?.stockQty || 0)) : Number(item?.remainQty || 0);
+                    $(qtySelector).val(formatNumber(defaultIssueQty));
+                } else {
+                    $(qtySelector).val('0');
+                    $(priceSelector).val('0');
+                }
+            });
+
+            $(document).on('change', '.mr-issue-qty', function () {
+                const id = Number($(this).data('id') || 0);
+                const item = mrDetails.find(x => Number(x.id) === id);
+                if (!item) return;
+
+                const qty = parseNumber($(this).val());
+                const hasStockQty = item.stockQty !== null && item.stockQty !== undefined;
+                const stockQty = Number(item.stockQty || 0);
+                if (hasStockQty && qty > stockQty) {
+                    showMrMessage(`Item stock quantity is ${Number(stockQty || 0).toLocaleString()}.`);
+                    $(this).val(formatNumber(stockQty));
+                    return;
+                }
+
+                $(this).val(formatNumber(qty));
             });
 
             $('#btnFromMrOk').on('click', function () {
@@ -1675,9 +1749,14 @@
                         invalidItems.push(`${item.itemCode || id}: Issue Qty (${qty}) cannot exceed Remain (${Number(item.remainQty || 0)})`);
                         return;
                     }
+                    if (item.stockQty !== null && item.stockQty !== undefined && qty > Number(item.stockQty || 0)) {
+                        invalidItems.push(`${item.itemCode || id}: Item stock quantity is ${Number(item.stockQty || 0).toLocaleString()}`);
+                        return;
+                    }
 
                     selected.push({
                         itemId: Number(item.itemId || 0),
+                        requestNo: Number(item.requestNo || selectedMrNo || 0),
                         mrDetailID: id,
                         itemCode: item.itemCode || '',
                         itemName: item.itemName || '',
@@ -1716,34 +1795,6 @@
         })();
     </script>
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
