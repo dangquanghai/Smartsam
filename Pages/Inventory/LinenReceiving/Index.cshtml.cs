@@ -35,7 +35,6 @@ public class IndexModel : BasePageModel
         }
 
         NormalizeFilter(Filter);
-        PrepareLegacyListData();
         ViewData["DefaultPageSize"] = DefaultPageSize;
         return Page();
     }
@@ -53,7 +52,6 @@ public class IndexModel : BasePageModel
         }
 
         NormalizeSearchRequest(request);
-        PrepareLegacyListData();
         var (rows, totalRecords) = SearchRows(request);
         var canAccess = PagePerm.HasPermission(PermissionView) || PagePerm.HasPermission(PermissionUpdate);
         var canEdit = PagePerm.HasPermission(PermissionUpdate);
@@ -139,18 +137,6 @@ public class IndexModel : BasePageModel
         return new JsonResult(new { success = true });
     }
 
-    private void PrepareLegacyListData()
-    {
-        using var conn = OpenConnection();
-        using var deleteCmd = new SqlCommand(@"
-DELETE FROM dbo.LN_ReceiveMT
-WHERE ReceiveID NOT IN (
-    SELECT ReceiveID
-    FROM dbo.LN_ReceiveDT
-);", conn);
-        deleteCmd.ExecuteNonQuery();
-    }
-
     private (List<LinenReceivingRow> rows, int totalRecords) SearchRows(LinenReceivingSearchRequest request)
     {
         var rows = new List<LinenReceivingRow>();
@@ -158,7 +144,8 @@ WHERE ReceiveID NOT IN (
         {
             "mt.ReceiveDate >= @FromDate",
             "mt.ReceiveDate <= @ToDate",
-            "ISNULL(mt.[Lock], 0) = @Lock"
+            "ISNULL(mt.[Lock], 0) = @Lock",
+            "EXISTS (SELECT 1 FROM dbo.LN_ReceiveDT dt WHERE dt.ReceiveID = mt.ReceiveID)"
         };
 
         if (request.ReceiveId.HasValue)

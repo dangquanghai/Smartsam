@@ -351,18 +351,35 @@ ORDER BY dt.ID;", conn, trans);
         };
 
         var sql = Header.SendID.HasValue
-            ? "SELECT DeliveryID, Des FROM dbo.LN_DeliveryMT ORDER BY DeliveryID DESC;"
+            ? @"
+SELECT DeliveryID, Des
+FROM dbo.LN_DeliveryMT
+WHERE DeliveryID = @CurrentDeliveryID
+   OR NOT EXISTS (
+       SELECT 1
+       FROM dbo.LN_ReceiveMT mt
+       WHERE mt.SendID = dbo.LN_DeliveryMT.DeliveryID
+         AND EXISTS (SELECT 1 FROM dbo.LN_ReceiveDT dt WHERE dt.ReceiveID = mt.ReceiveID)
+   )
+ORDER BY CASE WHEN DeliveryID = @CurrentDeliveryID THEN 0 ELSE 1 END,
+         DeliveryID DESC;"
             : @"
 SELECT DeliveryID, Des
 FROM dbo.LN_DeliveryMT
-WHERE DeliveryID NOT IN (
-    SELECT SendID
-    FROM dbo.LN_ReceiveMT
-    WHERE SendID IS NOT NULL
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM dbo.LN_ReceiveMT mt
+    WHERE mt.SendID = dbo.LN_DeliveryMT.DeliveryID
+      AND EXISTS (SELECT 1 FROM dbo.LN_ReceiveDT dt WHERE dt.ReceiveID = mt.ReceiveID)
 )
 ORDER BY DeliveryID DESC;";
 
         using var cmd = new SqlCommand(sql, conn);
+        if (Header.SendID.HasValue)
+        {
+            cmd.Parameters.Add("@CurrentDeliveryID", SqlDbType.Int).Value = Header.SendID.Value;
+        }
+
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
@@ -494,9 +511,10 @@ WHERE ReceiveID = @ReceiveID;", conn, trans);
 
         using var cmd = new SqlCommand(@"
 SELECT COUNT(1)
-FROM dbo.LN_ReceiveMT
-WHERE SendID = @SendID
-  AND ReceiveID <> @ReceiveID;", conn, trans);
+FROM dbo.LN_ReceiveMT mt
+WHERE mt.SendID = @SendID
+  AND mt.ReceiveID <> @ReceiveID
+  AND EXISTS (SELECT 1 FROM dbo.LN_ReceiveDT dt WHERE dt.ReceiveID = mt.ReceiveID);", conn, trans);
         cmd.Parameters.Add("@SendID", SqlDbType.Int).Value = Header.SendID.Value;
         cmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = Header.ReceiveID;
         return Convert.ToInt32(cmd.ExecuteScalar() ?? 0) > 0;
