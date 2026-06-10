@@ -640,13 +640,10 @@
                 <div id="inventoryItemStockContent" class="d-none">
                     <div class="mb-2">
                         <div>
-                            <strong id="inventoryItemStockCode"></strong>
-                            <span id="inventoryItemStockName" class="tcvn3-font"></span>
+                            <strong>Item Code:</strong> <strong id="inventoryItemStockCode"></strong>
                         </div>
                         <div>
-                            Main inventory:
-                            <strong id="inventoryItemStockMainInventory"></strong>
-                            <span id="inventoryItemStockUnit"></span>
+                            <strong>Item Name:</strong> <span id="inventoryItemStockName" class="tcvn3-font"></span>
                         </div>
                     </div>
 
@@ -654,15 +651,13 @@
                         <table class="table table-sm table-bordered mb-0">
                             <thead class="thead-light">
                                 <tr>
-                                    <th>Store</th>
-                                    <th style="width: 130px;" class="text-right">BG Quantity</th>
-                                    <th style="width: 130px;" class="text-right">BG Amount</th>
-                                    <th style="width: 80px;">Curr</th>
+                                    <th>Store-House Name</th>
+                                    <th style="width: 180px;" class="text-right">Current Stock Qty</th>
                                 </tr>
                             </thead>
                             <tbody id="inventoryItemStockStoreBody">
                                 <tr>
-                                    <td colspan="4" class="text-center text-muted">No store balance data</td>
+                                    <td colspan="2" class="text-center text-muted">Item does not have stock on any Store-house</td>
                                 </tr>
                             </tbody>
                         </table>
