@@ -402,8 +402,6 @@
         }
         setText("inventoryItemStockCode", "");
         setText("inventoryItemStockName", "");
-        setText("inventoryItemStockMainInventory", "");
-        setText("inventoryItemStockUnit", "");
     }
 
     function showStockError(message) {
@@ -435,14 +433,10 @@
 
         const itemCode = getValue(item, "itemCode", "ItemCode") || "";
         const itemName = getValue(item, "itemName", "ItemName") || "";
-        const unit = getValue(item, "unit", "Unit") || "";
-        const mainInventory = getValue(item, "mainInventory", "MainInventory");
         const storeBalances = getValue(item, "storeBalances", "StoreBalances") || [];
 
         setText("inventoryItemStockCode", itemCode);
-        setText("inventoryItemStockName", itemName ? ` - ${itemName}` : "");
-        setText("inventoryItemStockMainInventory", formatStockNumber(mainInventory));
-        setText("inventoryItemStockUnit", unit);
+        setText("inventoryItemStockName", itemName);
 
         if (body) {
             body.innerHTML = "";
@@ -450,18 +444,16 @@
             if (!storeBalances.length) {
                 const row = document.createElement("tr");
                 const cell = document.createElement("td");
-                cell.colSpan = 4;
+                cell.colSpan = 2;
                 cell.className = "text-center text-muted";
-                cell.textContent = "No store balance data";
+                cell.textContent = "Item does not have stock on any Store-house";
                 row.appendChild(cell);
                 body.appendChild(row);
             } else {
                 storeBalances.forEach((balance) => {
                     const row = document.createElement("tr");
                     appendStockCell(row, getValue(balance, "storeName", "StoreName"));
-                    appendStockCell(row, formatStockNumber(getValue(balance, "bgQuantity", "BGQuantity")), "text-right");
-                    appendStockCell(row, formatStockNumber(getValue(balance, "bgAmount", "BGAmount")), "text-right");
-                    appendStockCell(row, getValue(balance, "currencyName", "CurrencyName"));
+                    appendStockCell(row, formatStockNumber(getValue(balance, "currentStockQty", "CurrentStockQty")), "text-right");
                     body.appendChild(row);
                 });
             }

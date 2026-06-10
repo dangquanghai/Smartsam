@@ -130,14 +130,11 @@ public class IndexModel : BasePageModel
                 stockInfo.ItemCode,
                 stockInfo.ItemName,
                 stockInfo.Unit,
-                stockInfo.MainInventory,
                 StoreBalances = stockInfo.StoreBalances.Select(balance => new
                 {
                     balance.StoreID,
                     balance.StoreName,
-                    balance.BGQuantity,
-                    balance.BGAmount,
-                    balance.CurrencyName
+                    balance.CurrentStockQty
                 })
             }
         });
@@ -797,19 +794,18 @@ ORDER BY CatgCode;", conn);
 
     private InventoryItemStockInfo? GetStockInfo(SqlConnection conn, int itemId)
     {
-        using var cmd = new SqlCommand(@"
+        using var itemCmd = new SqlCommand(@"
 SELECT TOP (1)
     ItemID,
     ISNULL(ItemCode, '') AS ItemCode,
     ISNULL(ItemName, '') AS ItemName,
-    ISNULL(Unit, '') AS Unit,
-    CAST(ISNULL(dbo.GetItemBalance(ItemID, ISNULL(NULLIF(KPGroupItem, 0), 1), YEAR(GETDATE())), 0) AS decimal(18,2)) AS MainInventory
+    ISNULL(Unit, '') AS Unit
 FROM dbo.INV_ItemList
 WHERE ItemID = @ItemID;", conn);
-        cmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = itemId;
+        itemCmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = itemId;
 
         InventoryItemStockInfo stockInfo;
-        using (var rd = cmd.ExecuteReader())
+        using (var rd = itemCmd.ExecuteReader())
         {
             if (!rd.Read())
             {
@@ -821,40 +817,86 @@ WHERE ItemID = @ItemID;", conn);
                 ItemID = Convert.ToInt32(rd["ItemID"]),
                 ItemCode = Convert.ToString(rd["ItemCode"]) ?? string.Empty,
                 ItemName = Convert.ToString(rd["ItemName"]) ?? string.Empty,
-                Unit = Convert.ToString(rd["Unit"]) ?? string.Empty,
-                MainInventory = ReadNullableDecimal(rd["MainInventory"]) ?? 0m
+                Unit = Convert.ToString(rd["Unit"]) ?? string.Empty
             };
         }
 
-        using var storeCmd = new SqlCommand(@"
-SELECT TOP (200)
-    bg.StoreID,
-    ISNULL(store.StoreName, CONCAT('Store #', bg.StoreID)) AS StoreName,
-    CAST(SUM(ISNULL(bg.BGQuantity, 0)) AS decimal(18,2)) AS BGQuantity,
-    CAST(SUM(ISNULL(bg.BGAmount, 0)) AS decimal(18,2)) AS BGAmount,
-    ISNULL(curr.CurrencyName, '') AS CurrencyName
-FROM dbo.INV_ItemStoreBG bg
-LEFT JOIN dbo.INV_StoreList store ON store.StoreID = bg.StoreID
-LEFT JOIN dbo.MS_CurrencyFL curr ON curr.CurrencyID = bg.Currency
-WHERE bg.ItemID = @ItemID
-GROUP BY bg.StoreID, store.StoreName, curr.CurrencyName
-ORDER BY store.StoreName;", conn);
+        using var storeCmd = new SqlCommand("dbo.sp_CheckItemStock", conn)
+        {
+            CommandType = CommandType.StoredProcedure
+        };
         storeCmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = itemId;
 
-        using var storeReader = storeCmd.ExecuteReader();
-        while (storeReader.Read())
+        using (var storeReader = storeCmd.ExecuteReader())
         {
-            stockInfo.StoreBalances.Add(new InventoryItemStoreBalance
+            if (storeReader.FieldCount < 2)
             {
-                StoreID = Convert.ToInt32(storeReader["StoreID"]),
-                StoreName = Convert.ToString(storeReader["StoreName"]) ?? string.Empty,
-                BGQuantity = ReadNullableDecimal(storeReader["BGQuantity"]) ?? 0m,
-                BGAmount = ReadNullableDecimal(storeReader["BGAmount"]) ?? 0m,
-                CurrencyName = Convert.ToString(storeReader["CurrencyName"]) ?? string.Empty
-            });
+                throw new InvalidOperationException("sp_CheckItemStock must return StoreID and Current Stock Qty columns.");
+            }
+
+            while (storeReader.Read())
+            {
+                var storeId = ReadNullableInt(storeReader.GetValue(0)) ?? 0;
+                var currentStockQty = ReadNullableDecimal(storeReader.GetValue(1)) ?? 0m;
+                stockInfo.StoreBalances.Add(new InventoryItemStoreBalance
+                {
+                    StoreID = storeId,
+                    CurrentStockQty = currentStockQty
+                });
+            }
         }
 
+        if (stockInfo.StoreBalances.Count == 1
+            && stockInfo.StoreBalances[0].StoreID == 0
+            && stockInfo.StoreBalances[0].CurrentStockQty == 0m)
+        {
+            stockInfo.StoreBalances.Clear();
+        }
+
+        if (stockInfo.StoreBalances.Count == 0)
+        {
+            return stockInfo;
+        }
+
+        PopulateStoreNames(conn, stockInfo.StoreBalances);
+
         return stockInfo;
+    }
+
+    private static void PopulateStoreNames(SqlConnection conn, List<InventoryItemStoreBalance> storeBalances)
+    {
+        var storeIds = storeBalances.Select(balance => balance.StoreID).Where(storeId => storeId > 0).Distinct().ToList();
+        if (storeIds.Count == 0)
+        {
+            return;
+        }
+
+        var parameterNames = storeIds.Select((_, index) => $"@StoreID{index}").ToList();
+        using var cmd = new SqlCommand($@"
+SELECT StoreID, ISNULL(StoreName, '') AS StoreName
+FROM dbo.INV_StoreList
+WHERE StoreID IN ({string.Join(", ", parameterNames)});", conn);
+
+        for (var index = 0; index < storeIds.Count; index++)
+        {
+            cmd.Parameters.Add(parameterNames[index], SqlDbType.Int).Value = storeIds[index];
+        }
+
+        var storeNames = new Dictionary<int, string>();
+        using (var rd = cmd.ExecuteReader())
+        {
+            while (rd.Read())
+            {
+                storeNames[Convert.ToInt32(rd["StoreID"])] = Convert.ToString(rd["StoreName"]) ?? string.Empty;
+            }
+        }
+
+        foreach (var balance in storeBalances)
+        {
+            balance.StoreName = storeNames.TryGetValue(balance.StoreID, out var storeName) && !string.IsNullOrWhiteSpace(storeName)
+                ? storeName
+                : $"Store #{balance.StoreID}";
+        }
     }
 
     private IActionResult ExportRows(IReadOnlyList<InventoryItemRow> rows)
@@ -1541,7 +1583,6 @@ public class InventoryItemStockInfo
     public string ItemCode { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
     public string Unit { get; set; } = string.Empty;
-    public decimal MainInventory { get; set; }
     public List<InventoryItemStoreBalance> StoreBalances { get; set; } = new List<InventoryItemStoreBalance>();
 }
 
@@ -1549,9 +1590,7 @@ public class InventoryItemStoreBalance
 {
     public int StoreID { get; set; }
     public string StoreName { get; set; } = string.Empty;
-    public decimal BGQuantity { get; set; }
-    public decimal BGAmount { get; set; }
-    public string CurrencyName { get; set; } = string.Empty;
+    public decimal CurrentStockQty { get; set; }
 }
 
 public class InventoryItemDeleteInfo

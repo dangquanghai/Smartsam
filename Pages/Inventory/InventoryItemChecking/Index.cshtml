@@ -145,7 +145,7 @@
                                         };
                                         var detailMode = Model.CanEditRow(row.StatusId) ? "edit" : (Model.CanApproveRow(row.StatusId) ? "approved" : (Model.CanView ? "view" : string.Empty));
                                         var detailUrl = string.IsNullOrEmpty(detailMode) ? string.Empty : (Url.Page("./ItemCheckingDetail", new { id = row.CheckingId, mode = detailMode }) ?? "#");
-                                        <tr class="inventory-item-checking-row" data-id="@row.CheckingId" data-status-id="@row.StatusId"><td>@row.CheckingId</td><td>@if (!string.IsNullOrEmpty(detailMode)) { <a href="@detailUrl" class="inventory-item-checking-po-link font-weight-bold">@row.PONo</a> } else { <span class="font-weight-bold">@row.PONo</span> }</td><td><span class="badge @statusBadgeClass">@row.StatusName</span></td><td>@row.CheckedBy</td><td>@(row.CheckedDate?.ToString("dd/MM/yyyy"))</td><td>@row.ApprovedBy</td><td>@(row.ApprovedDate?.ToString("dd/MM/yyyy"))</td><td>@row.ReceiveNo</td></tr>
+                                        <tr class="inventory-item-checking-row" data-id="@row.CheckingId" data-status-id="@row.StatusId"><td>@if (!string.IsNullOrEmpty(detailMode)) { <a href="@detailUrl" class="inventory-item-checking-po-link font-weight-bold">@row.CheckingId</a> } else { <span class="font-weight-bold">@row.CheckingId</span> }</td><td>@row.PONo</td><td><span class="badge @statusBadgeClass">@row.StatusName</span></td><td>@row.CheckedBy</td><td>@(row.CheckedDate?.ToString("dd/MM/yyyy"))</td><td>@row.ApprovedBy</td><td>@(row.ApprovedDate?.ToString("dd/MM/yyyy"))</td><td>@row.ReceiveNo</td></tr>
                                     }
                                 }
                                 </tbody>
