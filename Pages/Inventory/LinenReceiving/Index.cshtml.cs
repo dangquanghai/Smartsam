@@ -35,7 +35,6 @@ public class IndexModel : BasePageModel
         }
 
         NormalizeFilter(Filter);
-        PrepareLegacyListData();
         ViewData["DefaultPageSize"] = DefaultPageSize;
         return Page();
     }
@@ -53,7 +52,6 @@ public class IndexModel : BasePageModel
         }
 
         NormalizeSearchRequest(request);
-        PrepareLegacyListData();
         var (rows, totalRecords) = SearchRows(request);
         var canAccess = PagePerm.HasPermission(PermissionView) || PagePerm.HasPermission(PermissionUpdate);
         var canEdit = PagePerm.HasPermission(PermissionUpdate);
@@ -139,18 +137,6 @@ public class IndexModel : BasePageModel
         return new JsonResult(new { success = true });
     }
 
-    private void PrepareLegacyListData()
-    {
-        using var conn = OpenConnection();
-        using var deleteCmd = new SqlCommand(@"
-DELETE FROM dbo.LN_ReceiveMT
-WHERE ReceiveID NOT IN (
-    SELECT ReceiveID
-    FROM dbo.LN_ReceiveDT
-);", conn);
-        deleteCmd.ExecuteNonQuery();
-    }
-
     private (List<LinenReceivingRow> rows, int totalRecords) SearchRows(LinenReceivingSearchRequest request)
     {
         var rows = new List<LinenReceivingRow>();
@@ -176,6 +162,11 @@ WHERE ReceiveID NOT IN (
         using (var countCmd = new SqlCommand($@"
 SELECT COUNT(1)
 FROM dbo.LN_ReceiveMT mt
+INNER JOIN (
+    SELECT ReceiveID
+    FROM dbo.LN_ReceiveDT
+    GROUP BY ReceiveID
+) dt ON dt.ReceiveID = mt.ReceiveID
 INNER JOIN dbo.LN_DeliveryMT de ON mt.SendID = de.DeliveryID
 WHERE {whereSql};", conn))
         {
@@ -190,6 +181,11 @@ SELECT mt.ReceiveID,
        ISNULL(mt.[Lock], 0) AS IsLocked,
        ISNULL(de.Des, '') AS DeliveryInfor
 FROM dbo.LN_ReceiveMT mt
+INNER JOIN (
+    SELECT ReceiveID
+    FROM dbo.LN_ReceiveDT
+    GROUP BY ReceiveID
+) dt ON dt.ReceiveID = mt.ReceiveID
 INNER JOIN dbo.LN_DeliveryMT de ON mt.SendID = de.DeliveryID
 WHERE {whereSql}
 ORDER BY mt.ReceiveDate DESC, mt.ReceiveID DESC

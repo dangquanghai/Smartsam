@@ -35,7 +35,7 @@
                     <div class="iic-header-grid">
                         <div class="iic-header-field">
                             <label>Check No</label>
-                            <input class="form-control form-control-sm" value="@(Model.Header.CheckingId > 0 ? Model.Header.CheckingId.ToString() : string.Empty)" disabled />
+                            <input class="form-control form-control-sm" value="@(Model.Header.CheckingId > 0 ? Model.Header.CheckingId.ToString() : (Model.PreviewCheckingId > 0 ? Model.PreviewCheckingId.ToString() : string.Empty))" disabled />
                         </div>
                         <div class="iic-header-field">
                             <label>MR Info</label>
@@ -99,11 +99,11 @@
                         }
                         <div class="iic-header-field iic-header-field-wide">
                             <label>Checking Method</label>
-                            <input asp-for="Header.CheckingMethod" class="form-control form-control-sm" readonly="@(!Model.CanSaveDraft)" />
+                            <input asp-for="Header.CheckingMethod" class="form-control form-control-sm" disabled="@(!Model.CanEditCheckingFields)" />
                         </div>
                         <div class="iic-header-field iic-header-field-wide">
                             <label>Result</label>
-                            <input asp-for="Header.Result" class="form-control form-control-sm" readonly="@(!Model.CanSaveDraft)" />
+                            <input asp-for="Header.Result" class="form-control form-control-sm" disabled="@(!Model.CanEditCheckingFields)" />
                         </div>
                     </div>
                     <div class="d-flex align-items-center flex-wrap">
@@ -195,6 +195,11 @@
                         @if (Model.CanSaveDraft)
                         {
                             <button type="submit" asp-page-handler="Save" class="btn btn-sm btn-action-save border mr-2 mb-2"><i class="fas fa-save"></i> Save</button>
+                        }
+                        @if (!Model.CanEditCheckingFields)
+                        {
+                            <input type="hidden" asp-for="Header.CheckingMethod" />
+                            <input type="hidden" asp-for="Header.Result" />
                         }
                         @if (Model.CanCheckAction)
                         {

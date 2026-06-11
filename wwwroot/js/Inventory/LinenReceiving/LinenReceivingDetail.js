@@ -3,6 +3,8 @@
 
     let pageDirty = false;
     let activeReportObjectUrl = '';
+    let rowDeliveryOptionsCache = null;
+    let rowDeliveryOptionsRequest = null;
 
     function initializePage() {
         initAutoDismissAlerts();
@@ -14,8 +16,10 @@
         bindDirtyTracking();
         initReportModal();
         initializeLocationSelect2(document);
+        initializeDeliverySelect2(document);
         recalcAllRows();
         pageDirty = false;
+        preloadRowDeliveryOptions();
     }
 
     function initAutoDismissAlerts() {
@@ -88,8 +92,19 @@
 
     function bindGridEvents() {
         $('#btnAddDetailRow').off('click').on('click', function () {
-            addDetailRow();
-            pageDirty = true;
+            const $button = $(this);
+            $button.prop('disabled', true);
+            ensureRowDeliveryOptions(getHeaderDeliveryOption(), true)
+                .done(function (deliveryOptions) {
+                    addDetailRow(deliveryOptions);
+                    pageDirty = true;
+                })
+                .fail(function (error) {
+                    alert(error?.message || 'Cannot load delivery list.');
+                })
+                .always(function () {
+                    $button.prop('disabled', false);
+                });
         });
 
         $(document).off('click', '.js-remove-row').on('click', '.js-remove-row', function () {
@@ -104,6 +119,11 @@
             const $row = $(this).closest('tr');
             refreshRowPriceFromLinen($row);
             recalcRow($row);
+            pageDirty = true;
+        });
+
+
+        $(document).off('change', '.lr-delivery').on('change', '.lr-delivery', function () {
             pageDirty = true;
         });
 
@@ -318,11 +338,186 @@
         }
     }
 
-    function addDetailRow() {
+    function initializeDeliverySelect2(scope) {
+        if (!$.fn.select2) {
+            return;
+        }
+
+        $(scope || document).find('select.lr-delivery').each(function () {
+            const $element = $(this);
+            if ($element.hasClass('select2-hidden-accessible')) {
+                $element.select2('destroy');
+            }
+
+            $element.select2({
+                width: '100%',
+                placeholder: '-- Select --',
+                minimumInputLength: 0,
+                ajax: {
+                    delay: 250,
+                    transport: function (params, success, failure) {
+                        const term = (params.data?.term || '').toString().trim();
+                        const currentOption = getCurrentDeliveryOption($element);
+
+                        if (!term) {
+                            ensureRowDeliveryOptions(currentOption, false)
+                                .done(function (deliveryOptions) {
+                                    success({ success: true, options: deliveryOptions });
+                                })
+                                .fail(function () {
+                                    success({ success: true, options: mergeDeliveryOptions(rowDeliveryOptionsCache || [], currentOption) });
+                                });
+
+                            return { abort: function () { } };
+                        }
+
+                        return $.ajax({
+                            url: `${window.location.pathname}?handler=RowDeliveryOptions`,
+                            type: 'GET',
+                            data: {
+                                currentDeliveryId: currentOption.value || '',
+                                term: term
+                            }
+                        }).done(success).fail(failure);
+                    },
+                    processResults: function (response) {
+                        return {
+                            results: mapDeliveryResults(response?.options || [])
+                        };
+                    }
+                }
+            });
+
+            $element.off('select2:open.linenReceivingDelivery').on('select2:open.linenReceivingDelivery', function () {
+                const searchField = document.querySelector('.select2-container--open .select2-search__field');
+                if (searchField) {
+                    searchField.focus();
+                }
+            });
+        });
+    }
+
+    function mapDeliveryResults(options) {
+        return (options || [])
+            .filter(function (item) {
+                return item.value !== undefined && item.value !== null && item.value !== '';
+            })
+            .map(function (item) {
+                return {
+                    id: item.value.toString(),
+                    text: item.text || item.value.toString()
+                };
+            });
+    }
+
+    function getHeaderDeliveryOption() {
+        const $header = $('#Header_SendID');
+        return {
+            value: ($header.val() || window.linenReceivingPage?.sendId || '').toString(),
+            text: ($header.find('option:selected').text() || '').toString()
+        };
+    }
+
+    function getCurrentDeliveryOption($select) {
+        return {
+            value: ($select.val() || '').toString(),
+            text: ($select.find('option:selected').text() || '').toString()
+        };
+    }
+
+    function preloadRowDeliveryOptions() {
+        return ensureRowDeliveryOptions(getHeaderDeliveryOption(), true);
+    }
+
+    function ensureRowDeliveryOptions(currentOption, allowFetch) {
+        const current = currentOption || { value: '', text: '' };
+        const deferred = $.Deferred();
+
+        if (rowDeliveryOptionsCache) {
+            deferred.resolve(mergeDeliveryOptions(rowDeliveryOptionsCache, current));
+            return deferred.promise();
+        }
+
+        if (rowDeliveryOptionsRequest) {
+            rowDeliveryOptionsRequest
+                .done(function () {
+                    deferred.resolve(mergeDeliveryOptions(rowDeliveryOptionsCache || [], current));
+                })
+                .fail(function () {
+                    deferred.reject(new Error('Cannot load delivery list.'));
+                });
+            return deferred.promise();
+        }
+
+        if (allowFetch !== true) {
+            deferred.reject(new Error('Delivery list is still loading.'));
+            return deferred.promise();
+        }
+
+        rowDeliveryOptionsRequest = $.ajax({
+            url: `${window.location.pathname}?handler=RowDeliveryOptions`,
+            type: 'GET',
+            data: { currentDeliveryId: current.value || '' }
+        });
+
+        rowDeliveryOptionsRequest
+            .done(function (response) {
+                if (!response || response.success !== true) {
+                    deferred.reject(new Error(response?.message || 'Cannot load delivery list.'));
+                    return;
+                }
+
+                rowDeliveryOptionsCache = response.options || [];
+                deferred.resolve(mergeDeliveryOptions(rowDeliveryOptionsCache, current));
+            })
+            .fail(function () {
+                deferred.reject(new Error('Cannot load delivery list.'));
+            })
+            .always(function () {
+                rowDeliveryOptionsRequest = null;
+            });
+
+        return deferred.promise();
+    }
+
+    function mergeDeliveryOptions(options, currentOption) {
+        const merged = [];
+        const seen = {};
+        const currentValue = (currentOption?.value || '').toString();
+
+        (options || []).forEach(function (item) {
+            const value = (item.value || '').toString();
+            if (seen[value]) {
+                return;
+            }
+
+            seen[value] = true;
+            merged.push({ value: value, text: item.text || '' });
+        });
+
+        if (currentValue && !seen[currentValue]) {
+            merged.unshift({ value: currentValue, text: currentOption?.text || currentValue });
+        }
+
+        return merged;
+    }
+
+    function renderDeliveryOptions($select, options, selectedValue) {
+        const selected = (selectedValue || '').toString();
+        const html = (options || []).map(function (item) {
+            const value = (item.value || '').toString();
+            const selectedAttr = value === selected ? ' selected' : '';
+            return `<option value="${encodeHtml(value)}"${selectedAttr}>${encodeHtml(item.text || '')}</option>`;
+        }).join('');
+
+        $select.html(html);
+    }
+
+    function addDetailRow(deliveryOptions) {
         $('.linen-receiving-empty-row').remove();
 
         const headerSendId = ($('#Header_SendID').val() || window.linenReceivingPage?.sendId || '').toString();
-        const deliveries = (window.linenReceivingPage?.rowTemplateOptions?.deliveries || []).map(function (item) {
+        const deliveries = (deliveryOptions || []).map(function (item) {
             const selected = item.value && item.value.toString() === headerSendId ? ' selected' : '';
             return `<option value="${encodeHtml(item.value)}"${selected}>${encodeHtml(item.text)}</option>`;
         }).join('');
@@ -344,7 +539,7 @@
                     </button>
                 </div>
             </td>
-            <td><select class="form-control form-control-sm lr-delivery vni-font">${deliveries}</select></td>
+            <td><select class="form-control form-control-sm lr-delivery vni-font" data-delivery-loaded="true">${deliveries}</select></td>
             <td><select class="form-control form-control-sm lr-location select2 vni-font" data-placeholder="-- Select --">${locations}</select></td>
             <td><select class="form-control form-control-sm lr-linen vni-font">${linens}</select></td>
             <td class="text-center"><input type="checkbox" class="lr-express" /></td>
@@ -358,6 +553,7 @@
         const $row = $(html);
         $('#linenReceivingDetailTable tbody').append($row);
         initializeLocationSelect2($row);
+        initializeDeliverySelect2($row);
     }
 
     function initializeLocationSelect2(scope) {

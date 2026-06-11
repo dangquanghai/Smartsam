@@ -1297,10 +1297,17 @@ VALUES
     private Dictionary<int, string> GetLocationMap(SqlConnection conn, SqlTransaction trans)
     {
         var result = new Dictionary<int, string>();
+        var locationSql = Header.DeliveryType == 3 && Header.IsSpecialLaundry
+            ? $@"    SELECT locationID, Location
+    FROM
+    (
+{BuildLocationSql()}
+    ) AS LocationBase"
+            : BuildLocationSql();
         var sql = $@"
 WITH LocationSource AS
 (
-{BuildLocationSql()}
+{locationSql}
 
     UNION
 

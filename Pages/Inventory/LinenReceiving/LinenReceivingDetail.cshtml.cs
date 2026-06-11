@@ -172,13 +172,6 @@ public class LinenReceivingDetailModel : BasePageModel
                 SaveDetailRows(conn, trans);
             }
 
-            if (Header.SendID.HasValue)
-            {
-                using var markCmd = new SqlCommand("exec LN_MarkFullReceiveOnDelevery @DeliveryID", conn, trans);
-                markCmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = Header.SendID.Value;
-                markCmd.ExecuteNonQuery();
-            }
-
             trans.Commit();
         }
         catch
@@ -189,6 +182,23 @@ public class LinenReceivingDetailModel : BasePageModel
 
         TempData["SuccessMessage"] = "Linen receiving saved.";
         return RedirectToPage("./LinenReceivingDetail", new { id = Header.ReceiveID, mode = "edit", returnUrl = ReturnUrl });
+    }
+
+    public JsonResult OnGetRowDeliveryOptions(int? currentDeliveryId, string? term)
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionUpdate))
+        {
+            Response.StatusCode = StatusCodes.Status403Forbidden;
+            return new JsonResult(new { success = false, message = "Forbidden" });
+        }
+
+        using var conn = OpenConnection();
+        var options = LoadAvailableDeliveryOptions(conn, currentDeliveryId, term)
+            .Select(x => new { value = x.Value, text = x.Text })
+            .ToList();
+
+        return new JsonResult(new { success = true, options });
     }
 
     public JsonResult OnGetDeliveryInfo(int id)
@@ -350,19 +360,75 @@ ORDER BY dt.ID;", conn, trans);
             new SelectListItem { Value = string.Empty, Text = "-- Select --" }
         };
 
-        var sql = Header.SendID.HasValue
-            ? "SELECT DeliveryID, Des FROM dbo.LN_DeliveryMT ORDER BY DeliveryID DESC;"
-            : @"
+        var selectedDeliveryIds = Details
+            .Where(x => x.SendID.HasValue)
+            .Select(x => x.SendID!.Value)
+            .ToList();
+
+        if (Header.SendID.HasValue)
+        {
+            selectedDeliveryIds.Add(Header.SendID.Value);
+        }
+
+        selectedDeliveryIds = selectedDeliveryIds.Distinct().ToList();
+        if (Details.Count > 0 && selectedDeliveryIds.Count > 0)
+        {
+            var parameterNames = selectedDeliveryIds.Select((_, index) => $"@DeliveryID{index}").ToList();
+            using var selectedCmd = new SqlCommand($@"
 SELECT DeliveryID, Des
 FROM dbo.LN_DeliveryMT
-WHERE DeliveryID NOT IN (
-    SELECT SendID
-    FROM dbo.LN_ReceiveMT
-    WHERE SendID IS NOT NULL
-)
-ORDER BY DeliveryID DESC;";
+WHERE DeliveryID IN ({string.Join(", ", parameterNames)})
+ORDER BY DeliveryID DESC;", conn);
+
+            for (var i = 0; i < selectedDeliveryIds.Count; i++)
+            {
+                selectedCmd.Parameters.Add(parameterNames[i], SqlDbType.Int).Value = selectedDeliveryIds[i];
+            }
+
+            using var selectedRd = selectedCmd.ExecuteReader();
+            while (selectedRd.Read())
+            {
+                items.Add(new SelectListItem
+                {
+                    Value = Convert.ToInt32(selectedRd["DeliveryID"]).ToString(),
+                    Text = Convert.ToString(selectedRd["Des"]) ?? string.Empty
+                });
+            }
+
+            return items;
+        }
+
+        return LoadAvailableDeliveryOptions(conn, Header.SendID, null);
+    }
+
+    private List<SelectListItem> LoadAvailableDeliveryOptions(SqlConnection conn, int? currentDeliveryId, string? term)
+    {
+        var items = new List<SelectListItem>
+        {
+            new SelectListItem { Value = string.Empty, Text = "-- Select --" }
+        };
+
+        var keyword = (term ?? string.Empty).Trim();
+        var sql = @"
+SELECT TOP (100) DeliveryID, Des
+FROM dbo.LN_DeliveryMT
+WHERE (@CurrentDeliveryID IS NOT NULL AND DeliveryID = @CurrentDeliveryID)
+   OR (
+       (@SearchText = '' OR Des LIKE @SearchPattern OR CONVERT(varchar(20), DeliveryID) LIKE @SearchPattern)
+       AND NOT EXISTS (
+           SELECT 1
+           FROM dbo.LN_ReceiveMT mt
+           WHERE mt.SendID = dbo.LN_DeliveryMT.DeliveryID
+             AND EXISTS (SELECT 1 FROM dbo.LN_ReceiveDT dt WHERE dt.ReceiveID = mt.ReceiveID)
+       )
+   )
+ORDER BY CASE WHEN DeliveryID = @CurrentDeliveryID THEN 0 ELSE 1 END,
+         DeliveryID DESC;";
 
         using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.Add("@CurrentDeliveryID", SqlDbType.Int).Value = currentDeliveryId.HasValue ? currentDeliveryId.Value : (object)DBNull.Value;
+        cmd.Parameters.Add("@SearchText", SqlDbType.VarChar, 100).Value = keyword;
+        cmd.Parameters.Add("@SearchPattern", SqlDbType.VarChar, 110).Value = $"%{keyword}%";
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
@@ -494,9 +560,10 @@ WHERE ReceiveID = @ReceiveID;", conn, trans);
 
         using var cmd = new SqlCommand(@"
 SELECT COUNT(1)
-FROM dbo.LN_ReceiveMT
-WHERE SendID = @SendID
-  AND ReceiveID <> @ReceiveID;", conn, trans);
+FROM dbo.LN_ReceiveMT mt
+WHERE mt.SendID = @SendID
+  AND mt.ReceiveID <> @ReceiveID
+  AND EXISTS (SELECT 1 FROM dbo.LN_ReceiveDT dt WHERE dt.ReceiveID = mt.ReceiveID);", conn, trans);
         cmd.Parameters.Add("@SendID", SqlDbType.Int).Value = Header.SendID.Value;
         cmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = Header.ReceiveID;
         return Convert.ToInt32(cmd.ExecuteScalar() ?? 0) > 0;

@@ -28,6 +28,7 @@ public class ItemCheckingDetailModel : BasePageModel
     [BindProperty] public ItemCheckingHeaderVm Header { get; set; } = new();
     [BindProperty] public string StagedItemsJson { get; set; } = "[]";
     [BindProperty] public bool SendCreateCheckMail { get; set; }
+    public int PreviewCheckingId { get; set; }
     public string Message { get; set; } = string.Empty;
     public string MessageType { get; set; } = "info";
     [BindProperty] public List<ItemCheckingDetailRowVm> DetailRows { get; set; } = new();
@@ -45,6 +46,7 @@ public class ItemCheckingDetailModel : BasePageModel
     public bool CanSaveDraft { get; set; }
     public bool CanCheckAction { get; set; }
     public bool CanApproveAction { get; set; }
+    public bool CanEditCheckingFields { get; set; }
 
     public IActionResult OnGet()
     {
@@ -180,6 +182,7 @@ WHERE a1.POID = @POID
         if (!Header.POID.HasValue || Header.POID.Value <= 0)
         {
             LoadLookups();
+            EnsurePreviewCheckingId();
             ComputeActionUi();
             Message = "Please select a PO.";
             MessageType = "error";
@@ -193,6 +196,7 @@ WHERE a1.POID = @POID
                 Header.CreatedDate = Header.CreatedDate == default ? DateTime.Now : Header.CreatedDate;
                 Header.CreatedBy ??= GetCurrentEmployeeId();
                 Header.StatusId = Header.StatusId == 0 ? 1 : Header.StatusId;
+                EnsurePreviewCheckingId();
                 ComputeActionUi();
                 Message = errMsg;
                 MessageType = "error";
@@ -283,6 +287,7 @@ WHERE CheckingID=@CheckingID";
         if (!Header.POID.HasValue || Header.POID.Value <= 0)
         {
             LoadLookups();
+            EnsurePreviewCheckingId();
             ComputeActionUi();
             Message = "Please select a PO.";
             MessageType = "error";
@@ -297,6 +302,7 @@ WHERE CheckingID=@CheckingID";
                 Header.CreatedDate = Header.CreatedDate == default ? DateTime.Now : Header.CreatedDate;
                 Header.CreatedBy ??= GetCurrentEmployeeId();
                 Header.StatusId = Header.StatusId == 0 ? 1 : Header.StatusId;
+                EnsurePreviewCheckingId();
                 ComputeActionUi();
                 Message = errMsg;
                 MessageType = "error";
@@ -344,7 +350,7 @@ WHERE CheckingID=@CheckingID";
 
         using var conn = OpenConnection();
         using var cmd = new SqlCommand(@"UPDATE dbo.INV_RecevingChekingVoucher
-SET ExpectDate=@ExpectDate, MRInfor=@MRInfor, CheckingMethod=@CheckingMethod, Result=@Result
+SET ExpectDate=@ExpectDate, MRInfor=@MRInfor
 WHERE CheckingID=@CheckingID", conn);
         cmd.Parameters.Add("@ExpectDate", SqlDbType.DateTime).Value = Header.ExpectDate;
         cmd.Parameters.Add("@MRInfor", SqlDbType.NVarChar, 50).Value = string.IsNullOrWhiteSpace(Header.MRInfor) ? string.Empty : Header.MRInfor.Trim();
@@ -554,10 +560,12 @@ VALUES(@CheckingID,@ItemID,@QuantityCheck,@QuantityPassed,@Price,@Amount,@Notes,
         CanCheckAction = false;
         CanApproveAction = false;
         CanDisapprove = false;
+        CanEditCheckingFields = false;
         if (Header.StatusId == 1)
         {
             ActionCaption = Mode == "add" ? "Save" : "Check";
             CanCheckAction = isDepartmentUser && (string.Equals(Mode, "edit", StringComparison.OrdinalIgnoreCase) || IsApprovedMode);
+            CanEditCheckingFields = CanCheckAction;
         }
         else if (Header.StatusId == 2)
         {
@@ -671,6 +679,7 @@ ORDER BY p.PODate DESC", conn);
         Header.ExpectDate = DateTime.Now.AddDays(2);
         Header.CreatedBy = GetCurrentEmployeeId();
         Header.StatusId = 1;
+        PreviewCheckingId = GetNextCheckingIdPreview();
     }
     private void LoadMaster(int checkingId)
     {
@@ -758,6 +767,19 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);", conn, tx);
         cmd.Parameters.Add("@CheckingMethod", SqlDbType.NVarChar, 254).Value = string.IsNullOrWhiteSpace(Header.CheckingMethod) ? string.Empty : Header.CheckingMethod.Trim();
         cmd.Parameters.Add("@Result", SqlDbType.NVarChar, 100).Value = string.IsNullOrWhiteSpace(Header.Result) ? string.Empty : Header.Result.Trim();
         return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+    private void EnsurePreviewCheckingId()
+    {
+        if (Header.CheckingId <= 0 && PreviewCheckingId <= 0)
+        {
+            PreviewCheckingId = GetNextCheckingIdPreview();
+        }
+    }
+    private int GetNextCheckingIdPreview()
+    {
+        using var conn = OpenConnection();
+        using var cmd = new SqlCommand("SELECT ISNULL(MAX(CheckingID), 0) + 1 FROM dbo.INV_RecevingChekingVoucher", conn);
+        return Convert.ToInt32(cmd.ExecuteScalar() ?? 1);
     }
     private int GetCurrentStatus(SqlConnection conn, int checkingId)
     {
