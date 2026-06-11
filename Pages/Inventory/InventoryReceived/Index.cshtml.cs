@@ -49,7 +49,7 @@ public class IndexModel : BasePageModel
         return Page();
     }
 
-    public IActionResult OnGetSearchDetail(string? keyword, int pageNumber = 1, int pageSize = 10)
+    public IActionResult OnGetSearchDetail(string? keyword, DateTime? fromDate, DateTime? toDate, int pageNumber = 1, int pageSize = 10)
     {
         PagePerm = GetUserPermissions();
         if (!PagePerm.HasPermission(PermissionViewList))
@@ -64,13 +64,17 @@ public class IndexModel : BasePageModel
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
 
-        var where = @" WHERE h.FlowType = 2
+var where = @" WHERE h.FlowType = 2
 AND (@KPGroupId IS NULL OR h.KPGroup = @KPGroupId)
+AND (@FromDate IS NULL OR CONVERT(date,h.FlowDate) >= @FromDate)
+AND (@ToDate IS NULL OR CONVERT(date,h.FlowDate) <= @ToDate)
 AND (@Keyword IS NULL OR i.ItemCode LIKE '%' + @Keyword + '%' OR i.ItemName LIKE '%' + @Keyword + '%' OR h.FlowNo LIKE '%' + @Keyword + '%') ";
 
         using var countCmd = new SqlCommand("SELECT COUNT(1) FROM dbo.INV_ItemFlowDetail d INNER JOIN dbo.INV_ItemFlow h ON h.FlowID=d.FlowID INNER JOIN dbo.INV_ItemList i ON i.ItemID=d.ItemID " + where, conn);
         var kpGroupId = IsAdminRole() ? (Filter.KpGroupId.HasValue && Filter.KpGroupId > 0 ? Filter.KpGroupId.Value : 0) : GetCurrentKpGroupId();
         countCmd.Parameters.Add("@KPGroupId", SqlDbType.Int).Value = IsAdminRole() ? (kpGroupId > 0 ? kpGroupId : DBNull.Value) : (kpGroupId > 0 ? kpGroupId : -1);
+        countCmd.Parameters.Add("@FromDate", SqlDbType.Date).Value = fromDate.HasValue ? fromDate.Value.Date : DBNull.Value;
+        countCmd.Parameters.Add("@ToDate", SqlDbType.Date).Value = toDate.HasValue ? toDate.Value.Date : DBNull.Value;
         countCmd.Parameters.Add("@Keyword", SqlDbType.NVarChar, 150).Value = string.IsNullOrWhiteSpace(keyword) ? DBNull.Value : keyword.Trim();
         var total = Convert.ToInt32(countCmd.ExecuteScalar() ?? 0);
 
@@ -81,6 +85,8 @@ INNER JOIN dbo.INV_ItemList i ON i.ItemID=d.ItemID " + where + @"
 ORDER BY h.FlowDate DESC, h.FlowID DESC
 OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn);
         cmd.Parameters.Add("@KPGroupId", SqlDbType.Int).Value = IsAdminRole() ? (kpGroupId > 0 ? kpGroupId : DBNull.Value) : (kpGroupId > 0 ? kpGroupId : -1);
+        cmd.Parameters.Add("@FromDate", SqlDbType.Date).Value = fromDate.HasValue ? fromDate.Value.Date : DBNull.Value;
+        cmd.Parameters.Add("@ToDate", SqlDbType.Date).Value = toDate.HasValue ? toDate.Value.Date : DBNull.Value;
         cmd.Parameters.Add("@Keyword", SqlDbType.NVarChar, 150).Value = string.IsNullOrWhiteSpace(keyword) ? DBNull.Value : keyword.Trim();
         cmd.Parameters.Add("@Offset", SqlDbType.Int).Value = (pageNumber - 1) * pageSize;
         cmd.Parameters.Add("@PageSize", SqlDbType.Int).Value = pageSize;
@@ -322,13 +328,29 @@ WHERE POID = @POID", conn, tran))
     private void LoadLookups()
     {
         ReceiveTypes = LoadListFromSql("SELECT FlowSubTypeID, FlowSubTypeName FROM dbo.INV_FlowSubType WHERE FlowTypeID=2 ORDER BY FlowSubTypeName", "FlowSubTypeID", "FlowSubTypeName", true);
-        Statuses = LoadListFromSql(@"SELECT CAST(StatusID AS varchar(20)) AS Value, StatusName AS Text FROM dbo.INV_ItemFlowReceiveStatus
-UNION
-SELECT CAST(ID AS varchar(20)) AS Value, Name AS Text FROM dbo.INV_ItemReturnStatus
-ORDER BY Text", "Value", "Text", true);
+        Statuses = LoadStatusFilterOptions();
         Stores = BuildStoreTreeOptions();
         StoreGroups = LoadListFromSql("SELECT KPGroupID, KPGroupName FROM dbo.INV_KPGroup ORDER BY KPGroupName", "KPGroupID", "KPGroupName", true);
         CurrentStoreGroupName = IsAdminUser ? string.Empty : GetCurrentStoreGroupName();
+    }
+
+    private List<SelectListItem> LoadStatusFilterOptions()
+    {
+        var receiveGroup = new SelectListGroup { Name = "Receive Status" };
+        var returnGroup = new SelectListGroup { Name = "Return Status" };
+        var results = new List<SelectListItem> { new("--- All ---", string.Empty) };
+
+        results.AddRange(LoadListFromSql("SELECT CAST(StatusID AS varchar(20)) AS Value, StatusName AS Text FROM dbo.INV_ItemFlowReceiveStatus ORDER BY StatusID", "Value", "Text").Select(x =>
+        {
+            x.Group = receiveGroup;
+            return x;
+        }));
+        results.AddRange(LoadListFromSql("SELECT CAST(ID AS varchar(20)) AS Value, Name AS Text FROM dbo.INV_ItemReturnStatus ORDER BY ID", "Value", "Text").Select(x =>
+        {
+            x.Group = returnGroup;
+            return x;
+        }));
+        return results;
     }
 
     private List<SelectListItem> BuildStoreTreeOptions()

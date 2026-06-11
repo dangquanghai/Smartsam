@@ -1,0 +1,9 @@
+﻿.app-date-picker[readonly] {
+    background-color: #fff;
+    cursor: pointer;
+}
+
+.ui-datepicker {
+    z-index: 3000 !important;
+    font-size: 0.875rem;
+}

@@ -30,6 +30,9 @@
         });
     }
     initSelect2(document);
+    if (window.AppDatePicker) {
+        window.AppDatePicker.init(document);
+    }
 
     if (addBtn) {
         addBtn.addEventListener('click', function () {

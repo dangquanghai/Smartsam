@@ -60,15 +60,15 @@
                 <div class="card card-info">
                     <div class="card-header"><h3 class="card-title"><i class="fas fa-search"></i> Search</h3></div>
                     <div class="card-body">
-                        <form method="get">
+                        <form method="get" id="inventoryIssueSearchForm">
                             <input type="hidden" name="Page" value="1" />
                             <input type="hidden" name="PageSize" value="@Model.Filter.PageSize" />
                             <div class="form-group mb-2"><label>Doc No.</label><input asp-for="Filter.FlowNo" name="FlowNo" class="form-control form-control-sm vni-font" /></div>
                             <div class="form-group mb-2"><label>According</label><input asp-for="Filter.PONo" name="PONo" class="form-control form-control-sm vni-font" /></div>
-                            <div class="form-group mb-2"><label>From</label><input asp-for="Filter.FromDate" name="FromDate" type="date" class="form-control form-control-sm" /></div>
-                            <div class="form-group mb-2"><label>To</label><input asp-for="Filter.ToDate" name="ToDate" type="date" class="form-control form-control-sm" /></div>
+                            <div class="form-group mb-2"><label>From</label><input id="FromDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.FromDate?.ToString("dd/MM/yyyy")" data-hidden-target="#FromDateHidden" autocomplete="off" readonly /><input id="FromDateHidden" name="FromDate" type="hidden" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" /></div>
+                            <div class="form-group mb-2"><label>To</label><input id="ToDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.ToDate?.ToString("dd/MM/yyyy")" data-hidden-target="#ToDateHidden" autocomplete="off" readonly /><input id="ToDateHidden" name="ToDate" type="hidden" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" /></div>
                             <div class="form-group mb-2"><label>Issue Type</label><select asp-for="Filter.RecTypeId" name="RecTypeId" asp-items="Model.IssueTypes" class="form-control form-control-sm select2 vni-font"></select></div>
-                            <div class="form-group mb-2"><label>Status</label><select asp-for="Filter.StatusId" name="StatusId" asp-items="Model.Statuses" class="form-control form-control-sm select2 vni-font"></select></div>
+                            <div class="form-group mb-2"><label>Status</label><select asp-for="Filter.StatusId" name="StatusId" asp-items="Model.Statuses" class="form-control form-control-sm select2 vni-font inventory-status-filter-select"></select></div>
                             <div class="form-group mb-2"><label>Issue as St.House</label><select asp-for="Filter.ToStoreId" name="ToStoreId" asp-items="Model.Stores" class="form-control form-control-sm select2 vni-font"></select></div>
                             <button type="submit" class="btn btn-primary btn-block btn-sm border mb-2"><i class="fas fa-search"></i> Search</button>
                         </form>
@@ -134,7 +134,7 @@
                             <thead class="thead-light">
                                 <tr>
                                     <th style="width:32px;"></th>
-                                    <th style="width:150px;">Doc No.</th>
+                                    <th style="width:150px;">Issue No.</th>
                                     <th style="width:120px;">Issue Date</th>
                                     <th>Status</th>
                                     <th style="width:210px;">StoreName</th>
@@ -206,7 +206,9 @@
             <div class="modal-header py-2"><h5 class="modal-title">Search Detail</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
             <div class="modal-body">
                 <div class="form-row align-items-end mb-2">
-                    <div class="col-md-5"><label>Item Code / Item Name / Doc No.</label><input id="IssueetailKeyword" class="form-control form-control-sm vni-font" /></div>
+                    <div class="col-md-4"><label>Item Code / Item Name / Doc No.</label><input id="IssueetailKeyword" class="form-control form-control-sm vni-font" /></div>
+                    <div class="col-md-3"><label>From</label><input id="IssueDetailFromDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.FromDate?.ToString("dd/MM/yyyy")" data-hidden-target="#IssueDetailFromDateHidden" autocomplete="off" readonly /><input id="IssueDetailFromDateHidden" type="hidden" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" /></div>
+                    <div class="col-md-3"><label>To</label><input id="IssueDetailToDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.ToDate?.ToString("dd/MM/yyyy")" data-hidden-target="#IssueDetailToDateHidden" autocomplete="off" readonly /><input id="IssueDetailToDateHidden" type="hidden" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" /></div>
                     <div class="col-md-1"><button id="btnIssueetailSearch" type="button" class="btn btn-sm btn-primary btn-block"><i class="fas fa-search"></i> Search</button></div>
                 </div>
                 <div class="table-responsive Issue-detail-table-wrap">
@@ -275,6 +277,8 @@
 
 @section Styles {
     <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/adminlte/plugins/jquery-ui/jquery-ui.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/common/app-datepicker.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Purchasing/PurchaseRequisition/index.css" asp-append-version="true" />
     <style>
         #IssueTable tbody tr.Issue-row {
@@ -299,10 +303,15 @@
         .Issue-detail-table { min-width: 1100px; }
         .Issue-detail-table th,
         .Issue-detail-table td { white-space: nowrap; }
+        .inventory-status-filter-select option:disabled { font-weight: 700; color: #212529; }
+        .select2-results__group { color: #212529 !important; font-weight: 700 !important; padding: 6px 6px 3px 6px; }
+        .select2-results__options--nested .select2-results__option { padding-left: 22px; white-space: normal; }
     </style>
 }
 
 @section Scripts {
+    <script src="~/adminlte/plugins/jquery-ui/jquery-ui.min.js" asp-append-version="true"></script>
+    <script src="~/js/common/app-datepicker.js" asp-append-version="true"></script>
     <script>
         (function () {
             const $searchDetailModal = $('#IssueSearchDetailModal');
@@ -313,6 +322,10 @@
             let issueReportPreviewMode = 'export';
             const issueReportPageUrl = '@Url.Page("./InventoryIssueDetail")';
             let IssueetailState = { page: 1, pageSize: 10, totalPages: 1, totalRecords: 0, keyword: '' };
+
+            if (window.AppDatePicker) {
+                window.AppDatePicker.init(document);
+            }
 
             if ($.fn.select2) {
                 $('select').select2({ width: '100%' });
@@ -484,11 +497,20 @@
 
             syncDeleteButtonState();
 
+            function syncIssueDetailDateDefaults() {
+                $('#IssueDetailFromDateDisplay').val($('#FromDateDisplay').val() || '');
+                $('#IssueDetailToDateDisplay').val($('#ToDateDisplay').val() || '');
+                $('#IssueDetailFromDateHidden').val($('#FromDateHidden').val() || '');
+                $('#IssueDetailToDateHidden').val($('#ToDateHidden').val() || '');
+            }
+
             async function loadDetail(page) {
                 IssueetailState.keyword = $('#IssueetailKeyword').val() || '';
                 IssueetailState.page = page || 1;
                 IssueetailState.pageSize = Number($('#IssueetailPageSize').val() || 10);
-                const url = `?handler=SearchDetail&keyword=${encodeURIComponent(IssueetailState.keyword)}&pageNumber=${IssueetailState.page}&pageSize=${IssueetailState.pageSize}`;
+                const fromIso = $('#IssueDetailFromDateHidden').val() || '';
+                const toIso = $('#IssueDetailToDateHidden').val() || '';
+                const url = `?handler=SearchDetail&keyword=${encodeURIComponent(IssueetailState.keyword)}&fromDate=${encodeURIComponent(fromIso || '')}&toDate=${encodeURIComponent(toIso || '')}&pageNumber=${IssueetailState.page}&pageSize=${IssueetailState.pageSize}`;
                 const response = await fetch(url);
                 const data = await response.json();
                 const $rows = $('#IssueetailRows');
@@ -527,6 +549,7 @@
             });
 
             $searchDetailModal.on('shown.bs.modal', function () {
+                syncIssueDetailDateDefaults();
                 loadDetail(1);
             });
 

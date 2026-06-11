@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
@@ -33,7 +33,7 @@ public class IndexModel : BasePageModel
     private readonly ISecurityService _securityService;
     private readonly IWebHostEnvironment _webHostEnvironment;
 
-    // Khởi tạo các service và thành phần cần dùng cho màn hình danh sách phiếu đề nghị mua hàng.
+    // Khá»Ÿi táº¡o cÃ¡c service vÃ  thÃ nh pháº§n cáº§n dÃ¹ng cho mÃ n hÃ¬nh danh sÃ¡ch phiáº¿u Ä‘á» nghá»‹ mua hÃ ng.
     public IndexModel(IConfiguration config, ILogger<IndexModel> logger, PermissionService permissionService, ISecurityService securityService, IWebHostEnvironment webHostEnvironment) : base(config)
     {
         _logger = logger;
@@ -96,7 +96,7 @@ public class IndexModel : BasePageModel
 
     private PurchaseRequisitionWorkflowUserInfo _workflowUser = new PurchaseRequisitionWorkflowUserInfo();
 
-    // Xử lý tải dữ liệu ban đầu của màn hình.
+    // Xá»­ lÃ½ táº£i dá»¯ liá»‡u ban Ä‘áº§u cá»§a mÃ n hÃ¬nh.
     public IActionResult OnGet()
     {
         PagePerm = GetUserPermissions();
@@ -107,7 +107,7 @@ public class IndexModel : BasePageModel
             return Redirect("/");
         }
 
-        // 2. Chuẩn hóa filter trước khi nạp dữ liệu để danh sách và phân trang luôn đồng bộ.
+        // 2. Chuáº©n hÃ³a filter trÆ°á»›c khi náº¡p dá»¯ liá»‡u Ä‘á»ƒ danh sÃ¡ch vÃ  phÃ¢n trang luÃ´n Ä‘á»“ng bá»™.
         NormalizeQueryInputs();
         ApplyDefaultStatusFilter();
         ApplyDefaultDateFilter();
@@ -118,12 +118,12 @@ public class IndexModel : BasePageModel
         return Page();
     }
 
-    // Xử lý yêu cầu tìm kiếm danh sách theo điều kiện người dùng nhập.
+    // Xá»­ lÃ½ yÃªu cáº§u tÃ¬m kiáº¿m danh sÃ¡ch theo Ä‘iá»u kiá»‡n ngÆ°á»i dÃ¹ng nháº­p.
     public IActionResult OnPostSearch([FromBody] PurchaseRequisitionSearchRequest request)
     {
         try
         {
-            // 1. Lấy quyền thực tế của role đang đăng nhập
+            // 1. Láº¥y quyá»n thá»±c táº¿ cá»§a role Ä‘ang Ä‘Äƒng nháº­p
             PagePerm = GetUserPermissions();
             LoadCurrentWorkflowUser();
             LoadPageActions();
@@ -132,7 +132,7 @@ public class IndexModel : BasePageModel
                 return new JsonResult(new { success = false, message = "You have no permission to access purchase requisitions." });
             }
 
-            // 2. Build filter tìm kiếm và lấy danh sách dữ liệu theo đúng điều kiện người dùng chọn.
+            // 2. Build filter tÃ¬m kiáº¿m vÃ  láº¥y danh sÃ¡ch dá»¯ liá»‡u theo Ä‘Ãºng Ä‘iá»u kiá»‡n ngÆ°á»i dÃ¹ng chá»n.
             var filter = BuildSearchFilter(request);
             var (rows, totalRecords) = SearchPurchaseRequisitionRows(filter);
 
@@ -159,7 +159,7 @@ public class IndexModel : BasePageModel
         }
     }
 
-    // Xử lý thao tác Add AT để tạo nhanh chứng từ và chi tiết.
+    // Xá»­ lÃ½ thao tÃ¡c Add AT Ä‘á»ƒ táº¡o nhanh chá»©ng tá»« vÃ  chi tiáº¿t.
     public IActionResult OnPostAddAt()
     {
         PagePerm = GetUserPermissions();
@@ -170,7 +170,7 @@ public class IndexModel : BasePageModel
             return Redirect("/");
         }
 
-        // 2. Chuẩn hóa filter sau post để quay lại đúng danh sách người dùng đang xem.
+        // 2. Chuáº©n hÃ³a filter sau post Ä‘á»ƒ quay láº¡i Ä‘Ãºng danh sÃ¡ch ngÆ°á»i dÃ¹ng Ä‘ang xem.
         NormalizePostInputs();
         NormalizeFilter();
 
@@ -220,7 +220,7 @@ public class IndexModel : BasePageModel
         return RedirectToPage("./Index", BuildRouteValues());
     }
 
-    // Xử lý nạp dữ liệu nguồn cho popup Add AT theo flow Gen PR từ MR.
+    // Xá»­ lÃ½ náº¡p dá»¯ liá»‡u nguá»“n cho popup Add AT theo flow Gen PR tá»« MR.
     public IActionResult OnGetAddAtSource()
     {
         PagePerm = GetUserPermissions();
@@ -256,7 +256,7 @@ public class IndexModel : BasePageModel
         }
     }
 
-    // Xử lý xuất dữ liệu ra file Excel.
+    // Xá»­ lÃ½ xuáº¥t dá»¯ liá»‡u ra file Excel.
     public IActionResult OnGetExportExcel()
     {
         PagePerm = GetUserPermissions();
@@ -266,7 +266,7 @@ public class IndexModel : BasePageModel
             return Redirect("/");
         }
 
-        // 2. Export phải bám đúng điều kiện filter hiện tại của màn hình danh sách.
+        // 2. Export pháº£i bÃ¡m Ä‘Ãºng Ä‘iá»u kiá»‡n filter hiá»‡n táº¡i cá»§a mÃ n hÃ¬nh danh sÃ¡ch.
         NormalizeQueryInputs();
         NormalizeFilter();
 
@@ -302,7 +302,7 @@ public class IndexModel : BasePageModel
         return ExportPurchaseRequisitionListExcel(rows);
     }
 
-    // Xuất PDF từ popup View Detail: có Request No. thì in 1 PR, không có thì in báo cáo tổng hợp.
+    // Xuáº¥t PDF tá»« popup View Detail: cÃ³ Request No. thÃ¬ in 1 PR, khÃ´ng cÃ³ thÃ¬ in bÃ¡o cÃ¡o tá»•ng há»£p.
     public IActionResult OnGetViewDetailReport([FromQuery] PurchaseRequisitionListViewDetailFilterRequest request)
     {
         PagePerm = GetUserPermissions();
@@ -325,7 +325,7 @@ public class IndexModel : BasePageModel
         {
             var detailReport = LoadPurchaseRequisitionDetailReport(conn, request, allowedStatuses);
             var pdfBytes = PurchaseRequisitionPdfReport.BuildDetailPdf(detailReport);
-            var fileName = $"purchase_requisition_{SanitizeFileName(detailReport.RequestNo)}.pdf";
+            var fileName = $"{SanitizeFileName(detailReport.RequestNo)}.pdf";
             return File(pdfBytes, "application/pdf", fileName);
         }
 
@@ -334,7 +334,7 @@ public class IndexModel : BasePageModel
         return File(summaryPdfBytes, "application/pdf", "purchase_report.pdf");
     }
 
-    // Tải danh sách PC_PRDetail của đúng PR đang chọn trong popup View Detail bằng ajax.
+    // Táº£i danh sÃ¡ch PC_PRDetail cá»§a Ä‘Ãºng PR Ä‘ang chá»n trong popup View Detail báº±ng ajax.
     public IActionResult OnGetViewDetailRows([FromQuery] PurchaseRequisitionListViewDetailFilterRequest request)
     {
         PagePerm = GetUserPermissions();
@@ -476,13 +476,13 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
         });
     }
 
-    // Thực hiện xử lý cho hàm ExportPurchaseRequisitionListExcel theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m ExportPurchaseRequisitionListExcel theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private IActionResult ExportPurchaseRequisitionListExcel(List<PurchaseRequisitionRow> rows)
     {
         using var workbook = new XLWorkbook();
         var worksheet = workbook.Worksheets.Add("Purchase Requisition");
 
-        // 1. File export danh sách hiển thị đúng các cột đang dùng ở màn hình list.
+        // 1. File export danh sÃ¡ch hiá»ƒn thá»‹ Ä‘Ãºng cÃ¡c cá»™t Ä‘ang dÃ¹ng á»Ÿ mÃ n hÃ¬nh list.
         var headers = new[]
         {
             "#",
@@ -521,14 +521,14 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
         return BuildExcelFileResult(workbook, "purchase_requisition");
     }
 
-    // Thực hiện xử lý cho hàm ExportPurchaseRequisitionDetailExcel theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m ExportPurchaseRequisitionDetailExcel theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private IActionResult ExportPurchaseRequisitionDetailExcel(PurchaseRequisitionExportHeader requisition)
     {
         using var workbook = new XLWorkbook();
         var headerSheet = workbook.Worksheets.Add("Purchase Requisition");
         var detailSheet = workbook.Worksheets.Add("PR Items");
 
-        // 1. Sheet đầu tiên chứa thông tin header của phiếu đang được chọn.
+        // 1. Sheet Ä‘áº§u tiÃªn chá»©a thÃ´ng tin header cá»§a phiáº¿u Ä‘ang Ä‘Æ°á»£c chá»n.
         var headerRows = new (string Label, string Value)[]
         {
             ("No.", requisition.RequestNo),
@@ -549,7 +549,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
         FormatWorksheetAsTable(headerSheet, 1, headerRows.Length, 2);
         ApplyWorksheetFont(headerSheet, 1, headerRows.Length, 2, ExcelVniFontName);
 
-        // 2. Sheet thứ hai chứa toàn bộ item detail của phiếu đang chọn.
+        // 2. Sheet thá»© hai chá»©a toÃ n bá»™ item detail cá»§a phiáº¿u Ä‘ang chá»n.
         var detailHeaders = new[]
         {
             "#",
@@ -595,7 +595,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
         return BuildExcelFileResult(workbook, $"purchase_requisition_{requisition.RequestNo}");
     }
 
-    // Thực hiện xử lý cho hàm LoadPurchaseRequisitionForExport theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m LoadPurchaseRequisitionForExport theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private PurchaseRequisitionExportHeader? LoadPurchaseRequisitionForExport(int prId)
     {
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -1034,8 +1034,9 @@ WHERE EmployeeID = @EmployeeID", conn);
 
     private static string SanitizeFileName(string value)
     {
+        var normalized = (value ?? string.Empty).Replace('/', '-').Replace('\\', '-');
         var invalidChars = Path.GetInvalidFileNameChars();
-        var cleaned = new string(value.Where(ch => !invalidChars.Contains(ch)).ToArray());
+        var cleaned = new string(normalized.Where(ch => !invalidChars.Contains(ch)).ToArray());
         return string.IsNullOrWhiteSpace(cleaned) ? "purchase_requisition" : cleaned;
     }
 
@@ -1048,7 +1049,7 @@ WHERE EmployeeID = @EmployeeID", conn);
         };
     }
 
-    // Thực hiện xử lý cho hàm LoadPurchaseRequisitionDetailRows theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m LoadPurchaseRequisitionDetailRows theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private List<PurchaseRequisitionDetailInput> LoadPurchaseRequisitionDetailRows(SqlConnection conn, int prId)
     {
         var rows = new List<PurchaseRequisitionDetailInput>();
@@ -1094,7 +1095,7 @@ ORDER BY d.RecordID", conn);
         return rows;
     }
 
-    // Thực hiện xử lý cho hàm FormatWorksheetAsTable theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m FormatWorksheetAsTable theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void FormatWorksheetAsTable(IXLWorksheet worksheet, int fromRow, int toRow, int totalColumns)
     {
         var range = worksheet.Range(fromRow, 1, toRow, totalColumns);
@@ -1126,7 +1127,7 @@ ORDER BY d.RecordID", conn);
         worksheet.Range(fromRow, columnIndex, toRow, columnIndex).Style.Font.FontName = fontName;
     }
 
-    // Thực hiện xử lý cho hàm BuildExcelFileResult theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m BuildExcelFileResult theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private FileContentResult BuildExcelFileResult(XLWorkbook workbook, string filePrefix)
     {
         using var stream = new MemoryStream();
@@ -1139,7 +1140,7 @@ ORDER BY d.RecordID", conn);
             fileName);
     }
 
-    // Thực hiện xử lý cho hàm LoadPurchaseRequisitionRows theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m LoadPurchaseRequisitionRows theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void LoadPurchaseRequisitionRows()
     {
         var (rows, totalRecords) = SearchPurchaseRequisitionRows(Filter);
@@ -1155,7 +1156,7 @@ ORDER BY d.RecordID", conn);
         }
     }
 
-    // Thực hiện xử lý cho hàm SearchPurchaseRequisitionRows theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m SearchPurchaseRequisitionRows theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private (List<PurchaseRequisitionRow> rows, int totalRecords) SearchPurchaseRequisitionRows(PurchaseRequisitionFilter filter)
     {
         var rows = new List<PurchaseRequisitionRow>();
@@ -1167,7 +1168,7 @@ ORDER BY d.RecordID", conn);
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
 
-        // 1. Đếm tổng số bản ghi trước để phục vụ phân trang.
+        // 1. Äáº¿m tá»•ng sá»‘ báº£n ghi trÆ°á»›c Ä‘á»ƒ phá»¥c vá»¥ phÃ¢n trang.
         using (var countCmd = new SqlCommand($@"
         SELECT COUNT(1)
         FROM dbo.PC_PR p
@@ -1189,7 +1190,7 @@ ORDER BY d.RecordID", conn);
             totalRecords = Convert.ToInt32(countCmd.ExecuteScalar() ?? 0);
         }
 
-        // 2. Lấy danh sách dữ liệu theo đúng trang đang xem.
+        // 2. Láº¥y danh sÃ¡ch dá»¯ liá»‡u theo Ä‘Ãºng trang Ä‘ang xem.
         using var cmd = new SqlCommand($@"
         SELECT
             p.PRID,
@@ -1258,7 +1259,7 @@ ORDER BY d.RecordID", conn);
         accessMode = GetAccessMode(row)
     };
 
-    // Thực hiện xử lý cho hàm LoadStatusList theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m LoadStatusList theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void LoadStatusList()
     {
         StatusList = new List<SelectListItem>
@@ -1288,14 +1289,14 @@ ORDER BY PRStatusID", conn);
         }
     }
 
-    // Thực hiện xử lý cho hàm LoadLookups theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m LoadLookups theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void LoadLookups()
     {
         LoadItemList();
         LoadSupplierList();
     }
 
-    // Thực hiện xử lý cho hàm LoadItemList theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m LoadItemList theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void LoadItemList()
     {
         ItemList = new List<PurchaseRequisitionItemLookup>();
@@ -1325,7 +1326,7 @@ ORDER BY ItemCode", conn);
         }
     }
 
-    // Thực hiện xử lý cho hàm LoadSupplierList theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m LoadSupplierList theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void LoadSupplierList()
     {
         SupplierList = new List<PurchaseRequisitionSupplierLookup>();
@@ -1352,7 +1353,7 @@ ORDER BY SupplierCode", conn);
         }
     }
 
-    // Nạp danh sách dòng MR đủ điều kiện để popup Add AT tạo PR mới.
+    // Náº¡p danh sÃ¡ch dÃ²ng MR Ä‘á»§ Ä‘iá»u kiá»‡n Ä‘á»ƒ popup Add AT táº¡o PR má»›i.
     private List<PurchaseRequisitionAddAtSourceRow> LoadAddAtSourceRows()
     {
         var rows = new List<PurchaseRequisitionAddAtSourceRow>();
@@ -1408,7 +1409,7 @@ ORDER BY d.REQUEST_NO, i.ItemCode", conn);
         return rows;
     }
 
-    // Nạp danh sách tiền tệ cho popup Add AT, nếu bảng rỗng thì dùng giá trị mặc định của hệ thống.
+    // Náº¡p danh sÃ¡ch tiá»n tá»‡ cho popup Add AT, náº¿u báº£ng rá»—ng thÃ¬ dÃ¹ng giÃ¡ trá»‹ máº·c Ä‘á»‹nh cá»§a há»‡ thá»‘ng.
     private List<PurchaseRequisitionCurrencyOption> LoadCurrencyOptions()
     {
         var currencies = new List<PurchaseRequisitionCurrencyOption>();
@@ -1439,7 +1440,7 @@ ORDER BY d.REQUEST_NO, i.ItemCode", conn);
         return currencies;
     }
 
-    // Sinh số PR cho popup Add AT theo stored procedure cũ của hệ thống.
+    // Sinh sá»‘ PR cho popup Add AT theo stored procedure cÅ© cá»§a há»‡ thá»‘ng.
     private string GetSuggestedAddAtRequestNo()
     {
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -1447,7 +1448,7 @@ ORDER BY d.REQUEST_NO, i.ItemCode", conn);
         return GetSuggestedAddAtRequestNo(conn, null);
     }
 
-    // Sinh số PR trong cùng transaction để tránh lệch dữ liệu khi đang tạo mới chứng từ.
+    // Sinh sá»‘ PR trong cÃ¹ng transaction Ä‘á»ƒ trÃ¡nh lá»‡ch dá»¯ liá»‡u khi Ä‘ang táº¡o má»›i chá»©ng tá»«.
     private static string GetSuggestedAddAtRequestNo(SqlConnection conn, SqlTransaction? trans)
     {
         using var cmd = new SqlCommand("EXEC dbo.HaiAutoNumPR NULL", conn, trans);
@@ -1455,7 +1456,7 @@ ORDER BY d.REQUEST_NO, i.ItemCode", conn);
         return string.IsNullOrWhiteSpace(result) ? $"PR{DateTime.Now:ddMMyy}" : result.Trim();
     }
 
-    // Xác định EmployeeID của người đang đăng nhập để gán làm người lập PR.
+    // XÃ¡c Ä‘á»‹nh EmployeeID cá»§a ngÆ°á»i Ä‘ang Ä‘Äƒng nháº­p Ä‘á»ƒ gÃ¡n lÃ m ngÆ°á»i láº­p PR.
     private int? ResolveCurrentEmployeeId(SqlConnection conn, SqlTransaction trans)
     {
         var employeeCode = User?.Identity?.Name;
@@ -1471,7 +1472,7 @@ ORDER BY d.REQUEST_NO, i.ItemCode", conn);
         return result == null || result == DBNull.Value ? null : Convert.ToInt32(result);
     }
 
-    // Tạo mới một PR từ các dòng MR được chọn trong popup Add AT.
+    // Táº¡o má»›i má»™t PR tá»« cÃ¡c dÃ²ng MR Ä‘Æ°á»£c chá»n trong popup Add AT.
     private int CreatePurchaseRequisitionFromAddAt(IReadOnlyList<PurchaseRequisitionAddAtSourceRow> details)
     {
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -1547,7 +1548,7 @@ VALUES
         }
     }
 
-    // Lưu file đính kèm của Add AT vào thư mục cấu hình và ghi tên file vào bảng PC_PR_Doc.
+    // LÆ°u file Ä‘Ã­nh kÃ¨m cá»§a Add AT vÃ o thÆ° má»¥c cáº¥u hÃ¬nh vÃ  ghi tÃªn file vÃ o báº£ng PC_PR_Doc.
     private void SaveAddAtAttachment(SqlConnection conn, SqlTransaction trans, int prId, int? userId, IFormFile attachment, List<string> savedFilePaths)
     {
         if (attachment == null || attachment.Length <= 0)
@@ -1590,7 +1591,7 @@ VALUES
         docCmd.ExecuteNonQuery();
     }
 
-    // Xác định thư mục lưu file theo cấu hình FileUploads trong appsettings.json.
+    // XÃ¡c Ä‘á»‹nh thÆ° má»¥c lÆ°u file theo cáº¥u hÃ¬nh FileUploads trong appsettings.json.
     private string ResolveAddAtUploadFolder()
     {
         var basePath = _config.GetValue<string>("FileUploads:BasePath");
@@ -1626,7 +1627,7 @@ VALUES
             : Path.Combine([rootPath, .. relativeSegments]);
     }
 
-    // Sinh tên file mới có gắn timestamp để tránh trùng tên khi upload nhiều lần.
+    // Sinh tÃªn file má»›i cÃ³ gáº¯n timestamp Ä‘á»ƒ trÃ¡nh trÃ¹ng tÃªn khi upload nhiá»u láº§n.
     private static string BuildAttachmentFileName(string originalFileName)
     {
         var sourceName = Path.GetFileName(originalFileName);
@@ -1642,7 +1643,7 @@ VALUES
         return $"{safeName}_{timeLong}{extension}";
     }
 
-    // Xóa các file đã ghi ra đĩa nếu transaction lưu PR bị lỗi và phải rollback.
+    // XÃ³a cÃ¡c file Ä‘Ã£ ghi ra Ä‘Ä©a náº¿u transaction lÆ°u PR bá»‹ lá»—i vÃ  pháº£i rollback.
     private static void RemoveSavedFiles(IEnumerable<string> savedFilePaths)
     {
         foreach (var path in savedFilePaths)
@@ -1656,12 +1657,12 @@ VALUES
             }
             catch
             {
-                // Không chặn flow rollback nếu việc dọn file tạm bị lỗi.
+                // KhÃ´ng cháº·n flow rollback náº¿u viá»‡c dá»n file táº¡m bá»‹ lá»—i.
             }
         }
     }
 
-    // Ghi từng dòng MR đã chọn vào PC_PRDetail theo flow Gen PR cũ.
+    // Ghi tá»«ng dÃ²ng MR Ä‘Ã£ chá»n vÃ o PC_PRDetail theo flow Gen PR cÅ©.
     private static void InsertAddAtDetail(SqlConnection conn, SqlTransaction trans, int prId, PurchaseRequisitionAddAtSourceRow detail)
     {
         using var detailCmd = new SqlCommand(@"
@@ -1715,7 +1716,7 @@ VALUES
         detailCmd.ExecuteNonQuery();
     }
 
-    // Ghi một dòng chi tiết PR theo dữ liệu đang nhập ở màn hình chi tiết.
+    // Ghi má»™t dÃ²ng chi tiáº¿t PR theo dá»¯ liá»‡u Ä‘ang nháº­p á»Ÿ mÃ n hÃ¬nh chi tiáº¿t.
     internal static void InsertDetail(SqlConnection conn, SqlTransaction trans, int prId, PurchaseRequisitionDetailInput detail)
     {
         using var detailCmd = new SqlCommand(@"
@@ -1770,7 +1771,7 @@ VALUES
         detailCmd.ExecuteNonQuery();
     }
 
-    // Cập nhật ngược lại dữ liệu MR sau khi một dòng đã được gom vào PR.
+    // Cáº­p nháº­t ngÆ°á»£c láº¡i dá»¯ liá»‡u MR sau khi má»™t dÃ²ng Ä‘Ã£ Ä‘Æ°á»£c gom vÃ o PR.
     private static void UpdateMaterialRequestAfterAddAt(SqlConnection conn, SqlTransaction trans, PurchaseRequisitionAddAtSourceRow detail)
     {
         var remainBuy = detail.Buy - detail.SugBuy;
@@ -1798,7 +1799,7 @@ WHERE ID = @MRDetailID", conn, trans);
 
     internal static void BindSearchParams(SqlCommand cmd, PurchaseRequisitionFilter filter)
     {
-        // 1. Bộ tham số tìm kiếm dùng chung cho cả câu đếm và câu lấy danh sách.
+        // 1. Bá»™ tham sá»‘ tÃ¬m kiáº¿m dÃ¹ng chung cho cáº£ cÃ¢u Ä‘áº¿m vÃ  cÃ¢u láº¥y danh sÃ¡ch.
         cmd.Parameters.Add("@RequestNo", SqlDbType.VarChar, 20).Value = string.IsNullOrWhiteSpace(filter.RequestNo) ? DBNull.Value : filter.RequestNo.Trim();
         cmd.Parameters.Add("@StatusID", SqlDbType.Int).Value = filter.StatusId.HasValue ? filter.StatusId.Value : DBNull.Value;
         cmd.Parameters.Add("@Description", SqlDbType.VarChar, 500).Value = string.IsNullOrWhiteSpace(filter.Description) ? DBNull.Value : filter.Description.Trim();
@@ -1807,7 +1808,7 @@ WHERE ID = @MRDetailID", conn, trans);
         cmd.Parameters.Add("@ToDate", SqlDbType.DateTime).Value = filter.ToDate.HasValue ? filter.ToDate.Value.Date : DBNull.Value;
     }
 
-    // Thực hiện xử lý cho hàm NormalizeFilter theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m NormalizeFilter theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void ApplyDefaultStatusFilter()
     {
         if (Request.Query.ContainsKey(nameof(Filter.StatusId)))
@@ -1862,7 +1863,7 @@ WHERE ID = @MRDetailID", conn, trans);
         }
     }
 
-    // Thực hiện xử lý cho hàm BuildSearchFilter theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m BuildSearchFilter theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private PurchaseRequisitionFilter BuildSearchFilter(PurchaseRequisitionSearchRequest request)
     {
         return new PurchaseRequisitionFilter
@@ -1932,7 +1933,7 @@ WHERE ID = @MRDetailID", conn, trans);
         PageSize = Filter.PageSize
     };
 
-    // Thực hiện xử lý cho hàm NormalizeQueryInputs theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m NormalizeQueryInputs theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void NormalizeQueryInputs()
     {
         Filter.RequestNo = Request.Query[nameof(Filter.RequestNo)].ToString();
@@ -1946,7 +1947,7 @@ WHERE ID = @MRDetailID", conn, trans);
         ClearPaginationModelState();
     }
 
-    // Thực hiện xử lý cho hàm NormalizePostInputs theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m NormalizePostInputs theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void NormalizePostInputs()
     {
         Filter.RequestNo = Request.Form[nameof(Filter.RequestNo)].ToString();
@@ -1967,7 +1968,7 @@ WHERE ID = @MRDetailID", conn, trans);
         }
     }
 
-    // Thực hiện xử lý cho hàm ClearPaginationModelState theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m ClearPaginationModelState theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void ClearPaginationModelState()
     {
         ModelState.Remove("Page");
@@ -1976,21 +1977,21 @@ WHERE ID = @MRDetailID", conn, trans);
         ModelState.Remove("Filter.PageSize");
     }
 
-    // Thực hiện xử lý cho hàm NormalizeDateQuery theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m NormalizeDateQuery theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void NormalizeDateQuery(string key, Action<DateTime?> assign)
     {
         if (!Request.Query.ContainsKey(key)) return;
         ParseDate(Request.Query[key].ToString(), assign, key);
     }
 
-    // Thực hiện xử lý cho hàm NormalizeDateForm theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m NormalizeDateForm theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void NormalizeDateForm(string key, Action<DateTime?> assign)
     {
         if (!Request.HasFormContentType || !Request.Form.ContainsKey(key)) return;
         ParseDate(Request.Form[key].ToString(), assign, key);
     }
 
-    // Thực hiện xử lý cho hàm ParseDate theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m ParseDate theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void ParseDate(string raw, Action<DateTime?> assign, string key)
     {
         if (string.IsNullOrWhiteSpace(raw))
@@ -2013,7 +2014,7 @@ WHERE ID = @MRDetailID", conn, trans);
         ModelState.Remove(key);
     }
 
-    // Thực hiện xử lý cho hàm NormalizeBoolQuery theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m NormalizeBoolQuery theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void NormalizeBoolQuery(string key, Action<bool> assign)
     {
         if (!Request.Query.ContainsKey(key)) return;
@@ -2021,7 +2022,7 @@ WHERE ID = @MRDetailID", conn, trans);
         ModelState.Remove(key);
     }
 
-    // Thực hiện xử lý cho hàm NormalizeBoolForm theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m NormalizeBoolForm theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void NormalizeBoolForm(string key, Action<bool> assign)
     {
         if (!Request.HasFormContentType || !Request.Form.ContainsKey(key)) return;
@@ -2029,7 +2030,7 @@ WHERE ID = @MRDetailID", conn, trans);
         ModelState.Remove(key);
     }
 
-    // Thực hiện xử lý cho hàm ParseBoolValues theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m ParseBoolValues theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private static bool ParseBoolValues(IEnumerable<string> values)
     {
         foreach (var value in values)
@@ -2041,7 +2042,7 @@ WHERE ID = @MRDetailID", conn, trans);
         return false;
     }
 
-    // Thực hiện xử lý cho hàm NormalizeIntQuery theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m NormalizeIntQuery theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void NormalizeIntQuery(string key, Action<int> assign, int defaultValue)
     {
         if (!Request.Query.ContainsKey(key)) return;
@@ -2049,7 +2050,7 @@ WHERE ID = @MRDetailID", conn, trans);
         ModelState.Remove(key);
     }
 
-    // Thực hiện xử lý cho hàm NormalizeIntForm theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m NormalizeIntForm theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void NormalizeIntForm(string key, Action<int> assign, int defaultValue)
     {
         if (!Request.HasFormContentType || !Request.Form.ContainsKey(key)) return;
@@ -2057,7 +2058,7 @@ WHERE ID = @MRDetailID", conn, trans);
         ModelState.Remove(key);
     }
 
-    // Thực hiện xử lý cho hàm NormalizeNullableIntQuery theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m NormalizeNullableIntQuery theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void NormalizeNullableIntQuery(string key, Action<int?> assign)
     {
         if (!Request.Query.ContainsKey(key))
@@ -2070,7 +2071,7 @@ WHERE ID = @MRDetailID", conn, trans);
         ModelState.Remove(key);
     }
 
-    // Thực hiện xử lý cho hàm NormalizeNullableIntForm theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m NormalizeNullableIntForm theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void NormalizeNullableIntForm(string key, Action<int?> assign)
     {
         if (!Request.HasFormContentType || !Request.Form.ContainsKey(key))
@@ -2083,7 +2084,7 @@ WHERE ID = @MRDetailID", conn, trans);
         ModelState.Remove(key);
     }
 
-    // Phân tích danh sách dòng MR người dùng đã chọn trong popup Add AT.
+    // PhÃ¢n tÃ­ch danh sÃ¡ch dÃ²ng MR ngÆ°á»i dÃ¹ng Ä‘Ã£ chá»n trong popup Add AT.
     private List<PurchaseRequisitionAddAtSourceRow> ParseAddAtSourceRows()
     {
         if (string.IsNullOrWhiteSpace(AddAtDetailsJson)) return new List<PurchaseRequisitionAddAtSourceRow>();
@@ -2103,7 +2104,7 @@ WHERE ID = @MRDetailID", conn, trans);
         }
     }
 
-    // Kiểm tra từng dòng MR trước khi tạo PR từ popup Add AT.
+    // Kiá»ƒm tra tá»«ng dÃ²ng MR trÆ°á»›c khi táº¡o PR tá»« popup Add AT.
     private void ValidateAddAtSourceRow(PurchaseRequisitionAddAtSourceRow detail, int rowNo)
     {
         if (detail.ItemId <= 0)
@@ -2127,7 +2128,7 @@ WHERE ID = @MRDetailID", conn, trans);
         }
     }
 
-    // Kiểm tra loại file và dung lượng file đính kèm theo cấu hình trong appsettings.json.
+    // Kiá»ƒm tra loáº¡i file vÃ  dung lÆ°á»£ng file Ä‘Ã­nh kÃ¨m theo cáº¥u hÃ¬nh trong appsettings.json.
     private void ValidateAddAtAttachment()
     {
         if (AddAtAttachments == null || AddAtAttachments.Count == 0)
@@ -2162,7 +2163,7 @@ WHERE ID = @MRDetailID", conn, trans);
         }
     }
 
-    // Thực hiện xử lý cho hàm GetModelStateErrorMessage theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m GetModelStateErrorMessage theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private string GetModelStateErrorMessage()
     {
         var errors = ModelState.Values
@@ -2177,31 +2178,31 @@ WHERE ID = @MRDetailID", conn, trans);
             : "Cannot save Add AT details. Please review data and try again.";
     }
 
-    // Lấy tập quyền thực tế của người dùng trên chức năng hiện tại.
+    // Láº¥y táº­p quyá»n thá»±c táº¿ cá»§a ngÆ°á»i dÃ¹ng trÃªn chá»©c nÄƒng hiá»‡n táº¡i.
     private PagePermissions GetUserPermissions()
     {
         bool isAdmin = IsAdminRole();
         int roleId = GetCurrentRoleId();
 
-        // 1. Khởi tạo đối tượng PagePermissions mới
+        // 1. Khá»Ÿi táº¡o Ä‘á»‘i tÆ°á»£ng PagePermissions má»›i
         var permsObj = new PagePermissions();
 
         if (isAdmin)
         {
-            // 2. Admin được cấp danh sách quyền đầy đủ
+            // 2. Admin Ä‘Æ°á»£c cáº¥p danh sÃ¡ch quyá»n Ä‘áº§y Ä‘á»§
             permsObj.AllowedNos = Enumerable.Range(1, 20).ToList();
         }
         else
         {
-            // 3. User thường lấy danh sách quyền theo RoleID và FunctionID
+            // 3. User thÆ°á»ng láº¥y danh sÃ¡ch quyá»n theo RoleID vÃ  FunctionID
             permsObj.AllowedNos = _permissionService.GetPermissionsForPage(roleId, FUNCTION_ID);
         }
 
-        // 4. Trả về object chứa tập quyền của người dùng
+        // 4. Tráº£ vá» object chá»©a táº­p quyá»n cá»§a ngÆ°á»i dÃ¹ng
         return permsObj;
     }
 
-    // Thực hiện xử lý cho hàm LoadPageActions theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m LoadPageActions theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private void LoadPageActions()
     {
         var newStatusPermissions = GetEffectivePermissionsByStatus(1);
@@ -2213,7 +2214,7 @@ WHERE ID = @MRDetailID", conn, trans);
         CanViewDetailRequisition = newStatusPermissions.Contains(PermissionViewDetail);
     }
 
-    // Thực hiện xử lý cho hàm GetEffectivePermissionsByStatus theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m GetEffectivePermissionsByStatus theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private List<int> GetEffectivePermissionsByStatus(int status)
     {
         bool isAdmin = IsAdminRole();
@@ -2227,7 +2228,7 @@ WHERE ID = @MRDetailID", conn, trans);
         return _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, status);
     }
 
-    // Thực hiện xử lý cho hàm CanEditRow theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m CanEditRow theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     public bool CanEditRow(byte? statusId)
     {
         if (!statusId.HasValue)
@@ -2244,13 +2245,13 @@ WHERE ID = @MRDetailID", conn, trans);
         };
     }
 
-    // Thực hiện xử lý cho hàm CanViewDetailRow theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m CanViewDetailRow theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     public bool CanViewDetailRow(byte? statusId)
     {
         return statusId.HasValue && GetEffectivePermissionsByStatus(statusId.Value).Contains(PermissionViewDetail);
     }
 
-    // Xác định row hiện tại có thể mở thẳng mode=approve theo bước workflow của user hay không.
+    // XÃ¡c Ä‘á»‹nh row hiá»‡n táº¡i cÃ³ thá»ƒ má»Ÿ tháº³ng mode=approve theo bÆ°á»›c workflow cá»§a user hay khÃ´ng.
     public bool CanApproveRow(PurchaseRequisitionRow row)
     {
         if (row.StatusId != 1 && row.StatusId != 2)
@@ -2318,7 +2319,7 @@ WHERE ID = @MRDetailID", conn, trans);
         return "1 = 0";
     }
 
-    // Gán tham số filter cho popup View Detail của đúng PR đang chọn.
+    // GÃ¡n tham sá»‘ filter cho popup View Detail cá»§a Ä‘Ãºng PR Ä‘ang chá»n.
     private static void BindViewDetailFilterParams(SqlCommand cmd, PurchaseRequisitionListViewDetailFilterRequest request)
     {
         cmd.Parameters.Add("@RequestNo", SqlDbType.NVarChar, 50).Value = string.IsNullOrWhiteSpace(request.RequestNo) ? DBNull.Value : request.RequestNo.Trim();
@@ -2330,7 +2331,7 @@ WHERE ID = @MRDetailID", conn, trans);
         cmd.Parameters.Add("@RecQty", SqlDbType.Decimal).Value = request.RecQty.HasValue ? request.RecQty.Value : DBNull.Value;
     }
 
-    // Lấy các trạng thái PR mà user hiện tại được quyền mở View Detail.
+    // Láº¥y cÃ¡c tráº¡ng thÃ¡i PR mÃ  user hiá»‡n táº¡i Ä‘Æ°á»£c quyá»n má»Ÿ View Detail.
     private List<int> GetAllowedViewStatuses()
     {
         var statuses = new List<int>();
@@ -2345,7 +2346,7 @@ WHERE ID = @MRDetailID", conn, trans);
         return statuses;
     }
 
-    // Xác định mode ưu tiên cho link No. theo thứ tự edit => view.
+    // XÃ¡c Ä‘á»‹nh mode Æ°u tiÃªn cho link No. theo thá»© tá»± edit => view.
     public string GetAccessMode(PurchaseRequisitionRow row)
     {
         if (CanEditRow(row.StatusId))
@@ -2358,7 +2359,7 @@ WHERE ID = @MRDetailID", conn, trans);
 
     private bool HasPermission(int permissionNo) => PagePerm.HasPermission(permissionNo);
 
-    // Nạp vai trò workflow hiện tại để danh sách cũng xác định đúng row nào được mở mode=edit.
+    // Náº¡p vai trÃ² workflow hiá»‡n táº¡i Ä‘á»ƒ danh sÃ¡ch cÅ©ng xÃ¡c Ä‘á»‹nh Ä‘Ãºng row nÃ o Ä‘Æ°á»£c má»Ÿ mode=edit.
     private void LoadCurrentWorkflowUser()
     {
         _workflowUser = new PurchaseRequisitionWorkflowUserInfo();
@@ -2396,19 +2397,19 @@ WHERE EmployeeCode = @EmployeeCode", conn);
         };
     }
 
-    // Chỉ PU/CFO/BOD/Admin mới được mở Pending ở mode=edit để xử lý CST New.
+    // Chá»‰ PU/CFO/BOD/Admin má»›i Ä‘Æ°á»£c má»Ÿ Pending á»Ÿ mode=edit Ä‘á»ƒ xá»­ lÃ½ CST New.
     private bool IsWorkflowActor()
     {
         return _workflowUser.IsPurchaser || _workflowUser.IsCFO || _workflowUser.IsBOD || IsAdminRole();
     }
 
-    // Thực hiện xử lý cho hàm NeedCollapseDescription theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m NeedCollapseDescription theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     public bool NeedCollapseDescription(string? description)
     {
         return !string.IsNullOrWhiteSpace(description) && description.Trim().Length > 80;
     }
 
-    // Thực hiện xử lý cho hàm GetDescriptionPreview theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m GetDescriptionPreview theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     public string GetDescriptionPreview(string? description)
     {
         if (string.IsNullOrWhiteSpace(description))
@@ -2420,13 +2421,13 @@ WHERE EmployeeCode = @EmployeeCode", conn);
         return source.Length <= 80 ? source : $"{source[..80]}...";
     }
 
-    // Thực hiện xử lý cho hàm GetCurrentRoleId theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m GetCurrentRoleId theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private int GetCurrentRoleId()
     {
         return int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
     }
 
-    // Thực hiện xử lý cho hàm IsAdminRole theo nghiệp vụ của màn hình.
+    // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m IsAdminRole theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
     private bool IsAdminRole()
     {
         return User.FindFirst("IsAdminRole")?.Value == "True";

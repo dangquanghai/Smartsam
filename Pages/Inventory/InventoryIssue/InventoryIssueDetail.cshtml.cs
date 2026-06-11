@@ -1423,10 +1423,9 @@ ORDER BY COALESCE(NULLIF(LTRIM(RTRIM(a2.ItemCode)),''), NULLIF(LTRIM(RTRIM(a1.It
         using var cmd = new SqlCommand(@"SELECT g.KPGroupID, g.KPGroupName, s.StoreID, s.StoreName
 FROM dbo.INV_KPGroup g
 INNER JOIN dbo.INV_StoreList s ON s.DeptID = g.KPGroupID
-WHERE (@IsKpAdmin = 1 OR s.DeptID = @KPGroupID)
+WHERE s.DeptID = @KPGroupID
 ORDER BY g.KPGroupName, s.StoreName", conn);
-        cmd.Parameters.Add("@IsKpAdmin", SqlDbType.Bit).Value = isKpAdmin;
-        cmd.Parameters.Add("@KPGroupID", SqlDbType.Int).Value = currentKpGroupId;
+        cmd.Parameters.Add("@KPGroupID", SqlDbType.Int).Value = currentKpGroupId > 0 ? currentKpGroupId : DBNull.Value;
         using var rd = cmd.ExecuteReader();
         var groupMap = new Dictionary<int, SelectListGroup>();
         while (rd.Read())
@@ -1567,10 +1566,6 @@ ORDER BY i.ItemCode", conn);
             if (detail.ActQty <= 0)
             {
                 ModelState.AddModelError(string.Empty, $"Item '{detail.ItemCode}' must have Act. Qty > 0.");
-            }
-            if (detail.DocQty < detail.ActQty)
-            {
-                ModelState.AddModelError(string.Empty, $"Item '{detail.ItemCode}' Doc. Qty must be greater than or equal Act. Qty.");
             }
         }
 

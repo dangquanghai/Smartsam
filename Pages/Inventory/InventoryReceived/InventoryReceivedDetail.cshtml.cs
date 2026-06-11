@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Net;
 using System.Net.Mail;
@@ -17,10 +17,10 @@ public class InventoryReceivedDetailModel : BasePageModel
     private const int PermissionViewDetail = 2;
     private const int PermissionAdd = 3;
     private const int PermissionEdit = 4;
-    // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
-    // private const string ReturnMoveToCpnNotifyEmail = "maiquangvinhi4@gmail.com";
-    private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
-    private const string ReturnMoveToCpnNotifyEmail = "hai.dq@saigonskygarden.com.vn";
+    private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
+    private const string ReturnMoveToCpnNotifyEmail = "maiquangvinhi4@gmail.com";
+    // private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
+    // private const string ReturnMoveToCpnNotifyEmail = "hai.dq@saigonskygarden.com.vn";
     private readonly PermissionService _permissionService;
 
     public InventoryReceivedDetailModel(IConfiguration config, PermissionService permissionService) : base(config) { _permissionService = permissionService; }
@@ -1391,10 +1391,6 @@ ORDER BY i.ItemCode", conn);
                     ModelState.AddModelError(string.Empty, $"Item '{detail.ItemCode}' must have Act. Qty > 0.");
                 }
 
-                if (detail.DocQty < detail.ActQty)
-                {
-                    ModelState.AddModelError(string.Empty, $"Item '{detail.ItemCode}' Doc. Qty must be greater than or equal Act. Qty.");
-                }
 
                 var remainingQty = GetRemainingQty(detail.ChekingDTID);
                 if (flowId.HasValue)
@@ -1414,10 +1410,6 @@ ORDER BY i.ItemCode", conn);
                 if (detail.ActQty <= 0)
                 {
                     ModelState.AddModelError(string.Empty, $"Item '{detail.ItemCode}' must have Act. Qty > 0.");
-                }
-                if (detail.DocQty < detail.ActQty)
-                {
-                    ModelState.AddModelError(string.Empty, $"Item '{detail.ItemCode}' Doc. Qty must be greater than or equal Act. Qty.");
                 }
             }
         }
