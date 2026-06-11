@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -41,7 +41,7 @@ internal static class InventoryReceivedPdfReport
             table.Cell().AlignCenter().Column(c =>
             {
                 c.Item().AlignCenter().Text("ITEM RECEIVED VOUCHER").FontFamily("Lato").FontSize(16).Bold();
-                c.Item().PaddingTop(2).AlignCenter().Text("PHIẾU NHẬP HÀNG").FontFamily("Lato").FontSize(16).Bold();
+                c.Item().PaddingTop(2).AlignCenter().Text("PHI?U NH?P H�NG").FontFamily("Lato").FontSize(16).Bold();
             });
             table.Cell().AlignRight().Text(model.FlowDateText).Bold();
             table.Cell().PaddingTop(8).Text($"Receive House: {model.StoreName}");
@@ -90,8 +90,8 @@ internal static class InventoryReceivedPdfReport
                 table.Cell().Element(Body).Text(item.ItemCode);
                 table.Cell().Element(Body).Text(x => x.Span(item.ItemName).FontFamily(".VnTime"));
                 table.Cell().Element(Body).AlignCenter().Text(item.Unit);
-                table.Cell().Element(Body).AlignRight().Text(item.DocQty.ToString("#,##0.##", CultureInfo.InvariantCulture));
-                table.Cell().Element(Body).AlignRight().Text(item.ActQty.ToString("#,##0.##", CultureInfo.InvariantCulture));
+                table.Cell().Element(Body).AlignRight().Text(item.DocQty.ToString("#,##0", CultureInfo.InvariantCulture));
+                table.Cell().Element(Body).AlignRight().Text(item.ActQty.ToString("#,##0", CultureInfo.InvariantCulture));
                 table.Cell().Element(Body).AlignRight().Text(item.Amount.ToString("#,##0", CultureInfo.InvariantCulture));
                 table.Cell().Element(Body).Text(item.LocationName);
             }

@@ -2040,7 +2040,7 @@ WHERE POID = @POID", conn, trans);
 
     private static string FormatAmountForView(decimal amount)
     {
-        return amount.ToString("#,##0.###");
+        return amount.ToString("#,##0");
     }
 
     private string GetCurrencyDisplayText(int currencyId)
@@ -2443,7 +2443,7 @@ WHERE POID = @POID", conn, trans);
 
         return unitIndex == 0
             ? $"{sizeBytes} {units[unitIndex]}"
-            : $"{value:0.##} {units[unitIndex]}";
+            : $"{value:0} {units[unitIndex]}";
     }
 
     private static void RemoveSavedFiles(IEnumerable<string> savedFilePaths)

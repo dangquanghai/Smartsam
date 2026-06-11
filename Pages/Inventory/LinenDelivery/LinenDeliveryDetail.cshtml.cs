@@ -330,10 +330,10 @@ public class LinenDeliveryDetailModel : BasePageModel
                 billDate = x.BillDateText,
                 apartmentNo = x.ApartmentNo,
                 customer = x.Customer,
-                vndAmountBefVat = x.VNDAmountBefVAT.ToString("0.##"),
-                pctTax = x.PctTax.ToString("0.##"),
-                vndAmountVat = x.VNDAmountVAT.ToString("0.##"),
-                vndAmount = x.VNDAmount.ToString("0.##"),
+                vndAmountBefVat = x.VNDAmountBefVAT.ToString("0"),
+                pctTax = x.PctTax.ToString("0"),
+                vndAmountVat = x.VNDAmountVAT.ToString("0"),
+                vndAmount = x.VNDAmount.ToString("0"),
                 billStatus = x.BillStatus,
                 billStatusText = x.BillStatusText
             })
@@ -381,8 +381,8 @@ public class LinenDeliveryDetailModel : BasePageModel
                     isChild = x.IsChild,
                     express = x.Express,
                     quantity = x.Quantity.ToString("0.00"),
-                    price = x.Price.ToString("0.##"),
-                    amount = x.Amount.ToString("0.##"),
+                    price = x.Price.ToString("0"),
+                    amount = x.Amount.ToString("0"),
                     note = x.Note
                 })
             });
@@ -466,10 +466,10 @@ public class LinenDeliveryDetailModel : BasePageModel
                         billDate = x.BillDateText,
                         apartmentNo = x.ApartmentNo,
                         customer = x.Customer,
-                        vndAmountBefVat = x.VNDAmountBefVAT.ToString("0.##"),
-                        pctTax = x.PctTax.ToString("0.##"),
-                        vndAmountVat = x.VNDAmountVAT.ToString("0.##"),
-                        vndAmount = x.VNDAmount.ToString("0.##"),
+                        vndAmountBefVat = x.VNDAmountBefVAT.ToString("0"),
+                        pctTax = x.PctTax.ToString("0"),
+                        vndAmountVat = x.VNDAmountVAT.ToString("0"),
+                        vndAmount = x.VNDAmount.ToString("0"),
                         billStatus = x.BillStatus,
                         billStatusText = x.BillStatusText
                     })
@@ -504,10 +504,10 @@ public class LinenDeliveryDetailModel : BasePageModel
                     billDate = x.BillDateText,
                     apartmentNo = x.ApartmentNo,
                     customer = x.Customer,
-                    vndAmountBefVat = x.VNDAmountBefVAT.ToString("0.##"),
-                    pctTax = x.PctTax.ToString("0.##"),
-                    vndAmountVat = x.VNDAmountVAT.ToString("0.##"),
-                    vndAmount = x.VNDAmount.ToString("0.##"),
+                    vndAmountBefVat = x.VNDAmountBefVAT.ToString("0"),
+                    pctTax = x.PctTax.ToString("0"),
+                    vndAmountVat = x.VNDAmountVAT.ToString("0"),
+                    vndAmount = x.VNDAmount.ToString("0"),
                     billStatus = x.BillStatus,
                     billStatusText = x.BillStatusText
                 })

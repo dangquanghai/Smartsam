@@ -382,7 +382,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
 
     private string FormatNumber(decimal value)
     {
-        return value.ToString("#,##0.###");
+        return value.ToString("#,##0");
     }
 
     private bool HasPermission(int permissionNo) => PagePerm.HasPermission(permissionNo);
@@ -447,9 +447,9 @@ public class SupplierPOReportRow
     public decimal POAmount { get; set; }
     public decimal PerVAT { get; set; }
     public decimal AfterVAT { get; set; }
-    public string QuantityText => Quantity.ToString("#,##0.###");
-    public string UnitPriceText => UnitPrice.ToString("#,##0.###");
-    public string POAmountText => POAmount.ToString("#,##0.###");
-    public string PerVATText => PerVAT.ToString("#,##0.###");
-    public string AfterVATText => AfterVAT.ToString("#,##0.###");
+    public string QuantityText => Quantity.ToString("#,##0");
+    public string UnitPriceText => UnitPrice.ToString("#,##0");
+    public string POAmountText => POAmount.ToString("#,##0");
+    public string PerVATText => PerVAT.ToString("#,##0");
+    public string AfterVATText => AfterVAT.ToString("#,##0");
 }

@@ -1036,7 +1036,7 @@ function toNumber(value) {
 
 // Dinh dang so de hien thi trong bang.
 function formatNumber(value) {
-    return toNumber(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    return Math.round(toNumber(value)).toLocaleString('en-US');
 }
 
 // Doi ngay ve dang yyyy-MM-dd cho input type=date.

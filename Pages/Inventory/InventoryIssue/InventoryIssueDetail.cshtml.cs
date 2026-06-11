@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Net;
 using System.Net.Mail;
@@ -927,7 +927,7 @@ WHERE dt.FlowID=@FlowID
         var detailRowsHtml = string.Empty;
         if (mailContext.Items.Count > 0)
         {
-            var rows = string.Join(string.Empty, mailContext.Items.Select((item, index) => $"<tr><td style='border:1px solid #dee2e6;padding:4px;text-align:center;'>{index + 1}</td><td style='border:1px solid #dee2e6;padding:4px;'>{WebUtility.HtmlEncode(item.ItemCode)}</td><td style='border:1px solid #dee2e6;padding:4px;font-family: &quot;TCVN3&quot;, &quot;.VnTime&quot;, &quot;.VnArial&quot;, &quot;.VnHelvetica&quot;, sans-serif !important;'>{WebUtility.HtmlEncode(item.ItemName)}</td><td style='border:1px solid #dee2e6;padding:4px;text-align:right;'>{item.ActQty:#,##0.##}</td><td style='border:1px solid #dee2e6;padding:4px;'>{WebUtility.HtmlEncode(item.LocationName)}</td></tr>"));
+            var rows = string.Join(string.Empty, mailContext.Items.Select((item, index) => $"<tr><td style='border:1px solid #dee2e6;padding:4px;text-align:center;'>{index + 1}</td><td style='border:1px solid #dee2e6;padding:4px;'>{WebUtility.HtmlEncode(item.ItemCode)}</td><td style='border:1px solid #dee2e6;padding:4px;font-family: &quot;TCVN3&quot;, &quot;.VnTime&quot;, &quot;.VnArial&quot;, &quot;.VnHelvetica&quot;, sans-serif !important;'>{WebUtility.HtmlEncode(item.ItemName)}</td><td style='border:1px solid #dee2e6;padding:4px;text-align:right;'>{item.ActQty:#,##0}</td><td style='border:1px solid #dee2e6;padding:4px;'>{WebUtility.HtmlEncode(item.LocationName)}</td></tr>"));
             detailRowsHtml = $@"
 <table style='border-collapse:collapse;width:100%;margin-top:8px;'>
     <thead>
@@ -1585,7 +1585,7 @@ ORDER BY i.ItemCode", conn);
                 if (totalActQty > stockQty)
                 {
                     var itemName = GetItemDisplayName(group.Key);
-                    ModelState.AddModelError(string.Empty, $"Item '{itemName}' stock quantity is {stockQty:N2}.");
+                    ModelState.AddModelError(string.Empty, $"Item '{itemName}' stock quantity is {stockQty:N0}.");
                 }
             }
         }

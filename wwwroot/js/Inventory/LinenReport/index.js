@@ -582,7 +582,7 @@
             return numeric.toString();
         }
 
-        return numeric.toFixed(2).replace(/\.?0+$/, '');
+        return Math.round(numeric).toLocaleString('en-US');
     }
 
     function parseNumber(value) {

@@ -613,9 +613,9 @@ ORDER BY View_LNLinenRecord.SupplierID ASC,
                 rows = x.Select(r => new
                 {
                     linenCode = r.LinenCode,
-                    price = r.Price.ToString("0.##"),
-                    days = r.DayValues.Select(d => d.ToString("0.##")).ToList(),
-                    total = r.DayValues.Sum().ToString("0.##")
+                    price = r.Price.ToString("0"),
+                    days = r.DayValues.Select(d => d.ToString("0")).ToList(),
+                    total = r.DayValues.Sum().ToString("0")
                 }).ToList()
             })
             .ToList();
@@ -683,9 +683,9 @@ ORDER BY DeliveryDate DESC, DeliveryID DESC, LinenCode ASC;", conn))
                 description = x.Description,
                 supplierName = x.SupplierName,
                 linenCode = x.LinenCode,
-                quantityDe = x.QuantityDe.ToString("0.##"),
-                quantityRe = x.QuantityRe.ToString("0.##"),
-                remain = x.Remain.ToString("0.##")
+                quantityDe = x.QuantityDe.ToString("0"),
+                quantityRe = x.QuantityRe.ToString("0"),
+                remain = x.Remain.ToString("0")
             })
         });
     }
@@ -732,12 +732,12 @@ ORDER BY DeliveryDate DESC, DeliveryID DESC, LinenCode ASC;", conn))
             rows = rows.Select(x => new
             {
                 linenCode = x.LinenCode,
-                begin = x.Begin.ToString("0.##"),
-                receiveApartment = x.ReceiveApartment.ToString("0.##"),
-                receiveSupplier = x.ReceiveSupplier.ToString("0.##"),
-                deliveryApartment = x.DeliveryApartment.ToString("0.##"),
-                deliverySupplier = x.DeliverySupplier.ToString("0.##"),
-                end = x.End.ToString("0.##")
+                begin = x.Begin.ToString("0"),
+                receiveApartment = x.ReceiveApartment.ToString("0"),
+                receiveSupplier = x.ReceiveSupplier.ToString("0"),
+                deliveryApartment = x.DeliveryApartment.ToString("0"),
+                deliverySupplier = x.DeliverySupplier.ToString("0"),
+                end = x.End.ToString("0")
             })
         });
     }
@@ -793,10 +793,10 @@ ORDER BY DeliveryDate DESC, DeliveryID DESC, LinenCode ASC;", conn))
             rows = rows.Select(x => new
             {
                 linenCode = x.LinenCode,
-                begin = x.Begin.ToString("0.##"),
-                receiveApartment = x.ReceiveApartment.ToString("0.##"),
-                deliveryApartment = x.DeliveryApartment.ToString("0.##"),
-                end = x.End.ToString("0.##")
+                begin = x.Begin.ToString("0"),
+                receiveApartment = x.ReceiveApartment.ToString("0"),
+                deliveryApartment = x.DeliveryApartment.ToString("0"),
+                end = x.End.ToString("0")
             })
         });
     }

@@ -1,4 +1,4 @@
-﻿
+
 using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Net;
@@ -32,7 +32,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
     private readonly ILogger<PurchaseRequisitionDetailModel> _logger;
     private PurchaseRequisitionWorkflowUserInfo _workflowUser = new PurchaseRequisitionWorkflowUserInfo();
 
-    // Khởi tạo các service và thành phần cần dùng cho màn hình chi tiết phiếu đề nghị mua hàng.
+    // Kh?i t?o c�c service v� th�nh ph?n c?n d�ng cho m�n h�nh chi ti?t phi?u d? ngh? mua h�ng.
     public PurchaseRequisitionDetailModel(IConfiguration config, PermissionService permissionService, ISecurityService securityService, ILogger<PurchaseRequisitionDetailModel> logger) : base(config)
     {
         _permissionService = permissionService;
@@ -85,7 +85,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
     public List<PurchaseRequisitionSupplierLookup> SupplierList { get; set; } = new List<PurchaseRequisitionSupplierLookup>();
     public List<PurchaseRequisitionAttachmentViewModel> AttachmentList { get; set; } = new List<PurchaseRequisitionAttachmentViewModel>();
 
-    // Tải dữ liệu ban đầu của màn hình chi tiết theo chế độ add, edit hoặc view.
+    // T?i d? li?u ban d?u c?a m�n h�nh chi ti?t theo ch? d? add, edit ho?c view.
     public IActionResult OnGet(int? id, string mode = "view")
     {
         PagePerm = GetUserPermissions();
@@ -147,7 +147,7 @@ public class PurchaseRequisitionDetailModel : BasePageModel
         return Page();
     }
 
-    // Tải dữ liệu popup View Detail bằng ajax để tìm kiếm và phân trang mà không reload trang chính.
+    // T?i d? li?u popup View Detail b?ng ajax d? t�m ki?m v� ph�n trang m� kh�ng reload trang ch�nh.
     public IActionResult OnGetViewDetailRows([FromQuery] PurchaseRequisitionViewDetailFilterRequest request)
     {
         PagePerm = GetUserPermissions();
@@ -321,7 +321,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
         return RedirectToPage("./Index", "ViewDetailReport", new { RequestNo = requestNo });
     }
 
-    // Lưu dữ liệu header và detail của phiếu đề nghị mua hàng.
+    // Luu d? li?u header v� detail c?a phi?u d? ngh? mua h�ng.
     public IActionResult OnPost()
     {
         PagePerm = GetUserPermissions();
@@ -423,7 +423,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
         return Page();
     }
 
-    // Chuyển một dòng item từ PR trở lại MR theo đúng liên kết MRDetailID của dòng chi tiết.
+    // Chuy?n m?t d�ng item t? PR tr? l?i MR theo d�ng li�n k?t MRDetailID c?a d�ng chi ti?t.
     public IActionResult OnPostToMr()
     {
         var prepareResult = PrepareExistingRecordForPost();
@@ -548,7 +548,7 @@ WHERE PRID = @PRID
         return RedirectToPage("./PurchaseRequisitionDetail", new { id = Requisition.Id, mode = "edit" });
     }
 
-    // Đưa chứng từ về trạng thái New để bắt đầu lại quy trình duyệt.
+    // �ua ch?ng t? v? tr?ng th�i New d? b?t d?u l?i quy tr�nh duy?t.
     public IActionResult OnPostCstNew()
     {
         var prepareResult = PrepareExistingRecordForPost();
@@ -584,7 +584,7 @@ WHERE PRID = @PRID", conn);
         return RedirectToPage("./PurchaseRequisitionDetail", new { id = Requisition.Id, mode = "edit" });
     }
 
-    // Duyệt chứng từ theo đúng vai trò PU, CFO hoặc BOD ở bước workflow hiện tại.
+    // Duy?t ch?ng t? theo d�ng vai tr� PU, CFO ho?c BOD ? bu?c workflow hi?n t?i.
     public IActionResult OnPostApprove()
     {
         var prepareResult = PrepareExistingRecordForPost();
@@ -703,7 +703,7 @@ WHERE PRID = @PRID
         return RedirectToPage("./Index");
     }
 
-    // Từ chối duyệt chứng từ và chuyển trạng thái sang Pending theo đúng bước đang xử lý.
+    // T? ch?i duy?t ch?ng t? v� chuy?n tr?ng th�i sang Pending theo d�ng bu?c dang x? l�.
     public IActionResult OnPostDisapprove()
     {
         var prepareResult = PrepareExistingRecordForPost();
@@ -764,7 +764,7 @@ WHERE PRID = @PRID
         return RedirectToPage("./PurchaseRequisitionDetail", new { id = Requisition.Id, mode = "view" });
     }
 
-    // Upload file đính kèm cho phiếu PR và ghi tên file vào bảng PC_PR_Doc.
+    // Upload file d�nh k�m cho phi?u PR v� ghi t�n file v�o b?ng PC_PR_Doc.
     public IActionResult OnPostUploadAttachment()
     {
         var prepareResult = PrepareExistingRecordForPost();
@@ -825,7 +825,7 @@ WHERE PRID = @PRID
         return RedirectToCurrentDetail();
     }
 
-    // Xóa các file đính kèm đã chọn của PR khỏi cả bảng PC_PR_Doc và thư mục lưu file vật lý.
+    // X�a c�c file d�nh k�m d� ch?n c?a PR kh?i c? b?ng PC_PR_Doc v� thu m?c luu file v?t l�.
     public IActionResult OnPostDeleteAttachments()
     {
         var prepareResult = PrepareExistingRecordForPost();
@@ -914,7 +914,7 @@ WHERE DocID = @DocID
         return RedirectToCurrentDetail();
     }
 
-    // Tải file đính kèm đã lưu của PR theo DocID.
+    // T?i file d�nh k�m d� luu c?a PR theo DocID.
     public IActionResult OnGetDownloadAttachment(int docId, int id)
     {
         PagePerm = GetUserPermissions();
@@ -955,7 +955,7 @@ WHERE DocID = @DocID
         return File(System.IO.File.ReadAllBytes(fullPath), contentType, fileName);
     }
 
-    // Nạp toàn bộ dropdown dùng chung cho form header, detail và file đính kèm.
+    // N?p to�n b? dropdown d�ng chung cho form header, detail v� file d�nh k�m.
     private void LoadAllDropdowns()
     {
         LoadStatusList();
@@ -963,7 +963,7 @@ WHERE DocID = @DocID
         LoadSupplierList();
     }
 
-    // Nạp đầy đủ dữ liệu header, detail, file đính kèm và tổng tiền của một PR hiện có.
+    // N?p d?y d? d? li?u header, detail, file d�nh k�m v� t?ng ti?n c?a m?t PR hi?n c�.
     private void LoadPurchaseRequisition(int id)
     {
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -1016,7 +1016,7 @@ WHERE PRID = @PRID", conn))
         }
     }
 
-    // Nạp dữ liệu workflow hiện tại của chứng từ để dùng cho các handler post.
+    // N?p d? li?u workflow hi?n t?i c?a ch?ng t? d? d�ng cho c�c handler post.
     private void LoadExistingWorkflowData(int prId)
     {
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -1061,7 +1061,7 @@ WHERE PRID = @PRID", conn);
         };
     }
 
-    // Nạp toàn bộ dòng item chi tiết, bao gồm cả liên kết ngược về MR để phục vụ thao tác To MR.
+    // N?p to�n b? d�ng item chi ti?t, bao g?m c? li�n k?t ngu?c v? MR d? ph?c v? thao t�c To MR.
     private List<PurchaseRequisitionDetailInput> LoadDetailRows(SqlConnection conn, int prId)
     {
         var rows = new List<PurchaseRequisitionDetailInput>();
@@ -1113,7 +1113,7 @@ ORDER BY d.RecordID", conn);
         return rows;
     }
 
-    // Nạp danh sách file đính kèm hiện có của PR để hiển thị trong modal Attached Files.
+    // N?p danh s�ch file d�nh k�m hi?n c� c?a PR d? hi?n th? trong modal Attached Files.
     private List<PurchaseRequisitionAttachmentViewModel> LoadAttachmentRows(int prId)
     {
         var rows = new List<PurchaseRequisitionAttachmentViewModel>();
@@ -1150,7 +1150,7 @@ ORDER BY d.UploadDate DESC, d.DocID DESC", conn);
         return rows;
     }
 
-    // Nạp danh sách trạng thái PR từ bảng danh mục trạng thái.
+    // N?p danh s�ch tr?ng th�i PR t? b?ng danh m?c tr?ng th�i.
     private void LoadStatusList()
     {
         StatusList = LoadListFromSql(
@@ -1159,7 +1159,7 @@ ORDER BY d.UploadDate DESC, d.DocID DESC", conn);
             "PRStatusName");
     }
 
-    // Nạp danh sách dòng MR đủ điều kiện để modal Add Detail dùng cùng nguồn dữ liệu với Add AT.
+    // N?p danh s�ch d�ng MR d? di?u ki?n d? modal Add Detail d�ng c�ng ngu?n d? li?u v?i Add AT.
     private void LoadItemList()
     {
         ItemList = new List<PurchaseRequisitionItemLookup>();
@@ -1211,7 +1211,7 @@ ORDER BY d.REQUEST_NO, i.ItemCode";
         }
     }
 
-    // Nạp danh sách supplier còn hiệu lực để chọn cho từng item chi tiết nếu cần.
+    // N?p danh s�ch supplier c�n hi?u l?c d? ch?n cho t?ng item chi ti?t n?u c?n.
     private void LoadSupplierList()
     {
         SupplierList = new List<PurchaseRequisitionSupplierLookup>();
@@ -1236,7 +1236,7 @@ ORDER BY SupplierCode";
         }
     }
 
-    // Sinh số PR mới theo stored procedure HaiAutoNumPR để đồng nhất với hệ thống cũ.
+    // Sinh s? PR m?i theo stored procedure HaiAutoNumPR d? d?ng nh?t v?i h? th?ng cu.
     private string GetSuggestedRequestNo()
     {
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -1244,7 +1244,7 @@ ORDER BY SupplierCode";
         return GetSuggestedRequestNo(conn, null);
     }
 
-    // Sinh số PR mới trong transaction hiện tại để tránh lệch số khi nhiều người thao tác cùng lúc.
+    // Sinh s? PR m?i trong transaction hi?n t?i d? tr�nh l?ch s? khi nhi?u ngu?i thao t�c c�ng l�c.
     private static string GetSuggestedRequestNo(SqlConnection conn, SqlTransaction? trans)
     {
         using var cmd = new SqlCommand("EXEC dbo.HaiAutoNumPR NULL", conn, trans);
@@ -1252,7 +1252,7 @@ ORDER BY SupplierCode";
         return string.IsNullOrWhiteSpace(result) ? $"PR{DateTime.Now:ddMMyy}" : result.Trim();
     }
 
-    // Lưu header và toàn bộ detail hiện tại của PR trong cùng một transaction.
+    // Luu header v� to�n b? detail hi?n t?i c?a PR trong c�ng m?t transaction.
     private void SavePurchaseRequisition(IReadOnlyList<PurchaseRequisitionDetailInput> details)
     {
         var operatorCode = User.Identity?.Name?.Trim() ?? string.Empty;
@@ -1383,7 +1383,7 @@ WHERE PRID = @PRID", conn, trans);
         }
     }
 
-    // Gộp các dòng trùng trước khi lưu để DB chỉ giữ một dòng cho cùng item hoặc cùng dòng MR.
+    // G?p c�c d�ng tr�ng tru?c khi luu d? DB ch? gi? m?t d�ng cho c�ng item ho?c c�ng d�ng MR.
     private static List<PurchaseRequisitionDetailInput> ConsolidateDetailsForSave(IReadOnlyList<PurchaseRequisitionDetailInput> details)
     {
         var consolidated = new List<PurchaseRequisitionDetailInput>();
@@ -1444,7 +1444,7 @@ WHERE PRID = @PRID", conn, trans);
         return consolidated;
     }
 
-    // Xác định EmployeeID của Purchaser để gắn cho PR khi tạo mới chứng từ.
+    // X�c d?nh EmployeeID c?a Purchaser d? g?n cho PR khi t?o m?i ch?ng t?.
     private static int? ResolvePurchaserId(SqlConnection conn, SqlTransaction trans, string operatorCode)
     {
         using var cmd = new SqlCommand(@"
@@ -1465,7 +1465,7 @@ END", conn, trans);
         return result == null || result == DBNull.Value ? null : Convert.ToInt32(result);
     }
 
-    // Với dòng đã có sẵn trong PR, chỉ cho phép chỉnh U.Price và Remark trực tiếp trên PC_PRDetail.
+    // V?i d�ng d� c� s?n trong PR, ch? cho ph�p ch?nh U.Price v� Remark tr?c ti?p tr�n PC_PRDetail.
     private static void UpdateExistingPrDetails(SqlConnection conn, SqlTransaction trans, int prId, IReadOnlyList<PurchaseRequisitionDetailInput> details)
     {
         foreach (var detail in details)
@@ -1487,7 +1487,7 @@ WHERE PRID = @PRID
         }
     }
 
-    // Cập nhật lại MR theo đúng logic cũ: nếu SugBuy < BUY thì trừ BUY, ngược lại chỉ set PostedPR = 1.
+    // C?p nh?t l?i MR theo d�ng logic cu: n?u SugBuy < BUY th� tr? BUY, ngu?c l?i ch? set PostedPR = 1.
     private static void ApplyMaterialRequestBuy(SqlConnection conn, SqlTransaction trans, IReadOnlyList<PurchaseRequisitionDetailInput> details)
     {
         var allocations = details
@@ -1565,7 +1565,7 @@ WHERE pr.PRID = @PRID", conn, trans);
         cmd.ExecuteNonQuery();
     }
 
-    // Parse JSON detail do frontend gửi lên thành danh sách object để backend kiểm tra và lưu.
+    // Parse JSON detail do frontend g?i l�n th�nh danh s�ch object d? backend ki?m tra v� luu.
     private List<PurchaseRequisitionDetailInput> ParseDetails()
     {
         if (string.IsNullOrWhiteSpace(DetailsJson))
@@ -1588,7 +1588,7 @@ WHERE pr.PRID = @PRID", conn, trans);
         }
     }
 
-    // Kiểm tra dữ liệu của từng dòng item trước khi lưu.
+    // Ki?m tra d? li?u c?a t?ng d�ng item tru?c khi luu.
     private void ValidateDetail(PurchaseRequisitionDetailInput detail, int rowNo)
     {
         if (detail.ItemId <= 0)
@@ -1632,7 +1632,7 @@ WHERE pr.PRID = @PRID", conn, trans);
         cmd.Parameters.Add("@ToDate", SqlDbType.Date).Value = request.ToDate.HasValue ? request.ToDate.Value.Date : DBNull.Value;
     }
 
-    // Nạp thông tin vai trò workflow của user hiện tại từ bảng MS_Employee.
+    // N?p th�ng tin vai tr� workflow c?a user hi?n t?i t? b?ng MS_Employee.
     private void LoadCurrentWorkflowUser()
     {
         _workflowUser = new PurchaseRequisitionWorkflowUserInfo();
@@ -1672,7 +1672,7 @@ WHERE EmployeeCode = @EmployeeCode", conn);
         };
     }
 
-    // Xác định các nút được phép hiển thị theo trạng thái chứng từ và vai trò workflow hiện tại.
+    // X�c d?nh c�c n�t du?c ph�p hi?n th? theo tr?ng th�i ch?ng t? v� vai tr� workflow hi?n t?i.
     private void SetActionFlags()
     {
         var canUploadByPermission = Requisition.Id > 0 && (IsAdminRole() || PagePerm.HasPermission(PermissionUploadAttachment));
@@ -1705,13 +1705,13 @@ WHERE EmployeeCode = @EmployeeCode", conn);
         CanManageAttachments = canUploadByPermission;
     }
 
-    // Xác định PU/CFO/BOD/Admin có đang thuộc nhóm workflow được phép dùng CST New ở trạng thái Pending hay không.
+    // X�c d?nh PU/CFO/BOD/Admin c� dang thu?c nh�m workflow du?c ph�p d�ng CST New ? tr?ng th�i Pending hay kh�ng.
     private bool IsWorkflowActor()
     {
         return _workflowUser.IsPurchaser || _workflowUser.IsCFO || _workflowUser.IsBOD || IsAdminRole();
     }
 
-    // Xác định có cho phép mở mode=edit hay không theo đúng rule trạng thái của Purchase Requisition.
+    // X�c d?nh c� cho ph�p m? mode=edit hay kh�ng theo d�ng rule tr?ng th�i c?a Purchase Requisition.
     private bool CanOpenEditMode(List<int> effectivePermissions)
     {
         if (Mode != "edit")
@@ -1750,19 +1750,19 @@ WHERE EmployeeCode = @EmployeeCode", conn);
 
         return false;
     }
-    // Xác định edit thật sự dữ liệu chứng từ chỉ được phép ở trạng thái New.
+    // X�c d?nh edit th?t s? d? li?u ch?ng t? ch? du?c ph�p ? tr?ng th�i New.
     private bool CanEditDocument(List<int> effectivePermissions)
     {
         return Requisition.Status == 1 && effectivePermissions.Contains(PermissionEdit);
     }
 
-    // Xác định user hiện tại có đang ở bước PU duyệt đầu tiên hay không.
+    // X�c d?nh user hi?n t?i c� dang ? bu?c PU duy?t d?u ti�n hay kh�ng.
     private bool CanApproveAsPurchaser()
     {
         return Requisition.Id > 0 && Requisition.Status == 1 && (_workflowUser.IsPurchaser || IsAdminRole());
     }
 
-    // Xác định user hiện tại có đang ở bước CFO duyệt hay không.
+    // X�c d?nh user hi?n t?i c� dang ? bu?c CFO duy?t hay kh�ng.
     private bool CanApproveAsCfo()
     {
         return Requisition.Id > 0
@@ -1771,7 +1771,7 @@ WHERE EmployeeCode = @EmployeeCode", conn);
             && (_workflowUser.IsCFO || IsAdminRole());
     }
 
-    // Xác định user hiện tại có đang ở bước BOD duyệt hay không.
+    // X�c d?nh user hi?n t?i c� dang ? bu?c BOD duy?t hay kh�ng.
     private bool CanApproveAsBod()
     {
         return Requisition.Id > 0
@@ -1781,13 +1781,13 @@ WHERE EmployeeCode = @EmployeeCode", conn);
             && (_workflowUser.IsBOD || IsAdminRole());
     }
 
-    // Xác định có được bật nút Approve trong bước workflow hiện tại hay không.
+    // X�c d?nh c� du?c b?t n�t Approve trong bu?c workflow hi?n t?i hay kh�ng.
     private bool CanApproveCurrentStep()
     {
         return CanApproveAsPurchaser() || CanApproveAsCfo() || CanApproveAsBod();
     }
 
-    // Chuẩn bị dữ liệu chung cho các handler post làm việc với chứng từ hiện hữu.
+    // Chu?n b? d? li?u chung cho c�c handler post l�m vi?c v?i ch?ng t? hi?n h?u.
     private IActionResult? PrepareExistingRecordForPost()
     {
         PagePerm = GetUserPermissions();
@@ -1817,14 +1817,14 @@ WHERE EmployeeCode = @EmployeeCode", conn);
         return null;
     }
 
-    // Điều hướng quay lại đúng record hiện tại sau khi xử lý workflow hoặc file đính kèm.
+    // �i?u hu?ng quay l?i d�ng record hi?n t?i sau khi x? l� workflow ho?c file d�nh k�m.
     private IActionResult RedirectToCurrentDetail(string? mode = null)
     {
         var currentMode = string.IsNullOrWhiteSpace(mode) ? "view" : mode.Trim().ToLowerInvariant();
         return RedirectToPage("./PurchaseRequisitionDetail", new { id = Requisition.Id, mode = currentMode });
     }
 
-    // Lấy tập quyền tĩnh của user trên function Purchase Requisition Detail.
+    // L?y t?p quy?n tinh c?a user tr�n function Purchase Requisition Detail.
     private PagePermissions GetUserPermissions()
     {
         var isAdmin = IsAdminRole();
@@ -1843,7 +1843,7 @@ WHERE EmployeeCode = @EmployeeCode", conn);
         return permsObj;
     }
 
-    // Lấy quyền hiệu lực theo trạng thái PR hiện tại để quyết định add, edit hay view.
+    // L?y quy?n hi?u l?c theo tr?ng th�i PR hi?n t?i d? quy?t d?nh add, edit hay view.
     private List<int> GetEffectivePermissionsByStatus(int status)
     {
         var isAdmin = IsAdminRole();
@@ -1857,19 +1857,19 @@ WHERE EmployeeCode = @EmployeeCode", conn);
         return _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, status);
     }
 
-    // Lấy RoleID hiện tại từ claim đăng nhập.
+    // L?y RoleID hi?n t?i t? claim dang nh?p.
     private int GetCurrentRoleId()
     {
         return int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
     }
 
-    // Xác định user hiện tại có phải admin role hay không.
+    // X�c d?nh user hi?n t?i c� ph?i admin role hay kh�ng.
     private bool IsAdminRole()
     {
         return User.FindFirst("IsAdminRole")?.Value == "True";
     }
 
-    // Lấy danh sách người nhận mail theo vai trò workflow hiện tại.
+    // L?y danh s�ch ngu?i nh?n mail theo vai tr� workflow hi?n t?i.
     private List<PurchaseRequisitionNotifyRecipientViewModel> GetEmailsByWorkflowRole(SqlConnection conn, SqlTransaction trans, string workflowRole)
     {
         if (string.Equals(workflowRole, "CFO", StringComparison.OrdinalIgnoreCase))
@@ -1885,7 +1885,7 @@ WHERE EmployeeCode = @EmployeeCode", conn);
         return new List<PurchaseRequisitionNotifyRecipientViewModel>();
     }
 
-    // Lấy danh sách người nhận mail theo một cờ bool trong MS_Employee như IsCFO hoặc IsBOD.
+    // L?y danh s�ch ngu?i nh?n mail theo m?t c? bool trong MS_Employee nhu IsCFO ho?c IsBOD.
     private static List<PurchaseRequisitionNotifyRecipientViewModel> GetEmailsByFlag(SqlConnection conn, SqlTransaction trans, string flagColumn)
     {
         var rows = new List<PurchaseRequisitionNotifyRecipientViewModel>();
@@ -1920,7 +1920,7 @@ WHERE ISNULL({flagColumn}, 0) = 1
         return rows;
     }
 
-    // Lấy danh sách người nhận mail của BOD, ưu tiên bảng cấu hình SYS_Funtion_LevelProcess nếu hệ thống có bảng này.
+    // L?y danh s�ch ngu?i nh?n mail c?a BOD, uu ti�n b?ng c?u h�nh SYS_Funtion_LevelProcess n?u h? th?ng c� b?ng n�y.
     private List<PurchaseRequisitionNotifyRecipientViewModel> GetBodEmails(SqlConnection conn, SqlTransaction trans)
     {
         var rows = new List<PurchaseRequisitionNotifyRecipientViewModel>();
@@ -1978,7 +1978,7 @@ WHERE ISNULL(IsBOD, 0) = 1
         return rows;
     }
 
-    // Tính tổng tiền hiện tại của PR từ bảng chi tiết để mail luôn dùng đúng dữ liệu mới nhất.
+    // T�nh t?ng ti?n hi?n t?i c?a PR t? b?ng chi ti?t d? mail lu�n d�ng d�ng d? li?u m?i nh?t.
     private decimal GetCurrentTotalAmount(SqlConnection conn, SqlTransaction trans)
     {
         using var cmd = new SqlCommand(@"
@@ -1991,13 +1991,13 @@ WHERE PRID = @PRID", conn, trans);
         return value == null || value == DBNull.Value ? 0M : Convert.ToDecimal(value);
     }
 
-    // Format số tiền theo đúng cách hiển thị hiện tại của màn hình: có dấu phẩy hàng nghìn và bỏ số 0 dư cuối.
+    // Format s? ti?n theo d�ng c�ch hi?n th? hi?n t?i c?a m�n h�nh: c� d?u ph?y h�ng ngh�n v� b? s? 0 du cu?i.
     private static string FormatAmountForView(decimal amount)
     {
-        return amount.ToString("#,##0.###");
+        return amount.ToString("#,##0");
     }
 
-    // Lấy tên currency hiển thị cho mail theo mã tiền tệ đang lưu trên chứng từ.
+    // L?y t�n currency hi?n th? cho mail theo m� ti?n t? dang luu tr�n ch?ng t?.
     private string GetCurrencyDisplayText(int currencyId)
     {
         return currencyId switch
@@ -2007,7 +2007,7 @@ WHERE PRID = @PRID", conn, trans);
         };
     }
 
-    // Tạo nội dung mail thông báo workflow cho bước duyệt kế tiếp.
+    // T?o n?i dung mail th�ng b�o workflow cho bu?c duy?t k? ti?p.
     private string BuildWorkflowNotifyBody(SqlConnection conn, SqlTransaction trans, string title, string color, string actionText)
     {
         var detailUrl = Url.Page("/Purchasing/PurchaseRequisition/PurchaseRequisitionDetail", values: new
@@ -2035,7 +2035,7 @@ WHERE PRID = @PRID", conn, trans);
         return EmailTemplateHelper.WrapInNotifyTemplate(title, color, DateTime.Now, body);
     }
 
-    // Đẩy tác vụ gửi mail ra nền để người dùng không phải chờ kết quả SMTP.
+    // �?y t�c v? g?i mail ra n?n d? ngu?i d�ng kh�ng ph?i ch? k?t qu? SMTP.
     private void TryQueueWorkflowNotifyEmail(List<PurchaseRequisitionNotifyRecipientViewModel> recipients, string subject, string htmlBody)
     {
         var senderEmail = _config.GetValue<string>("EmailSettings:SenderEmail");
@@ -2064,7 +2064,7 @@ WHERE PRID = @PRID", conn, trans);
         });
     }
 
-    // Áp tiền tố subject theo cấu hình EmailSettings khi FunctionID của Purchase Requisition nằm trong danh sách test.
+    // �p ti?n t? subject theo c?u h�nh EmailSettings khi FunctionID c?a Purchase Requisition n?m trong danh s�ch test.
     private string ApplyMailSubjectPrefix(string subject)
     {
         if (string.IsNullOrWhiteSpace(subject))
@@ -2081,7 +2081,7 @@ WHERE PRID = @PRID", conn, trans);
         return $"{prefix} - {subject}";
     }
 
-    // Kiểm tra cấu hình TestFunctionIDs để quyết định có thêm tiền tố test vào subject hay không.
+    // Ki?m tra c?u h�nh TestFunctionIDs d? quy?t d?nh c� th�m ti?n t? test v�o subject hay kh�ng.
     private bool ShouldApplyTestSubjectPrefix()
     {
         var configuredIds = _config.GetValue<string>("EmailSettings:TestFunctionIDs");
@@ -2095,7 +2095,7 @@ WHERE PRID = @PRID", conn, trans);
             .Any(value => int.TryParse(value, out var id) && id == FUNCTION_ID);
     }
 
-    // Gửi mail workflow bằng SMTP với body HTML theo template chung.
+    // G?i mail workflow b?ng SMTP v?i body HTML theo template chung.
     private async Task SendNotifyEmailAsync(PurchaseRequisitionWorkflowNotifyRequestViewModel notifyRequest)
     {
         try
@@ -2143,7 +2143,7 @@ WHERE PRID = @PRID", conn, trans);
         }
     }
 
-    // Kiểm tra file upload theo danh sách extension và giới hạn dung lượng cấu hình trong appsettings.json.
+    // Ki?m tra file upload theo danh s�ch extension v� gi?i h?n dung lu?ng c?u h�nh trong appsettings.json.
     private string? ValidateAttachment(IFormFile file)
     {
         var allowedExtensions = AllowedAttachmentExtensionsText
@@ -2166,7 +2166,7 @@ WHERE PRID = @PRID", conn, trans);
         return null;
     }
 
-    // Lưu file đính kèm vật lý và ghi tên file vào bảng PC_PR_Doc.
+    // Luu file d�nh k�m v?t l� v� ghi t�n file v�o b?ng PC_PR_Doc.
     private void SaveAttachment(SqlConnection conn, SqlTransaction trans, int prId, int? userId, IFormFile file, List<string> savedFilePaths)
     {
         var uploadFolder = ResolveUploadFolder();
@@ -2204,7 +2204,7 @@ VALUES
         cmd.ExecuteNonQuery();
     }
 
-    // Xác định thư mục lưu file đính kèm từ cấu hình FileUploads:FilePath.
+    // X�c d?nh thu m?c luu file d�nh k�m t? c?u h�nh FileUploads:FilePath.
     private string ResolveUploadFolder()
     {
         var basePath = _config.GetValue<string>("FileUploads:BasePath");
@@ -2240,7 +2240,7 @@ VALUES
             : Path.Combine([rootPath, .. relativeSegments]);
     }
 
-    // Sinh tên file mới có thêm ticks để tránh trùng tên khi upload.
+    // Sinh t�n file m?i c� th�m ticks d? tr�nh tr�ng t�n khi upload.
     private static string BuildAttachmentFileName(string originalFileName)
     {
         var sourceName = Path.GetFileName(originalFileName);
@@ -2255,7 +2255,7 @@ VALUES
         return $"{safeName}_{DateTime.UtcNow.Ticks}{extension}";
     }
 
-    // Xóa file vật lý đã lưu nếu transaction insert file đính kèm bị lỗi và phải rollback.
+    // X�a file v?t l� d� luu n?u transaction insert file d�nh k�m b? l?i v� ph?i rollback.
     private static void RemoveSavedFiles(IEnumerable<string> savedFilePaths)
     {
         foreach (var path in savedFilePaths)
@@ -2269,7 +2269,7 @@ VALUES
             }
             catch
             {
-                // Không chặn luồng chính nếu dọn file tạm bị lỗi.
+                // Kh�ng ch?n lu?ng ch�nh n?u d?n file t?m b? l?i.
             }
         }
     }

@@ -19,8 +19,7 @@
     
     string Money(decimal v)
     {
-        var s = v.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
-        return s.EndsWith(".00") ? v.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) : s;
+        return v.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     string ImgTag(byte[]? bytes, string cssClass)
@@ -172,7 +171,7 @@
         <td></td>
       </tr>
       <tr>
-        <td colspan="6" class="po-rpt-tot-lbl"><div style="display:flex;justify-content:flex-end;gap:150px"><span>% VAT: @(r.PerVAT.ToString("0.##"))</span><span>Tiền thuế (VAT):</span></div></td>
+        <td colspan="6" class="po-rpt-tot-lbl"><div style="display:flex;justify-content:flex-end;gap:150px"><span>% VAT: @(r.PerVAT.ToString("0"))</span><span>Tiền thuế (VAT):</span></div></td>
         <td class="po-rpt-tot-val">@Money(r.VAT)</td>
         <td></td>
       </tr>

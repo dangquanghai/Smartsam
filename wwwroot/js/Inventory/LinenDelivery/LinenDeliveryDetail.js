@@ -541,10 +541,7 @@
             return '';
         }
 
-        return numberValue.toLocaleString('en-US', {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2
-        });
+        return Math.round(numberValue).toLocaleString('en-US');
     }
     function previewLinenDeliveryReportPdf() {
         const reportPdfUrl = buildLinenDeliveryReportPdfUrl();
@@ -856,10 +853,7 @@
             return value || '0';
         }
 
-        return number.toLocaleString('en-US', {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2
-        });
+        return Math.round(number).toLocaleString('en-US');
     }
 
     function loadPrintPreview() {
@@ -1191,10 +1185,7 @@
             return '0';
         }
 
-        return numberValue.toLocaleString('en-US', {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2
-        });
+        return Math.round(numberValue).toLocaleString('en-US');
     }
 
     function encodeHtml(value) {

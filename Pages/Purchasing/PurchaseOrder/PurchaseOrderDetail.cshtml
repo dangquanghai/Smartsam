@@ -99,7 +99,7 @@
                             <div class="row no-gutters align-items-center mb-2">
                                 <div class="col-2 text-left pr-2"><label class="col-form-label-sm mb-0">ExRate</label></div>
                                 <div class="col-4">
-                                    <input asp-for="Header.ExRate" asp-format="{0:#,##0.##}" id="ExRate" class="form-control form-control-sm text-right" readonly="@Model.IsViewMode" />
+                                    <input asp-for="Header.ExRate" asp-format="{0:#,##0}" id="ExRate" class="form-control form-control-sm text-right" readonly="@Model.IsViewMode" />
                                 </div>
                                 <div class="col-2 text-left pl-4 pr-2"><label class="col-form-label-sm mb-0">Status</label></div>
                                 <div class="col-4">
@@ -144,13 +144,13 @@
                                     <label class="col-form-label-sm mb-0">%VAT</label>
                                 </div>
                                 <div class="purchase-order-vat-value purchase-order-vat-value-sm">
-                                    <input asp-for="Header.PerVAT" asp-format="{0:#,##0.##}" id="PerVAT" class="form-control form-control-sm text-right" readonly="@Model.IsViewMode" />
+                                    <input asp-for="Header.PerVAT" asp-format="{0:#,##0}" id="PerVAT" class="form-control form-control-sm text-right" readonly="@Model.IsViewMode" />
                                 </div>
                                 <div class="purchase-order-vat-label purchase-order-vat-label-secondary">
                                     <label class="col-form-label-sm mb-0">Before VAT</label>
                                 </div>
                                 <div class="purchase-order-vat-value">
-                                    <input asp-for="Header.BeforeVAT" asp-format="{0:#,##0.##}" id="BeforeVAT" class="form-control form-control-sm text-right" readonly="@Model.IsViewMode" />
+                                    <input asp-for="Header.BeforeVAT" asp-format="{0:#,##0}" id="BeforeVAT" class="form-control form-control-sm text-right" readonly="@Model.IsViewMode" />
                                 </div>
 
                                 <div></div>
@@ -159,7 +159,7 @@
                                     <label class="col-form-label-sm mb-0">VAT</label>
                                 </div>
                                 <div class="purchase-order-vat-value">
-                                    <input asp-for="Header.VAT" asp-format="{0:#,##0.##}" id="VAT" class="form-control form-control-sm text-right" readonly="@Model.IsViewMode" />
+                                    <input asp-for="Header.VAT" asp-format="{0:#,##0}" id="VAT" class="form-control form-control-sm text-right" readonly="@Model.IsViewMode" />
                                 </div>
 
                                 <div></div>
@@ -168,7 +168,7 @@
                                     <label class="col-form-label-sm mb-0">After VAT</label>
                                 </div>
                                 <div class="purchase-order-vat-value">
-                                    <input asp-for="Header.AfterVAT" asp-format="{0:#,##0.##}" id="AfterVAT" class="form-control form-control-sm text-right" readonly="@Model.IsViewMode" />
+                                    <input asp-for="Header.AfterVAT" asp-format="{0:#,##0}" id="AfterVAT" class="form-control form-control-sm text-right" readonly="@Model.IsViewMode" />
                                 </div>
                             </div>
                         </div>

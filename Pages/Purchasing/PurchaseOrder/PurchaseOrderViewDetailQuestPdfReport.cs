@@ -202,18 +202,18 @@ internal static class PurchaseOrderViewDetailQuestPdfReport
 
     private static string FormatQuantity(decimal value)
     {
-        return value == 0 ? string.Empty : value.ToString("#,##0.##", CultureInfo.InvariantCulture);
+        return value == 0 ? string.Empty : value.ToString("#,##0", CultureInfo.InvariantCulture);
     }
 
     private static string FormatQuantityTotal(decimal value)
     {
-        return value.ToString("#,##0.##", CultureInfo.InvariantCulture);
+        return value.ToString("#,##0", CultureInfo.InvariantCulture);
     }
 
     private static string FormatMoney(decimal value, bool withDecimals)
     {
         return withDecimals
-            ? value.ToString("#,##0.##", CultureInfo.InvariantCulture)
+            ? value.ToString("#,##0", CultureInfo.InvariantCulture)
             : value.ToString("#,##0", CultureInfo.InvariantCulture);
     }
 }
