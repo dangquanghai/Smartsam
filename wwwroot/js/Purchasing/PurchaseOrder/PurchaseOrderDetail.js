@@ -766,7 +766,7 @@ function renderDetailRows() {
     $tbody.empty();
 
     if (!purchaseOrderDetails.length) {
-        $tbody.html('<tr id="purchaseOrderDetailEmptyRow"><td colspan="12" class="text-center text-muted">No detail rows</td></tr>');
+        $tbody.html('<tr id="purchaseOrderDetailEmptyRow"><td colspan="13" class="text-center text-muted">No detail rows</td></tr>');
         $('#purchaseOrderDetailCount').text('0');
         return;
     }
@@ -787,6 +787,7 @@ function renderDetailRows() {
                 <td><input type="text" class="form-control form-control-sm text-right po-detail-recqty" value="${formatNumber(row.recQty)}" ${canSave ? '' : 'readonly'} /></td>
                 <td><input type="text" class="form-control form-control-sm text-right po-detail-recamount" value="${formatNumber(row.recAmount)}" readonly /></td>
                 <td>${canSave ? `<input type="date" class="form-control form-control-sm po-detail-recdate" value="${formatDate(row.recDate)}" />` : escapeHtml(formatDate(row.recDate))}</td>
+                <td class="vni-font">${escapeHtml(row.mrRequestNo || '')}</td>
             </tr>`;
     });
 
