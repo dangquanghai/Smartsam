@@ -414,13 +414,8 @@ SELECT TOP (100) DeliveryID, Des
 FROM dbo.LN_DeliveryMT
 WHERE (@CurrentDeliveryID IS NOT NULL AND DeliveryID = @CurrentDeliveryID)
    OR (
-       (@SearchText = '' OR Des LIKE @SearchPattern OR CONVERT(varchar(20), DeliveryID) LIKE @SearchPattern)
-       AND NOT EXISTS (
-           SELECT 1
-           FROM dbo.LN_ReceiveMT mt
-           WHERE mt.SendID = dbo.LN_DeliveryMT.DeliveryID
-             AND EXISTS (SELECT 1 FROM dbo.LN_ReceiveDT dt WHERE dt.ReceiveID = mt.ReceiveID)
-       )
+       (FullReceive = 0 OR FullReceive IS NULL)
+       AND (@SearchText = '' OR Des LIKE @SearchPattern OR CONVERT(varchar(20), DeliveryID) LIKE @SearchPattern)
    )
 ORDER BY CASE WHEN DeliveryID = @CurrentDeliveryID THEN 0 ELSE 1 END,
          DeliveryID DESC;";
