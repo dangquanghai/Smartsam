@@ -485,11 +485,21 @@
                     const $radio = $(this).find('input.receive-selector');
                     const wasChecked = $radio.prop('checked');
                     $('input.receive-selector').prop('checked', false);
-                    if (!wasChecked) {
-                        $radio.prop('checked', true);
-                    }
+                    $radio.prop('checked', !wasChecked);
                     syncDeleteButtonState();
                 }
+            });
+
+            $(document).on('click', '#receiveTable tbody input.receive-selector', function (e) {
+                e.stopPropagation();
+                const wasChecked = $(this).data('wasChecked') === true;
+                $('input.receive-selector').not(this).prop('checked', false);
+                $(this).prop('checked', !wasChecked);
+                syncDeleteButtonState();
+            });
+
+            $(document).on('mousedown', '#receiveTable tbody input.receive-selector', function () {
+                $(this).data('wasChecked', this.checked);
             });
 
             $('#btnDeleteReceived').on('click', function () {
