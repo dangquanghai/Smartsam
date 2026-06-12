@@ -430,11 +430,21 @@
                     const $radio = $(this).find('input.Issue-selector');
                     const wasChecked = $radio.prop('checked');
                     $('input.Issue-selector').prop('checked', false);
-                    if (!wasChecked) {
-                        $radio.prop('checked', true);
-                    }
+                    $radio.prop('checked', !wasChecked);
                     syncDeleteButtonState();
                 }
+            });
+
+            $(document).on('click', '#IssueTable tbody input.Issue-selector', function (e) {
+                e.stopPropagation();
+                const wasChecked = $(this).data('wasChecked') === true;
+                $('input.Issue-selector').not(this).prop('checked', false);
+                $(this).prop('checked', !wasChecked);
+                syncDeleteButtonState();
+            });
+
+            $(document).on('mousedown', '#IssueTable tbody input.Issue-selector', function () {
+                $(this).data('wasChecked', this.checked);
             });
 
             $('#btnDeleteIssue').on('click', function () {
