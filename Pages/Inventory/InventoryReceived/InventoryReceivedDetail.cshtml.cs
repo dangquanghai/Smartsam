@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Net;
 using System.Net.Mail;
@@ -1391,10 +1391,6 @@ ORDER BY i.ItemCode", conn);
                     ModelState.AddModelError(string.Empty, $"Item '{detail.ItemCode}' must have Act. Qty > 0.");
                 }
 
-                if (detail.DocQty < detail.ActQty)
-                {
-                    ModelState.AddModelError(string.Empty, $"Item '{detail.ItemCode}' Doc. Qty must be greater than or equal Act. Qty.");
-                }
 
                 var remainingQty = GetRemainingQty(detail.ChekingDTID);
                 if (flowId.HasValue)
@@ -1414,10 +1410,6 @@ ORDER BY i.ItemCode", conn);
                 if (detail.ActQty <= 0)
                 {
                     ModelState.AddModelError(string.Empty, $"Item '{detail.ItemCode}' must have Act. Qty > 0.");
-                }
-                if (detail.DocQty < detail.ActQty)
-                {
-                    ModelState.AddModelError(string.Empty, $"Item '{detail.ItemCode}' Doc. Qty must be greater than or equal Act. Qty.");
                 }
             }
         }

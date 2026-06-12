@@ -379,10 +379,7 @@
             return "";
         }
 
-        return numericValue.toLocaleString(undefined, {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2
-        });
+        return Math.round(numericValue).toLocaleString('en-US');
     }
 
     function resetStockModal() {

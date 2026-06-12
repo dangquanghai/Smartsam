@@ -53,7 +53,7 @@
                 <div class="card card-info">
                     <div class="card-header"><h3 class="card-title"><i class="fas fa-search"></i> Search</h3></div>
                     <div class="card-body">
-                        <form method="get">
+                        <form method="get" id="inventoryItemCheckingSearchForm">
                             <input type="hidden" name="Filter.Page" value="1" />
                             <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
                             <div class="form-group mb-2">
@@ -70,11 +70,11 @@
                             </div>
                             <div class="form-group mb-2"><label>Status</label><select asp-for="Filter.StatusId" asp-items="Model.Statuses" class="form-control form-control-sm select2 vni-font" data-placeholder="--- All ---"></select></div>
                             <div class="form-group mb-1"><div class="custom-control custom-checkbox"><input asp-for="Filter.UseCheckedDate" class="custom-control-input" /><label asp-for="Filter.UseCheckedDate" class="custom-control-label">Checked Date</label></div></div>
-                            <div class="form-group mb-2"><label>From</label><input asp-for="Filter.CheckedFrom" type="date" class="form-control form-control-sm" /></div>
-                            <div class="form-group mb-2"><label>To</label><input asp-for="Filter.CheckedTo" type="date" class="form-control form-control-sm" /></div>
+                            <div class="form-group mb-2"><label>From</label><input id="CheckedFromDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.CheckedFrom?.ToString("dd/MM/yyyy")" data-hidden-target="#CheckedFromDateHidden" autocomplete="off" readonly /><input id="CheckedFromDateHidden" name="Filter.CheckedFrom" type="hidden" value="@Model.Filter.CheckedFrom?.ToString("yyyy-MM-dd")" /></div>
+                            <div class="form-group mb-2"><label>To</label><input id="CheckedToDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.CheckedTo?.ToString("dd/MM/yyyy")" data-hidden-target="#CheckedToDateHidden" autocomplete="off" readonly /><input id="CheckedToDateHidden" name="Filter.CheckedTo" type="hidden" value="@Model.Filter.CheckedTo?.ToString("yyyy-MM-dd")" /></div>
                             <div class="form-group mb-1"><div class="custom-control custom-checkbox"><input asp-for="Filter.UseApprovedDate" class="custom-control-input" /><label asp-for="Filter.UseApprovedDate" class="custom-control-label">Approved Date</label></div></div>
-                            <div class="form-group mb-2"><label>From</label><input asp-for="Filter.ApprovedFrom" type="date" class="form-control form-control-sm" /></div>
-                            <div class="form-group mb-2"><label>To</label><input asp-for="Filter.ApprovedTo" type="date" class="form-control form-control-sm" /></div>
+                            <div class="form-group mb-2"><label>From</label><input id="ApprovedFromDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.ApprovedFrom?.ToString("dd/MM/yyyy")" data-hidden-target="#ApprovedFromDateHidden" autocomplete="off" readonly /><input id="ApprovedFromDateHidden" name="Filter.ApprovedFrom" type="hidden" value="@Model.Filter.ApprovedFrom?.ToString("yyyy-MM-dd")" /></div>
+                            <div class="form-group mb-2"><label>To</label><input id="ApprovedToDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.ApprovedTo?.ToString("dd/MM/yyyy")" data-hidden-target="#ApprovedToDateHidden" autocomplete="off" readonly /><input id="ApprovedToDateHidden" name="Filter.ApprovedTo" type="hidden" value="@Model.Filter.ApprovedTo?.ToString("yyyy-MM-dd")" /></div>
                             <div class="form-group mb-2"><div class="custom-control custom-checkbox"><input asp-for="Filter.LateChecking" class="custom-control-input" /><label asp-for="Filter.LateChecking" class="custom-control-label">Late Checking</label></div></div>
                             <button type="submit" class="btn btn-sm btn-primary btn-block"><i class="fas fa-search"></i> Search</button>
                         </form>
@@ -179,11 +179,15 @@
             exportUrl: '@Url.Page("./Index", "ExportExcel")'
         };
     </script>
+    <script src="~/adminlte/plugins/jquery-ui/jquery-ui.min.js" asp-append-version="true"></script>
+    <script src="~/js/common/app-datepicker.js" asp-append-version="true"></script>
     <script src="~/js/Inventory/InventoryItemChecking/index.js" asp-append-version="true"></script>
 }
 
 @section Styles {
     <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/adminlte/plugins/jquery-ui/jquery-ui.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/common/app-datepicker.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Inventory/InventoryItemChecking/index.css" asp-append-version="true" />
 }
 

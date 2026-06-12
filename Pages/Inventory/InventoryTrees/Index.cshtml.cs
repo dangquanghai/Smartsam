@@ -447,7 +447,7 @@ public class InventoryTreeItemRow
     public string Unit { get; set; } = string.Empty;
     public decimal? UnitPrice { get; set; }
     public string CurrencyName { get; set; } = string.Empty;
-    public string UnitPriceText => UnitPrice.HasValue ? UnitPrice.Value.ToString("N2") : string.Empty;
+    public string UnitPriceText => UnitPrice.HasValue ? UnitPrice.Value.ToString("N0") : string.Empty;
 }
 
 public class InventoryTreeNodeForm

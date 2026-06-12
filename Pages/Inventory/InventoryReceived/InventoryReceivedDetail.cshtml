@@ -43,7 +43,7 @@
                         <div class="row inventory-received-header-grid-row">
                             <div class="col-xl-4 col-md-6 col-12">
                                 <div class="inventory-received-header-field prq-detail-form-col">
-                                    <label class="prq-detail-label inventory-received-header-label">Doc No.<span class="required-mark">*</span></label>
+                                    <label class="prq-detail-label inventory-received-header-label">Received No.<span class="required-mark">*</span></label>
                                     <div class="inventory-received-header-control-wrap">
                                         <input asp-for="Header.FlowNo" class="form-control form-control-sm vni-font" readonly="@(Model.IsAddMode && Model.CanEditVoucherBusiness ? null : "readonly")" />
                                         <span asp-validation-for="Header.FlowNo" class="text-danger small"></span>
@@ -52,9 +52,56 @@
                             </div>
                             <div class="col-xl-4 col-md-6 col-12">
                                 <div class="inventory-received-header-field prq-detail-form-col">
+                                    <label class="prq-detail-label inventory-received-header-label">PO No.</label>
+                                    <div class="inventory-received-header-control-wrap inventory-received-po-control-wrap">
+                                        <select asp-for="Header.POID" asp-items="Model.PONos" class="form-control form-control-sm select2 detail-context-field" disabled="@(Model.CanEditVoucherBusiness && Model.IsAddMode ? null : "disabled")"></select>
+                                        <button type="button" id="btnOpenAttachmentModal" class="btn btn-sm btn-action-secondary border text-nowrap inventory-received-attachment-btn" data-toggle="modal" data-target="#prqAttachmentModal">
+                                            <i class="fas fa-paperclip"></i> Attached Files (<span id="attachmentCountText">@Model.AttachmentList.Count</span>)
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-xl-4 col-md-6 col-12">
+                                <div class="inventory-received-header-field prq-detail-form-col">
+                                    <label class="prq-detail-label inventory-received-header-label">Return Department</label>
+                                    <div class="inventory-received-header-control-wrap">
+                                        <select asp-for="Header.RetDept" asp-items="Model.Departments" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-xl-4 col-md-6 col-12">
+                                <div class="inventory-received-header-field prq-detail-form-col">
                                     <label class="prq-detail-label inventory-received-header-label">Received Date</label>
                                     <div class="inventory-received-header-control-wrap">
-                                        <input asp-for="Header.FlowDate" type="date" class="form-control form-control-sm" readonly="@(Model.CanEditVoucherBusiness ? null : "readonly")" />
+                                        <input id="Header_FlowDateDisplay" type="text" class="form-control form-control-sm @(Model.CanEditVoucherBusiness ? "app-date-picker" : string.Empty)" value="@Model.Header.FlowDate.ToString("dd/MM/yyyy")" data-hidden-target="#Header_FlowDate" autocomplete="off" readonly />
+                                <input id="Header_FlowDate" name="Header.FlowDate" type="hidden" value="@Model.Header.FlowDate.ToString("yyyy-MM-dd")" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-xl-4 col-md-6 col-12">
+                                <div class="inventory-received-header-field prq-detail-form-col">
+                                    <label class="prq-detail-label inventory-received-header-label">Status</label>
+                                    <div class="inventory-received-header-control-wrap inventory-received-status-text-wrap">
+                                        <input id="statusTextStrong" class="form-control form-control-sm font-weight-bold" value="@Model.Header.StatusName" disabled />
+                                    </div>
+                                </div>
+                            </div>
+                            @* <div class="col-xl-4 col-md-6 col-12">
+                                <div class="inventory-received-header-field prq-detail-form-col">
+                                    <label class="prq-detail-label inventory-received-header-label">Return Location</label>
+                                    <div class="inventory-received-header-control-wrap">
+                                        <select asp-for="Header.RetAssetLocation" asp-items="Model.Locations" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
+                                    </div>
+                                </div>
+                            </div> *@
+                            <div class="col-xl-4 col-md-6 col-12">
+                                <div class="inventory-received-header-field prq-detail-form-col">
+                                    <label class="prq-detail-label inventory-received-header-label">Move to Company Store<span id="moveToCompanyStoreRequiredMark" class="required-mark d-none">*</span></label>
+                                    <div class="inventory-received-header-control-wrap">
+                                        <select asp-for="Header.MoveToCPNStore" asp-items="Model.MoveToCPNStores" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")">
+                                            <option value="">--- Select ---</option>
+                                        </select>
+                                        <span asp-validation-for="Header.MoveToCPNStore" class="text-danger small"></span>
                                     </div>
                                 </div>
                             </div>
@@ -73,52 +120,6 @@
                                     <div class="inventory-received-header-control-wrap">
                                         <select asp-for="Header.ToStore" asp-items="Model.Stores" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
                                         <span asp-validation-for="Header.ToStore" class="text-danger small"></span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-xl-4 col-md-6 col-12">
-                                <div class="inventory-received-header-field prq-detail-form-col">
-                                    <label class="prq-detail-label inventory-received-header-label">Return Department</label>
-                                    <div class="inventory-received-header-control-wrap">
-                                        <select asp-for="Header.RetDept" asp-items="Model.Departments" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-xl-4 col-md-6 col-12">
-                                <div class="inventory-received-header-field prq-detail-form-col">
-                                    <label class="prq-detail-label inventory-received-header-label">Return Location</label>
-                                    <div class="inventory-received-header-control-wrap">
-                                        <select asp-for="Header.RetAssetLocation" asp-items="Model.Locations" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-xl-4 col-md-6 col-12">
-                                <div class="inventory-received-header-field prq-detail-form-col">
-                                    <label class="prq-detail-label inventory-received-header-label">Move to Company Store<span id="moveToCompanyStoreRequiredMark" class="required-mark d-none">*</span></label>
-                                    <div class="inventory-received-header-control-wrap">
-                                        <select asp-for="Header.MoveToCPNStore" asp-items="Model.MoveToCPNStores" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")">
-                                            <option value="">--- Select ---</option>
-                                        </select>
-                                        <span asp-validation-for="Header.MoveToCPNStore" class="text-danger small"></span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-xl-4 col-md-6 col-12">
-                                <div class="inventory-received-header-field prq-detail-form-col">
-                                    <label class="prq-detail-label inventory-received-header-label">PO No.</label>
-                                    <div class="inventory-received-header-control-wrap inventory-received-po-control-wrap">
-                                        <select asp-for="Header.POID" asp-items="Model.PONos" class="form-control form-control-sm select2 detail-context-field" disabled="@(Model.CanEditVoucherBusiness && Model.IsAddMode ? null : "disabled")"></select>
-                                        <button type="button" id="btnOpenAttachmentModal" class="btn btn-sm btn-action-secondary border text-nowrap inventory-received-attachment-btn" data-toggle="modal" data-target="#prqAttachmentModal">
-                                            <i class="fas fa-paperclip"></i> Attached Files (<span id="attachmentCountText">@Model.AttachmentList.Count</span>)
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-xl-4 col-md-6 col-12">
-                                <div class="inventory-received-header-field prq-detail-form-col">
-                                    <label class="prq-detail-label inventory-received-header-label">Status</label>
-                                    <div class="inventory-received-header-control-wrap inventory-received-status-text-wrap">
-                                        <input id="statusTextStrong" class="form-control form-control-sm font-weight-bold" value="@Model.Header.StatusName" disabled />
                                     </div>
                                 </div>
                             </div>
@@ -192,6 +193,10 @@
                     {
                         <button type="button" id="btnOpenConfirmVoucher" class="btn btn-sm btn-success border mx-1 my-1" data-toggle="modal" data-target="#confirmInventoryReceivedModal"><i class="fas fa-check"></i> Confirm</button>
                     }
+                    @if (Model.Id.HasValue)
+                    {
+                        <button type="button" id="btnPrintInventoryReceivedDetail" class="btn btn-sm btn-info border mx-1 my-1"><i class="fas fa-print"></i> Print</button>
+                    }
                     <a class="btn btn-sm btn-action-close border mx-1 my-1" asp-page="./Index"><i class="fas fa-arrow-left"></i> Back to List</a>
                 </div>
             </form>
@@ -206,6 +211,15 @@
         </div>
     </div>
 </section>
+<div class="modal fade vni-font" id="inventoryReceivedDetailReportPreviewModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog inventory-received-report-preview-modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2"><h5 class="modal-title">Print Preview</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
+            <div class="modal-body p-0 inventory-received-report-preview-body"><iframe id="inventoryReceivedDetailPrintFrame" class="inventory-received-report-preview-frame" title="Inventory Received Detail Report Preview"></iframe></div>
+            <div class="modal-footer py-2 justify-content-end"><button type="button" id="btnPrintInventoryReceivedDetailFrame" class="btn btn-sm btn-info border"><i class="fas fa-print"></i> Print</button><button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Close</button></div>
+        </div>
+    </div>
+</div>
 
 <div class="modal fade vni-font" id="confirmInventoryReceivedModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
@@ -235,48 +249,41 @@
             <div class="modal-body pb-2">
                 <div id="addDetailModalValidationAlert" class="alert alert-danger mb-2 py-2 d-none"></div>
                 <div id="addDetailManualPanel" class="d-none inventory-received-modal-form-section">
-                    <div class="row">
-                        <div class="col-xl-6 col-lg-12">
+                    <div class="row inventory-received-add-detail-form-row">
+                        <div class="col-xl-4 col-md-6 col-12">
                             <div class="inventory-received-modal-field">
-                                <label class="prq-detail-label inventory-received-modal-label">Item</label>
-                                <div class="inventory-received-modal-control-wrap">
-                                    <select id="manualAddItemId" class="form-control form-control-sm select2"></select>
-                                </div>
-                            </div>
-                            <div class="inventory-received-modal-field">
-                                <label class="prq-detail-label inventory-received-modal-label">Location</label>
-                                <div class="inventory-received-modal-control-wrap">
-                                    <select id="manualAddLocationId" class="form-control form-control-sm select2"></select>
-                                </div>
-                            </div>
-                            <div class="inventory-received-modal-field">
-                                <label class="prq-detail-label inventory-received-modal-label">Act. Qty</label>
-                                <div class="inventory-received-modal-control-wrap">
-                                    <input type="text" id="manualAddActQty" class="form-control form-control-sm text-right number-format" value="0" />
-                                    <small id="manualAddActQtyError" class="text-danger d-none"></small>
-                                </div>
+                                <label class="prq-detail-label inventory-received-modal-label">Item<span class="required-mark">*</span></label>
+                                <div class="inventory-received-modal-control-wrap"><select id="manualAddItemId" class="form-control form-control-sm select2"></select></div>
                             </div>
                         </div>
-                        <div class="col-xl-6 col-lg-12">
+                        <div class="col-xl-4 col-md-6 col-12">
                             <div class="inventory-received-modal-field">
                                 <label class="prq-detail-label inventory-received-modal-label">Unit</label>
-                                <div class="inventory-received-modal-control-wrap">
-                                    <input type="text" id="manualAddUnit" class="form-control form-control-sm" readonly />
-                                </div>
+                                <div class="inventory-received-modal-control-wrap"><input type="text" id="manualAddUnit" class="form-control form-control-sm" readonly /></div>
                             </div>
+                        </div>
+                        <div class="col-xl-4 col-md-6 col-12">
+                            <div class="inventory-received-modal-field">
+                                <label class="prq-detail-label inventory-received-modal-label">Location</label>
+                                <div class="inventory-received-modal-control-wrap"><select id="manualAddLocationId" class="form-control form-control-sm select2"></select></div>
+                            </div>
+                        </div>
+                        <div class="col-xl-4 col-md-6 col-12">
+                            <div class="inventory-received-modal-field">
+                                <label class="prq-detail-label inventory-received-modal-label">Act. Qty<span class="required-mark">*</span></label>
+                                <div class="inventory-received-modal-control-wrap"><input type="text" id="manualAddActQty" class="form-control form-control-sm text-right number-format" value="0" /><small id="manualAddActQtyError" class="text-danger d-none"></small></div>
+                            </div>
+                        </div>
+                        <div class="col-xl-4 col-md-6 col-12">
                             <div class="inventory-received-modal-field">
                                 <label class="prq-detail-label inventory-received-modal-label">Doc. Qty</label>
-                                <div class="inventory-received-modal-control-wrap">
-                                    <input type="text" id="manualAddDocQty" class="form-control form-control-sm text-right number-format" value="0" />
-                                    <small id="manualAddDocQtyError" class="text-danger d-none"></small>
-                                </div>
+                                <div class="inventory-received-modal-control-wrap"><input type="text" id="manualAddDocQty" class="form-control form-control-sm text-right number-format" value="0" /><small id="manualAddDocQtyError" class="text-danger d-none"></small></div>
                             </div>
+                        </div>
+                        <div class="col-xl-4 col-md-6 col-12">
                             <div class="inventory-received-modal-field">
                                 <label class="prq-detail-label inventory-received-modal-label">Price</label>
-                                <div class="inventory-received-modal-control-wrap">
-                                    <input type="text" id="manualAddUnitPrice" class="form-control form-control-sm text-right number-format" value="0" />
-                                    <small id="manualAddUnitPriceError" class="text-danger d-none"></small>
-                                </div>
+                                <div class="inventory-received-modal-control-wrap"><input type="text" id="manualAddUnitPrice" class="form-control form-control-sm text-right number-format" value="0" /><small id="manualAddUnitPriceError" class="text-danger d-none"></small></div>
                             </div>
                         </div>
                     </div>
@@ -440,6 +447,8 @@
 
 @section Styles {
     <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/adminlte/plugins/jquery-ui/jquery-ui.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/common/app-datepicker.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Purchasing/PurchaseRequisition/index.css" asp-append-version="true" />
     <style>
         .select2-results__group { font-weight: 700; color: #212529; }
@@ -569,6 +578,13 @@
             align-items: center;
             justify-content: flex-start;
         }
+        #inventoryReceivedDetailReportPreviewModal { z-index: 2050; }
+        #inventoryReceivedDetailReportPreviewModal .modal-dialog { z-index: 2051; }
+        #inventoryReceivedDetailReportPreviewModal .modal-content { z-index: 2052; }
+        .inventory-received-report-preview-modal-dialog { width: 100vw; max-width: 100vw; height: 100vh; margin: 0; }
+        .inventory-received-report-preview-modal-dialog .modal-content { height: 100vh; border-radius: 0; display: flex; flex-direction: column; }
+        .inventory-received-report-preview-body { flex: 1 1 auto; min-height: 0; }
+        .inventory-received-report-preview-frame { display: block; width: 100%; height: 100%; border: 0; }
         @@media (max-width: 1199.98px) {
             .inventory-received-header-section {
                 padding-bottom: 0;
@@ -600,8 +616,33 @@
 }
 
 @section Scripts {
+    <script src="~/adminlte/plugins/jquery-ui/jquery-ui.min.js" asp-append-version="true"></script>
+    <script src="~/js/common/app-datepicker.js" asp-append-version="true"></script>
     <script>
         (function () {
+            if (window.AppDatePicker) {
+                window.AppDatePicker.init(document);
+            }
+            const detailPrintFrame = document.getElementById('inventoryReceivedDetailPrintFrame');
+            const detailReceivedId = @(Model.Id.HasValue ? Model.Id.Value.ToString() : "null");
+            const detailPrintButton = document.getElementById('btnPrintInventoryReceivedDetail');
+            if (detailPrintButton) {
+                detailPrintButton.addEventListener('click', function () {
+                    if (!detailPrintFrame || !detailReceivedId) return;
+                    const reportUrl = '?id=' + encodeURIComponent(detailReceivedId) + '&handler=Report&inline=true';
+                    detailPrintFrame.src = reportUrl;
+                    $('#inventoryReceivedDetailReportPreviewModal').modal('show');
+                });
+            }
+            $("#btnPrintInventoryReceivedDetailFrame").on('click', function () {
+                try {
+                    if (detailPrintFrame && detailPrintFrame.contentWindow) {
+                        detailPrintFrame.contentWindow.focus();
+                        detailPrintFrame.contentWindow.print();
+                    }
+                } catch (e) { }
+            });
+
             const itemCatalog = @Html.Raw(JsonSerializer.Serialize(Model.ItemCatalog.Select(x => new {
                 id = x.ItemId.ToString(),
                 checkingId = x.ChekingID,
@@ -1401,19 +1442,7 @@
                         showAddDetailModalValidation(`Item '${item.itemCode || ''}' must have Act. Qty > 0.`);
                         return;
                     }
-                    if (docQty < actQty) {
-                        setManualAddFieldError('#manualAddDocQty', '#manualAddDocQtyError', 'Doc. Qty must be greater than or equal Act. Qty.');
-                        setManualAddFieldError('#manualAddActQty', '#manualAddActQtyError', 'Act. Qty must be less than or equal Doc. Qty.');
-                        showAddDetailModalValidation(`Item '${item.itemCode || ''}' Doc. Qty must be greater than or equal Act. Qty.`);
-                        return;
-                    }
-                    if (unitPrice <= 0) {
-                        setManualAddFieldError('#manualAddUnitPrice', '#manualAddUnitPriceError', 'Price must be greater than 0.');
-                        showAddDetailModalValidation(`Item '${item.itemCode || ''}' must have Price > 0.`);
-                        return;
-                    }
-
-                    details.push({
+details.push({
                         itemId: Number(item.id),
                         chekingID: null,
                         chekingDTID: null,
@@ -1462,17 +1491,6 @@
                     if (actQty > maxQty) {
                         errorMessage = `Item '${item.itemCode || ''}' Act. Qty exceeds remaining qty (${formatNumber(maxQty)}).`;
                         setPoAddFieldError(itemId, 'add-actqty', `Act. Qty exceeds remaining qty (${formatNumber(maxQty)}).`);
-                        return;
-                    }
-                    if (docQty < actQty) {
-                        errorMessage = `Item '${item.itemCode || ''}' Doc. Qty must be greater than or equal Act. Qty.`;
-                        setPoAddFieldError(itemId, 'add-docqty', 'Doc. Qty must be greater than or equal Act. Qty.');
-                        setPoAddFieldError(itemId, 'add-actqty', 'Act. Qty must be less than or equal Doc. Qty.');
-                        return;
-                    }
-                    if (unitPrice <= 0) {
-                        errorMessage = `Item '${item.itemCode || ''}' must have Price > 0.`;
-                        setPoAddFieldError(itemId, 'add-unitprice', 'Price must be greater than 0.');
                         return;
                     }
                     if ($('#Header_POID').val() && (!item.checkingDtId || !item.mrDetailId)) {
@@ -1558,8 +1576,6 @@
                     showClientValidation(`Item '${row.itemCode || ''}' Act. Qty exceeds remaining qty (${formatNumber(maxQty)}).`);
                 } else if (row.actQty <= 0) {
                     showClientValidation(`Item '${row.itemCode || ''}' must have Act. Qty > 0.`);
-                } else if (row.docQty < row.actQty) {
-                    showClientValidation(`Item '${row.itemCode || ''}' Doc. Qty must be greater than or equal Act. Qty.`);
                 } else {
                     showClientValidation('');
                 }

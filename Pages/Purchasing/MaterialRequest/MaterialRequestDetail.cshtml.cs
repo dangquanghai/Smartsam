@@ -1422,7 +1422,7 @@ public class MaterialRequestDetailModel : BasePageModel
 
     private static string FormatNumber(decimal value)
     {
-        return value.ToString("0.##");
+        return value.ToString("0");
     }
 
     private static void AddDecimal18_0Param(SqlCommand cmd, string name, decimal value)

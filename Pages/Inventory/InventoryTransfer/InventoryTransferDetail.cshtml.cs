@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
@@ -459,7 +459,7 @@ ORDER BY i.ItemCode", conn);
                 var totalActQty = Details.Where(x => x.ItemId == detail.ItemId).Sum(x => x.ActQty);
                 if (totalActQty > stockQty)
                 {
-                    ModelState.AddModelError(string.Empty, $"Item '{GetItemDisplayName(detail.ItemId)}' total transfer quantity ({totalActQty:N2}) exceeds stock ({stockQty:N2}).");
+                    ModelState.AddModelError(string.Empty, $"Item '{GetItemDisplayName(detail.ItemId)}' total transfer quantity ({totalActQty:N0}) exceeds stock ({stockQty:N0}).");
                 }
             }
 

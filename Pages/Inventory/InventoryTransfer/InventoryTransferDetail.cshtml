@@ -117,7 +117,7 @@ $(function(){
         return Number.isFinite(n) ? n : 0;
     }
     function formatNumber(value){
-        return parseNumber(value).toLocaleString(undefined,{minimumFractionDigits:0, maximumFractionDigits:2});
+        return Math.round(parseNumber(value)).toLocaleString('en-US');
     }
 
     function calc($row){ const qty=parseNumber($row.find('.act-qty').val()); const price=parseNumber($row.find('.price').val()); $row.find('.amount').val(formatNumber(qty*price)); }

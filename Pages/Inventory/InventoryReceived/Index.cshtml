@@ -43,15 +43,15 @@
                 <div class="card card-info">
                     <div class="card-header"><h3 class="card-title"><i class="fas fa-search"></i> Search</h3></div>
                     <div class="card-body">
-                        <form method="get">
+                        <form method="get" id="inventoryReceivedSearchForm">
                             <input type="hidden" name="Filter.Page" value="1" />
                             <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
                             <div class="form-group mb-2"><label>Doc No.</label><input asp-for="Filter.FlowNo" name="Filter.FlowNo" class="form-control form-control-sm vni-font" /></div>
                             <div class="form-group mb-2"><label>PO No.</label><input asp-for="Filter.PONo" name="Filter.PONo" class="form-control form-control-sm vni-font" /></div>
-                            <div class="form-group mb-2"><label>From</label><input asp-for="Filter.FromDate" name="Filter.FromDate" type="date" class="form-control form-control-sm" /></div>
-                            <div class="form-group mb-2"><label>To</label><input asp-for="Filter.ToDate" name="Filter.ToDate" type="date" class="form-control form-control-sm" /></div>
+                            <div class="form-group mb-2"><label>From</label><input id="ReceivedFromDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.FromDate?.ToString("dd/MM/yyyy")" data-hidden-target="#ReceivedFromDateHidden" autocomplete="off" readonly /><input id="ReceivedFromDateHidden" name="Filter.FromDate" type="hidden" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" /></div>
+                            <div class="form-group mb-2"><label>To</label><input id="ReceivedToDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.ToDate?.ToString("dd/MM/yyyy")" data-hidden-target="#ReceivedToDateHidden" autocomplete="off" readonly /><input id="ReceivedToDateHidden" name="Filter.ToDate" type="hidden" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" /></div>
                             <div class="form-group mb-2"><label>Rec. Type</label><select asp-for="Filter.RecTypeId" name="Filter.RecTypeId" asp-items="Model.ReceiveTypes" class="form-control form-control-sm select2 vni-font"></select></div>
-                            <div class="form-group mb-2"><label>Status</label><select asp-for="Filter.StatusId" name="Filter.StatusId" asp-items="Model.Statuses" class="form-control form-control-sm select2 vni-font"></select></div>
+                            <div class="form-group mb-2"><label>Status</label><select asp-for="Filter.StatusId" name="Filter.StatusId" asp-items="Model.Statuses" class="form-control form-control-sm select2 vni-font inventory-status-filter-select"></select></div>
                             <div class="form-group mb-2">
                                 <label>Store Group</label>
                                 @if (Model.IsAdminUser)
@@ -127,7 +127,7 @@
                             <thead class="thead-light">
                                 <tr>
                                     <th style="width:32px;"></th>
-                                    <th style="width:150px;">Doc No.</th>
+                                    <th style="width:150px;">Received No.</th>
                                     <th style="width:120px;">Received Date</th>
                                     <th>Status</th>
                                     <th style="width:210px;">StoreName</th>
@@ -206,12 +206,14 @@
     </div>
 </div>
 <div class="modal fade vni-font" id="receiveSearchDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-xl" role="document">
+    <div class="modal-dialog" style="max-width: 96vw; width: 96vw;" role="document">
         <div class="modal-content">
             <div class="modal-header py-2"><h5 class="modal-title">Search Detail</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
             <div class="modal-body">
                 <div class="form-row align-items-end mb-2">
-                    <div class="col-md-5"><label>Item Code / Item Name / Doc No.</label><input id="receiveDetailKeyword" class="form-control form-control-sm vni-font" /></div>
+                    <div class="col-md-4"><label>Item Code / Item Name / Doc No.</label><input id="receiveDetailKeyword" class="form-control form-control-sm vni-font" /></div>
+                    <div class="col-md-3"><label>From</label><input id="ReceiveDetailFromDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.FromDate?.ToString("dd/MM/yyyy")" data-hidden-target="#ReceiveDetailFromDateHidden" autocomplete="off" readonly /><input id="ReceiveDetailFromDateHidden" type="hidden" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" /></div>
+                    <div class="col-md-3"><label>To</label><input id="ReceiveDetailToDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.ToDate?.ToString("dd/MM/yyyy")" data-hidden-target="#ReceiveDetailToDateHidden" autocomplete="off" readonly /><input id="ReceiveDetailToDateHidden" type="hidden" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" /></div>
                     <div class="col-md-1"><button id="btnReceiveDetailSearch" type="button" class="btn btn-sm btn-primary btn-block"><i class="fas fa-search"></i> Search</button></div>
                 </div>
                 <div class="table-responsive receive-detail-table-wrap">
@@ -290,6 +292,8 @@
 
 @section Styles {
     <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/adminlte/plugins/jquery-ui/jquery-ui.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/common/app-datepicker.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Purchasing/PurchaseRequisition/index.css" asp-append-version="true" />
     <style>
         #receiveTable tbody tr.receive-row {
@@ -323,16 +327,25 @@
         .receive-detail-table { min-width: 1100px; }
         .receive-detail-table th,
         .receive-detail-table td { white-space: nowrap; }
+        .inventory-status-filter-select option:disabled { font-weight: 700; color: #212529; }
+        .select2-results__group { color: #212529 !important; font-weight: 700 !important; padding: 6px 6px 3px 6px; }
+        .select2-results__options--nested .select2-results__option { padding-left: 22px; white-space: normal; }
     </style>
 }
 
 @section Scripts {
+    <script src="~/adminlte/plugins/jquery-ui/jquery-ui.min.js" asp-append-version="true"></script>
+    <script src="~/js/common/app-datepicker.js" asp-append-version="true"></script>
     <script>
         (function () {
             const $searchDetailModal = $('#receiveSearchDetailModal');
             const $deleteConfirmModal = $('#receiveDeleteConfirmModal');
             const $statusHistoryModal = $('#receiveStatusHistoryModal');
             let receiveDetailState = { page: 1, pageSize: 10, totalPages: 1, totalRecords: 0, keyword: '' };
+
+            if (window.AppDatePicker) {
+                window.AppDatePicker.init(document);
+            }
 
             if ($.fn.select2) {
                 $('select').select2({ width: '100%' });
@@ -515,11 +528,20 @@
 
             syncDeleteButtonState();
 
+            function syncReceiveDetailDateDefaults() {
+                $('#ReceiveDetailFromDateDisplay').val($('#ReceivedFromDateDisplay').val() || '');
+                $('#ReceiveDetailToDateDisplay').val($('#ReceivedToDateDisplay').val() || '');
+                $('#ReceiveDetailFromDateHidden').val($('#ReceivedFromDateHidden').val() || '');
+                $('#ReceiveDetailToDateHidden').val($('#ReceivedToDateHidden').val() || '');
+            }
+
             async function loadDetail(page) {
                 receiveDetailState.keyword = $('#receiveDetailKeyword').val() || '';
                 receiveDetailState.page = page || 1;
                 receiveDetailState.pageSize = Number($('#receiveDetailPageSize').val() || 10);
-                const url = `?handler=SearchDetail&keyword=${encodeURIComponent(receiveDetailState.keyword)}&pageNumber=${receiveDetailState.page}&pageSize=${receiveDetailState.pageSize}`;
+                const fromIso = $('#ReceiveDetailFromDateHidden').val() || '';
+                const toIso = $('#ReceiveDetailToDateHidden').val() || '';
+                const url = `?handler=SearchDetail&keyword=${encodeURIComponent(receiveDetailState.keyword)}&fromDate=${encodeURIComponent(fromIso || '')}&toDate=${encodeURIComponent(toIso || '')}&pageNumber=${receiveDetailState.page}&pageSize=${receiveDetailState.pageSize}`;
                 const response = await fetch(url);
                 const data = await response.json();
                 const $rows = $('#receiveDetailRows');
@@ -558,6 +580,7 @@
             });
 
             $searchDetailModal.on('shown.bs.modal', function () {
+                syncReceiveDetailDateDefaults();
                 loadDetail(1);
             });
 

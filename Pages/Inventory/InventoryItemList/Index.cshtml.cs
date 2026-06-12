@@ -1507,7 +1507,7 @@ public class RecallLostItemCandidate
     public string Specification { get; set; } = string.Empty;
     public string KPGroupName { get; set; } = string.Empty;
 
-    public string UnitPriceDisplay => UnitPrice.HasValue ? UnitPrice.Value.ToString("#,##0.####", CultureInfo.InvariantCulture) : string.Empty;
+    public string UnitPriceDisplay => UnitPrice.HasValue ? UnitPrice.Value.ToString("#,##0", CultureInfo.InvariantCulture) : string.Empty;
 }
 
 public class InventoryItemRow
@@ -1543,10 +1543,10 @@ public class InventoryItemRow
     public string ReplaceForItemCode { get; set; } = string.Empty;
     public string CreatedDate { get; set; } = string.Empty;
 
-    public string UnitPriceInput => UnitPrice.HasValue ? UnitPrice.Value.ToString("0.####", CultureInfo.InvariantCulture) : string.Empty;
-    public string ReOrderPointInput => ReOrderPoint.HasValue ? ReOrderPoint.Value.ToString("0.##", CultureInfo.InvariantCulture) : string.Empty;
-    public string UnitPriceDisplay => UnitPrice.HasValue ? UnitPrice.Value.ToString("#,##0.####", CultureInfo.InvariantCulture) : string.Empty;
-    public string ReOrderPointDisplay => ReOrderPoint.HasValue ? ReOrderPoint.Value.ToString("#,##0.##", CultureInfo.InvariantCulture) : string.Empty;
+    public string UnitPriceInput => UnitPrice.HasValue ? UnitPrice.Value.ToString("0", CultureInfo.InvariantCulture) : string.Empty;
+    public string ReOrderPointInput => ReOrderPoint.HasValue ? ReOrderPoint.Value.ToString("0", CultureInfo.InvariantCulture) : string.Empty;
+    public string UnitPriceDisplay => UnitPrice.HasValue ? UnitPrice.Value.ToString("#,##0", CultureInfo.InvariantCulture) : string.Empty;
+    public string ReOrderPointDisplay => ReOrderPoint.HasValue ? ReOrderPoint.Value.ToString("#,##0", CultureInfo.InvariantCulture) : string.Empty;
     public string CreatedDateDisplay
     {
         get

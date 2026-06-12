@@ -1020,10 +1020,7 @@ async function downloadPurchaseOrderPdf(reportUrl, fileName) {
             return '0';
         }
 
-        return number.toLocaleString('en-US', {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2
-        });
+        return Math.round(number).toLocaleString('en-US');
     }
 
     function buildViewDetailRequest(page = 1) {

@@ -339,7 +339,7 @@ internal static class PurchaseRequisitionPdfReport
 
     private static string FormatQuantity(decimal value)
     {
-        return value.ToString("#,##0.##", CultureInfo.InvariantCulture);
+        return value.ToString("#,##0", CultureInfo.InvariantCulture);
     }
 
     private static string FormatAmount(decimal value)

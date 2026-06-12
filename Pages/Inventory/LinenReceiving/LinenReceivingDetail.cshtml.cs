@@ -410,15 +410,23 @@ ORDER BY DeliveryID DESC;", conn);
 
         var keyword = (term ?? string.Empty).Trim();
         var sql = @"
-SELECT TOP (100) DeliveryID, Des
-FROM dbo.LN_DeliveryMT
-WHERE (@CurrentDeliveryID IS NOT NULL AND DeliveryID = @CurrentDeliveryID)
+WITH ReceivedDelivery AS
+(
+    SELECT dt.SendID
+    FROM dbo.LN_ReceiveDT dt
+    WHERE dt.SendID IS NOT NULL
+    GROUP BY dt.SendID
+)
+SELECT TOP (100) de.DeliveryID, de.Des
+FROM dbo.LN_DeliveryMT de
+LEFT JOIN ReceivedDelivery rd ON rd.SendID = de.DeliveryID
+WHERE (@CurrentDeliveryID IS NOT NULL AND de.DeliveryID = @CurrentDeliveryID)
    OR (
-       (FullReceive = 0 OR FullReceive IS NULL)
-       AND (@SearchText = '' OR Des LIKE @SearchPattern OR CONVERT(varchar(20), DeliveryID) LIKE @SearchPattern)
+       rd.SendID IS NULL
+       AND (@SearchText = '' OR de.Des LIKE @SearchPattern OR CONVERT(varchar(20), de.DeliveryID) LIKE @SearchPattern)
    )
-ORDER BY CASE WHEN DeliveryID = @CurrentDeliveryID THEN 0 ELSE 1 END,
-         DeliveryID DESC;";
+ORDER BY CASE WHEN de.DeliveryID = @CurrentDeliveryID THEN 0 ELSE 1 END,
+         de.DeliveryID DESC;";
 
         using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.Add("@CurrentDeliveryID", SqlDbType.Int).Value = currentDeliveryId.HasValue ? currentDeliveryId.Value : (object)DBNull.Value;

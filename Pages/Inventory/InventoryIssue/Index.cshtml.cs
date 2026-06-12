@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
@@ -44,7 +44,7 @@ public class IndexModel : BasePageModel
         return Page();
     }
 
-    public IActionResult OnGetSearchDetail(string? keyword, int pageNumber = 1, int pageSize = 10)
+    public IActionResult OnGetSearchDetail(string? keyword, DateTime? fromDate, DateTime? toDate, int pageNumber = 1, int pageSize = 10)
     {
         PagePerm = GetUserPermissions();
         if (!PagePerm.HasPermission(PermissionViewList))
@@ -59,13 +59,17 @@ public class IndexModel : BasePageModel
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
 
-        var where = @" WHERE h.FlowType = 1
-AND (@KPGroupId IS NULL OR h.KPGroup = @KPGroupId)
+var where = @" WHERE h.FlowType = 1
+AND h.KPGroup = @KPGroupId
+AND (@FromDate IS NULL OR CONVERT(date,h.FlowDate) >= @FromDate)
+AND (@ToDate IS NULL OR CONVERT(date,h.FlowDate) <= @ToDate)
 AND (@Keyword IS NULL OR i.ItemCode LIKE '%' + @Keyword + '%' OR i.ItemName LIKE '%' + @Keyword + '%' OR h.FlowNo LIKE '%' + @Keyword + '%') ";
 
         using var countCmd = new SqlCommand("SELECT COUNT(1) FROM dbo.INV_ItemFlowDetail d INNER JOIN dbo.INV_ItemFlow h ON h.FlowID=d.FlowID INNER JOIN dbo.INV_ItemList i ON i.ItemID=d.ItemID " + where, conn);
         var kpGroupId = GetCurrentKpGroupId();
-        countCmd.Parameters.Add("@KPGroupId", SqlDbType.Int).Value = kpGroupId > 0 ? kpGroupId : DBNull.Value;
+        countCmd.Parameters.Add("@KPGroupId", SqlDbType.Int).Value = kpGroupId;
+        countCmd.Parameters.Add("@FromDate", SqlDbType.Date).Value = fromDate.HasValue ? fromDate.Value.Date : DBNull.Value;
+        countCmd.Parameters.Add("@ToDate", SqlDbType.Date).Value = toDate.HasValue ? toDate.Value.Date : DBNull.Value;
         countCmd.Parameters.Add("@Keyword", SqlDbType.NVarChar, 150).Value = string.IsNullOrWhiteSpace(keyword) ? DBNull.Value : keyword.Trim();
         var total = Convert.ToInt32(countCmd.ExecuteScalar() ?? 0);
 
@@ -75,7 +79,9 @@ INNER JOIN dbo.INV_ItemFlow h ON h.FlowID=d.FlowID
 INNER JOIN dbo.INV_ItemList i ON i.ItemID=d.ItemID " + where + @"
 ORDER BY h.FlowDate DESC, h.FlowID DESC
 OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn);
-        cmd.Parameters.Add("@KPGroupId", SqlDbType.Int).Value = kpGroupId > 0 ? kpGroupId : DBNull.Value;
+        cmd.Parameters.Add("@KPGroupId", SqlDbType.Int).Value = kpGroupId;
+        cmd.Parameters.Add("@FromDate", SqlDbType.Date).Value = fromDate.HasValue ? fromDate.Value.Date : DBNull.Value;
+        cmd.Parameters.Add("@ToDate", SqlDbType.Date).Value = toDate.HasValue ? toDate.Value.Date : DBNull.Value;
         cmd.Parameters.Add("@Keyword", SqlDbType.NVarChar, 150).Value = string.IsNullOrWhiteSpace(keyword) ? DBNull.Value : keyword.Trim();
         cmd.Parameters.Add("@Offset", SqlDbType.Int).Value = (pageNumber - 1) * pageSize;
         cmd.Parameters.Add("@PageSize", SqlDbType.Int).Value = pageSize;
@@ -298,22 +304,41 @@ WHERE POID = @POID", conn, tran))
     private void LoadLookups()
     {
         IssueTypes = LoadListFromSql("SELECT FlowSubTypeID, FlowSubTypeName FROM dbo.INV_FlowSubType WHERE FlowTypeID=1 ORDER BY FlowSubTypeName", "FlowSubTypeID", "FlowSubTypeName", true);
-        Statuses = LoadListFromSql(@"SELECT CAST(StatusID AS varchar(20)) AS Value, StatusName AS Text FROM dbo.INV_ItemFlowIssueStatus
-UNION
-SELECT CAST(ID AS varchar(20)) AS Value, Name AS Text FROM dbo.INV_ItemReturnStatus
-ORDER BY Text", "Value", "Text", true);
+        Statuses = LoadStatusFilterOptions();
         Stores = BuildStoreTreeOptions();
+    }
+
+    private List<SelectListItem> LoadStatusFilterOptions()
+    {
+        var issueGroup = new SelectListGroup { Name = "Issue Status" };
+        var returnGroup = new SelectListGroup { Name = "Return Status" };
+        var results = new List<SelectListItem> { new("--- All ---", string.Empty) };
+
+        results.AddRange(LoadListFromSql("SELECT CAST(StatusID AS varchar(20)) AS Value, StatusName AS Text FROM dbo.INV_ItemFlowIssueStatus ORDER BY StatusID", "Value", "Text").Select(x =>
+        {
+            x.Group = issueGroup;
+            return x;
+        }));
+        results.AddRange(LoadListFromSql("SELECT CAST(ID AS varchar(20)) AS Value, Name AS Text FROM dbo.INV_ItemReturnStatus ORDER BY ID", "Value", "Text").Select(x =>
+        {
+            x.Group = returnGroup;
+            return x;
+        }));
+        return results;
     }
 
     private List<SelectListItem> BuildStoreTreeOptions()
     {
         var results = new List<SelectListItem> { new("--- Select ---", "") };
+        var currentKpGroupId = GetCurrentKpGroupId();
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
         using var cmd = new SqlCommand(@"SELECT g.KPGroupID, g.KPGroupName, s.StoreID, s.StoreName
 FROM dbo.INV_KPGroup g
 INNER JOIN dbo.INV_StoreList s ON s.DeptID = g.KPGroupID
+WHERE s.DeptID = @CurrentKpGroupID
 ORDER BY g.KPGroupName, s.StoreName", conn);
+        cmd.Parameters.Add("@CurrentKpGroupID", SqlDbType.Int).Value = currentKpGroupId > 0 ? currentKpGroupId : DBNull.Value;
         using var rd = cmd.ExecuteReader();
         var groupMap = new Dictionary<int, SelectListGroup>();
         while (rd.Read())
@@ -345,7 +370,7 @@ ORDER BY g.KPGroupName, s.StoreName", conn);
 FROM dbo.INV_ItemFlow h
 LEFT JOIN dbo.PC_PO po ON po.POID = h.POID
 WHERE h.FlowType = 1
-AND (@KPGroupId IS NULL OR h.KPGroup = @KPGroupId)
+AND h.KPGroup = @KPGroupId
 AND h.FlowDate >= @FromDate AND h.FlowDate < DATEADD(DAY,1,@ToDate)
 AND (@FlowNo IS NULL OR h.FlowNo LIKE '%' + @FlowNo + '%')
 AND (@PoNo IS NULL OR po.PONo LIKE '%' + @PoNo + '%')
@@ -366,7 +391,7 @@ LEFT JOIN dbo.PC_PO po ON po.POID = h.POID
 LEFT JOIN dbo.INV_FlowSubType fst ON fst.FlowSubTypeID = h.FlowSubType AND fst.FlowTypeID = 1
 LEFT JOIN dbo.INV_ItemFlowIssueStatus rs ON rs.StatusID = h.StatusID
 WHERE h.FlowType = 1
-AND (@KPGroupId IS NULL OR h.KPGroup = @KPGroupId)
+AND h.KPGroup = @KPGroupId
 AND h.FlowDate >= @FromDate AND h.FlowDate < DATEADD(DAY,1,@ToDate)
 AND (@FlowNo IS NULL OR h.FlowNo LIKE '%' + @FlowNo + '%')
 AND (@PoNo IS NULL OR po.PONo LIKE '%' + @PoNo + '%')
@@ -400,7 +425,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn);
     private void BindFilterParams(SqlCommand cmd)
     {
         var kpGroupId = GetCurrentKpGroupId();
-        cmd.Parameters.Add("@KPGroupId", SqlDbType.Int).Value = kpGroupId > 0 ? kpGroupId : DBNull.Value;
+        cmd.Parameters.Add("@KPGroupId", SqlDbType.Int).Value = kpGroupId;
         cmd.Parameters.Add("@FromDate", SqlDbType.Date).Value = Filter.FromDate!.Value.Date;
         cmd.Parameters.Add("@ToDate", SqlDbType.Date).Value = Filter.ToDate!.Value.Date;
         cmd.Parameters.Add("@FlowNo", SqlDbType.NVarChar, 50).Value = string.IsNullOrWhiteSpace(Filter.FlowNo) ? DBNull.Value : Filter.FlowNo.Trim();
@@ -420,7 +445,36 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn);
 
     private int GetCurrentRoleId() => int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
     private bool IsAdminRole() => User.FindFirst("IsAdminRole")?.Value == "True";
-    private int GetCurrentKpGroupId() => int.Parse(User.FindFirst("KPGroupID")?.Value ?? "0");
+    private int GetCurrentKpGroupId()
+    {
+        if (int.TryParse(User.FindFirst("KPGroupID")?.Value, out var kpGroupFromClaim) && kpGroupFromClaim > 0)
+        {
+            return kpGroupFromClaim;
+        }
+
+        var employeeId = int.Parse(User.FindFirst("EmployeeID")?.Value ?? User.FindFirst("EmpID")?.Value ?? "0");
+        using var connEmployee = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmdEmployee = new SqlCommand("SELECT TOP 1 StoreGR FROM dbo.MS_Employee WHERE EmployeeID=@EmployeeID", connEmployee);
+        cmdEmployee.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId;
+        connEmployee.Open();
+        var kpGroupFromEmployee = Convert.ToInt32(cmdEmployee.ExecuteScalar() ?? 0);
+        if (kpGroupFromEmployee > 0) return kpGroupFromEmployee;
+
+        var employeeCode = User.FindFirst("EmployeeCode")?.Value;
+        if (!string.IsNullOrWhiteSpace(employeeCode))
+        {
+            using var cmdEmployeeCode = new SqlCommand("SELECT TOP 1 StoreGR FROM dbo.MS_Employee WHERE EmployeeCode=@EmployeeCode", connEmployee);
+            cmdEmployeeCode.Parameters.Add("@EmployeeCode", SqlDbType.VarChar, 50).Value = employeeCode.Trim();
+            var kpGroupFromCode = Convert.ToInt32(cmdEmployeeCode.ExecuteScalar() ?? 0);
+            if (kpGroupFromCode > 0) return kpGroupFromCode;
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand("SELECT TOP 1 KPGroupID FROM dbo.INV_KPGroupMember WHERE EmployeeID=@EmployeeID ORDER BY KPGroupID", conn);
+        cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId;
+        conn.Open();
+        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
+    }
     private PagePermissions GetUserPermissions() => IsAdminRole() ? new PagePermissions { AllowedNos = Enumerable.Range(1, 20).ToList() } : new PagePermissions { AllowedNos = _permissionService.GetPermissionsForPage(GetCurrentRoleId(), FunctionId) };
 }
 

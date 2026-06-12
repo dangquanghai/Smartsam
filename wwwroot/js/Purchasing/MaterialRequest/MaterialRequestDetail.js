@@ -861,8 +861,7 @@ function normalizeEditableNumeric(value) {
 
     const parsed = Number.parseFloat(text);
     if (!Number.isFinite(parsed)) return text;
-    if (Number.isInteger(parsed)) return parsed.toString();
-    return parsed.toFixed(2).replace(/\.?0+$/, '');
+    return Math.round(parsed).toLocaleString('en-US');
 }
 
 function normalizeEditableNumericInput(value) {
@@ -1240,8 +1239,7 @@ function toggleLookupValidation(forceShow) {
 function formatLookupNumber(value) {
     const parsed = Number.parseFloat((value || 0).toString());
     if (!Number.isFinite(parsed)) return '0';
-    if (Number.isInteger(parsed)) return parsed.toString();
-    return parsed.toFixed(2).replace(/\.?0+$/, '');
+    return Math.round(parsed).toLocaleString('en-US');
 }
 
 function searchItems(keyword, checkBalanceInStore) {

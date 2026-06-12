@@ -35,12 +35,7 @@
 
     function formatNumber(value) {
         const number = toNumber(value);
-        const negative = number < 0;
-        const absolute = Math.abs(number);
-        const parts = absolute.toFixed(3).split(".");
-        const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-        const decimalPart = parts[1].replace(/0+$/, "");
-        return `${negative ? "-" : ""}${integerPart}${decimalPart ? `.${decimalPart}` : ""}`;
+        return Math.round(number).toLocaleString("en-US");
     }
 
     function sanitizeNonNegativeDecimal(value) {

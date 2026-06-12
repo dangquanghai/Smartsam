@@ -665,10 +665,7 @@
             return '0';
         }
 
-        return numberValue.toLocaleString('en-US', {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2
-        });
+        return Math.round(numberValue).toLocaleString('en-US');
     }
 
     function encodeHtml(value) {
