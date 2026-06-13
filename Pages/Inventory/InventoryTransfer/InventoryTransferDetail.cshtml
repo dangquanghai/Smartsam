@@ -226,6 +226,9 @@ $(function(){
 
     function calc($row){ const qty=parseNumber($row.find('.act-qty').val()); const price=parseNumber($row.find('.price').val()); $row.find('.amount').val(formatNumber(qty*price)); }
     function reindex(){ $('#detailRows tr').not('.empty-row').each(function(i){ $(this).find('input').each(function(){ if(this.name){ this.name=this.name.replace(/Details\[\d+\]/,`Details[${i}]`); } }); }); }
+    function getExistingDetailItemIds(){
+        return $('#detailRows .item-select').map(function(){ return Number($(this).val() || 0); }).get().filter(x => x > 0);
+    }
     function initSelect2(){ if(!$.fn.select2) return; $("select.select2").each(function(){ const el=$(this); if(el.data("select2")) el.select2("destroy"); el.select2({ width:"100%" }); }); }
     function showMessageModal(message){ $("#transferMessageText").text(message || ""); $("#transferMessageModal").modal("show"); }
     function clearTransferAddValidation(){
@@ -269,8 +272,9 @@ $(function(){
         $('#TransferAddDetailModal').modal('hide');
     }
     $('#TransferAddDetailModal').on('show.bs.modal', function(){
+        const existingItemIds = new Set(getExistingDetailItemIds());
         let options='<option value="">--- Select ---</option>';
-        items.forEach(x=>options+=`<option value="${x.ItemId}" data-unit="${x.Unit||''}" data-price="${x.UnitPrice||0}" class="tcvn3-font">${x.ItemCode} - ${x.ItemName}</option>`);
+        items.filter(x => !existingItemIds.has(Number(x.ItemId))).forEach(x=>options+=`<option value="${x.ItemId}" data-unit="${x.Unit||''}" data-price="${x.UnitPrice||0}" class="tcvn3-font">${x.ItemCode} - ${x.ItemName}</option>`);
         $('#transferAddItemId').html(options);
         $('#transferAddUnit').val('');
         $('#transferAddDocQty').val('0');
@@ -305,7 +309,6 @@ $(function(){
 });
 </script>
 }
-
 
 
 
