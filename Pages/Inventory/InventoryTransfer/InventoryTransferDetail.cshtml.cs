@@ -27,12 +27,14 @@ public class InventoryTransferDetailModel : BasePageModel
     public string Mode { get; set; } = "add";
     public string Message { get; set; } = string.Empty;
     public string MessageType { get; set; } = "info";
+    public long? Id { get; set; }
     public bool IsAddMode => Mode == "add";
     public bool IsViewMode => Mode == "view";
 
     public IActionResult OnGet(long? id, string? mode)
     {
         PagePerm = GetUserPermissions();
+        Id = id;
         Mode = string.IsNullOrWhiteSpace(mode) ? "view" : mode.Trim().ToLowerInvariant();
         if (id.HasValue && Mode == "view" && !PagePerm.HasPermission(PermissionViewDetail)) return Redirect("/");
         if (!id.HasValue && !PagePerm.HasPermission(PermissionAdd)) return Redirect("/");
@@ -130,11 +132,21 @@ public class InventoryTransferDetailModel : BasePageModel
         try
         {
             long flowId;
+            Header.FlowNo = Header.FlowNo?.Trim() ?? string.Empty;
             if (!id.HasValue || id.Value <= 0)
             {
-                Header.FlowNo = GenerateNextVoucherNo(conn, tran);
-                using var cmd = new SqlCommand(@"INSERT INTO dbo.INV_ItemFlow(FlowType,KPGroup,OperatorID,FlowNo,FlowDate,FromStore,ToStore,According)
-VALUES(3,@KPGroup,@OperatorId,@FlowNo,@FlowDate,@FromStore,@ToStore,@According);
+                if (string.IsNullOrWhiteSpace(Header.FlowNo)) Header.FlowNo = GenerateNextVoucherNo(conn, tran);
+                if (FlowNoExists(conn, tran, Header.FlowNo, null))
+                {
+                    ModelState.AddModelError("Header.FlowNo", $"Doc No. '{Header.FlowNo}' already exists.");
+                    tran.Rollback();
+                    Message = $"Doc No. '{Header.FlowNo}' already exists.";
+                    MessageType = "error";
+                    return Page();
+                }
+
+                using var cmd = new SqlCommand(@"INSERT INTO dbo.INV_ItemFlow(FlowType,KPGroup,OperatorID,FlowNo,FlowDate,FromStore,ToStore,According,Reason)
+VALUES(3,@KPGroup,@OperatorId,@FlowNo,@FlowDate,@FromStore,@ToStore,@According,@Reason);
 SELECT CAST(SCOPE_IDENTITY() AS bigint);", conn, tran);
                 BindHeader(cmd);
                 flowId = Convert.ToInt64(cmd.ExecuteScalar() ?? 0);
@@ -143,8 +155,17 @@ SELECT CAST(SCOPE_IDENTITY() AS bigint);", conn, tran);
             else
             {
                 flowId = id.Value;
+                if (FlowNoExists(conn, tran, Header.FlowNo, flowId))
+                {
+                    ModelState.AddModelError("Header.FlowNo", $"Doc No. '{Header.FlowNo}' already exists.");
+                    tran.Rollback();
+                    Message = $"Doc No. '{Header.FlowNo}' already exists.";
+                    MessageType = "error";
+                    return Page();
+                }
+
                 using var upd = new SqlCommand(@"UPDATE dbo.INV_ItemFlow
-SET FlowDate=@FlowDate, FromStore=@FromStore, ToStore=@ToStore, According=@According
+SET FlowNo=@FlowNo, FlowDate=@FlowDate, FromStore=@FromStore, ToStore=@ToStore, According=@According, Reason=@Reason
 WHERE FlowID=@FlowID AND FlowType=3", conn, tran);
                 BindHeader(upd);
                 upd.Parameters.Add("@FlowID", SqlDbType.BigInt).Value = flowId;
@@ -193,13 +214,29 @@ FROM dbo.INV_ItemList i WHERE i.ItemID=@ItemID", conn, tran);
         var kpGroupId = GetCurrentKpGroupId();
         var storeFilterKpGroupId = GetStoreFilterKpGroupId();
 
-        using (var cmd = new SqlCommand("SELECT StoreID, StoreName FROM dbo.INV_StoreList WHERE StoreID<>0 AND (@KPGroupId IS NULL OR DeptID=@KPGroupId) ORDER BY StoreName", conn))
+        using (var cmd = new SqlCommand(@"SELECT g.KPGroupID, g.KPGroupName, s.StoreID, s.StoreName
+FROM dbo.INV_KPGroup g
+INNER JOIN dbo.INV_StoreList s ON s.DeptID = g.KPGroupID
+WHERE s.StoreID <> 0 AND (@KPGroupId IS NULL OR s.DeptID = @KPGroupId)
+ORDER BY g.KPGroupName, s.StoreName", conn))
         {
             cmd.Parameters.Add("@KPGroupId", SqlDbType.Int).Value = storeFilterKpGroupId.HasValue ? storeFilterKpGroupId.Value : DBNull.Value;
             using var rd = cmd.ExecuteReader();
+            var groupMap = new Dictionary<int, SelectListGroup>();
             while (rd.Read())
             {
-                Stores.Add(new SelectListItem(Convert.ToString(rd["StoreName"]) ?? string.Empty, Convert.ToString(rd["StoreID"])));
+                var groupId = Convert.ToInt32(rd["KPGroupID"]);
+                if (!groupMap.ContainsKey(groupId))
+                {
+                    groupMap[groupId] = new SelectListGroup { Name = Convert.ToString(rd["KPGroupName"]) ?? string.Empty };
+                }
+
+                Stores.Add(new SelectListItem
+                {
+                    Value = Convert.ToString(rd["StoreID"]),
+                    Text = Convert.ToString(rd["StoreName"]) ?? string.Empty,
+                    Group = groupMap[groupId]
+                });
             }
         }
 
@@ -228,7 +265,7 @@ ORDER BY COALESCE(k.ItemCode,i.ItemCode)", conn))
     {
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
-        using (var cmd = new SqlCommand("SELECT FlowNo, FlowDate, FromStore, ToStore, According FROM dbo.INV_ItemFlow WHERE FlowID=@FlowID AND FlowType=3", conn))
+        using (var cmd = new SqlCommand("SELECT FlowNo, FlowDate, FromStore, ToStore, According, Reason FROM dbo.INV_ItemFlow WHERE FlowID=@FlowID AND FlowType=3", conn))
         {
             cmd.Parameters.Add("@FlowID", SqlDbType.BigInt).Value = id;
             using var rd = cmd.ExecuteReader();
@@ -239,6 +276,7 @@ ORDER BY COALESCE(k.ItemCode,i.ItemCode)", conn))
                 Header.FromStoreId = Convert.ToInt32(rd["FromStore"] == DBNull.Value ? 0 : rd["FromStore"]);
                 Header.ToStoreId = Convert.ToInt32(rd["ToStore"] == DBNull.Value ? 0 : rd["ToStore"]);
                 Header.According = Convert.ToString(rd["According"]) ?? string.Empty;
+                Header.Reason = Convert.ToString(rd["Reason"]) ?? string.Empty;
             }
         }
 
@@ -273,6 +311,7 @@ ORDER BY COALESCE(k.ItemCode,i.ItemCode)", conn))
         cmd.Parameters.Add("@FromStore", SqlDbType.Int).Value = (object?)Header.FromStoreId ?? DBNull.Value;
         cmd.Parameters.Add("@ToStore", SqlDbType.Int).Value = (object?)Header.ToStoreId ?? DBNull.Value;
         cmd.Parameters.Add("@According", SqlDbType.NVarChar, 250).Value = string.IsNullOrWhiteSpace(Header.According) ? DBNull.Value : Header.According.Trim();
+        cmd.Parameters.Add("@Reason", SqlDbType.NVarChar, 250).Value = string.IsNullOrWhiteSpace(Header.Reason) ? DBNull.Value : Header.Reason.Trim();
     }
 
     private string GetNextVoucherNo()
@@ -310,6 +349,18 @@ WHERE FlowType = 3
         return $"{prefix}-{next:000}";
     }
 
+    private static bool FlowNoExists(SqlConnection conn, SqlTransaction tran, string flowNo, long? excludeFlowId)
+    {
+        using var cmd = new SqlCommand(@"SELECT COUNT(1)
+FROM dbo.INV_ItemFlow WITH (UPDLOCK, HOLDLOCK)
+WHERE FlowType = 3
+  AND FlowNo = @FlowNo
+  AND (@ExcludeFlowId IS NULL OR FlowID <> @ExcludeFlowId)", conn, tran);
+        cmd.Parameters.Add("@FlowNo", SqlDbType.NVarChar, 50).Value = flowNo.Trim();
+        cmd.Parameters.Add("@ExcludeFlowId", SqlDbType.BigInt).Value = excludeFlowId.HasValue ? excludeFlowId.Value : DBNull.Value;
+        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0) > 0;
+    }
+
     private static string GetTransferSuffixByKpGroup(int kpGroupId)
     {
         return kpGroupId switch
@@ -338,7 +389,6 @@ WHERE h.FlowID=@FlowID AND h.FlowType=3", conn);
         using var rd = cmd.ExecuteReader();
         if (!rd.Read()) return null;
 
-        var operatorId = rd["OperatorID"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["OperatorID"]);
         var report = new InventoryTransferReportModel
         {
             FlowNo = Convert.ToString(rd["FlowNo"]) ?? string.Empty,
@@ -349,8 +399,6 @@ WHERE h.FlowID=@FlowID AND h.FlowType=3", conn);
             OperatorName = Convert.ToString(rd["OperatorName"]) ?? string.Empty
         };
         rd.Close();
-
-        report.OperatorSignature = LoadEmployeeSignature(conn, operatorId);
 
         using var detailCmd = new SqlCommand(@"SELECT ISNULL(i.ItemCode,'') AS ItemCode,ISNULL(i.ItemName,'') AS ItemName,ISNULL(dt.Unit,'') AS Unit,
        ISNULL(dt.Doc_Qty,0) AS DocQty,ISNULL(dt.Act_Qty,0) AS ActQty,ISNULL(dt.UnitPrice,0) AS UnitPrice,ISNULL(dt.Amount,0) AS Amount
@@ -377,28 +425,6 @@ ORDER BY i.ItemCode", conn);
         return report;
     }
 
-    private byte[]? LoadEmployeeSignature(SqlConnection conn, int? employeeId)
-    {
-        if (!employeeId.HasValue || employeeId.Value <= 0) return null;
-        using var cmd = new SqlCommand("SELECT TOP 1 ISNULL(UrlNomalSign,'') FROM dbo.MS_Employee WHERE EmployeeID=@EmployeeID", conn);
-        cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId.Value;
-        var fileName = Convert.ToString(cmd.ExecuteScalar())?.Trim();
-        if (string.IsNullOrWhiteSpace(fileName)) return null;
-        var path = ResolveEmployeeSignaturePath(fileName);
-        return string.IsNullOrWhiteSpace(path) || !System.IO.File.Exists(path) ? null : System.IO.File.ReadAllBytes(path);
-    }
-
-    private string ResolveEmployeeSignaturePath(string fileName)
-    {
-        var cleanedFileName = Path.GetFileName(fileName.Trim());
-        if (string.IsNullOrWhiteSpace(cleanedFileName)) return string.Empty;
-        var basePath = _config.GetValue<string>("FileUploads:BasePath");
-        if (string.IsNullOrWhiteSpace(basePath)) return string.Empty;
-        var rootPath = Path.IsPathRooted(basePath) ? basePath : Path.Combine(Directory.GetCurrentDirectory(), basePath);
-        var functionPath = _config.GetValue<string>("FileUploads:Funtions:18") ?? "Admin/Employee";
-        var relativeSegments = functionPath.Replace('\\', '/').Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
-        return Path.Combine(new[] { rootPath }.Concat(relativeSegments).Concat(new[] { cleanedFileName }).ToArray());
-    }
     private void ValidateStorePermissions()
     {
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -414,6 +440,7 @@ ORDER BY i.ItemCode", conn);
     {
         if (storeId <= 0) return false;
         if (IsAdminRole()) return true;
+        if (GetCurrentKpGroupId() == 1) return true;
         using var cmd = new SqlCommand("SELECT COUNT(1) FROM dbo.INV_StoreList WHERE StoreID=@StoreID AND DeptID=@KPGroupID", conn);
         cmd.Parameters.Add("@StoreID", SqlDbType.Int).Value = storeId;
         cmd.Parameters.Add("@KPGroupID", SqlDbType.Int).Value = GetCurrentKpGroupId();
@@ -449,17 +476,20 @@ ORDER BY i.ItemCode", conn);
                 detail.Unit = Convert.ToString(unitCmd.ExecuteScalar()) ?? string.Empty;
             }
 
-            using (var stockCmd = new SqlCommand("EXEC dbo.sp_CheckStockItem @FlowDate, @FromStore, @ItemID", conn))
+            if (detail.ActQty > 0)
             {
-                stockCmd.Parameters.Add("@FlowDate", SqlDbType.Date).Value = Header.FlowDate.Date;
-                stockCmd.Parameters.Add("@FromStore", SqlDbType.Int).Value = Header.FromStoreId ?? 0;
-                stockCmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = detail.ItemId;
-                var stockObj = stockCmd.ExecuteScalar();
-                var stockQty = Convert.ToDecimal(stockObj == null || stockObj == DBNull.Value ? 0m : stockObj);
-                var totalActQty = Details.Where(x => x.ItemId == detail.ItemId).Sum(x => x.ActQty);
-                if (totalActQty > stockQty)
+                using (var stockCmd = new SqlCommand("EXEC dbo.sp_CheckStockItem @FlowDate, @FromStore, @ItemID", conn))
                 {
-                    ModelState.AddModelError(string.Empty, $"Item '{GetItemDisplayName(detail.ItemId)}' total transfer quantity ({totalActQty:N0}) exceeds stock ({stockQty:N0}).");
+                    stockCmd.Parameters.Add("@FlowDate", SqlDbType.Date).Value = Header.FlowDate.Date;
+                    stockCmd.Parameters.Add("@FromStore", SqlDbType.Int).Value = Header.FromStoreId ?? 0;
+                    stockCmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = detail.ItemId;
+                    var stockObj = stockCmd.ExecuteScalar();
+                    var stockQty = Convert.ToDecimal(stockObj == null || stockObj == DBNull.Value ? 0m : stockObj);
+                    var totalActQty = Details.Where(x => x.ItemId == detail.ItemId).Sum(x => x.ActQty);
+                    if (totalActQty > stockQty)
+                    {
+                        ModelState.AddModelError(string.Empty, $"Item '{GetItemDisplayName(detail.ItemId)}' total transfer quantity ({totalActQty:N0}) exceeds stock ({stockQty:N0}).");
+                    }
                 }
             }
 
@@ -519,11 +549,45 @@ WHERE i.ItemID = @ItemID", conn);
         return itemId.ToString();
     }
 
-    private int GetCurrentKpGroupId() => int.Parse(User.FindFirst("KPGroupID")?.Value ?? "0");
+    private int GetCurrentKpGroupId()
+    {
+        if (int.TryParse(User.FindFirst("KPGroupID")?.Value, out var kpGroupFromClaim) && kpGroupFromClaim > 0)
+        {
+            return kpGroupFromClaim;
+        }
+
+        var employeeId = int.Parse(User.FindFirst("EmployeeID")?.Value ?? User.FindFirst("EmpID")?.Value ?? "0");
+        using var connEmployee = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmdEmployee = new SqlCommand("SELECT TOP 1 StoreGR FROM dbo.MS_Employee WHERE EmployeeID=@EmployeeID", connEmployee);
+        cmdEmployee.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId;
+        connEmployee.Open();
+        var kpGroupFromEmployee = Convert.ToInt32(cmdEmployee.ExecuteScalar() ?? 0);
+        if (kpGroupFromEmployee > 0) return kpGroupFromEmployee;
+
+        var employeeCode = User.FindFirst("EmployeeCode")?.Value;
+        if (!string.IsNullOrWhiteSpace(employeeCode))
+        {
+            using var cmdEmployeeCode = new SqlCommand("SELECT TOP 1 StoreGR FROM dbo.MS_Employee WHERE EmployeeCode=@EmployeeCode", connEmployee);
+            cmdEmployeeCode.Parameters.Add("@EmployeeCode", SqlDbType.VarChar, 50).Value = employeeCode.Trim();
+            var kpGroupFromCode = Convert.ToInt32(cmdEmployeeCode.ExecuteScalar() ?? 0);
+            if (kpGroupFromCode > 0) return kpGroupFromCode;
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = new SqlCommand("SELECT TOP 1 KPGroupID FROM dbo.INV_KPGroupMember WHERE EmployeeID=@EmployeeID ORDER BY KPGroupID", conn);
+        cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId;
+        conn.Open();
+        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
+    }
     private int GetCurrentEmployeeId() => int.Parse(User.FindFirst("EmployeeID")?.Value ?? "0");
     private int GetCurrentRoleId() => int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
     private bool IsAdminRole() => User.FindFirst("IsAdminRole")?.Value == "True";
-    private int? GetStoreFilterKpGroupId() => IsAdminRole() ? null : GetCurrentKpGroupId();
+    private int? GetStoreFilterKpGroupId()
+    {
+        if (IsAdminRole()) return null;
+        var kpGroupId = GetCurrentKpGroupId();
+        return kpGroupId == 1 ? null : kpGroupId;
+    }
     private PagePermissions GetUserPermissions() => IsAdminRole() ? new PagePermissions { AllowedNos = Enumerable.Range(1, 20).ToList() } : new PagePermissions { AllowedNos = _permissionService.GetPermissionsForPage(GetCurrentRoleId(), FunctionId) };
 }
 
@@ -537,6 +601,7 @@ public class TransferHeader
     [System.ComponentModel.DataAnnotations.Range(1, int.MaxValue, ErrorMessage = "Please select enter to St.House.")]
     public int? ToStoreId { get; set; }
     public string? According { get; set; }
+    public string? Reason { get; set; }
 }
 
 public class TransferDetailRow

@@ -20,7 +20,6 @@ internal static class InventoryTransferPdfReport
                 {
                     column.Item().Element(c => ComposeHeader(c, model));
                     column.Item().PaddingTop(12).Element(c => ComposeDetails(c, model));
-                    column.Item().PaddingTop(24).Element(c => ComposeSignatures(c, model));
                 });
             });
         }).GeneratePdf();
@@ -40,8 +39,8 @@ internal static class InventoryTransferPdfReport
             table.Cell().Text(model.FlowNo).Bold();
             table.Cell().AlignCenter().Column(c =>
             {
-                c.Item().AlignCenter().Text("ITEM TRANSFER VOUCHER").FontFamily("Lato").FontSize(16).Bold();
-                c.Item().PaddingTop(2).AlignCenter().Text("PHI?U CHUY?N KHO").FontFamily("Lato").FontSize(16).Bold();
+                c.Item().AlignCenter().Text("ITEM TRANSFER VOUCHER").FontFamily("Times New Roman").FontSize(16).Bold();
+                c.Item().PaddingTop(2).AlignCenter().Text("PHIẾU CHUYỂN KHO").FontFamily("Times New Roman").FontSize(16).Bold();
             });
             table.Cell().AlignRight().Text(model.FlowDateText).Bold();
             table.Cell().PaddingTop(8).Text($"Issue House: {model.FromStoreName}");
@@ -96,33 +95,6 @@ internal static class InventoryTransferPdfReport
             }
         });
     }
-
-    private static void ComposeSignatures(IContainer container, InventoryTransferReportModel model)
-    {
-        container.Row(row =>
-        {
-            row.Spacing(24);
-            row.RelativeItem().Element(c => ComposeSignatureBlock(c, "Issued by", model.OperatorSignature));
-            row.RelativeItem().Element(c => ComposeSignatureBlock(c, "Store Man", null));
-            row.RelativeItem().Element(c => ComposeSignatureBlock(c, "Received by", null));
-        });
-    }
-
-    private static void ComposeSignatureBlock(IContainer container, string title, byte[]? signature)
-    {
-        container.AlignCenter().Width(250).Column(column =>
-        {
-            column.Item().Height(22).AlignCenter().AlignMiddle().Text(title).Bold();
-            column.Item().Height(70).AlignCenter().AlignMiddle().Element(c => DrawSignature(c, signature));
-            column.Item().Height(22);
-        });
-    }
-
-    private static void DrawSignature(IContainer container, byte[]? signature)
-    {
-        if (signature is not { Length: > 0 }) return;
-        container.AlignCenter().AlignMiddle().MaxWidth(210).Height(62).Image(signature).FitArea();
-    }
 }
 
 internal sealed class InventoryTransferReportModel
@@ -133,7 +105,6 @@ internal sealed class InventoryTransferReportModel
     public string ToStoreName { get; set; } = string.Empty;
     public string According { get; set; } = string.Empty;
     public string OperatorName { get; set; } = string.Empty;
-    public byte[]? OperatorSignature { get; set; }
     public List<InventoryTransferReportItem> Items { get; set; } = new();
 }
 

@@ -44,8 +44,8 @@
                         <input type="hidden" name="PageSize" value="@Model.Filter.PageSize" />
                         <div class="form-group mb-2"><label>Doc No.</label><input asp-for="Filter.FlowNo" class="form-control form-control-sm vni-font" /></div>
                         <div class="form-group mb-2"><label>According</label><input asp-for="Filter.According" class="form-control form-control-sm vni-font" /></div>
-                        <div class="form-group mb-2"><label>From</label><input asp-for="Filter.FromDate" type="date" class="form-control form-control-sm" /></div>
-                        <div class="form-group mb-2"><label>To</label><input asp-for="Filter.ToDate" type="date" class="form-control form-control-sm" /></div>
+                        <div class="form-group mb-2"><label>From</label><input id="FromDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.FromDate?.ToString("dd/MM/yyyy")" data-hidden-target="#FromDateHidden" autocomplete="off" readonly /><input id="FromDateHidden" name="Filter.FromDate" type="hidden" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" /></div>
+                        <div class="form-group mb-2"><label>To</label><input id="ToDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.ToDate?.ToString("dd/MM/yyyy")" data-hidden-target="#ToDateHidden" autocomplete="off" readonly /><input id="ToDateHidden" name="Filter.ToDate" type="hidden" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" /></div>
                         <div class="form-group mb-2"><label>Issue at St.House</label><select asp-for="Filter.FromStoreId" asp-items="Model.Stores" class="form-control form-control-sm select2 vni-font"></select></div>
                         <div class="form-group mb-2"><label>Enter to St.House</label><select asp-for="Filter.ToStoreId" asp-items="Model.Stores" class="form-control form-control-sm select2 vni-font"></select></div>
                         <button type="submit" class="btn btn-primary btn-block btn-sm border mb-2"><i class="fas fa-search"></i> Search</button>
@@ -148,6 +148,7 @@
                         @if (Model.PagePerm.HasPermission(2))
                         {
                             <button type="button" id="btnExportTransfer" class="btn btn-sm btn-primary border mx-1 my-1" disabled><i class="fas fa-file-excel"></i> Export Excel</button>
+                            <button type="button" id="btnPrintTransfer" class="btn btn-sm btn-info border mx-1 my-1" disabled><i class="fas fa-print"></i> Print</button>
                             <button type="button" class="btn btn-sm btn-action-close border mx-1 my-1" data-toggle="modal" data-target="#transferSearchDetailModal"><i class="fas fa-search-plus"></i> Search Detail</button>
                         }
                     </div>
@@ -161,6 +162,16 @@
     <div class="modal-dialog modal-dialog-centered" role="document"><div class="modal-content"><div class="modal-header bg-danger py-2"><h5 class="modal-title text-white">Confirm Delete</h5><button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button></div><div class="modal-body" id="transferDeleteConfirmText">Do you want to delete this Doc no.?</div><div class="modal-footer py-2"><button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Cancel</button><button type="button" id="btnConfirmDeleteTransfer" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i> Delete</button></div></div></div>
 </div>
 
+<div class="modal fade vni-font" id="transferReportPreviewModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog inventory-transfer-report-preview-modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2"><h5 class="modal-title">Print Preview</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
+            <div class="modal-body p-0"><iframe id="transferReportPreviewFrame" class="inventory-transfer-report-preview-frame" title="Inventory Transfer Report Preview"></iframe></div>
+            <div class="modal-footer py-2 justify-content-end"><button type="button" id="btnTransferReportOpen" class="btn btn-sm btn-primary border"><i class="fas fa-file-pdf"></i> Export</button><button type="button" id="btnTransferReportPrint" class="btn btn-sm btn-info border"><i class="fas fa-print"></i> Print</button><button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Close</button></div>
+        </div>
+    </div>
+</div>
+
 
 <div class="modal fade vni-font" id="transferSearchDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog" style="max-width: 96vw; width: 96vw;" role="document">
@@ -168,7 +179,9 @@
             <div class="modal-header py-2"><h5 class="modal-title">Search Detail</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
             <div class="modal-body">
                 <div class="form-row align-items-end mb-2">
-                    <div class="col-md-5"><label>Item Code / Item Name / Doc No.</label><input id="transferDetailKeyword" class="form-control form-control-sm vni-font" /></div>
+                    <div class="col-md-3"><label>Item Code / Item Name / Doc No.</label><input id="transferDetailKeyword" class="form-control form-control-sm vni-font" /></div>
+                    <div class="col-md-2"><label>From</label><input id="TransferDetailFromDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.FromDate?.ToString("dd/MM/yyyy")" data-hidden-target="#TransferDetailFromDateHidden" autocomplete="off" readonly /><input id="TransferDetailFromDateHidden" type="hidden" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" /></div>
+                    <div class="col-md-2"><label>To</label><input id="TransferDetailToDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.ToDate?.ToString("dd/MM/yyyy")" data-hidden-target="#TransferDetailToDateHidden" autocomplete="off" readonly /><input id="TransferDetailToDateHidden" type="hidden" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" /></div>
                     <div class="col-md-1"><button id="btnTransferDetailSearch" type="button" class="btn btn-sm btn-primary btn-block"><i class="fas fa-search"></i> Search</button></div>
                 </div>
                 <div class="table-responsive">
@@ -199,18 +212,25 @@
 </div>
 
 @section Scripts {
+<script src="~/adminlte/plugins/jquery-ui/jquery-ui.min.js" asp-append-version="true"></script>
+<script src="~/js/common/app-datepicker.js" asp-append-version="true"></script>
 <script>
 $(function(){
+    if (window.AppDatePicker) window.AppDatePicker.init(document);
     function initBackgroundSelect2(){ if(!$.fn.select2) return; $('select.select2').each(function(){ const el=$(this); const parent = el.closest('#transferSearchDetailModal').length ? $('#transferSearchDetailModal') : null; if(el.data('select2')) el.select2('destroy'); el.select2(parent ? { width:'100%', dropdownParent: parent } : { width:'100%' }); }); }
     function destroyBackgroundSelect2(){ $('select.select2').each(function(){ const el=$(this); if(el.data('select2')) el.select2('destroy'); }); }
     initBackgroundSelect2();
     setTimeout(initBackgroundSelect2, 0);
-    const transferDetailState = { page: 1, pageSize: 10, totalPages: 1, totalRecords: 0, keyword: '' };
+    const transferDetailState = { page: 1, pageSize: 10, totalPages: 1, totalRecords: 0, keyword: '', fromDate: '', toDate: '' };
     const transferDetailPageUrl = '@Url.Page("./InventoryTransferDetail")';
     const transferExportUrl = '@Url.Page("./Index", new { handler = "Export" })';
+    const transferReportUrl = '@Url.Page("./InventoryTransferDetail", new { handler = "Report" })';
+    const transferReportPreviewFrame = document.getElementById('transferReportPreviewFrame');
+    let selectedTransferReportUrl = '';
+    let selectedTransferReportPreviewUrl = '';
 
     function getSelectedRow(){ return $('.transfer-selector:checked').closest('.transfer-row'); }
-    function syncButtonState(){ const hasRow = getSelectedRow().length > 0; $('#btnDeleteTransfer,#btnExportTransfer').prop('disabled', !hasRow); }
+    function syncButtonState(){ const hasRow = getSelectedRow().length > 0; $('#btnDeleteTransfer,#btnExportTransfer,#btnPrintTransfer').prop('disabled', !hasRow); }
     $(document).on('click', '#transferTable tbody tr.transfer-row', function(e){
         if ($(e.target).closest('a').length) return;
         const $row = $(this);
@@ -227,6 +247,10 @@ $(function(){
     $('#btnDeleteTransfer').on('click', function(){ const row=getSelectedRow(); if(row.length===0) return; const flowNo=row.find('td').eq(1).text().trim(); $('#transferDeleteConfirmText').text(`Do you want to delete this Doc no. '${flowNo}' ?`); $('#deleteFlowId').val(row.data('flowid')); $('#transferDeleteConfirmModal').modal('show'); });
     $('#btnConfirmDeleteTransfer').on('click', function(){ $('#transferDeleteConfirmModal').modal('hide'); $('#transferDeleteForm').trigger('submit'); });
     $('#btnExportTransfer').on('click', function(){ const row=getSelectedRow(); if(row.length===0) return; window.open(`${transferExportUrl}&id=${row.data('flowid')}`, '_blank'); });
+    $('#btnPrintTransfer').on('click', function(){ const row=getSelectedRow(); if(row.length===0) return; const flowId=row.data('flowid'); selectedTransferReportUrl = `${transferReportUrl}&id=${flowId}`; selectedTransferReportPreviewUrl = `${transferReportUrl}&id=${flowId}&inline=true`; if(transferReportPreviewFrame) transferReportPreviewFrame.src = selectedTransferReportPreviewUrl; $('#transferReportPreviewModal').modal('show'); });
+    $('#btnTransferReportOpen').on('click', function(){ if(selectedTransferReportUrl) window.open(selectedTransferReportUrl, '_blank'); });
+    $('#btnTransferReportPrint').on('click', function(){ const frame = transferReportPreviewFrame; if(frame && frame.contentWindow) frame.contentWindow.print(); });
+    $('#transferReportPreviewModal').on('hidden.bs.modal', function(){ if(transferReportPreviewFrame) transferReportPreviewFrame.src = 'about:blank'; selectedTransferReportUrl=''; selectedTransferReportPreviewUrl=''; });
 
     function renderTransferDetailPagination(){
         const page = transferDetailState.page;
@@ -244,9 +268,11 @@ $(function(){
 
     async function loadTransferDetail(page){
         transferDetailState.keyword = $('#transferDetailKeyword').val() || '';
+        transferDetailState.fromDate = $('#TransferDetailFromDateHidden').val() || '';
+        transferDetailState.toDate = $('#TransferDetailToDateHidden').val() || '';
         transferDetailState.page = page || 1;
         transferDetailState.pageSize = Number($('#transferDetailPageSize').val() || 10);
-        const url = `?handler=SearchDetail&keyword=${encodeURIComponent(transferDetailState.keyword)}&pageNumber=${transferDetailState.page}&pageSize=${transferDetailState.pageSize}`;
+        const url = `?handler=SearchDetail&keyword=${encodeURIComponent(transferDetailState.keyword)}&fromDate=${encodeURIComponent(transferDetailState.fromDate)}&toDate=${encodeURIComponent(transferDetailState.toDate)}&pageNumber=${transferDetailState.page}&pageSize=${transferDetailState.pageSize}`;
         const response = await fetch(url);
         const data = await response.json();
         const $rows = $('#transferDetailRows').empty();
@@ -288,8 +314,16 @@ $(function(){
 
 @section Styles {
     <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/adminlte/plugins/jquery-ui/jquery-ui.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/common/app-datepicker.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Purchasing/PurchaseRequisition/index.css" asp-append-version="true" />
     <style>
         #transferTable tbody tr.transfer-row { cursor: pointer; }
+        #transferReportPreviewModal { z-index: 2050; }
+        #transferReportPreviewModal .modal-dialog { z-index: 2051; }
+        #transferReportPreviewModal .modal-content { z-index: 2052; }
+        .inventory-transfer-report-preview-modal-dialog { width: 100vw; max-width: 100vw; height: 100vh; margin: 0; }
+        .inventory-transfer-report-preview-modal-dialog .modal-content { height: 100vh; border-radius: 0; }
+        .inventory-transfer-report-preview-frame { display: block; width: 100%; height: calc(100vh - 106px); border: 0; }
     </style>
 }

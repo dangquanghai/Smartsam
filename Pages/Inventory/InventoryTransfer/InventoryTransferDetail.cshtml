@@ -15,6 +15,28 @@
 .select2-container .select2-selection__rendered,
 .select2-results__option{font-family:TCVN3, "Times New Roman", serif;}
 .required-mark{color:#ff0707;}
+.inventory-transfer-header-section .row{row-gap:10px;}
+.inventory-transfer-header-section .inventory-transfer-header-field{display:flex;align-items:center;gap:12px;margin-bottom:0;min-height:38px;}
+.inventory-transfer-header-section .inventory-transfer-header-label{flex:0 0 135px;max-width:135px;margin-bottom:0;font-weight:600;}
+.inventory-transfer-header-section .inventory-transfer-header-control-wrap{flex:1 1 auto;min-width:0;}
+.inventory-transfer-header-section .inventory-transfer-header-control-wrap .text-danger.small{display:block;margin-top:3px;}
+.inventory-transfer-header-section .select2-container{width:100% !important;}
+.inventory-transfer-add-detail-form-row{row-gap:10px;}
+.inventory-transfer-add-detail-form-row .inventory-transfer-header-field{display:flex;align-items:center;gap:12px;margin-bottom:0;min-height:38px;}
+.inventory-transfer-add-detail-form-row .inventory-transfer-header-label{flex:0 0 90px;max-width:90px;margin-bottom:0;font-weight:600;}
+.inventory-transfer-add-detail-form-row .inventory-transfer-header-control-wrap{flex:1 1 auto;min-width:0;}
+.inventory-transfer-add-detail-form-row .select2-container{width:100% !important;}
+.transfer-add-validation-summary{display:none;white-space:pre-line;}
+.transfer-add-field-error{display:none;margin-top:3px;color:#dc3545;font-size:12px;}
+.transfer-add-invalid .form-control,
+.transfer-add-invalid .select2-container--default .select2-selection--single{border-color:#dc3545 !important;}
+.transfer-add-invalid .transfer-add-field-error{display:block;}
+@@media (max-width: 767.98px){
+    .inventory-transfer-header-section .inventory-transfer-header-field{display:block;}
+    .inventory-transfer-header-section .inventory-transfer-header-label{display:block;max-width:none;flex-basis:auto;margin-bottom:4px;}
+    .inventory-transfer-add-detail-form-row .inventory-transfer-header-field{display:block;}
+    .inventory-transfer-add-detail-form-row .inventory-transfer-header-label{display:block;max-width:none;flex-basis:auto;margin-bottom:4px;}
+}
 </style>
 <section class="content vni-font inventory-received-page">
     <div class="container-fluid">
@@ -26,17 +48,61 @@
             <div class="card card-primary card-outline">
                 <div class="card-header"><h3 class="card-title">Item Transfer Detail</h3></div>
                 <div class="card-body">
-                    <div class="form-row">
-                        <div class="form-group col-md-4"><label class="prq-detail-label">Doc No.<span class="required-mark">*</span></label><input asp-for="Header.FlowNo" class="form-control form-control-sm vni-font" readonly="@readOnly" />
-                            <span asp-validation-for="Header.FlowNo" class="text-danger small"></span></div>
-                        <div class="form-group col-md-4"><label>Transfer Date</label><input asp-for="Header.FlowDate" type="date" class="form-control form-control-sm" readonly="@readOnly" /></div>
-                        <div class="form-group col-md-4"><label class="prq-detail-label">Issue at St.House<span class="required-mark">*</span></label><select asp-for="Header.FromStoreId" asp-items="Model.Stores" class="form-control form-control-sm select2 vni-font" disabled="@disabled"></select>
-                            <span asp-validation-for="Header.FromStoreId" class="text-danger small"></span></div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group col-md-4"><label class="prq-detail-label">Enter to St.House<span class="required-mark">*</span></label><select asp-for="Header.ToStoreId" asp-items="Model.Stores" class="form-control form-control-sm select2 vni-font" disabled="@disabled"></select>
-                            <span asp-validation-for="Header.ToStoreId" class="text-danger small"></span></div>
-                        <div class="form-group col-md-8"><label>According</label><input asp-for="Header.According" class="form-control form-control-sm vni-font" readonly="@readOnly" /></div>
+                    <div class="inventory-transfer-header-section mb-3">
+                        <div class="row">
+                            <div class="col-xl-4 col-md-6 col-12">
+                                <div class="inventory-transfer-header-field prq-detail-form-col">
+                                    <label class="prq-detail-label inventory-transfer-header-label">Transfer No.<span class="required-mark">*</span></label>
+                                    <div class="inventory-transfer-header-control-wrap">
+                                        <input asp-for="Header.FlowNo" class="form-control form-control-sm vni-font" readonly="@readOnly" />
+                                        <span asp-validation-for="Header.FlowNo" class="text-danger small"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-xl-4 col-md-6 col-12">
+                                <div class="inventory-transfer-header-field prq-detail-form-col">
+                                    <label class="prq-detail-label inventory-transfer-header-label">Issue at St.House<span class="required-mark">*</span></label>
+                                    <div class="inventory-transfer-header-control-wrap">
+                                        <select asp-for="Header.FromStoreId" asp-items="Model.Stores" class="form-control form-control-sm select2 vni-font" disabled="@disabled"></select>
+                                        <span asp-validation-for="Header.FromStoreId" class="text-danger small"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-xl-4 col-md-6 col-12">
+                                <div class="inventory-transfer-header-field prq-detail-form-col">
+                                    <label class="prq-detail-label inventory-transfer-header-label">According</label>
+                                    <div class="inventory-transfer-header-control-wrap">
+                                        <input asp-for="Header.According" class="form-control form-control-sm vni-font" readonly="@readOnly" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-xl-4 col-md-6 col-12">
+                                <div class="inventory-transfer-header-field prq-detail-form-col">
+                                    <label class="prq-detail-label inventory-transfer-header-label">Transfer Date</label>
+                                    <div class="inventory-transfer-header-control-wrap">
+                                        <input id="Header_FlowDateDisplay" type="text" class="form-control form-control-sm @(Model.IsViewMode ? string.Empty : "app-date-picker")" value="@Model.Header.FlowDate.ToString("dd/MM/yyyy")" data-hidden-target="#Header_FlowDate" autocomplete="off" readonly />
+                                        <input id="Header_FlowDate" name="Header.FlowDate" type="hidden" value="@Model.Header.FlowDate.ToString("yyyy-MM-dd")" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-xl-4 col-md-6 col-12">
+                                <div class="inventory-transfer-header-field prq-detail-form-col">
+                                    <label class="prq-detail-label inventory-transfer-header-label">Enter to St.House<span class="required-mark">*</span></label>
+                                    <div class="inventory-transfer-header-control-wrap">
+                                        <select asp-for="Header.ToStoreId" asp-items="Model.Stores" class="form-control form-control-sm select2 vni-font" disabled="@disabled"></select>
+                                        <span asp-validation-for="Header.ToStoreId" class="text-danger small"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-xl-4 col-md-6 col-12">
+                                <div class="inventory-transfer-header-field prq-detail-form-col">
+                                    <label class="prq-detail-label inventory-transfer-header-label">Reason</label>
+                                    <div class="inventory-transfer-header-control-wrap">
+                                        <input asp-for="Header.Reason" class="form-control form-control-sm vni-font" readonly="@readOnly" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     @if (!Model.IsViewMode)
                     {
@@ -71,6 +137,10 @@
                 </div>
                 <div class="card-footer p-2 module-action-bar prq-action-bar text-left">
                     @if (!Model.IsViewMode){<button type="submit" class="btn btn-sm btn-primary border mx-1 my-1"><i class="fas fa-save"></i> Save</button>}
+                    @if (Model.Id.HasValue && Model.Id.Value > 0)
+                    {
+                        <button type="button" id="btnPrintInventoryTransferDetail" class="btn btn-sm btn-info border mx-1 my-1"><i class="fas fa-print"></i> Print</button>
+                    }
                     <a asp-page="./Index" class="btn btn-sm btn-action-close border mx-1 my-1"><i class="fas fa-arrow-left"></i> Back to List</a>
                 </div>
             </div>
@@ -83,12 +153,13 @@
         <div class="modal-content">
             <div class="modal-header py-2"><h5 class="modal-title">Add Detail</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
             <div class="modal-body pb-2">
-                <div class="form-row">
-                    <div class="form-group col-md-6"><label class="prq-detail-label">Item</label><select id="transferAddItemId" class="form-control form-control-sm select2"></select></div>
-                    <div class="form-group col-md-6"><label class="prq-detail-label">Unit</label><input type="text" id="transferAddUnit" class="form-control form-control-sm" readonly /></div>
-                    <div class="form-group col-md-4"><label class="prq-detail-label">Doc. Qty</label><input type="text" id="transferAddDocQty" class="form-control form-control-sm text-right number-format" value="0" /></div>
-                    <div class="form-group col-md-4"><label class="prq-detail-label">Act. Qty</label><input type="text" id="transferAddActQty" class="form-control form-control-sm text-right number-format" value="0" /></div>
-                    <div class="form-group col-md-4"><label class="prq-detail-label">Price</label><input type="text" id="transferAddUnitPrice" class="form-control form-control-sm text-right number-format" value="0" /></div>
+                <div id="transferAddValidationSummary" class="alert alert-danger transfer-add-validation-summary py-2 mb-2"></div>
+                <div class="row inventory-transfer-add-detail-form-row">
+                    <div class="col-xl-4 col-md-6 col-12"><div id="transferAddItemGroup" class="inventory-transfer-header-field prq-detail-form-col"><label class="prq-detail-label inventory-transfer-header-label">Item<span class="required-mark">*</span></label><div class="inventory-transfer-header-control-wrap"><select id="transferAddItemId" class="form-control form-control-sm select2"></select><div id="transferAddItemError" class="transfer-add-field-error"></div></div></div></div>
+                    <div class="col-xl-4 col-md-6 col-12"><div class="inventory-transfer-header-field prq-detail-form-col"><label class="prq-detail-label inventory-transfer-header-label">Unit</label><div class="inventory-transfer-header-control-wrap"><input type="text" id="transferAddUnit" class="form-control form-control-sm" readonly /></div></div></div>
+                    <div class="col-xl-4 col-md-6 col-12"><div id="transferAddDocQtyGroup" class="inventory-transfer-header-field prq-detail-form-col"><label class="prq-detail-label inventory-transfer-header-label">Doc. Qty<span class="required-mark">*</span></label><div class="inventory-transfer-header-control-wrap"><input type="text" id="transferAddDocQty" class="form-control form-control-sm text-right number-format" value="0" /><div id="transferAddDocQtyError" class="transfer-add-field-error"></div></div></div></div>
+                    <div class="col-xl-4 col-md-6 col-12"><div class="inventory-transfer-header-field prq-detail-form-col"><label class="prq-detail-label inventory-transfer-header-label">Act. Qty</label><div class="inventory-transfer-header-control-wrap"><input type="text" id="transferAddActQty" class="form-control form-control-sm text-right number-format" value="0" /></div></div></div>
+                    <div class="col-xl-4 col-md-6 col-12"><div class="inventory-transfer-header-field prq-detail-form-col"><label class="prq-detail-label inventory-transfer-header-label">Price</label><div class="inventory-transfer-header-control-wrap"><input type="text" id="transferAddUnitPrice" class="form-control form-control-sm text-right number-format" value="0" /></div></div></div>
                 </div>
             </div>
             <div class="modal-footer py-2"><button type="button" id="btnTransferAddDetailConfirm" class="btn btn-sm btn-primary"><i class="fas fa-save"></i> Add</button><button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Close</button></div>
@@ -105,10 +176,43 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade vni-font" id="transferDetailReportPreviewModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog inventory-transfer-report-preview-modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2"><h5 class="modal-title">Print Preview</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
+            <div class="modal-body p-0"><iframe id="transferDetailReportPreviewFrame" class="inventory-transfer-report-preview-frame" title="Inventory Transfer Report Preview"></iframe></div>
+            <div class="modal-footer py-2 justify-content-end"><button type="button" id="btnTransferDetailReportOpen" class="btn btn-sm btn-primary border"><i class="fas fa-file-pdf"></i> Export</button><button type="button" id="btnTransferDetailReportPrint" class="btn btn-sm btn-info border"><i class="fas fa-print"></i> Print</button><button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal">Close</button></div>
+        </div>
+    </div>
+</div>
+@section Styles {
+<link rel="stylesheet" href="~/adminlte/plugins/jquery-ui/jquery-ui.min.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/common/app-datepicker.css" asp-append-version="true" />
+<style>
+    #transferDetailReportPreviewModal { z-index: 2050; }
+    #transferDetailReportPreviewModal .modal-dialog { z-index: 2051; }
+    #transferDetailReportPreviewModal .modal-content { z-index: 2052; }
+    .inventory-transfer-report-preview-modal-dialog { width: 100vw; max-width: 100vw; height: 100vh; margin: 0; }
+    .inventory-transfer-report-preview-modal-dialog .modal-content { height: 100vh; border-radius: 0; }
+    .inventory-transfer-report-preview-frame { display: block; width: 100%; height: calc(100vh - 106px); border: 0; }
+</style>
+}
 @section Scripts {
+<script src="~/adminlte/plugins/jquery-ui/jquery-ui.min.js" asp-append-version="true"></script>
+<script src="~/js/common/app-datepicker.js" asp-append-version="true"></script>
 <script>
 $(function(){
+    if (window.AppDatePicker) window.AppDatePicker.init(document);
     const items = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Items));
+    const transferDetailReportUrl = '@Html.Raw(Url.Page("./InventoryTransferDetail", new { handler = "Report", id = Model.Id }))';
+    const transferDetailReportPreviewUrl = '@Html.Raw(Url.Page("./InventoryTransferDetail", new { handler = "Report", id = Model.Id, inline = true }))';
+    const transferDetailReportPreviewFrame = document.getElementById('transferDetailReportPreviewFrame');
+
+    $('#btnPrintInventoryTransferDetail').on('click', function(){ if(transferDetailReportPreviewFrame) transferDetailReportPreviewFrame.src = transferDetailReportPreviewUrl; $('#transferDetailReportPreviewModal').modal('show'); });
+    $('#btnTransferDetailReportOpen').on('click', function(){ if(transferDetailReportUrl) window.open(transferDetailReportUrl, '_blank'); });
+    $('#btnTransferDetailReportPrint').on('click', function(){ const frame = transferDetailReportPreviewFrame; if(frame && frame.contentWindow) frame.contentWindow.print(); });
+    $('#transferDetailReportPreviewModal').on('hidden.bs.modal', function(){ if(transferDetailReportPreviewFrame) transferDetailReportPreviewFrame.src = 'about:blank'; });
 
     function parseNumber(value){
         if(value === null || value === undefined) return 0;
@@ -124,19 +228,42 @@ $(function(){
     function reindex(){ $('#detailRows tr').not('.empty-row').each(function(i){ $(this).find('input').each(function(){ if(this.name){ this.name=this.name.replace(/Details\[\d+\]/,`Details[${i}]`); } }); }); }
     function initSelect2(){ if(!$.fn.select2) return; $("select.select2").each(function(){ const el=$(this); if(el.data("select2")) el.select2("destroy"); el.select2({ width:"100%" }); }); }
     function showMessageModal(message){ $("#transferMessageText").text(message || ""); $("#transferMessageModal").modal("show"); }
+    function clearTransferAddValidation(){
+        $('#transferAddValidationSummary').hide().text('');
+        $('#transferAddItemGroup,#transferAddDocQtyGroup').removeClass('transfer-add-invalid');
+        $('#transferAddItemError,#transferAddDocQtyError').text('');
+    }
+    function showTransferAddValidation(message){
+        if(!message) return;
+        $('#transferAddValidationSummary').text(message).show();
+    }
     async function checkStock($row){ const itemId=Number($row.find('.item-select').val()||0); const fromStoreId=Number($('#Header_FromStoreId').val()||0); const flowDate=$('#Header_FlowDate').val()||''; if(!(itemId>0)||!(fromStoreId>0)) return null; const res=await fetch(`?handler=CheckStock&itemId=${itemId}&fromStoreId=${fromStoreId}&flowDate=${encodeURIComponent(flowDate)}`); return await res.json(); }
     $(document).on('change','.item-select',async function(){ const $opt=$(this).find(':selected'); const $row=$(this).closest('tr'); $row.find('.unit').val($opt.data('unit')||''); $row.find('.price').val($opt.data('price')||0); calc($row); await checkStock($row); });
     $(document).on('input','.qty,.price',async function(){ const $row=$(this).closest('tr'); calc($row); if($(this).hasClass('act-qty')){ const data=await checkStock($row); if(data && parseNumber($row.find('.act-qty').val()) > Number(data.stockQty||0)){ showMessageModal('Item stock quantity is ' + Number(data.stockQty||0).toLocaleString()); $row.find('.act-qty').val(formatNumber(data.stockQty||0)); calc($row); } } });
     $(document).on('click','.btn-remove',function(){ $(this).closest('tr').remove(); reindex(); if($('#detailRows tr').length===0){ $('#detailRows').append('<tr class="empty-row"><td colspan="7" class="text-center text-muted py-3">No item transfer detail.</td></tr>'); } });
     function addDetailRowFromModal(){
+        clearTransferAddValidation();
         $('#detailRows').find('tr.empty-row').remove();
         const i=$('#detailRows tr').length;
         const itemId=Number($('#transferAddItemId').val()||0);
         const item=items.find(x=>Number(x.ItemId)===itemId);
-        if(!item){ showMessageModal('Please select item.'); return; }
         const docQty=parseNumber($('#transferAddDocQty').val());
         const actQty=parseNumber($('#transferAddActQty').val());
         const unitPrice=parseNumber($('#transferAddUnitPrice').val());
+        let hasFieldError=false;
+        if(!item){
+            const message='Item is required.';
+            hasFieldError=true;
+            $('#transferAddItemGroup').addClass('transfer-add-invalid');
+            $('#transferAddItemError').text(message);
+        }
+        if(!(docQty>0)){
+            const message='Doc. Qty must be greater than 0.';
+            hasFieldError=true;
+            $('#transferAddDocQtyGroup').addClass('transfer-add-invalid');
+            $('#transferAddDocQtyError').text(message);
+        }
+        if(hasFieldError){ return; }
         const amount=actQty*unitPrice;
         $('#detailRows').append(`<tr><td class="text-center"><button type="button" class="btn btn-sm btn-danger btn-remove"><i class="fas fa-trash"></i></button></td><td><input type="hidden" name="Details[${i}].ItemId" class="item-select" value="${item.ItemId}" /><span class="tcvn3-font text-nowrap">${item.ItemCode} - ${item.ItemName}</span></td><td><input name="Details[${i}].Unit" class="form-control form-control-sm unit" readonly value="${item.Unit||''}" /></td><td><input name="Details[${i}].DocQty" type="text" class="form-control form-control-sm text-right qty doc-qty number-format" value="${formatNumber(docQty)}" /></td><td><input name="Details[${i}].ActQty" type="text" class="form-control form-control-sm text-right qty act-qty number-format" value="${formatNumber(actQty)}" /></td><td><input name="Details[${i}].UnitPrice" type="text" class="form-control form-control-sm text-right price number-format" value="${formatNumber(unitPrice)}" /></td><td><input name="Details[${i}].Amount" class="form-control form-control-sm text-right amount number-format" readonly value="${formatNumber(amount)}" /></td></tr>`);
         $('#TransferAddDetailModal').modal('hide');
@@ -149,12 +276,19 @@ $(function(){
         $('#transferAddDocQty').val('0');
         $('#transferAddActQty').val('0');
         $('#transferAddUnitPrice').val('0');
+        clearTransferAddValidation();
         if($.fn.select2){ $('#transferAddItemId').select2({ width:'100%', dropdownParent: $('#TransferAddDetailModal') }); }
     });
     $(document).on('change','#transferAddItemId', function(){
+        $('#transferAddItemGroup').removeClass('transfer-add-invalid');
+        $('#transferAddItemError').text('');
         const $opt=$(this).find(':selected');
         $('#transferAddUnit').val($opt.data('unit')||'');
         $('#transferAddUnitPrice').val(formatNumber($opt.data('price')||0));
+    });
+    $(document).on('input','#transferAddDocQty', function(){
+        $('#transferAddDocQtyGroup').removeClass('transfer-add-invalid');
+        $('#transferAddDocQtyError').text('');
     });
     $('#btnTransferAddDetailConfirm').on('click', addDetailRowFromModal);
 
@@ -171,9 +305,6 @@ $(function(){
 });
 </script>
 }
-
-
-
 
 
 
