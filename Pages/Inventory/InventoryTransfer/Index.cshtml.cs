@@ -1,4 +1,4 @@
-﻿using ClosedXML.Excel;
+using ClosedXML.Excel;
 using System.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -75,7 +75,7 @@ AND h.FlowDate >= @FromDate AND h.FlowDate < DATEADD(DAY, 1, @ToDate)
 AND (@Keyword IS NULL OR COALESCE(k.ItemCode, i.ItemCode) LIKE '%' + @Keyword + '%' OR COALESCE(k.ItemName, i.ItemName) LIKE '%' + @Keyword + '%' OR h.FlowNo LIKE '%' + @Keyword + '%') ";
 
         var kpGroupId = GetCurrentKpGroupId();
-        var allowAllStores = IsAdminRole() || kpGroupId == 1;
+        var allowAllStores = IsAdminRole();
         var searchJoin = @" FROM dbo.INV_ItemFlowDetail d
 INNER JOIN dbo.INV_ItemFlow h ON h.FlowID=d.FlowID
 INNER JOIN dbo.INV_ItemList i ON i.ItemID=d.ItemID
@@ -376,7 +376,7 @@ ORDER BY h.FlowDate DESC, h.FlowID DESC", conn);
     private void BindFilterParams(SqlCommand cmd)
     {
         var kpGroupId = GetCurrentKpGroupId();
-        var allowAllStores = IsAdminRole() || kpGroupId == 1;
+        var allowAllStores = IsAdminRole();
         cmd.Parameters.Add("@AllowAllStores", SqlDbType.Bit).Value = allowAllStores;
         cmd.Parameters.Add("@KPGroupId", SqlDbType.Int).Value = !allowAllStores && kpGroupId > 0 ? kpGroupId : DBNull.Value;
         cmd.Parameters.Add("@FromDate", SqlDbType.Date).Value = Filter.FromDate!.Value.Date;
@@ -441,7 +441,7 @@ ORDER BY h.FlowDate DESC, h.FlowID DESC", conn);
     {
         if (IsAdminRole()) return null;
         var kpGroupId = GetCurrentKpGroupId();
-        return kpGroupId == 1 ? null : kpGroupId;
+        return kpGroupId > 0 ? kpGroupId : null;
     }
     private PagePermissions GetUserPermissions() => IsAdminRole() ? new PagePermissions { AllowedNos = Enumerable.Range(1, 20).ToList() } : new PagePermissions { AllowedNos = _permissionService.GetPermissionsForPage(GetCurrentRoleId(), FunctionId) };
 }
