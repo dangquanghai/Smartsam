@@ -494,12 +494,15 @@
     }
 
     function formatDetailNumber(value) {
-        const number = Number(value || 0);
+        const number = Number((value || 0).toString().replace(/,/g, ''));
         if (!Number.isFinite(number)) {
             return '0';
         }
 
-        return Math.round(number).toLocaleString('en-US');
+        return number.toLocaleString('en-US', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+        });
     }
 
     // Sử dụng delegation để bắt sự kiện cho link được tạo động

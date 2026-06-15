@@ -859,9 +859,12 @@ function normalizeEditableNumeric(value) {
     const text = (value ?? '').toString().trim();
     if (!text) return '0';
 
-    const parsed = Number.parseFloat(text);
+    const parsed = Number.parseFloat(text.replace(/,/g, ''));
     if (!Number.isFinite(parsed)) return text;
-    return Math.round(parsed).toLocaleString('en-US');
+    return parsed.toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
+    });
 }
 
 function normalizeEditableNumericInput(value) {
@@ -1237,9 +1240,12 @@ function toggleLookupValidation(forceShow) {
 }
 
 function formatLookupNumber(value) {
-    const parsed = Number.parseFloat((value || 0).toString());
+    const parsed = Number.parseFloat((value || 0).toString().replace(/,/g, ''));
     if (!Number.isFinite(parsed)) return '0';
-    return Math.round(parsed).toLocaleString('en-US');
+    return parsed.toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
+    });
 }
 
 function searchItems(keyword, checkBalanceInStore) {
