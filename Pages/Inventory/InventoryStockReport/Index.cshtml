@@ -1,0 +1,530 @@
+﻿@page
+@model SmartSam.Pages.Inventory.InventoryReport.IndexModel
+@{
+    ViewData["Title"] = "Item Store";
+    var currentPage = Model.Filter.Page <= 0 ? 1 : Model.Filter.Page;
+    var totalPages = Model.TotalPages <= 0 ? 1 : Model.TotalPages;
+    var pageItems = new List<int?>();
+    for (var p = 1; p <= totalPages; p++)
+    {
+        if (p == 1 || p == totalPages || (p >= currentPage - 2 && p <= currentPage + 2)) pageItems.Add(p);
+        else if (pageItems.Count == 0 || pageItems[^1].HasValue) pageItems.Add(null);
+    }
+    Func<int, string> pageUrl = page => Url.Page("./Index", new
+    {
+        FromDate = Model.Filter.FromDate?.ToString("yyyy-MM-dd"),
+        ToDate = Model.Filter.ToDate?.ToString("yyyy-MM-dd"),
+        ItemCode = Model.Filter.ItemCode,
+        ItemName = Model.Filter.ItemName,
+        KpGroupId = Model.Filter.KpGroupId,
+        StoreId = Model.Filter.StoreId,
+        ViewType = Model.Filter.ViewType,
+        Page = page,
+        PageSize = Model.Filter.PageSize
+    }) ?? "#";
+}
+<section class="content vni-font inventory-received-page inventory-report-page">
+    <div class="container-fluid">
+        <form method="post" asp-page-handler="SubmitReport" id="submitStockReportForm">
+            <input type="hidden" name="Filter.FromDate" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" />
+            <input type="hidden" name="Filter.ToDate" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" />
+            <input type="hidden" name="Filter.ItemCode" value="@Model.Filter.ItemCode" />
+            <input type="hidden" name="Filter.ItemName" value="@Model.Filter.ItemName" />
+            <input type="hidden" name="Filter.KpGroupId" value="@Model.Filter.KpGroupId" />
+            <input type="hidden" name="Filter.StoreId" value="@Model.Filter.StoreId" />
+            <input type="hidden" name="Filter.ViewType" value="0" />
+            <input type="hidden" name="Filter.Page" value="@Model.Filter.Page" />
+            <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+        </form>
+        <form method="post" asp-page-handler="ApproveReport" id="approveStockReportForm">
+            <input type="hidden" name="Filter.FromDate" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" />
+            <input type="hidden" name="Filter.ToDate" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" />
+            <input type="hidden" name="Filter.ItemCode" value="@Model.Filter.ItemCode" />
+            <input type="hidden" name="Filter.ItemName" value="@Model.Filter.ItemName" />
+            <input type="hidden" name="Filter.KpGroupId" value="@Model.Filter.KpGroupId" />
+            <input type="hidden" name="Filter.StoreId" value="@Model.Filter.StoreId" />
+            <input type="hidden" name="Filter.ViewType" value="0" />
+            <input type="hidden" name="Filter.Page" value="@Model.Filter.Page" />
+            <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+        </form>
+
+        <div class="row">
+            <div class="col-md-2">
+                <div class="card card-info">
+                    <div class="card-header"><h3 class="card-title"><i class="fas fa-search"></i> Search</h3></div>
+                    <div class="card-body">
+                        <form method="get" id="inventoryReportSearchForm">
+                            <input type="hidden" name="Page" value="1" />
+                            <input type="hidden" name="PageSize" value="@Model.Filter.PageSize" />
+                            <input type="hidden" name="ViewType" value="0" />
+                            <div class="form-group mb-2"><label>From</label><input id="FromDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.FromDate?.ToString("dd/MM/yyyy")" data-hidden-target="#FromDateHidden" autocomplete="off" readonly /><input id="FromDateHidden" name="FromDate" type="hidden" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" /></div>
+                            <div class="form-group mb-2"><label>To</label><input id="ToDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.ToDate?.ToString("dd/MM/yyyy")" data-hidden-target="#ToDateHidden" autocomplete="off" readonly /><input id="ToDateHidden" name="ToDate" type="hidden" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" /></div>
+                            <div class="form-group mb-2"><label>Item Code</label><input asp-for="Filter.ItemCode" name="ItemCode" class="form-control form-control-sm vni-font" /></div>
+                            <div class="form-group mb-2"><label>Item Name</label><input asp-for="Filter.ItemName" name="ItemName" class="form-control form-control-sm vni-font" /></div>
+                            <div class="form-group mb-2"><label>Inv Group</label><select id="kpGroupSelect" asp-for="Filter.KpGroupId" name="KpGroupId" asp-items="Model.KpGroups" class="form-control form-control-sm select2 vni-font"></select></div>
+                            <div class="form-group mb-2"><label>Store Name</label><select id="storeSelect" asp-for="Filter.StoreId" name="StoreId" asp-items="Model.Stores" class="form-control form-control-sm select2 vni-font"></select></div>
+                            <button type="submit" class="btn btn-primary btn-block btn-sm border mb-2"><i class="fas fa-search"></i> Search</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-10">
+                <div class="card card-primary">
+                    <div class="card-header prq-table-header">
+                        <div class="prq-table-header-left">
+                            <h3 class="card-title">Item Store</h3>
+                            <span class="badge badge-light ml-2">@Model.TotalRecords records</span>
+                        </div>
+                        <div class="prq-table-header-right app-paging-white">
+                            <nav aria-label="Page navigation">
+                                <div class="d-inline-block mr-2 prq-pagination-info">
+                                    @if (Model.TotalRecords == 0)
+                                    {
+                                        <small>No records</small>
+                                    }
+                                    else
+                                    {
+                                        <small>Showing @Model.PageStart to @Model.PageEnd of @Model.TotalRecords entries</small>
+                                    }
+                                </div>
+                                <div class="prq-page-size-form d-inline-flex mr-2">
+                                    <label class="mb-0 prq-page-size-label" for="transferPageSize">Show</label>
+                                    <select id="transferPageSize" class="form-control form-control-sm prq-page-size-select">
+                                        @foreach (var pageSizeOption in Model.PageSizeOptions)
+                                        {
+                                            <option value="@pageSizeOption" selected="@(Model.Filter.PageSize == pageSizeOption ? "selected" : null)">@pageSizeOption</option>
+                                        }
+                                    </select>
+                                </div>
+                                <ul class="pagination pagination-sm mb-0 d-inline-flex" id="pagination">
+                                    <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+                                        <a class="page-link prq-pager-link" href="@(Model.HasPreviousPage ? pageUrl(currentPage - 1) : "#")">Prev</a>
+                                    </li>
+                                    @foreach (var p in pageItems)
+                                    {
+                                        if (p.HasValue)
+                                        {
+                                            <li class="page-item @(p.Value == currentPage ? "active" : "")">
+                                                <a class="page-link prq-pager-link" href="@pageUrl(p.Value)">@p.Value</a>
+                                            </li>
+                                        }
+                                        else
+                                        {
+                                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                                        }
+                                    }
+                                    <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+                                        <a class="page-link prq-pager-link" href="@(Model.HasNextPage ? pageUrl(currentPage + 1) : "#")">Next</a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+                        {
+                            <div class="alert alert-warning py-2 m-2">@Model.ErrorMessage</div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Model.SubmitMessage))
+                        {
+                            <div class="alert alert-@(string.Equals(Model.SubmitMessageType, "success", StringComparison.OrdinalIgnoreCase) ? "success" : "warning") py-2 m-2">@Model.SubmitMessage</div>
+                        }
+                        <div class="table-responsive prq-table-wrap">
+                            <table class="table table-sm table-bordered table-hover mb-0 text-nowrap prq-table inventory-report-table">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>ItemCode</th>
+                                        <th>ItemName</th>
+                                        <th>unit</th>
+                                        <th class="text-right">ReorderPo</th>
+                                        <th class="text-right">BegQuanti</th>
+                                        <th class="text-right">RecQuanti</th>
+                                        <th class="text-right">IssQuanti</th>
+                                        <th class="text-right">EndQuanti</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (Model.Rows.Count == 0)
+                                    {
+                                        <tr><td colspan="8" class="text-center text-muted py-3">No data found.</td></tr>
+                                    }
+                                    else
+                                    {
+                                        foreach (var row in Model.Rows)
+                                        {
+                                            <tr data-item-id="@row.ItemId" data-reorder-point="@row.ReorderPoint" data-end-quantity="@row.EndQuantity">
+                                                <td>@row.ItemCode</td>
+                                                <td class="tcvn3-font">@row.ItemName</td>
+                                                <td>@row.Unit</td>
+                                                <td class="text-right">@row.ReorderPoint.ToString("#,##0.##")</td>
+                                                <td class="text-right">@row.BeginQuantity.ToString("#,##0.##")</td>
+                                                <td class="text-right">@row.ReceiveQuantity.ToString("#,##0.##")</td>
+                                                <td class="text-right">@row.IssueQuantity.ToString("#,##0.##")</td>
+                                                <td class="text-right js-mask-target">@row.EndQuantity.ToString("#,##0.##")</td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="card card-outline card-primary">
+                    <div class="card-footer p-2 text-center module-action-bar prq-action-bar">
+                        @if (Model.CanSubmitReport)
+                        {
+                            <button type="button" id="btnSubmitStockReport" class="btn btn-sm btn-info border mx-1 my-1" @(Model.Filter.StoreId > 0 ? null : "disabled")><i class="fas fa-paper-plane"></i> Submit Report</button>
+                        }
+                        @if (Model.CanApproveReport)
+                        {
+                            <button type="button" id="btnApproveStockReport" class="btn btn-sm btn-success border mx-1 my-1"><i class="fas fa-check-circle"></i> Approved</button>
+                        }
+                        <button type="button" class="btn btn-sm btn-warning border mx-1 my-1" disabled><i class="fas fa-balance-scale"></i> CompareACC</button>
+                        <button type="button" id="btnMaskStockReport" class="btn btn-sm btn-secondary border mx-1 my-1"><i class="fas fa-mask"></i> Mask</button>
+                        <button type="button" id="btnPreviewStockReport" class="btn btn-sm btn-primary border mx-1 my-1 d-none" @(Model.TotalRecords > 0 ? null : "disabled")><i class="fas fa-file-alt"></i> Report</button>
+                        <button type="button" id="btnListStockReport" class="btn btn-sm btn-outline-primary border mx-1 my-1"><i class="fas fa-list-alt"></i> List Report</button>
+                        <button type="button" id="btnPrintStockReport" class="btn btn-sm btn-info border mx-1 my-1" @(Model.TotalRecords > 0 ? null : "disabled")><i class="fas fa-print"></i> Print</button>
+                        <button type="button" class="btn btn-sm btn-success border mx-1 my-1" disabled><i class="fas fa-file-excel"></i> Export Excel</button>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+
+<div class="modal fade vni-font" id="stockReportPreviewModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog inventory-transfer-report-preview-modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2"><h5 class="modal-title">Print Preview</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
+            <div class="modal-body p-0"><iframe id="stockReportPreviewFrame" class="inventory-transfer-report-preview-frame" title="Inventory Report Preview"></iframe></div>
+            <div class="modal-footer py-2 justify-content-end"><button type="button" id="btnStockReportOpen" class="btn btn-sm btn-primary border"><i class="fas fa-file-pdf"></i> Export</button><button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal"><i class="fas fa-times"></i> Close</button></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade vni-font" id="stockReportListModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog stock-report-list-modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2 bg-primary"><h5 class="modal-title text-white"><i class="fas fa-list-alt"></i> List Report</h5><button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button></div>
+            <div class="modal-body">
+                <div class="form-inline mb-2">
+                    <label class="mr-2">Year</label>
+                    <select id="stockReportListYear" class="form-control form-control-sm mr-2"></select>
+                    <button type="button" id="btnReloadStockReportList" class="btn btn-sm btn-primary border"><i class="fas fa-sync-alt"></i> Load</button>
+                    <span id="stockReportListStatus" class="ml-3 text-muted small"></span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered table-hover text-nowrap mb-0">
+                        <thead class="thead-light"><tr><th style="width:90px;">Action</th><th>Report No</th><th>Period</th><th>Inv Group</th><th>Store Name</th><th>Status</th><th>Prepared By</th><th>Prepared Date</th><th>Checked By</th><th>Checked Date</th></tr></thead>
+                        <tbody id="stockReportListBody"><tr><td colspan="10" class="text-center text-muted py-3">Select year to load report list.</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer py-2 justify-content-end"><button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal"><i class="fas fa-times"></i> Close</button></div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade vni-font" id="submitStockReportConfirmModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-info py-2"><h5 class="modal-title text-white">Confirm Submit Report</h5><button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button></div>
+            <div class="modal-body" id="submitStockReportConfirmText">Do you want to submit Item Balance Report for this store?</div>
+            <div class="modal-footer py-2"><button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Cancel</button><button type="button" id="btnConfirmSubmitStockReport" class="btn btn-sm btn-info border"><i class="fas fa-paper-plane"></i> Submit</button></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade vni-font" id="approveStockReportConfirmModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-success py-2"><h5 class="modal-title text-white">Confirm Approved Report</h5><button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button></div>
+            <div class="modal-body" id="approveStockReportConfirmText">Do you want to approve Item Balance Report for this store?</div>
+            <div class="modal-footer py-2"><button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Cancel</button><button type="button" id="btnConfirmApproveStockReport" class="btn btn-sm btn-success border"><i class="fas fa-check-circle"></i> Approved</button></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade vni-font" id="maskStockReportMessageModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary py-2"><h5 class="modal-title text-white">Mask</h5><button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button></div>
+            <div class="modal-body" id="maskStockReportMessageText"></div>
+            <div class="modal-footer py-2"><button type="button" class="btn btn-sm btn-secondary border" data-dismiss="modal">Close</button></div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/adminlte/plugins/jquery-ui/jquery-ui.min.js" asp-append-version="true"></script>
+<script src="~/js/common/app-datepicker.js" asp-append-version="true"></script>
+<script>
+$(function(){
+    if (window.AppDatePicker) window.AppDatePicker.init(document);
+    if ($.fn.select2) {
+        $('select.select2').each(function(){
+            const el = $(this);
+            if (el.data('select2')) el.select2('destroy');
+            el.select2({ width: '100%' });
+        });
+    }
+
+    function syncReportActionForm(formSelector){
+        const fromDateValue = window.AppDatePicker ? window.AppDatePicker.parseDisplayDate($('#FromDateDisplay').val()) : ($('#FromDateHidden').val() || '');
+        const toDateValue = window.AppDatePicker ? window.AppDatePicker.parseDisplayDate($('#ToDateDisplay').val()) : ($('#ToDateHidden').val() || '');
+        $('#FromDateHidden').val(fromDateValue || '');
+        $('#ToDateHidden').val(toDateValue || '');
+        $(`${formSelector} input[name="Filter.FromDate"]`).val(fromDateValue || '');
+        $(`${formSelector} input[name="Filter.ToDate"]`).val(toDateValue || '');
+        $(`${formSelector} input[name="Filter.ItemCode"]`).val($('input[name="ItemCode"]').val() || '');
+        $(`${formSelector} input[name="Filter.ItemName"]`).val($('input[name="ItemName"]').val() || '');
+        $(`${formSelector} input[name="Filter.StoreId"]`).val($('#storeSelect').val() || '-1');
+        $(`${formSelector} input[name="Filter.KpGroupId"]`).val($('#kpGroupSelect').val() || '');
+    }
+
+    function syncSubmitReportForm(){ syncReportActionForm('#submitStockReportForm'); }
+    function syncApproveReportForm(){ syncReportActionForm('#approveStockReportForm'); }
+
+    function syncSubmitReportButton(){
+        const hasStore = Number($('#storeSelect').val() || -1) > 0;
+        $('#btnSubmitStockReport').prop('disabled', !hasStore);
+        syncSubmitReportForm();
+    }
+
+    $('#kpGroupSelect').on('change', function(){
+        const kpGroupId = $(this).val();
+        const $store = $('#storeSelect');
+        $store.empty().append(new Option('[All Stores]', '-1', true, true));
+        syncSubmitReportButton();
+        if (!kpGroupId) {
+            if ($.fn.select2 && $store.data('select2')) $store.trigger('change.select2');
+            return;
+        }
+        $.getJSON('@Url.Page("./Index", new { handler = "StoresByGroup" })', { kpGroupId: kpGroupId })
+            .done(function(items){
+                $store.empty();
+                (items || []).forEach(function(item, index){
+                    const option = new Option(item.text, item.value, index === 0, index === 0);
+                    $store.append(option);
+                });
+                if ($.fn.select2 && $store.data('select2')) $store.trigger('change.select2');
+                syncSubmitReportButton();
+            })
+            .fail(function(){
+                $store.empty().append(new Option('[All Stores]', '-1', true, true));
+                if ($.fn.select2 && $store.data('select2')) $store.trigger('change.select2');
+                syncSubmitReportButton();
+            });
+    });
+
+    $('#storeSelect').on('change', function(){
+        syncSubmitReportButton();
+    });
+
+    $('#btnSubmitStockReport').on('click', function(){
+        syncSubmitReportForm();
+        const storeText = $('#storeSelect option:selected').text() || '';
+        $('#submitStockReportConfirmText').html(`Do you want to submit Item Balance Report for store '<b>${$('<div/>').text(storeText).html()}</b>'?`);
+        $('#submitStockReportConfirmModal').modal('show');
+    });
+
+    $('#btnConfirmSubmitStockReport').on('click', function(){
+        $('#submitStockReportConfirmModal').modal('hide');
+        $('#submitStockReportForm').trigger('submit');
+    });
+
+    $('#btnApproveStockReport').on('click', function(){
+        syncApproveReportForm();
+        const storeText = $('#storeSelect option:selected').text() || '';
+        $('#approveStockReportConfirmText').html(`Do you want to approve Item Balance Report for store '<b>${$('<div/>').text(storeText).html()}</b>'?`);
+        $('#approveStockReportConfirmModal').modal('show');
+    });
+
+    $('#btnConfirmApproveStockReport').on('click', function(){
+        $('#approveStockReportConfirmModal').modal('hide');
+        $('#approveStockReportForm').trigger('submit');
+    });
+
+    function showMaskMessage(message){
+        $('#maskStockReportMessageText').text(message || '');
+        $('#maskStockReportMessageModal').modal('show');
+    }
+
+    $('#btnMaskStockReport').on('click', function(){
+        const isAllStores = Number($('#storeSelect').val() || -1) <= 0;
+        let maskedCount = 0;
+        $('.inventory-report-table tbody tr').each(function(){
+            const row = $(this);
+            const target = row.find('.js-mask-target');
+            target.removeClass('bg-danger text-white');
+            if (!isAllStores) return;
+
+            const reorderPoint = Number(row.data('reorder-point') || 0);
+            const endQuantity = Number(row.data('end-quantity') || 0);
+            if (reorderPoint > endQuantity) {
+                target.addClass('bg-danger text-white');
+                maskedCount++;
+            }
+        });
+        if (!isAllStores) {
+            showMaskMessage('Mask only applies when Store Name is [All Stores], same as legacy VB.');
+        } else if (maskedCount === 0) {
+            showMaskMessage('No item needs masking.');
+        }
+    });
+
+    syncSubmitReportButton();
+
+    const stockReportPreviewFrame = document.getElementById('stockReportPreviewFrame');
+    let stockReportUrl = '';
+    let stockReportPreviewUrl = '';
+    const stockReportListBody = $('#stockReportListBody');
+    const stockReportListStatus = $('#stockReportListStatus');
+
+    function buildReportUrlsFromFilter(filter){
+        const baseUrl = '@Url.Page("./Index", new { handler = "Report" })';
+        const query = '&FromDate=' + encodeURIComponent(filter.fromDate || '')
+            + '&ToDate=' + encodeURIComponent(filter.toDate || '')
+            + '&KpGroupId=' + encodeURIComponent(filter.kpGroupId || '')
+            + '&StoreId=' + encodeURIComponent(filter.storeId || '')
+            + '&ViewType=0';
+        return { pdf: baseUrl + query, preview: baseUrl + '&inline=true' + query };
+    }
+
+    function buildStockReportUrls(){
+        const urls = buildReportUrlsFromFilter({
+            fromDate: $('#FromDateHidden').val() || '',
+            toDate: $('#ToDateHidden').val() || '',
+            kpGroupId: $('#kpGroupSelect').val() || '',
+            storeId: $('#storeSelect').val() || ''
+        });
+        stockReportUrl = urls.pdf;
+        stockReportPreviewUrl = urls.preview;
+    }
+
+    function buildViewUrlFromFilter(filter){
+        const url = new URL('@Url.Page("./Index")', window.location.origin);
+        url.searchParams.set('FromDate', filter.fromDate || '');
+        url.searchParams.set('ToDate', filter.toDate || '');
+        url.searchParams.set('KpGroupId', filter.kpGroupId || '');
+        url.searchParams.set('StoreId', filter.storeId || '');
+        url.searchParams.set('ViewType', '0');
+        url.searchParams.set('Page', '1');
+        url.searchParams.set('PageSize', '@Model.Filter.PageSize');
+        return url.toString();
+    }
+
+    function renderStockReportList(items){
+        if (!items || !items.length) {
+            stockReportListBody.html('<tr><td colspan="10" class="text-center text-muted py-3">No submitted report found.</td></tr>');
+            return;
+        }
+        const rows = items.map(function(item){
+            const safe = $('<div/>');
+            const viewUrl = buildViewUrlFromFilter(item);
+            return `<tr>
+                <td>
+                    <button type="button" class="btn btn-xs btn-info mr-1 js-stock-report-view" data-url="${safe.text(viewUrl).html()}"><i class="fas fa-eye mr-1"></i>View</button>
+                    <button type="button" class="btn btn-xs btn-primary js-stock-report-report"
+                        data-from-date="${safe.text(item.fromDate || '').html()}"
+                        data-to-date="${safe.text(item.toDate || '').html()}"
+                        data-kp-group-id="${safe.text(String(item.kpGroupId || '')).html()}"
+                        data-store-id="${safe.text(String(item.storeId || '')).html()}"><i class="fas fa-file-alt mr-1"></i>Report</button>
+                </td>
+                <td>${safe.text(String(item.id || '')).html()}</td>
+                <td>${safe.text(item.period || '').html()}</td>
+                <td>${safe.text(item.kpGroupName || '').html()}</td>
+                <td>${safe.text(item.storeName || '').html()}</td>
+                <td>${safe.text(item.status || '').html()}</td>
+                <td>${safe.text(item.preparedBy || '').html()}</td>
+                <td>${safe.text(item.preparedDate || '').html()}</td>
+                <td>${safe.text(item.checkedBy || '').html()}</td>
+                <td>${safe.text(item.checkedDate || '').html()}</td>
+            </tr>`;
+        });
+        stockReportListBody.html(rows.join(''));
+    }
+
+    function loadSubmittedReports(){
+        const year = $('#stockReportListYear').val() || new Date().getFullYear();
+        stockReportListStatus.text('Loading...');
+        stockReportListBody.html('<tr><td colspan="10" class="text-center text-muted py-3">Loading...</td></tr>');
+        $.getJSON('@Url.Page("./Index", new { handler = "SubmittedReports" })', { year: year })
+            .done(function(items){
+                stockReportListStatus.text((items || []).length + ' report(s)');
+                renderStockReportList(items || []);
+            })
+            .fail(function(xhr){
+                const msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Cannot load report list.';
+                stockReportListStatus.text(msg);
+                stockReportListBody.html(`<tr><td colspan="10" class="text-center text-danger py-3">${$('<div/>').text(msg).html()}</td></tr>`);
+            });
+    }
+
+    (function initStockReportYears(){
+        const currentYear = new Date().getFullYear();
+        const years = [];
+        for (let y = currentYear; y >= currentYear - 5; y--) years.push(`<option value="${y}">${y}</option>`);
+        $('#stockReportListYear').html(years.join('')).val(String(currentYear));
+    })();
+
+    $('#btnPreviewStockReport').on('click', function(){
+        buildStockReportUrls();
+        if (stockReportPreviewFrame) stockReportPreviewFrame.src = stockReportPreviewUrl;
+        $('#stockReportPreviewModal').modal('show');
+    });
+    $('#btnListStockReport').on('click', function(){
+        $('#stockReportListModal').modal('show');
+        loadSubmittedReports();
+    });
+    $('#btnReloadStockReportList, #stockReportListYear').on('click change', function(){ loadSubmittedReports(); });
+    $(document).on('click', '.js-stock-report-view', function(){
+        const url = $(this).data('url');
+        if (url) window.location.href = url;
+    });
+    $(document).on('click', '.js-stock-report-report', function(){
+        const filter = {
+            fromDate: $(this).data('from-date') || '',
+            toDate: $(this).data('to-date') || '',
+            kpGroupId: $(this).data('kp-group-id') || '',
+            storeId: $(this).data('store-id') || ''
+        };
+        const urls = buildReportUrlsFromFilter(filter);
+        stockReportUrl = urls.pdf;
+        stockReportPreviewUrl = urls.preview;
+        if (stockReportPreviewFrame) stockReportPreviewFrame.src = stockReportPreviewUrl;
+        $('#stockReportPreviewModal').modal('show');
+    });
+    $('#btnPrintStockReport').on('click', function(){ buildStockReportUrls(); if (stockReportUrl) window.open(stockReportUrl, '_blank'); });
+    $('#btnStockReportOpen').on('click', function(){ if (stockReportUrl) window.open(stockReportUrl, '_blank'); });
+    $('#stockReportPreviewModal').on('hidden.bs.modal', function(){ if(stockReportPreviewFrame) stockReportPreviewFrame.src = 'about:blank'; stockReportUrl=''; stockReportPreviewUrl=''; });
+
+    $('#transferPageSize').on('change', function(){
+        const url = new URL(window.location.href);
+        url.searchParams.set('PageSize', $(this).val());
+        url.searchParams.set('Page', '1');
+        window.location.href = url.toString();
+    });
+});
+</script>
+}
+
+@section Styles {
+    <style>.tcvn3-font { font-family: '.VnTime', '.TCVN3', serif; } #stockReportPreviewModal { z-index: 2050; } #stockReportPreviewModal .modal-dialog { z-index: 2051; width: 100vw; max-width: 100vw; height: 100vh; margin: 0; } #stockReportPreviewModal .modal-content { height: 100vh; border-radius: 0; display: flex; flex-direction: column; } #stockReportPreviewModal .modal-body { flex: 1 1 auto; overflow: auto; min-height: 0; } #stockReportPreviewModal .inventory-transfer-report-preview-frame { display: block; width: 100%; height: 100%; min-height: calc(100vh - 106px); border: 0; background: #fff; } #stockReportListModal .stock-report-list-modal-dialog { width: 98vw; max-width: 98vw; margin: 1vh auto; } #stockReportListModal .modal-content { min-height: 90vh; } #stockReportListModal .modal-body { overflow: auto; }</style>
+    <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/adminlte/plugins/jquery-ui/jquery-ui.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/common/app-datepicker.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Purchasing/PurchaseRequisition/index.css" asp-append-version="true" />
+}
+
+
+
+
+
+
+
+
+
