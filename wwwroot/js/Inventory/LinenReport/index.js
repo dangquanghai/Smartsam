@@ -1,6 +1,8 @@
 (function () {
     'use strict';
 
+    let isApplyingModeDate = false;
+
     function initializePage() {
         initializeDateRange();
         bindEvents();
@@ -27,7 +29,7 @@
 
     function bindEvents() {
         $('input[name="linenReportType"]').off('change').on('change', function () {
-            loadModeOptions();
+            loadModeOptions(true);
         });
 
         $('#btnPreviewLinenReportPage').off('click').on('click', function () {
@@ -35,11 +37,15 @@
         });
 
         $('#linenReportDateRange').on('apply.daterangepicker cancel.daterangepicker', function () {
-            loadModeOptions();
+            if (isApplyingModeDate) {
+                return;
+            }
+
+            loadModeOptions(false);
         });
     }
 
-    function loadModeOptions() {
+    function loadModeOptions(resetDateRange) {
         $.ajax({
             url: window.linenReportPage?.modeOptionsUrl || '',
             type: 'GET',
@@ -47,7 +53,8 @@
                 reportType: getSelectedReportType(),
                 descriptionId: $('#linenReportDescription').val() || '',
                 fromDate: $('#linenReportFromDate').val() || '',
-                toDate: $('#linenReportToDate').val() || ''
+                toDate: $('#linenReportToDate').val() || '',
+                resetDateRange: resetDateRange === true
             },
             success: function (response) {
                 if (!response || response.success !== true) {
@@ -72,6 +79,22 @@
         $('#linenReportLinenCode').prop('disabled', response.linenEnabled !== true);
         $('#linenReportDateRange').prop('disabled', !(response.fromEnabled === true || response.toEnabled === true));
         $('#linenReportChart').prop('disabled', response.chartEnabled !== true);
+
+        if (response.fromDate && response.toDate) {
+            const currentFromDate = $('#linenReportFromDate').val() || '';
+            const currentToDate = $('#linenReportToDate').val() || '';
+            $('#linenReportFromDate').val(response.fromDate);
+            $('#linenReportToDate').val(response.toDate);
+
+            if ((currentFromDate !== response.fromDate || currentToDate !== response.toDate) && typeof window.setDateRangeValue === 'function') {
+                isApplyingModeDate = true;
+                try {
+                    window.setDateRangeValue('linenReportDateRange', response.fromDate, response.toDate);
+                } finally {
+                    isApplyingModeDate = false;
+                }
+            }
+        }
     }
 
     function syncRadioState(reportType) {
@@ -367,7 +390,7 @@
 
         let html = buildHeader('LINEN-LAUDRY RECORD', '', '');
         html += '<table class="linen-report-info-table">';
-        html += `<tr><td style="width:120px;"><strong>From Dat</strong></td><td style="width:180px;">${encodeHtml(formatShortDate(response.fromDate))}</td><td style="width:100px;"><strong>To Date:</strong></td><td>${encodeHtml(formatShortDate(response.toDate))}</td></tr>`;
+        html += `<tr><td style="width:120px;"><strong>From Date</strong></td><td style="width:180px;">${encodeHtml(formatShortDate(response.fromDate))}</td><td style="width:100px;"><strong>To Date:</strong></td><td>${encodeHtml(formatShortDate(response.toDate))}</td></tr>`;
         html += '</table>';
 
         html += '<table class="linen-report-table">';
@@ -449,7 +472,7 @@
 
         let html = buildHeader('LAUNDRY ROOM BALANCE', '', '');
         html += '<table class="linen-report-info-table">';
-        html += `<tr><td style="width:120px;"><strong>From Dat</strong></td><td style="width:180px;">${encodeHtml(formatShortDate(response.fromDate))}</td><td style="width:100px;"><strong>To Date</strong></td><td>${encodeHtml(formatShortDate(response.toDate))}</td></tr>`;
+        html += `<tr><td style="width:120px;"><strong>From Date</strong></td><td style="width:180px;">${encodeHtml(formatShortDate(response.fromDate))}</td><td style="width:100px;"><strong>To Date</strong></td><td>${encodeHtml(formatShortDate(response.toDate))}</td></tr>`;
         html += '</table>';
         html += '<table class="linen-report-table" style="max-width:720px;">';
         html += '<thead><tr><th>LinenCode</th><th>Begin</th><th>R Apmt</th><th>R Supplier</th><th>D Apmt</th><th>D Supplier</th><th>End</th></tr></thead><tbody>';
@@ -480,7 +503,7 @@
         let html = buildHeader('LAUNDRY ROOM BALANCE', formatSlashDate(new Date().toISOString().slice(0, 10)), '');
         html += '<table class="linen-report-info-table">';
         html += `<tr><td style="width:120px;"><strong>Apartment No:</strong></td><td style="width:180px;">${encodeHtml(response.apartmentNo || '')}</td><td></td><td></td></tr>`;
-        html += `<tr><td><strong>From Dat</strong></td><td>${encodeHtml(formatShortDate(response.fromDate))}</td><td style="width:100px;"><strong>To Dat</strong></td><td>${encodeHtml(formatShortDate(response.toDate))}</td></tr>`;
+        html += `<tr><td><strong>From Date</strong></td><td>${encodeHtml(formatShortDate(response.fromDate))}</td><td style="width:100px;"><strong>To Date</strong></td><td>${encodeHtml(formatShortDate(response.toDate))}</td></tr>`;
         html += '</table>';
         html += '<table class="linen-report-table" style="max-width:620px;">';
         html += '<thead><tr><th>Linen</th><th>TonDau</th><th>NhapVaoCanH</th><th>XuatRaTuCanH</th><th>TonCuoi</th></tr></thead><tbody>';
