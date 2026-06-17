@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Text.Json;
@@ -83,6 +83,9 @@ public class IndexModel : BasePageModel
 
     [BindProperty]
     public long? CreateAutoRequestNoPreview { get; set; }
+
+    [BindProperty]
+    public long? CopyRequestNo { get; set; }
 
     [TempData]
     public string? SuccessMessage { get; set; }
@@ -249,19 +252,21 @@ public class IndexModel : BasePageModel
             var isAuto = r.IsAuto;
             var canApprove = CanApproveStatus(statusId, isAuto);
             var canReject = CanRejectStatus(statusId, isAuto);
+            var canAccess = effectivePerms.Count > 0 || isDraftCreator;
 
             return new
             {
                 data = r,
                 actions = new
                 {
-                    canAccess = effectivePerms.Count > 0 || isDraftCreator,
+                    canAccess = canAccess,
                     accessMode = canEditRow ? "edit" : "view",
 
                     canEdit = canEditRow,
                     canSubmit = canEditRow,
                     canApprove = canApprove,
-                    canReject = canReject
+                    canReject = canReject,
+                    canCopy = canAccess && CanCreateDraftMaterialRequest()
                 }
             };
         });
@@ -384,6 +389,69 @@ public class IndexModel : BasePageModel
                 operatorEmployeeId,
                 cancellationToken);
             SuccessMessage = "Material Request created successfully.";
+            return RedirectToPage("./MaterialRequestDetail", new { id = requestNo, mode = "edit" });
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = BuildSystemErrorMessage(ex);
+            return RedirectToPage("./Index");
+        }
+    }
+
+    /// <summary>
+    /// Copy MR duoc chon thanh draft moi.
+    /// </summary>
+    public async Task<IActionResult> OnPostCopy()
+    {
+        var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+        var operatorCode = User.Identity?.Name ?? string.Empty;
+        var operatorEmployeeId = GetCurrentEmployeeId();
+        int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
+
+        PagePerm = new PagePermissions();
+        PagePerm = GetUserPermissions();
+        LoadUserScopeAsync(cancellationToken).GetAwaiter().GetResult();
+        if (!CanAccessPage() || !CanCreateDraftMaterialRequest())
+        {
+            return Forbid();
+        }
+
+        if (!CopyRequestNo.HasValue || CopyRequestNo.Value <= 0)
+        {
+            WarningMessage = "Please select a Material Request to copy.";
+            return RedirectToPage("./Index");
+        }
+
+        operatorEmployeeId = ResolveCurrentEmployeeId(operatorEmployeeId, operatorCode);
+        if (!operatorEmployeeId.HasValue || operatorEmployeeId.Value <= 0)
+        {
+            ErrorMessage = "Current user is not linked to an active employee. Please assign this account to MS_Employee before copying MR.";
+            return RedirectToPage("./Index");
+        }
+
+        var sourceHeader = await _materialRequestService.GetDetailAsync(CopyRequestNo.Value, cancellationToken);
+        if (sourceHeader is null)
+        {
+            ErrorMessage = "Material Request not found.";
+            return RedirectToPage("./Index");
+        }
+
+        if (IsStoreGroupLocked() && (!_dataScope.StoreGroup.HasValue || sourceHeader.StoreGroup != _dataScope.StoreGroup))
+        {
+            return Forbid();
+        }
+
+        var sourceLines = await _materialRequestService.GetLinesAsync(CopyRequestNo.Value, cancellationToken);
+        try
+        {
+            var requestNo = await _materialRequestService.CopyToDraftAsync(
+                sourceHeader,
+                sourceLines,
+                operatorCode,
+                operatorEmployeeId,
+                cancellationToken);
+
+            SuccessMessage = $"Material Request copied from {CopyRequestNo.Value} successfully.";
             return RedirectToPage("./MaterialRequestDetail", new { id = requestNo, mode = "edit" });
         }
         catch (Exception ex)
@@ -2974,6 +3042,98 @@ public class MaterialRequestService
             await UpdateHeaderStatusOnlyAsync(conn, (SqlTransaction)tx, requestNo, statusId, approval, approvalEnd, postPr, cancellationToken);
             await tx.CommitAsync(cancellationToken);
             return requestNo;
+        }
+        catch
+        {
+            await tx.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Copy MR hien co thanh draft moi.
+    /// </summary>
+    public async Task<long> CopyToDraftAsync(
+        MaterialRequestDetailDto sourceHeader,
+        IReadOnlyList<MaterialRequestLineDto> sourceLines,
+        string operatorCode,
+        int? operatorEmployeeId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!sourceHeader.StoreGroup.HasValue || sourceHeader.StoreGroup.Value <= 0)
+        {
+            throw new InvalidOperationException("Store Group is required.");
+        }
+
+        var normalizedLines = NormalizeLines(sourceLines)
+            .Where(line => !string.IsNullOrWhiteSpace(line.ItemCode))
+            .Select(line => new MaterialRequestLineDto
+            {
+                ItemCode = (line.ItemCode ?? string.Empty).Trim(),
+                ItemName = (line.ItemName ?? string.Empty).Trim(),
+                Unit = (line.Unit ?? string.Empty).Trim(),
+                OrderQty = line.OrderQty.HasValue && line.OrderQty.Value > 0 ? line.OrderQty.Value : 1m,
+                Note = (line.Note ?? string.Empty).Trim(),
+                NewItem = line.NewItem,
+                Selected = true
+            })
+            .ToList();
+
+        if (normalizedLines.Count == 0)
+        {
+            throw new InvalidOperationException("Cannot copy Material Request because it has no detail lines.");
+        }
+
+        await using var conn = new SqlConnection(_connectionString);
+        await conn.OpenAsync(cancellationToken);
+        await using var tx = await conn.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            var employeeId = operatorEmployeeId.GetValueOrDefault();
+            if (employeeId <= 0)
+            {
+                employeeId = await ResolveEmployeeIdAsync(conn, (SqlTransaction)tx, operatorCode, cancellationToken);
+            }
+            if (employeeId <= 0)
+            {
+                throw new InvalidOperationException("Cannot resolve current employee.");
+            }
+
+            var legacyNow = await GetLegacyServerDateAsync(conn, (SqlTransaction)tx, cancellationToken);
+            var copyHeader = new MaterialRequestDetailDto
+            {
+                StoreGroup = sourceHeader.StoreGroup,
+                DateCreate = legacyNow,
+                AccordingTo = sourceHeader.AccordingTo,
+                Approval = false,
+                ApprovalEnd = false,
+                PostPr = false,
+                IsAuto = false,
+                MaterialStatusId = -1,
+                NoIssue = sourceHeader.NoIssue
+            };
+
+            var newRequestNo = await SaveRequestCoreAsync(
+                conn,
+                (SqlTransaction)tx,
+                null,
+                copyHeader,
+                normalizedLines,
+                cancellationToken);
+
+            await InsertSuperRequestAsync(
+                conn,
+                (SqlTransaction)tx,
+                newRequestNo,
+                employeeId,
+                legacyNow,
+                "Copy MR",
+                -1,
+                cancellationToken);
+
+            await tx.CommitAsync(cancellationToken);
+            return newRequestNo;
         }
         catch
         {
