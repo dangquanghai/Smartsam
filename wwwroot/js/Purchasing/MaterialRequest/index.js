@@ -1,8 +1,9 @@
-﻿(function () {
+(function () {
     'use strict';
 
     let pageSize = typeof defaultPageSize !== 'undefined' ? defaultPageSize : 10;
     let selectedRequestNo = null;
+    let selectedCanCopy = false;
     let currentPage = 1;
     let currentDataRows = [];
     let searchDetailState = {
@@ -13,6 +14,10 @@
 
     function updateHistoryButtonState() {
         $('#btnViewHistory').prop('disabled', !selectedRequestNo);
+    }
+
+    function updateCopyButtonState() {
+        $('#btnCopyMr').prop('disabled', !(selectedRequestNo && selectedCanCopy));
     }
 
     function buildCurrentReturnUrl() {
@@ -540,9 +545,11 @@
         if (!item) return;
 
         selectedRequestNo = item.data.requestNo || item.data.RequestNo;
+        selectedCanCopy = item.actions && item.actions.canCopy === true;
         $('#mrTable tbody tr').removeClass('selected');
         $(this).closest('tr').addClass('selected');
         updateHistoryButtonState();
+        updateCopyButtonState();
     });
 
     $(document).on('click focusin', '#mrTable tbody tr', function (e) {
@@ -559,9 +566,11 @@
 
     function resetActions() {
         selectedRequestNo = null;
+        selectedCanCopy = false;
         $('#mrTable tbody tr').removeClass('selected');
         $('input[name="selectedMr"]').prop('checked', false);
         updateHistoryButtonState();
+        updateCopyButtonState();
     }
 
     // ========== PAGINATION (ĐÃ SỬA LỖI) ==========
@@ -685,6 +694,20 @@
             loadHistory(selectedRequestNo);
         });
 
+        $('#btnCopyMr').off('click').on('click', function () {
+            if (!selectedRequestNo || !selectedCanCopy) {
+                alert('Please select a request first.');
+                return;
+            }
+
+            if (!window.confirm('Copy this Material Request to a new draft?')) {
+                return;
+            }
+
+            $('#copyMrRequestNoInput').val(selectedRequestNo);
+            $('#copyMrForm').trigger('submit');
+        });
+
         $('#btnSearchDetail').off('click').on('click', function () {
             resetSearchDetailCriteria();
             $('#mrSearchDetailModal').modal({ backdrop: 'static', keyboard: false, show: true });
@@ -743,6 +766,7 @@
             || parseInt($('#mrSearchForm input[name="Filter.PageIndex"]').val() || '1', 10);
         performSearch(Number.isFinite(initialPage) && initialPage > 0 ? initialPage : 1);
         updateHistoryButtonState();
+        updateCopyButtonState();
     }
 
     window.addEventListener('pageshow', function (event) {

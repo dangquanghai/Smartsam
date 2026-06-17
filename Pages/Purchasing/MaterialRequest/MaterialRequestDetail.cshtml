@@ -209,7 +209,7 @@
                                                 <span class="mr-readonly-cell-text">@(line.Unit ?? string.Empty)</span>
                                                 <input type="hidden" class="mr-line-unit" value="@line.Unit" />
                                             </td>
-                                            <td><input type="text" inputmode="decimal" class="form-control form-control-sm mr-line-order" value="@(line.OrderQty?.ToString("0") ?? "0")" /></td>
+                                            <td><input type="text" inputmode="decimal" class="form-control form-control-sm mr-line-order" value="@(line.OrderQty?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "0")" /></td>
                                             <td>
                                                 <span class="mr-readonly-cell-text">@(line.Issued?.ToString("0") ?? "0")</span>
                                                 <input type="hidden" class="mr-line-notrec" value="@(line.NotReceipt?.ToString("0") ?? "0")" />
@@ -224,7 +224,7 @@
                                                 <input type="hidden" class="mr-line-accin" value="@(line.AccIn?.ToString("0") ?? "0")" />
                                             </td>
                                             <td>
-                                                <input type="text" inputmode="decimal" class="form-control form-control-sm mr-line-buy" value="@(line.Buy?.ToString("0") ?? "0")" />
+                                                <input type="text" inputmode="decimal" class="form-control form-control-sm mr-line-buy" value="@(line.Buy?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "0")" />
                                             </td>
                                             <td>
                                                 <input type="text" class="form-control form-control-sm mr-line-note vni-font" value="@line.Note" />

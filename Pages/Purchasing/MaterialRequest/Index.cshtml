@@ -1,4 +1,4 @@
-﻿@page
+@page
 @model SmartSam.Pages.Purchasing.MaterialRequest.IndexModel
 @{
     ViewData["Title"] = "Material Request";
@@ -273,6 +273,16 @@
                                     data-require-filter-store-group-for-create-mr="@(Model.CreateMrRequiresFilterStoreGroup.ToString().ToLowerInvariant())"
                                     @(Model.CreateMrDisabledByMissingStoreScope ? "disabled=\"disabled\"" : null)>
                                 <i class="fas fa-plus"></i> Create MR
+                            </button>
+                        }
+                        @if (Model.ShowCreateMrButton)
+                        {
+                            <form id="copyMrForm" method="post" asp-page-handler="Copy" class="d-none">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" asp-for="CopyRequestNo" id="copyMrRequestNoInput" />
+                            </form>
+                            <button type="button" id="btnCopyMr" class="btn btn-secondary btn-sm" disabled>
+                                <i class="fas fa-copy"></i> Copy MR
                             </button>
                         }
                         <button type="button" id="btnViewHistory" class="btn btn-info btn-sm" disabled>
