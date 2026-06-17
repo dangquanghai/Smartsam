@@ -1,6 +1,7 @@
 using System.Data;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
@@ -60,11 +61,13 @@ public class IndexModel : BasePageModel
         var modeState = BuildModeState(conn, Filter.ReportType, Filter.DescriptionId, Filter.FromDate, Filter.ToDate);
         ApplyModeState(modeState);
         Filter.DescriptionId = modeState.SelectedDescriptionId;
+        Filter.FromDate = modeState.FromDate;
+        Filter.ToDate = modeState.ToDate;
 
         return Page();
     }
 
-    public JsonResult OnGetModeOptions(string? reportType, int? descriptionId, DateTime? fromDate, DateTime? toDate)
+    public JsonResult OnGetModeOptions(string? reportType, int? descriptionId, DateTime? fromDate, DateTime? toDate, bool resetDateRange = false)
     {
         PagePerm = GetUserPermissions();
         if (!HasPageAccess())
@@ -76,31 +79,42 @@ public class IndexModel : BasePageModel
         try
         {
             using var conn = OpenConnection();
-            var normalizedFromDate = (fromDate ?? DateTime.Today.AddDays(-30)).Date;
-            var normalizedToDate = (toDate ?? DateTime.Today).Date;
+            var normalizedType = ResolveRequestedReportType(reportType);
+            if (resetDateRange && normalizedType == LinenReportTypes.LaundryRecord)
+            {
+                fromDate = GetDefaultFromDate(normalizedType);
+                toDate = GetDefaultToDate(normalizedType);
+            }
+
+            var normalizedFromDate = (fromDate ?? GetDefaultFromDate(normalizedType)).Date;
+            var normalizedToDate = (toDate ?? GetDefaultToDate(normalizedType)).Date;
             if (normalizedFromDate > normalizedToDate)
             {
                 normalizedToDate = normalizedFromDate;
             }
 
-            var modeState = BuildModeState(conn, ResolveRequestedReportType(reportType), descriptionId, normalizedFromDate, normalizedToDate);
-            return new JsonResult(new
+            var modeState = BuildModeState(conn, normalizedType, descriptionId, normalizedFromDate, normalizedToDate);
+            var response = new LinenReportModeOptionsResponse
             {
-                success = true,
-                reportType = modeState.ReportType,
-                labelText = modeState.DescriptionLabel,
-                descriptionEnabled = modeState.DescriptionEnabled,
-                linenEnabled = modeState.LinenEnabled,
-                fromEnabled = modeState.FromEnabled,
-                toEnabled = modeState.ToEnabled,
-                chartEnabled = modeState.ChartEnabled,
-                selectedDescriptionId = modeState.SelectedDescriptionId,
-                descriptions = modeState.DescriptionOptions.Select(x => new
+                Success = true,
+                ReportType = modeState.ReportType,
+                LabelText = modeState.DescriptionLabel,
+                DescriptionEnabled = modeState.DescriptionEnabled,
+                LinenEnabled = modeState.LinenEnabled,
+                FromEnabled = modeState.FromEnabled,
+                ToEnabled = modeState.ToEnabled,
+                ChartEnabled = modeState.ChartEnabled,
+                SelectedDescriptionId = modeState.SelectedDescriptionId,
+                FromDate = modeState.FromDate.ToString("yyyy-MM-dd"),
+                ToDate = modeState.ToDate.ToString("yyyy-MM-dd"),
+                Descriptions = modeState.DescriptionOptions.Select(x => new LinenReportModeDescriptionOption
                 {
-                    value = x.Value,
-                    text = x.Text
-                })
-            });
+                    Value = x.Value,
+                    Text = x.Text
+                }).ToList()
+            };
+
+            return new JsonResult(response);
         }
         catch (Exception ex)
         {
@@ -505,19 +519,6 @@ WHERE ReceiveID = @ReceiveID
             throw new InvalidOperationException("From Date and To Date must be in a month");
         }
 
-        var normalizedFromDate = fromDate.Date.AddSeconds(1);
-        var normalizedToDate = toDate.Date.AddDays(1).AddSeconds(-1);
-
-        using (var procCmd = new SqlCommand("dbo.LN_LaundryRecordRPT", conn))
-        {
-            procCmd.CommandType = CommandType.StoredProcedure;
-            procCmd.Parameters.Add("@Month", SqlDbType.Int).Value = fromDate.Month;
-            procCmd.Parameters.Add("@Year", SqlDbType.Int).Value = fromDate.Year;
-            procCmd.Parameters.Add("@FromDate", SqlDbType.VarChar, 50).Value = normalizedFromDate.ToString("yyyy-MM-dd HH:mm:ss");
-            procCmd.Parameters.Add("@ToDate", SqlDbType.VarChar, 50).Value = normalizedToDate.ToString("yyyy-MM-dd HH:mm:ss");
-            procCmd.Parameters.Add("@UserCode", SqlDbType.VarChar, 15).Value = GetCurrentUserCode();
-            procCmd.ExecuteNonQuery();
-        }
 
         var rows = new List<LaundryRecordPreviewRow>();
         using (var cmd = new SqlCommand(@"
@@ -576,7 +577,7 @@ ORDER BY View_LNLinenRecord.SupplierID ASC,
          View_LNLinenRecord.GroupID,
          View_LNLinenRecord.LinenCode ASC;", conn))
         {
-            cmd.Parameters.Add("@UserCode", SqlDbType.VarChar, 15).Value = GetCurrentUserCode();
+            cmd.Parameters.Add("@UserCode", SqlDbType.VarChar, 15).Value = LinenLaundryRecordCacheService.CacheUserCode;
             cmd.Parameters.Add("@MyMonth", SqlDbType.Int).Value = fromDate.Month;
             cmd.Parameters.Add("@MyYear", SqlDbType.Int).Value = fromDate.Year;
             cmd.Parameters.Add("@LinenCode", SqlDbType.VarChar, 50).Value = linenCode;
@@ -587,7 +588,8 @@ ORDER BY View_LNLinenRecord.SupplierID ASC,
                 var dayValues = new List<decimal>(31);
                 for (var day = 1; day <= 31; day++)
                 {
-                    dayValues.Add(ToDecimal(rd[$"D{day:00}"]));
+                    var dayDate = new DateTime(fromDate.Year, fromDate.Month, day);
+                    dayValues.Add(dayDate < fromDate.Date || dayDate > toDate.Date ? 0 : ToDecimal(rd[$"D{day:00}"]));
                 }
 
                 rows.Add(new LaundryRecordPreviewRow
@@ -803,8 +805,8 @@ ORDER BY DeliveryDate DESC, DeliveryID DESC, LinenCode ASC;", conn))
 
     private LinenReportModeState BuildModeState(SqlConnection conn, string reportType, int? requestedDescriptionId, DateTime? fromDate, DateTime? toDate)
     {
-        var normalizedFromDate = (fromDate ?? DateTime.Today.AddDays(-30)).Date;
-        var normalizedToDate = (toDate ?? DateTime.Today).Date;
+        var normalizedFromDate = (fromDate ?? GetDefaultFromDate(reportType)).Date;
+        var normalizedToDate = (toDate ?? GetDefaultToDate(reportType)).Date;
         if (normalizedFromDate > normalizedToDate)
         {
             normalizedToDate = normalizedFromDate;
@@ -812,7 +814,9 @@ ORDER BY DeliveryDate DESC, DeliveryID DESC, LinenCode ASC;", conn))
 
         var state = new LinenReportModeState
         {
-            ReportType = reportType
+            ReportType = reportType,
+            FromDate = normalizedFromDate,
+            ToDate = normalizedToDate
         };
 
         if (reportType == LinenReportTypes.Pantry)
@@ -1103,8 +1107,8 @@ FROM dbo.MS_Parameters;", conn);
         }
 
         Filter.LinenCode = (Filter.LinenCode ?? string.Empty).Trim();
-        Filter.FromDate ??= DateTime.Today.AddDays(-30);
-        Filter.ToDate ??= DateTime.Today;
+        Filter.FromDate ??= GetDefaultFromDate(Filter.ReportType);
+        Filter.ToDate ??= GetDefaultToDate(Filter.ReportType);
         if (Filter.FromDate > Filter.ToDate)
         {
             Filter.ToDate = Filter.FromDate;
@@ -1141,6 +1145,26 @@ FROM dbo.MS_Parameters;", conn);
         {
             Filter.ToDate = toDate;
         }
+    }
+
+    private static DateTime GetDefaultFromDate(string reportType)
+    {
+        if (reportType == LinenReportTypes.LaundryRecord)
+        {
+            return new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        }
+
+        return DateTime.Today.AddDays(-30);
+    }
+
+    private static DateTime GetDefaultToDate(string reportType)
+    {
+        if (reportType == LinenReportTypes.LaundryRecord)
+        {
+            return new DateTime(DateTime.Today.Year, DateTime.Today.Month, DateTime.DaysInMonth(DateTime.Today.Year, DateTime.Today.Month));
+        }
+
+        return DateTime.Today;
     }
 
     private static string NormalizeReportType(string? reportType)
@@ -1263,11 +1287,11 @@ FROM dbo.MS_Parameters;", conn);
     {
         return groupId switch
         {
-            1 => "Pantry-linen",
+            1 => "Pantry- linen",
             2 => "Uniform",
             3 => "Guest",
             4 => "Other",
-            5 => "Apartment",
+            5 => "Tenant",
             _ => "Group " + groupId
         };
     }
@@ -1413,6 +1437,54 @@ public static class LinenReportTypes
     public const string ApmtBalance = "apmt-balance";
 }
 
+public class LinenReportModeOptionsResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("reportType")]
+    public string ReportType { get; set; } = string.Empty;
+
+    [JsonPropertyName("labelText")]
+    public string LabelText { get; set; } = string.Empty;
+
+    [JsonPropertyName("descriptionEnabled")]
+    public bool DescriptionEnabled { get; set; }
+
+    [JsonPropertyName("linenEnabled")]
+    public bool LinenEnabled { get; set; }
+
+    [JsonPropertyName("fromEnabled")]
+    public bool FromEnabled { get; set; }
+
+    [JsonPropertyName("toEnabled")]
+    public bool ToEnabled { get; set; }
+
+    [JsonPropertyName("chartEnabled")]
+    public bool ChartEnabled { get; set; }
+
+    [JsonPropertyName("selectedDescriptionId")]
+    public int? SelectedDescriptionId { get; set; }
+
+    [JsonPropertyName("fromDate")]
+    public string FromDate { get; set; } = string.Empty;
+
+    [JsonPropertyName("toDate")]
+    public string ToDate { get; set; } = string.Empty;
+
+    [JsonPropertyName("descriptions")]
+    public List<LinenReportModeDescriptionOption> Descriptions { get; set; } = new List<LinenReportModeDescriptionOption>();
+}
+
+public class LinenReportModeDescriptionOption
+{
+    [JsonPropertyName("value")]
+    public string Value { get; set; } = string.Empty;
+
+    [JsonPropertyName("text")]
+    public string Text { get; set; } = string.Empty;
+}
+
 public class LinenReportModeState
 {
     public string ReportType { get; set; } = LinenReportTypes.LaundryRecord;
@@ -1423,6 +1495,8 @@ public class LinenReportModeState
     public bool ToEnabled { get; set; }
     public bool ChartEnabled { get; set; }
     public int? SelectedDescriptionId { get; set; }
+    public DateTime FromDate { get; set; }
+    public DateTime ToDate { get; set; }
     public List<SelectListItem> DescriptionOptions { get; set; } = new List<SelectListItem>();
 }
 

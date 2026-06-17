@@ -440,7 +440,6 @@ ORDER BY i.ItemCode", conn);
     {
         if (storeId <= 0) return false;
         if (IsAdminRole()) return true;
-        if (GetCurrentKpGroupId() == 1) return true;
         using var cmd = new SqlCommand("SELECT COUNT(1) FROM dbo.INV_StoreList WHERE StoreID=@StoreID AND DeptID=@KPGroupID", conn);
         cmd.Parameters.Add("@StoreID", SqlDbType.Int).Value = storeId;
         cmd.Parameters.Add("@KPGroupID", SqlDbType.Int).Value = GetCurrentKpGroupId();
@@ -586,7 +585,7 @@ WHERE i.ItemID = @ItemID", conn);
     {
         if (IsAdminRole()) return null;
         var kpGroupId = GetCurrentKpGroupId();
-        return kpGroupId == 1 ? null : kpGroupId;
+        return kpGroupId > 0 ? kpGroupId : null;
     }
     private PagePermissions GetUserPermissions() => IsAdminRole() ? new PagePermissions { AllowedNos = Enumerable.Range(1, 20).ToList() } : new PagePermissions { AllowedNos = _permissionService.GetPermissionsForPage(GetCurrentRoleId(), FunctionId) };
 }

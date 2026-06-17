@@ -34,6 +34,7 @@ builder.Services.AddSession();
 builder.Services.AddScoped<MenuService>();
 builder.Services.AddScoped<PermissionService>();
 builder.Services.AddScoped<SmartSam.Services.Interfaces.ISecurityService, SmartSam.Services.Implementations.SecurityService>();
+builder.Services.AddScoped<LinenLaundryRecordCacheService>();
 
 // Đăng ký Service xử lý Review của bạn
 builder.Services.AddScoped<SixMonthsStayReviewService>();
@@ -136,6 +137,16 @@ RecurringJob.AddOrUpdate<VoucherNotifyService>(
     }
 );
 
+// Job cache Laundry Record report
+RecurringJob.AddOrUpdate<LinenLaundryRecordCacheService>(
+    "DailyLinenLaundryRecordCache",
+    service => service.CollectRecentLaundryRecordCache(),
+    Cron.Daily(23, 30),
+    new RecurringJobOptions
+    {
+        TimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time")
+    }
+);
 app.Run();
 
 void RegisterPdfFontIfExists(string fontAlias, string fileName)

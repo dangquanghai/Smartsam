@@ -85,8 +85,15 @@ public static class LinenReportQuestPdfReport
             LinenReportTypes.Pantry => FormatSlashDate(GetString(preview, "dateText")),
             LinenReportTypes.Delivery => FormatShortDate(GetString(preview, "dateText")),
             LinenReportTypes.Receive => FormatShortDate(GetString(preview, "dateText")),
+            LinenReportTypes.LaundryRecord => DateTime.Today.ToString("dd-MMM-yy", CultureInfo.InvariantCulture),
             _ => string.Empty
         };
+
+        if (reportType == LinenReportTypes.LaundryRecord)
+        {
+            ComposeLaundryRecordHeader(container, preview, companyLogo, title, rightDate);
+            return;
+        }
 
         var headerContainer = headerWidth.HasValue
             ? container.AlignCenter().Width(headerWidth.Value)
@@ -114,6 +121,40 @@ public static class LinenReportQuestPdfReport
         });
     }
 
+    private static void ComposeLaundryRecordHeader(IContainer container, object preview, byte[]? companyLogo, string title, string rightDate)
+    {
+        container.Height(78).Row(row =>
+        {
+            row.ConstantItem(120).Element(left =>
+            {
+                if (companyLogo != null && companyLogo.Length > 0)
+                {
+                    left.Width(82).Height(72).AlignLeft().AlignTop().Image(companyLogo).FitArea();
+                    return;
+                }
+
+                left.Column(textColumn =>
+                {
+                    textColumn.Item().PaddingTop(42).Text("S A I G O N").FontSize(6);
+                    textColumn.Item().Text("SKYGARDEN").FontSize(10).Bold();
+                });
+            });
+
+            row.RelativeItem().Column(center =>
+            {
+                center.Item().PaddingTop(8).AlignCenter().Text(title).Bold().FontSize(15);
+                center.Item().PaddingTop(12).AlignCenter().Width(300).Row(dateRow =>
+                {
+                    dateRow.ConstantItem(62).AlignRight().Text("From Date:").Bold().FontSize(8);
+                    dateRow.ConstantItem(82).AlignCenter().Text(FormatShortDate(GetString(preview, "fromDate"))).FontSize(8);
+                    dateRow.ConstantItem(74).AlignCenter().Text("To Date:").Bold().FontSize(8);
+                    dateRow.ConstantItem(82).AlignLeft().Text(FormatShortDate(GetString(preview, "toDate"))).FontSize(8);
+                });
+            });
+
+            row.ConstantItem(120).AlignRight().PaddingTop(2).Text(rightDate).FontSize(8);
+        });
+    }
     private static void ComposePantry(IContainer container, object preview)
     {
         var columns = GetItems(GetValue(preview, "columns")).ToList();
@@ -301,46 +342,81 @@ public static class LinenReportQuestPdfReport
         var groups = GetItems(GetValue(preview, "groups")).ToList();
         container.Column(column =>
         {
-            column.Spacing(6);
-            column.Item().Text($"From Dat: {FormatShortDate(GetString(preview, "fromDate"))}    To Date: {FormatShortDate(GetString(preview, "toDate"))}");
+            column.Spacing(5);
             column.Item().Table(table =>
             {
                 table.ColumnsDefinition(def =>
                 {
-                    def.ConstantColumn(62);
-                    def.ConstantColumn(36);
+                    def.ConstantColumn(88);
+                    def.ConstantColumn(40);
                     for (var day = 1; day <= 31; day++)
                     {
-                        def.ConstantColumn(16);
+                        def.ConstantColumn(18);
                     }
-                    def.ConstantColumn(40);
+                    def.ConstantColumn(42);
+                    def.ConstantColumn(78);
                 });
 
                 table.Header(header =>
                 {
-                    header.Cell().Element(HeaderCell).Text("LinenCode").Bold();
-                    header.Cell().Element(HeaderCell).AlignRight().Text("Price").Bold();
+                    header.Cell().Element(LaundryHeaderCell).Text("LinenCode").Bold().FontSize(6);
+                    header.Cell().Element(LaundryHeaderCell).AlignRight().Text("Price").Bold().FontSize(6);
                     for (var day = 1; day <= 31; day++)
                     {
-                        header.Cell().Element(HeaderCell).AlignCenter().Text(day.ToString("00", CultureInfo.InvariantCulture)).Bold();
+                        header.Cell().Element(LaundryHeaderCell).AlignCenter().Text(day.ToString("00", CultureInfo.InvariantCulture)).Bold().FontSize(6);
                     }
-                    header.Cell().Element(HeaderCell).AlignRight().Text("Total QT").Bold();
+                    header.Cell().Element(LaundryHeaderCell).AlignRight().Text("Total Qty").Bold().FontSize(6);
+                    header.Cell().Element(LaundryHeaderCell).AlignRight().Text("Total Amount").Bold().FontSize(6);
                 });
 
-                foreach (var group in groups)
+                foreach (var supplierGroup in groups.GroupBy(x => new
                 {
-                    table.Cell().ColumnSpan(34).Element(x => BodyCell(x, "#f7f7f7")).Text(GetString(group, "supplierName")).Bold();
-                    table.Cell().ColumnSpan(34).Element(x => BodyCell(x, "#fbfbfb")).Text(GetString(group, "groupName")).Bold();
+                    SupplierId = GetString(x, "supplierId"),
+                    SupplierName = GetString(x, "supplierName")
+                }))
+                {
+                    table.Cell().ColumnSpan(35).Element(LaundrySupplierCell).Text(supplierGroup.Key.SupplierName).Bold().FontSize(8);
 
-                    foreach (var row in GetItems(GetValue(group, "rows")))
+                    foreach (var group in supplierGroup.OrderBy(x => GetInt(x, "groupId")))
                     {
-                        table.Cell().Element(BodyCell).Text(GetString(row, "linenCode"));
-                        table.Cell().Element(BodyCell).AlignRight().Text(FormatNumber(GetDecimal(row, "price")));
-                        foreach (var day in GetItems(GetValue(row, "days")).Take(31))
+                        var groupName = GetString(group, "groupName");
+                        table.Cell().ColumnSpan(35).Element(LaundryGroupCell).Text(groupName).Bold().FontSize(7);
+
+                        var dayTotals = new decimal[31];
+                        decimal groupTotalQuantity = 0;
+                        decimal groupTotalAmount = 0;
+
+                        foreach (var row in GetItems(GetValue(group, "rows")))
                         {
-                            table.Cell().Element(BodyCell).AlignRight().Text(FormatBlankZero(GetDecimal(day)));
+                            var price = GetDecimal(row, "price");
+                            var rowTotalQuantity = GetDecimal(row, "total");
+                            var rowTotalAmount = rowTotalQuantity * price;
+                            groupTotalQuantity += rowTotalQuantity;
+                            groupTotalAmount += rowTotalAmount;
+
+                            table.Cell().Element(LaundryBodyCell).Text(GetString(row, "linenCode")).FontSize(6);
+                            table.Cell().Element(LaundryBodyCell).AlignRight().Text(FormatNumber(price)).FontSize(6);
+
+                            var days = GetItems(GetValue(row, "days")).Take(31).Select(GetDecimal).ToList();
+                            for (var dayIndex = 0; dayIndex < 31; dayIndex++)
+                            {
+                                var dayValue = dayIndex < days.Count ? days[dayIndex] : 0;
+                                dayTotals[dayIndex] += dayValue;
+                                table.Cell().Element(LaundryBodyCell).AlignRight().Text(FormatBlankZero(dayValue)).FontSize(6);
+                            }
+
+                            table.Cell().Element(LaundryBodyCell).AlignRight().Text(FormatNumber(rowTotalQuantity)).FontSize(6).Bold();
+                            table.Cell().Element(LaundryBodyCell).AlignRight().Text(FormatNumber(rowTotalAmount)).FontSize(6).Bold();
                         }
-                        table.Cell().Element(BodyCell).AlignRight().Text(FormatNumber(GetDecimal(row, "total")));
+
+                        table.Cell().Element(LaundryTotalCell).AlignCenter().Text("Total").Bold().FontSize(6);
+                        table.Cell().Element(LaundryTotalCell).AlignCenter().Text(groupName).Bold().FontSize(6);
+                        foreach (var total in dayTotals)
+                        {
+                            table.Cell().Element(LaundryTotalCell).AlignRight().Text(FormatBlankZero(total)).FontSize(6);
+                        }
+                        table.Cell().Element(LaundryTotalCell).AlignRight().Text(FormatNumber(groupTotalQuantity)).Bold().FontSize(6);
+                        table.Cell().Element(LaundryTotalCell).AlignRight().Text(FormatNumber(groupTotalAmount)).Bold().FontSize(6);
                     }
                 }
             });
@@ -386,7 +462,7 @@ public static class LinenReportQuestPdfReport
         container.Column(column =>
         {
             column.Spacing(6);
-            column.Item().Text($"From Dat: {FormatShortDate(GetString(preview, "fromDate"))}    To Date: {FormatShortDate(GetString(preview, "toDate"))}");
+            column.Item().Text($"From Date: {FormatShortDate(GetString(preview, "fromDate"))}    To Date: {FormatShortDate(GetString(preview, "toDate"))}");
             column.Item().AlignCenter().Table(table =>
             {
                 table.ColumnsDefinition(def =>
@@ -422,7 +498,7 @@ public static class LinenReportQuestPdfReport
         container.Column(column =>
         {
             column.Spacing(6);
-            column.Item().Text($"Apartment No: {GetString(preview, "apartmentNo")}    From Dat: {FormatShortDate(GetString(preview, "fromDate"))}    To Dat: {FormatShortDate(GetString(preview, "toDate"))}");
+            column.Item().Text($"Apartment No: {GetString(preview, "apartmentNo")}    From Date: {FormatShortDate(GetString(preview, "fromDate"))}    To Date: {FormatShortDate(GetString(preview, "toDate"))}");
             column.Item().AlignCenter().Table(table =>
             {
                 table.ColumnsDefinition(def =>
@@ -447,6 +523,32 @@ public static class LinenReportQuestPdfReport
                 }
             });
         });
+    }
+
+
+    private static IContainer LaundryHeaderCell(IContainer container)
+    {
+        return container.Border(0.8f).BorderColor(Colors.Black).PaddingVertical(1).PaddingHorizontal(1);
+    }
+
+    private static IContainer LaundryBodyCell(IContainer container)
+    {
+        return container.Border(0.5f).BorderColor(Colors.Black).PaddingVertical(0.5f).PaddingHorizontal(1);
+    }
+
+    private static IContainer LaundrySupplierCell(IContainer container)
+    {
+        return container.PaddingTop(2).PaddingBottom(2).PaddingHorizontal(1);
+    }
+
+    private static IContainer LaundryGroupCell(IContainer container)
+    {
+        return container.PaddingLeft(12).PaddingTop(2).PaddingBottom(2);
+    }
+
+    private static IContainer LaundryTotalCell(IContainer container)
+    {
+        return container.BorderTop(0.8f).PaddingVertical(1).PaddingHorizontal(1);
     }
 
     private static IContainer HeaderCell(IContainer container)
