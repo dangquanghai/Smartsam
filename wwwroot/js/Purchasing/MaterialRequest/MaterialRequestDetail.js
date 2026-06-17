@@ -1,4 +1,4 @@
-﻿$(document).ready(function () {
+$(document).ready(function () {
     // Read mode and user rights
     const urlParams = new URLSearchParams(window.location.search);
     const modeParam = urlParams.get('mode');
@@ -24,6 +24,7 @@
     initializePage(mode, currentStatusId, actionPerm);
     syncNoIssueInput();
     $('#NoIssueCheck').on('change', syncNoIssueInput);
+    initializeAutoDismissMessages();
 
     // Handle main form submit
     $('#materialRequestDetailForm').on('submit', function (e) {
@@ -38,6 +39,19 @@
         const $tableBody = $('#mrLineTableBody');
         const $linesJsonInput = $('#linesJsonInput');
         syncPostedLines($tableBody, $linesJsonInput);
+
+        const $activeInput = $(document.activeElement);
+        if (!submitter && $activeInput.closest('#mrLineTableBody').length > 0) {
+            const $activeRow = $activeInput.closest('.mr-line-row');
+            if ($activeInput.is('.mr-line-order')) {
+                promptSaveDraftEditableRow($form, $tableBody, $activeRow);
+                return;
+            }
+            if ($activeInput.is('.mr-line-buy, .mr-line-note')) {
+                promptSavePurchaserEditableRow($form, $tableBody, $activeRow);
+                return;
+            }
+        }
 
         $('#rejectItemLineIdsJsonInput').val('');
 
@@ -763,6 +777,22 @@ function initializePurchaserEditableRowPrompt($form, $tableBody, enablePrompt) {
     });
 
     $tableBody.off('.mrPurchaserEditPrompt');
+    $tableBody.off('.mrLineOrder');
+
+    $tableBody.on('input.mrLineOrder', '.mr-line-order', function () {
+        const normalized = normalizeEditableNumericInput($(this).val());
+        if ($(this).val() !== normalized) {
+            $(this).val(normalized);
+        }
+    });
+
+    $tableBody.on('keydown.mrLineOrder', '.mr-line-order', function (event) {
+        if (event.key !== 'Enter') return;
+
+        event.preventDefault();
+        promptSaveDraftEditableRow($form, $tableBody, $(this).closest('.mr-line-row'));
+    });
+
     if (!enablePrompt) {
         return;
     }
@@ -798,14 +828,19 @@ function initializePurchaserEditableRowPrompt($form, $tableBody, enablePrompt) {
         }
     });
 
-    $tableBody.on('input.mrLineOrder', '.mr-line-order', function () {
-        const normalized = normalizeEditableNumericInput($(this).val());
-        if ($(this).val() !== normalized) {
-            $(this).val(normalized);
+    $tableBody.on('keydown.mrPurchaserEditPrompt', '.mr-line-buy, .mr-line-note', function (event) {
+        if (event.key !== 'Enter') return;
+
+        event.preventDefault();
+        const $row = $(this).closest('.mr-line-row');
+        const existingTimer = $row.data('mrPromptTimer');
+        if (existingTimer) {
+            window.clearTimeout(existingTimer);
+            $row.removeData('mrPromptTimer');
         }
+        promptSavePurchaserEditableRow($form, $tableBody, $row);
     });
 }
-
 function promptSavePurchaserEditableRow($form, $tableBody, $row) {
     if (!$row || $row.length === 0) return;
     if ($row.data('mrPromptBusy')) return;
@@ -820,6 +855,26 @@ function promptSavePurchaserEditableRow($form, $tableBody, $row) {
         }
 
         savePurchaserEditableLines($form, $tableBody, $row);
+    } finally {
+        $row.removeData('mrPromptBusy');
+    }
+}
+
+function promptSaveDraftEditableRow($form, $tableBody, $row) {
+    if (!$row || $row.length === 0) return;
+    if ($row.data('mrPromptBusy')) return;
+
+    $row.data('mrPromptBusy', true);
+    try {
+        if (!window.confirm('Do you want to save your changes?')) {
+            return;
+        }
+
+        syncPostedLines($tableBody, $('#linesJsonInput'));
+        $('#workflowActionModeInput').val('draft-save');
+        $('#draftSaveActionInput').val('manual-save');
+        $('#rejectItemLineIdsJsonInput').val('');
+        submitDraftSaveAjax($form, { showSuccess: false });
     } finally {
         $row.removeData('mrPromptBusy');
     }
@@ -1070,9 +1125,10 @@ function autoSaveDraftAfterGridChange(draftSaveAction) {
     submitDraftSaveAjax($form);
 }
 
-function submitDraftSaveAjax($form) {
+function submitDraftSaveAjax($form, options) {
     if ($form.length === 0) return;
 
+    const showSuccess = !options || options.showSuccess !== false;
     const form = $form[0];
     const formData = new FormData(form);
     const targetUrl = new URL(window.location.href);
@@ -1090,7 +1146,9 @@ function submitDraftSaveAjax($form) {
                 if (res.requestNo !== undefined && res.requestNo !== null && res.requestNo !== '') {
                     updateDraftSavedRequestNo(res.requestNo);
                 }
-                showDetailSuccessMessage(res.message || 'Line changes saved.');
+                if (showSuccess) {
+                    showDetailSuccessMessage(res.message || 'Line changes saved.');
+                }
                 return;
             }
 
@@ -1133,9 +1191,28 @@ function showDetailSuccessMessage(message) {
     $target.find('.mr-auto-message').remove();
     if ($target.length > 0) {
         $target.prepend($alert);
+        scheduleSuccessAlertDismiss($alert);
     } else {
         alert(message || 'Saved successfully.');
     }
+}
+
+function initializeAutoDismissMessages() {
+    scheduleSuccessAlertDismiss($('.alert-success'));
+}
+
+function scheduleSuccessAlertDismiss($alerts) {
+    $alerts.each(function () {
+        const $alert = $(this);
+        window.setTimeout(function () {
+            if ($alert.length === 0 || !$alert.is(':visible')) return;
+            if (typeof $alert.alert === 'function') {
+                $alert.alert('close');
+            } else {
+                $alert.remove();
+            }
+        }, 10000);
+    });
 }
 
 function showDetailErrorMessage(message) {
