@@ -241,7 +241,7 @@ WHERE a1.POID = @POID
         if (currentStatus == 1)
         {
             var sql = @"UPDATE dbo.INV_RecevingChekingVoucher
-SET CheckedBy=@EmpId, CheckedDate=GETDATE(), StatusID=2,
+SET CheckedBy=ISNULL(CheckedBy,@EmpId), CheckedDate=GETDATE(), StatusID=2,
     ExpectDate=@ExpectDate, MRInfor=@MRInfor, CheckingMethod=@CheckingMethod, Result=@Result
 WHERE CheckingID=@CheckingID";
             using var cmd = new SqlCommand(sql, conn);
@@ -350,12 +350,13 @@ WHERE CheckingID=@CheckingID";
 
         using var conn = OpenConnection();
         using var cmd = new SqlCommand(@"UPDATE dbo.INV_RecevingChekingVoucher
-SET ExpectDate=@ExpectDate, MRInfor=@MRInfor
+SET ExpectDate=@ExpectDate, MRInfor=@MRInfor, CheckingMethod=@CheckingMethod, Result=@Result, CheckedBy=@CheckedBy
 WHERE CheckingID=@CheckingID", conn);
         cmd.Parameters.Add("@ExpectDate", SqlDbType.DateTime).Value = Header.ExpectDate;
         cmd.Parameters.Add("@MRInfor", SqlDbType.NVarChar, 50).Value = string.IsNullOrWhiteSpace(Header.MRInfor) ? string.Empty : Header.MRInfor.Trim();
         cmd.Parameters.Add("@CheckingMethod", SqlDbType.NVarChar, 254).Value = string.IsNullOrWhiteSpace(Header.CheckingMethod) ? string.Empty : Header.CheckingMethod.Trim();
         cmd.Parameters.Add("@Result", SqlDbType.NVarChar, 100).Value = string.IsNullOrWhiteSpace(Header.Result) ? string.Empty : Header.Result.Trim();
+        cmd.Parameters.Add("@CheckedBy", SqlDbType.Int).Value = Header.NotifyCheckedBy ?? (object)DBNull.Value;
         cmd.Parameters.Add("@CheckingID", SqlDbType.Int).Value = Header.CheckingId;
         cmd.ExecuteNonQuery();
         if (SendCreateCheckMail)
@@ -756,8 +757,8 @@ WHERE d.CheckingID=@CheckingID", conn);
     }
     private int InsertMaster(int poid, SqlConnection conn, SqlTransaction? tx)
     {
-        using var cmd = new SqlCommand(@"INSERT INTO dbo.INV_RecevingChekingVoucher(CreateDate,CreatedBy,POID,ExpectDate,DeptChecked,StatusID,MRInfor,CheckingMethod,Result)
-VALUES(GETDATE(),@CreatedBy,@POID,@ExpectDate,@DeptChecked,1,@MRInfor,@CheckingMethod,@Result);
+        using var cmd = new SqlCommand(@"INSERT INTO dbo.INV_RecevingChekingVoucher(CreateDate,CreatedBy,POID,ExpectDate,DeptChecked,StatusID,MRInfor,CheckingMethod,Result,CheckedBy)
+VALUES(GETDATE(),@CreatedBy,@POID,@ExpectDate,@DeptChecked,1,@MRInfor,@CheckingMethod,@Result,@CheckedBy);
 SELECT CAST(SCOPE_IDENTITY() AS INT);", conn, tx);
         cmd.Parameters.Add("@CreatedBy", SqlDbType.Int).Value = GetCurrentEmployeeId();
         cmd.Parameters.Add("@POID", SqlDbType.Int).Value = poid;
@@ -766,6 +767,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);", conn, tx);
         cmd.Parameters.Add("@MRInfor", SqlDbType.NVarChar, 50).Value = string.IsNullOrWhiteSpace(Header.MRInfor) ? string.Empty : Header.MRInfor.Trim();
         cmd.Parameters.Add("@CheckingMethod", SqlDbType.NVarChar, 254).Value = string.IsNullOrWhiteSpace(Header.CheckingMethod) ? string.Empty : Header.CheckingMethod.Trim();
         cmd.Parameters.Add("@Result", SqlDbType.NVarChar, 100).Value = string.IsNullOrWhiteSpace(Header.Result) ? string.Empty : Header.Result.Trim();
+        cmd.Parameters.Add("@CheckedBy", SqlDbType.Int).Value = Header.NotifyCheckedBy ?? (object)DBNull.Value;
         return Convert.ToInt32(cmd.ExecuteScalar());
     }
     private void EnsurePreviewCheckingId()
