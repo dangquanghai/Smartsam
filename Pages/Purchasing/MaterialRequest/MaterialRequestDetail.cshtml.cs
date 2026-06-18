@@ -139,6 +139,11 @@ public class MaterialRequestDetailModel : BasePageModel
         get { return IsEdit && CanUpdateDraftMaterialRequest() && CurrentStatusId == StatusJustCreated; }
     }
 
+    public bool CanRecall
+    {
+        get { return IsEdit && CanRecallSubmittedMaterialRequest(CurrentStatusId); }
+    }
+
     public bool CanApprove
     {
         get { return IsEdit && CanApproveStatus(CurrentStatusId, Input.IsAuto); }
@@ -427,6 +432,11 @@ public class MaterialRequestDetailModel : BasePageModel
         return await HandleWorkflowActionAsync(MaterialRequestWorkflowAction.Submit, cancellationToken);
     }
 
+    public async Task<IActionResult> OnPostRecall(CancellationToken cancellationToken)
+    {
+        return await HandleWorkflowActionAsync(MaterialRequestWorkflowAction.Recall, cancellationToken);
+    }
+
     public async Task<IActionResult> OnPostApprove(CancellationToken cancellationToken)
     {
         return await HandleWorkflowActionAsync(MaterialRequestWorkflowAction.Approve, cancellationToken);
@@ -659,6 +669,16 @@ public class MaterialRequestDetailModel : BasePageModel
             WarningMessage = "You do not have permission to submit this draft.";
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
         }
+        if (action == MaterialRequestWorkflowAction.Recall && !CanRecallSubmittedMaterialRequest(currentStatus))
+        {
+            WarningMessage = "You can only recall your own submitted Material Request before Head Dept approval.";
+            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
+        }
+        if (action == MaterialRequestWorkflowAction.Recall && !GetCurrentEmployeeId().HasValue)
+        {
+            ErrorMessage = "Current user is not linked to an active employee. Please assign this account to MS_Employee before recalling MR.";
+            return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id));
+        }
         var transition = ResolveTransition(action, currentStatus, isAuto, autoHeadApproveOnSubmit);
         if (transition is null)
         {
@@ -707,6 +727,11 @@ public class MaterialRequestDetailModel : BasePageModel
             await WriteWorkflowHistoryAsync(action, currentStatus, transition, Id.Value, cancellationToken, autoHeadApproveOnSubmit);
             TryQueueWorkflowNotifyEmail(action, currentStatus, existing, isAuto, purchaserLines, autoHeadApproveOnSubmit);
             SuccessMessage = transition.SuccessMessage;
+            if (action == MaterialRequestWorkflowAction.Recall)
+            {
+                return RedirectToPage("./MaterialRequestDetail", new { id = Id, mode = "edit", returnUrl = ReturnUrl });
+            }
+
             return RedirectToPage("./MaterialRequestDetail", BuildDetailRoute(Id, true));
         }
         catch (Exception ex)
@@ -1771,6 +1796,11 @@ public class MaterialRequestDetailModel : BasePageModel
             return "Submit";
         }
 
+        if (action == MaterialRequestWorkflowAction.Recall)
+        {
+            return "Recall";
+        }
+
         if (action == MaterialRequestWorkflowAction.Approve)
         {
             return currentStatus switch
@@ -2097,11 +2127,39 @@ public class MaterialRequestDetailModel : BasePageModel
         return _dataScope.IsPurchaser;
     }
 
+    private bool CanRecallSubmittedMaterialRequest(int statusId)
+    {
+        if (statusId != StatusSubmittedToHead)
+        {
+            return false;
+        }
+
+        if (_isAdminRole)
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(_draftCreatorEmployeeCode))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            User.Identity?.Name?.Trim(),
+            _draftCreatorEmployeeCode,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     private bool CanExecuteTransition(MaterialRequestWorkflowAction action, int currentStatus, bool isAuto)
     {
         if (action == MaterialRequestWorkflowAction.Submit)
         {
             return CanUpdateDraftMaterialRequest() && currentStatus == StatusJustCreated;
+        }
+
+        if (action == MaterialRequestWorkflowAction.Recall)
+        {
+            return CanRecallSubmittedMaterialRequest(currentStatus);
         }
 
         if (action == MaterialRequestWorkflowAction.Approve)
@@ -2211,6 +2269,24 @@ public class MaterialRequestDetailModel : BasePageModel
                 "#17a2b8",
                 "has been submitted and is waiting for your approval.",
                 "Submit");
+        }
+
+        if (action == MaterialRequestWorkflowAction.Recall && currentStatus == StatusSubmittedToHead)
+        {
+            var recipients = GetHeadDeptRecipientsByStoreGroup(header.StoreGroup);
+            if (recipients.Count == 0)
+            {
+                return null;
+            }
+
+            return CreateWorkflowNotifyRequest(
+                header,
+                recipients,
+                "[Material Request] Recalled by requester",
+                "MATERIAL REQUEST",
+                "#ffc107",
+                "has been recalled by requester and no longer requires Head Dept approval.",
+                "Recall");
         }
 
         if (action == MaterialRequestWorkflowAction.Approve && currentStatus == StatusSubmittedToHead)
@@ -2583,6 +2659,16 @@ public class MaterialRequestDetailModel : BasePageModel
                     null);
         }
 
+        if (action == MaterialRequestWorkflowAction.Recall && currentStatus == StatusSubmittedToHead)
+        {
+            return new MaterialRequestWorkflowTransition(
+                    StatusJustCreated,
+                    "Material Request recalled. You can edit and submit again.",
+                    false,
+                    false,
+                    false);
+        }
+
         if (action == MaterialRequestWorkflowAction.Approve && currentStatus == StatusSubmittedToHead)
         {
             return new MaterialRequestWorkflowTransition(
@@ -2705,6 +2791,7 @@ public class MaterialRequestDetailModel : BasePageModel
 internal enum MaterialRequestWorkflowAction
 {
     Submit,
+    Recall,
     Approve,
     Issue,
     Reject

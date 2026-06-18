@@ -9,6 +9,7 @@ $(document).ready(function () {
     const actionPerm = {
         canSave: toBoolData($form.data('can-save')),
         canSubmit: toBoolData($form.data('can-submit')),
+        canRecall: toBoolData($form.data('can-recall')),
         canCalculate: toBoolData($form.data('can-calculate')),
         canApprove: toBoolData($form.data('can-approve')),
         canIssue: toBoolData($form.data('can-issue')),
@@ -28,9 +29,9 @@ $(document).ready(function () {
 
     // Handle main form submit
     $('#materialRequestDetailForm').on('submit', function (e) {
-        if (mode === 'view') return true;
-
         const submitter = e.originalEvent && e.originalEvent.submitter ? e.originalEvent.submitter : null;
+        if (mode === 'view' && (!submitter || submitter.id !== 'mrRecallBtn')) return true;
+
         const form = this;
         let actionMode = ($('#workflowActionModeInput').val() || '').toString().trim();
 
@@ -57,6 +58,7 @@ $(document).ready(function () {
 
         const isRejectButton = submitter && submitter.id === 'mrRejectBtn';
         const isIssueButton = submitter && submitter.id === 'mrIssueBtn';
+        const isRecallButton = submitter && submitter.id === 'mrRecallBtn';
         const $selectedRows = $tableBody.find('.mr-line-row.is-selected');
         const lineCount = getMrLineCount($tableBody);
 
@@ -79,6 +81,11 @@ $(document).ready(function () {
                 return;
             }
         }
+        else if (isRecallButton) {
+            if (!window.confirm('Recall this Material Request so you can edit and submit it again?')) {
+                return;
+            }
+        }
 
         if (!actionMode && submitter) {
             if (submitter.id === 'mrSubmitBtn') {
@@ -87,6 +94,9 @@ $(document).ready(function () {
             else if (submitter.id === 'mrSaveBtn') {
                 actionMode = 'draft-save';
                 $('#draftSaveActionInput').val('manual-save');
+            }
+            else if (submitter.id === 'mrRecallBtn') {
+                actionMode = 'recall';
             }
             else if (submitter.id === 'mrApproveBtn') {
                 actionMode = 'approve';
@@ -225,6 +235,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
 
     const canSave = !!actionPerm.canSave;
     const canSubmit = !!actionPerm.canSubmit;
+    const canRecall = !!actionPerm.canRecall;
     const canCalculate = !!actionPerm.canCalculate;
     const canApprove = !!actionPerm.canApprove;
     const canIssue = !!actionPerm.canIssue;
@@ -251,6 +262,7 @@ function initializePage(mode, currentStatusId, actionPerm) {
     const isSubmittedToHead = currentStatusId === 0;
     const showEditActions = isDraft && !isViewMode && canSave;
     const showSubmitAction = isDraft && !isViewMode && canSubmit;
+    const showRecallAction = isSubmittedToHead && canRecall;
     const showCalculateAction = canCalculate;
     const showReplaceAction = canReplace;
     const showApproveAction = !isDraft && canApprove;
@@ -276,6 +288,9 @@ function initializePage(mode, currentStatusId, actionPerm) {
     $('#mrSubmitBtn')
         .toggle(showSubmitAction)
         .prop('disabled', !showSubmitAction);
+    $('#mrRecallBtn')
+        .toggle(showRecallAction)
+        .prop('disabled', !showRecallAction);
     $('#mrApproveBtn')
         .toggle(showApproveAction)
         .prop('disabled', !showApproveAction);
@@ -567,6 +582,10 @@ function validateMainForm(actionMode) {
     }
 
     if (normalizedActionMode === 'reject-item') {
+        return true;
+    }
+
+    if (normalizedActionMode === 'recall') {
         return true;
     }
 
