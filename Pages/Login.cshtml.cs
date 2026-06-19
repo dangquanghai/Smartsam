@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authentication;
+﻿﻿using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -37,7 +37,7 @@ namespace SmartSam.Pages
             // SQL: Lấy thông tin User và RoleID từ bảng SYS_RoleMember
             // Lưu ý: Một user có thể có nhiều Role, ở đây ta lấy Role quan trọng nhất hoặc đầu tiên
             string sql = @"
-                SELECT TOP 1 e.EmployeeID, e.EmployeeCode, e.EmployeeName, e.NewPassword, rm.RoleID , r.IsAdminRole
+                SELECT TOP 1 e.EmployeeID, e.EmployeeCode, e.EmployeeName, e.NewPassword, e.StoreGR, rm.RoleID , r.IsAdminRole
                 FROM MS_Employee e
                 INNER JOIN SYS_RoleMember rm ON e.EmployeeID = rm.Operator
                 INNER JOIN SYS_Role r on rm.RoleID = r.RoleID
@@ -55,6 +55,7 @@ namespace SmartSam.Pages
                     string empId = reader["EmployeeID"].ToString() ?? "0"; // THÊM DÒNG NÀY
                     string empCode = reader["EmployeeCode"].ToString() ?? string.Empty;
                     string empName = reader["EmployeeName"].ToString() ?? string.Empty;
+                    string storeGr = reader["StoreGR"] != DBNull.Value ? reader["StoreGR"].ToString() ?? "0" : "0";
                     string roleId = reader["RoleID"] != DBNull.Value ? reader["RoleID"].ToString() ?? "0" : "0";
                     bool isAdminRole = reader["IsAdminRole"] != DBNull.Value && Convert.ToBoolean(reader["IsAdminRole"]);
 
@@ -63,6 +64,7 @@ namespace SmartSam.Pages
                         new Claim("EmployeeID", empId),                  // THÊM DÒNG NÀY: Dùng để truy vấn DB sau này
                         new Claim(ClaimTypes.Name, empCode), // Lưu Mã NV làm định danh
                         new Claim("FullName", empName),      // Lưu Tên để hiển thị Layout
+                        new Claim("StoreGR", storeGr),        // Lưu kho mặc định/liên quan của nhân viên
                         new Claim("RoleID", roleId),          // QUAN TRỌNG: Lưu RoleID để PermissionService dùng
                         new Claim("IsAdminRole", isAdminRole.ToString()) // // Chuyển bool thành "True" hoặc "False"
 

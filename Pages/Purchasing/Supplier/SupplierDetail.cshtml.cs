@@ -36,7 +36,8 @@ namespace SmartSam.Pages.Purchasing.Supplier
         private const int PermissionEdit = 4;
         private const int PermissionSubmit = 5;
         private const int StatusDisapproved = 5;
-        private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
+        // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
+        private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
 
         private EmployeeDataScopeViewModel _dataScope = new EmployeeDataScopeViewModel();
         private bool _isAdminRole;

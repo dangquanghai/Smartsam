@@ -19,8 +19,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 {
     public class ApproveSupplierDetailModel : BasePageModel
     {
-        // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
-        private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
+        private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
+        // private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
         private readonly ILogger<ApproveSupplierDetailModel> _logger;
         private readonly ISecurityService _securityService;
         private const int NoDepartmentScopeValue = -1;
@@ -115,12 +115,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             LoadUserDataScope();
             if (!HasPermission(PermissionViewList))
             {
-                return Redirect("/");
+                return RedirectHomeWithAccessError("Missing permission: View Approve Supplier list (FunctionID 145, PermissionNo 1).");
             }
 
             if (IsSupplierLinkMode && (!_dataScope.LevelCheckSupplier.HasValue || _dataScope.LevelCheckSupplier.Value is < 1 or > 4))
             {
-                return Redirect("/");
+                return RedirectHomeWithAccessError("Missing approval data scope: LevelCheckSupplier must be from 1 to 4 for Approve Supplier New links.");
             }
 
             if (!string.IsNullOrWhiteSpace(FlashMessage))
@@ -139,6 +139,16 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             // 2. Load dữ liệu màn hình theo đúng phạm vi quyền
             LoadSupplierRows();
             LoadCurrentSupplierDetailData();
+            if (IsSupplierLinkMode && CurrentSupplierDetail is null)
+            {
+                SetGlobalFlashMessage(
+                    string.IsNullOrWhiteSpace(FlashMessage)
+                        ? "Cannot access this Approve Supplier New link. The supplier is outside your permission scope or is not in your approval step."
+                        : FlashMessage,
+                    "error");
+                return Redirect("/");
+            }
+
             return Page();
         }
 
@@ -152,7 +162,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             LoadUserDataScope();
             if (!HasPermission(PermissionViewList))
             {
-                return Redirect("/");
+                return RedirectHomeWithAccessError("Missing permission: View Approve Supplier list (FunctionID 145, PermissionNo 1).");
             }
 
             var supplierId = EditSupplier.SupplierID;
@@ -214,7 +224,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             LoadUserDataScope();
             if (!HasPermission(PermissionViewList))
             {
-                return Redirect("/");
+                return RedirectHomeWithAccessError("Missing permission: View Approve Supplier list (FunctionID 145, PermissionNo 1).");
             }
 
             LoadSupplierRows();
@@ -616,7 +626,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             LoadUserDataScope();
             if (!HasPermission(PermissionViewList))
             {
-                return Redirect("/");
+                return RedirectHomeWithAccessError("Missing permission: View Approve Supplier list (FunctionID 145, PermissionNo 1).");
             }
 
             var supplierId = EditSupplier.SupplierID;
@@ -1208,13 +1218,13 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
             if (!supplier.IsNew)
             {
-                SetFlashMessage("Supplier is not a new supplier.", "warning");
+                SetFlashMessage("Supplier is not a new supplier.", "error");
                 return false;
             }
 
             if (!_dataScope.LevelCheckSupplier.HasValue || _dataScope.LevelCheckSupplier.Value is < 1 or > 4)
             {
-                SetFlashMessage("You have no right to access this approval link.", "warning");
+                SetFlashMessage("You have no right to access this approval link.", "error");
                 return false;
             }
 
@@ -1236,11 +1246,11 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
             if (supplierStatus > currentLevel)
             {
-                SetFlashMessage("This supplier has already passed your approval level.", "warning");
+                SetFlashMessage("This supplier has already passed your approval level.", "error");
                 return false;
             }
 
-            SetFlashMessage("This supplier is not in your approval step yet.", "warning");
+            SetFlashMessage("This supplier is not in your approval step yet.", "error");
             return false;
         }
 
@@ -1840,7 +1850,35 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         {
             FlashMessage = message;
             FlashMessageType = type;
+            SetGlobalFlashMessage(message, type);
         }
+
+        private void SetGlobalFlashMessage(string message, string type = "info")
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return;
+            }
+
+            var normalizedType = string.IsNullOrWhiteSpace(type) ? "info" : type.Trim().ToLowerInvariant();
+            var tempDataKey = normalizedType switch
+            {
+                "success" => "LayoutSuccessMessage",
+                "warning" => "LayoutWarningMessage",
+                "error" => "LayoutErrorMessage",
+                "danger" => "LayoutErrorMessage",
+                _ => "LayoutWarningMessage"
+            };
+
+            TempData[tempDataKey] = message;
+        }
+
+        private IActionResult RedirectHomeWithAccessError(string detail)
+        {
+            SetGlobalFlashMessage($"Cannot access Approve Supplier. {detail}", "error");
+            return Redirect("/");
+        }
+
 
         // Điều hướng người dùng về đúng màn hình danh sách hiện tại.
         private IActionResult RedirectToCurrentList()
@@ -2696,6 +2734,9 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public int? Status { get; set; }
     }
 }
+
+
+
 
 
 
