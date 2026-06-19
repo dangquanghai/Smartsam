@@ -109,11 +109,19 @@ WHERE DeliveryID NOT IN (
         var rows = new List<LinenDeliveryRow>();
         var conditions = new List<string>
         {
-            "mt.DeliveryDate >= @FromDate",
-            "mt.DeliveryDate <= @ToDate",
             "ISNULL(mt.Closed, 0) = @Closed",
             "ISNULL(mt.IsRent, 0) = @IsRent"
         };
+
+        if (request.FromDate.HasValue)
+        {
+            conditions.Add("mt.DeliveryDate >= @FromDate");
+        }
+
+        if (request.ToDate.HasValue)
+        {
+            conditions.Add("mt.DeliveryDate <= @ToDate");
+        }
 
         if (request.DeliveryId.HasValue)
         {
@@ -243,10 +251,18 @@ ORDER BY SupplierID;", conn))
 
     private static void BindSearchParams(SqlCommand cmd, LinenDeliverySearchRequest request)
     {
-        cmd.Parameters.Add("@FromDate", SqlDbType.DateTime).Value = request.FromDate!.Value.Date;
-        cmd.Parameters.Add("@ToDate", SqlDbType.DateTime).Value = request.ToDate!.Value.Date.AddDays(1).AddTicks(-1);
         cmd.Parameters.Add("@Closed", SqlDbType.Bit).Value = request.Closed;
         cmd.Parameters.Add("@IsRent", SqlDbType.Bit).Value = request.IsRent;
+
+        if (request.FromDate.HasValue)
+        {
+            cmd.Parameters.Add("@FromDate", SqlDbType.DateTime).Value = request.FromDate.Value.Date;
+        }
+
+        if (request.ToDate.HasValue)
+        {
+            cmd.Parameters.Add("@ToDate", SqlDbType.DateTime).Value = request.ToDate.Value.Date.AddDays(1).AddTicks(-1);
+        }
 
         if (request.DeliveryId.HasValue)
         {
@@ -272,8 +288,6 @@ ORDER BY SupplierID;", conn))
 
     private void NormalizeSearchRequest(LinenDeliverySearchRequest request)
     {
-        request.FromDate ??= DateTime.Today.AddDays(-10);
-        request.ToDate ??= DateTime.Today;
         request.Page = request.Page <= 0 ? 1 : request.Page;
         request.PageSize = NormalizePageSize(request.PageSize);
     }
