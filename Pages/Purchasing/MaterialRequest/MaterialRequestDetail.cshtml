@@ -33,6 +33,7 @@
               data-can-save="@Model.CanSave.ToString().ToLowerInvariant()"
               data-is-auto="@Model.Input.IsAuto.ToString().ToLowerInvariant()"
               data-can-submit="@Model.CanSubmit.ToString().ToLowerInvariant()"
+              data-can-recall="@Model.CanRecall.ToString().ToLowerInvariant()"
               data-can-calculate="@Model.CanCalculate.ToString().ToLowerInvariant()"
               data-can-approve="@Model.CanApprove.ToString().ToLowerInvariant()"
               data-can-issue="@Model.CanIssue.ToString().ToLowerInvariant()"
@@ -264,6 +265,7 @@
                         <button type="button" class="btn btn-primary btn-sm mx-1 my-1 @(Model.CurrentStatusId == -1 && Model.CanSave ? string.Empty : "d-none")" id="createNewItemBtn"><i class="fas fa-box-open"></i> Create new item</button>
                         <button type="submit" asp-page-handler="Calculate" class="btn btn-info btn-sm mx-1 my-1 @(Model.CanCalculate ? string.Empty : "d-none")" id="calculateBtn"><i class="fas fa-calculator"></i> Calculate</button>
                         <button type="submit" asp-page-handler="Submit" id="mrSubmitBtn" class="btn btn-dark btn-sm mx-1 my-1 @(Model.CurrentStatusId == -1 && Model.CanSubmit ? string.Empty : "d-none")"><i class="fas fa-paper-plane"></i> Submit</button>
+                        <button type="submit" asp-page-handler="Recall" id="mrRecallBtn" class="btn btn-warning btn-sm mx-1 my-1 @(Model.CanRecall ? string.Empty : "d-none")"><i class="fas fa-undo-alt"></i> Recall</button>
                         <button type="submit" asp-page-handler="Approve" id="mrApproveBtn" class="btn btn-success btn-sm mx-1 my-1 @(Model.CanApprove ? string.Empty : "d-none")"><i class="fas fa-check"></i> Approve</button>
                         <button type="submit" asp-page-handler="Issue" id="mrIssueBtn" class="btn btn-secondary btn-sm mx-1 my-1 @(Model.ShowIssueButton ? string.Empty : "d-none")" disabled="@(Model.CanIssue ? null : "disabled")"><i class="fas fa-check-double"></i> Issue</button>
                         <button type="button" asp-page-handler="Reject" id="mrRejectBtn" class="btn btn-danger btn-sm mx-1 my-1 @(Model.CanReject ? string.Empty : "d-none")"><i class="fas fa-times"></i> Reject</button>
