@@ -2286,7 +2286,8 @@ public class MaterialRequestDetailModel : BasePageModel
                 "MATERIAL REQUEST",
                 "#ffc107",
                 "has been recalled by requester and no longer requires Head Dept approval.",
-                "Recall");
+                "Recall",
+                includeDetailLink: false);
         }
 
         if (action == MaterialRequestWorkflowAction.Approve && currentStatus == StatusSubmittedToHead)
@@ -2340,7 +2341,8 @@ public class MaterialRequestDetailModel : BasePageModel
         string title,
         string color,
         string actionText,
-        string stepLabel)
+        string stepLabel,
+        bool includeDetailLink = true)
     {
         var requestNo = header.RequestNo > 0 ? header.RequestNo.ToString() : string.Empty;
         var storeGroupText = ResolveStoreGroupText(header.StoreGroup);
@@ -2353,6 +2355,9 @@ public class MaterialRequestDetailModel : BasePageModel
         var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl)
             ? string.Empty
             : $"{Request.Scheme}://{Request.Host}{detailUrl}";
+        var detailLinkHtml = includeDetailLink && !string.IsNullOrWhiteSpace(absoluteUrl)
+            ? $"<p>Open Approval Page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Material Request Detail</a></p>"
+            : string.Empty;
         var body = $@"
         <p>Dear {{RECIPIENT_LABEL}},</p>
         <p>Material Request <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(requestNo)}</span></b> <span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(actionText)}</span></p>
@@ -2363,7 +2368,7 @@ public class MaterialRequestDetailModel : BasePageModel
         <li>According To: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(header.AccordingTo ?? string.Empty)}</span></b></li>
         <li>Step: <b><span style='font-family: ""VNI-Times"", ""VNI-Helve"", sans-serif;'>{WebUtility.HtmlEncode(stepLabel)}</span></b></li>
         </ul>
-        {(string.IsNullOrWhiteSpace(absoluteUrl) ? string.Empty : $"<p>Open Approval Page: <a href=\"{WebUtility.HtmlEncode(absoluteUrl)}\">Material Request Detail</a></p>")}
+        {detailLinkHtml}
         <p>SmartSam System</p>";
 
         var htmlBody = EmailTemplateHelper.WrapInNotifyTemplate(title, color, DateTime.Now, body);

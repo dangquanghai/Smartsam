@@ -409,33 +409,9 @@ ORDER BY h.FlowDate DESC, h.FlowID DESC", conn);
     private bool IsAdminRole() => User.FindFirst("IsAdminRole")?.Value == "True";
     private int GetCurrentKpGroupId()
     {
-        if (int.TryParse(User.FindFirst("KPGroupID")?.Value, out var kpGroupFromClaim) && kpGroupFromClaim > 0)
-        {
-            return kpGroupFromClaim;
-        }
-
-        var employeeId = int.Parse(User.FindFirst("EmployeeID")?.Value ?? User.FindFirst("EmpID")?.Value ?? "0");
-        using var connEmployee = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
-        using var cmdEmployee = new SqlCommand("SELECT TOP 1 StoreGR FROM dbo.MS_Employee WHERE EmployeeID=@EmployeeID", connEmployee);
-        cmdEmployee.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId;
-        connEmployee.Open();
-        var kpGroupFromEmployee = Convert.ToInt32(cmdEmployee.ExecuteScalar() ?? 0);
-        if (kpGroupFromEmployee > 0) return kpGroupFromEmployee;
-
-        var employeeCode = User.FindFirst("EmployeeCode")?.Value;
-        if (!string.IsNullOrWhiteSpace(employeeCode))
-        {
-            using var cmdEmployeeCode = new SqlCommand("SELECT TOP 1 StoreGR FROM dbo.MS_Employee WHERE EmployeeCode=@EmployeeCode", connEmployee);
-            cmdEmployeeCode.Parameters.Add("@EmployeeCode", SqlDbType.VarChar, 50).Value = employeeCode.Trim();
-            var kpGroupFromCode = Convert.ToInt32(cmdEmployeeCode.ExecuteScalar() ?? 0);
-            if (kpGroupFromCode > 0) return kpGroupFromCode;
-        }
-
-        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
-        using var cmd = new SqlCommand("SELECT TOP 1 KPGroupID FROM dbo.INV_KPGroupMember WHERE EmployeeID=@EmployeeID ORDER BY KPGroupID", conn);
-        cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId;
-        conn.Open();
-        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
+        return int.TryParse(User.FindFirst("StoreGR")?.Value, out var kpGroupFromClaim) && kpGroupFromClaim > 0
+            ? kpGroupFromClaim
+            : 0;
     }
     private int? GetStoreFilterKpGroupId()
     {
