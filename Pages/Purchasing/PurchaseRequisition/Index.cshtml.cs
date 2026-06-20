@@ -1383,6 +1383,8 @@ WHERE ISNULL(d.BUY, 0) > 0
       (m.MATERIALSTATUSID = 3 AND ISNULL(d.BUY, 0) > 0)
       OR
       (m.MATERIALSTATUSID = 2 AND ISNULL(m.IS_AUTO, 0) = 1)
+      OR
+      m.MATERIALSTATUSID = 6
   )
 ORDER BY d.REQUEST_NO, i.ItemCode", conn);
 
