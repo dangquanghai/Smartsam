@@ -2114,6 +2114,8 @@ WHERE ID = @MRDetailID", conn, trans);
             ModelState.AddModelError(string.Empty, $"Row {rowNo}: Item is required.");
         }
 
+        detail.SugBuy = Math.Round(detail.SugBuy, 2, MidpointRounding.AwayFromZero);
+
         if (detail.SugBuy <= 0)
         {
             ModelState.AddModelError(string.Empty, $"Row {rowNo}: SugBuy must be greater than 0.");

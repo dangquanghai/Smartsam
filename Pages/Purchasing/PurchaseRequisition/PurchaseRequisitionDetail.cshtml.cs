@@ -1622,6 +1622,9 @@ WHERE pr.PRID = @PRID", conn, trans);
             ModelState.AddModelError(string.Empty, $"Row {rowNo}: Item is required.");
         }
 
+        detail.QtyPur = Math.Round(detail.QtyPur, 2, MidpointRounding.AwayFromZero);
+        detail.Amount = Math.Round(detail.QtyPur * detail.UnitPrice, 2, MidpointRounding.AwayFromZero);
+
         if (detail.QtyPur <= 0)
         {
             ModelState.AddModelError(string.Empty, $"Row {rowNo}: QtyPur must be greater than 0.");

@@ -38,6 +38,18 @@
         return Math.round(number).toLocaleString("en-US");
     }
 
+    function roundToTwoDecimals(value) {
+        return Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
+    }
+
+    function formatQuantity(value) {
+        const number = roundToTwoDecimals(value);
+        return number.toLocaleString("en-US", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+        });
+    }
+
     function sanitizeNonNegativeDecimal(value) {
         let normalized = String(value ?? "")
             .replace(/,/g, "")
@@ -46,6 +58,8 @@
         const firstDotIndex = normalized.indexOf(".");
         if (firstDotIndex >= 0) {
             normalized = normalized.slice(0, firstDotIndex + 1) + normalized.slice(firstDotIndex + 1).replace(/\./g, "");
+            const parts = normalized.split(".");
+            normalized = `${parts[0]}.${(parts[1] || "").slice(0, 2)}`;
         }
 
         return normalized;
@@ -54,13 +68,13 @@
     function clampNonNegativeDecimalInput(input) {
         if (!input) return 0;
 
-        let normalizedValue = toNumber(input.value);
+        let normalizedValue = roundToTwoDecimals(input.value);
 
         if (normalizedValue < 0) {
             normalizedValue = 0;
         }
 
-        input.value = formatNumber(normalizedValue);
+        input.value = formatQuantity(normalizedValue);
         return normalizedValue;
     }
 
@@ -872,7 +886,7 @@
                     <td class="prq-add-at-col-item-name prq-text-left"><span class="prq-add-at-ellipsis tcvn3-font" title="${escapeHtml(row.itemName)}">${escapeHtml(row.itemName)}</span></td>
                     <td class="prq-number">${formatNumber(row.buy)}</td>
                     <td class="prq-number">
-                        <input type="text" inputmode="decimal" class="form-control form-control-sm prq-add-at-sugbuy prq-number-input" data-index="${index}" value="${formatNumber(row.sugBuy)}" />
+                        <input type="text" inputmode="decimal" class="form-control form-control-sm prq-add-at-sugbuy prq-number-input" data-index="${index}" value="${formatQuantity(row.sugBuy)}" />
                     </td>
                     <td class="prq-text-left">${escapeHtml(row.unit)}</td>
                     <td class="prq-number">${formatNumber(row.unitPrice)}</td>
@@ -1022,7 +1036,7 @@
             const index = Number.parseInt(sugBuyInput.getAttribute("data-index"), 10);
             if (!Number.isInteger(index) || !sourceRows[index]) return;
 
-            sourceRows[index].sugBuy = clampNonNegativeDecimalInput(sugBuyInput);
+            sourceRows[index].sugBuy = toNumber(sugBuyInput.value);
         });
 
         addAtForm.addEventListener("submit", (ev) => {

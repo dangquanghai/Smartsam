@@ -28,12 +28,24 @@
         return Math.round(number).toLocaleString("en-US");
     }
 
+    function roundToTwoDecimals(value) {
+        return Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
+    }
+
+    function formatQuantity(value) {
+        const number = roundToTwoDecimals(value);
+        return number.toLocaleString("en-US", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+        });
+    }
+
     function formatSummaryAmount(value) {
         const number = toNumber(value);
         return Math.round(number).toLocaleString("en-US");
     }
 
-    function sanitizeNonNegativeDecimal(value) {
+    function sanitizeNonNegativeDecimal(value, decimalPlaces = null) {
         let normalized = String(value ?? "")
             .replace(/,/g, "")
             .replace(/[^0-9.]/g, "");
@@ -41,6 +53,10 @@
         const firstDotIndex = normalized.indexOf(".");
         if (firstDotIndex >= 0) {
             normalized = normalized.slice(0, firstDotIndex + 1) + normalized.slice(firstDotIndex + 1).replace(/\./g, "");
+            if (Number.isInteger(decimalPlaces) && decimalPlaces >= 0) {
+                const parts = normalized.split(".");
+                normalized = `${parts[0]}.${(parts[1] || "").slice(0, decimalPlaces)}`;
+            }
         }
 
         return normalized;
@@ -56,6 +72,19 @@
         }
 
         input.value = formatNumber(normalizedValue);
+        return normalizedValue;
+    }
+
+    function clampQuantityInput(input) {
+        if (!input) return 0;
+
+        let normalizedValue = roundToTwoDecimals(input.value);
+
+        if (normalizedValue < 0) {
+            normalizedValue = 0;
+        }
+
+        input.value = formatQuantity(normalizedValue);
         return normalizedValue;
     }
 
@@ -616,8 +645,8 @@
                         <span class="tcvn3-font">${escapeHtml(detail.itemName || "")}</span>
                     </td>
                     <td class="prq-text-left">${detail.unit || ""}</td>
-                    <td class="prq-number">${formatNumber(detail.qtyFromM)}</td>
-                    <td class="prq-number">${formatNumber(detail.qtyPur)}</td>
+                    <td class="prq-number">${formatQuantity(detail.qtyFromM)}</td>
+                    <td class="prq-number">${formatQuantity(detail.qtyPur)}</td>
                     <td class="prq-number">${getConfig().canEditExistingDetailFields
                         ? `<input type="text" inputmode="decimal" class="form-control form-control-sm prq-detail-edit-price prq-number-input" value="${formatNumber(detail.unitPrice)}" />`
                         : formatNumber(detail.unitPrice)}</td>
@@ -802,7 +831,7 @@
                 row.style.display = isAlreadyInPr ? "none" : "";
 
                 if (buyCell) {
-                    buyCell.textContent = formatNumber(remainingBuy);
+                    buyCell.textContent = formatQuantity(remainingBuy);
                 }
 
                 if (checkbox) {
@@ -812,7 +841,7 @@
 
                 if (subQtyInput) {
                     subQtyInput.disabled = isAlreadyInPr;
-                    subQtyInput.value = formatNumber(remainingBuy);
+                    subQtyInput.value = formatQuantity(remainingBuy);
                 }
 
                 row.classList.remove("prq-detail-row-selected");
@@ -821,7 +850,7 @@
 
         const normalizeInputValue = (input) => {
             if (!input) return;
-            input.value = formatNumber(input.value);
+            input.value = formatQuantity(input.value);
         };
 
         const resetDetailFields = () => {
@@ -834,7 +863,7 @@
                 }
                 if (subQtyInput) {
                     const currentBuy = row.getAttribute("data-current-buy") || row.getAttribute("data-base-buy") || row.getAttribute("data-buy") || "0";
-                    subQtyInput.value = formatNumber(currentBuy);
+                    subQtyInput.value = formatQuantity(currentBuy);
                 }
             });
             hideAddDetailError();
@@ -892,16 +921,15 @@
                 hideAddDetailError();
             });
             subQtyInput?.addEventListener("input", () => {
-                const sanitizedValue = sanitizeNonNegativeDecimal(subQtyInput.value);
+                const sanitizedValue = sanitizeNonNegativeDecimal(subQtyInput.value, 2);
                 if (subQtyInput.value !== sanitizedValue) {
                     subQtyInput.value = sanitizedValue;
                 }
 
-                clampNonNegativeDecimalInput(subQtyInput);
                 hideAddDetailError();
             });
             subQtyInput?.addEventListener("blur", () => {
-                clampNonNegativeDecimalInput(subQtyInput);
+                clampQuantityInput(subQtyInput);
                 normalizeInputValue(subQtyInput);
             });
         });
