@@ -213,14 +213,16 @@ FROM dbo.INV_ItemList i WHERE i.ItemID=@ItemID", conn, tran);
         conn.Open();
         var kpGroupId = GetCurrentKpGroupId();
         var storeFilterKpGroupId = GetStoreFilterKpGroupId();
+        var isAdminUser = IsAdminRole();
 
         using (var cmd = new SqlCommand(@"SELECT g.KPGroupID, g.KPGroupName, s.StoreID, s.StoreName
 FROM dbo.INV_KPGroup g
 INNER JOIN dbo.INV_StoreList s ON s.DeptID = g.KPGroupID
-WHERE s.StoreID <> 0 AND (@KPGroupId IS NULL OR s.DeptID = @KPGroupId)
+WHERE s.StoreID <> 0 AND (@IsAdminUser = 1 OR s.DeptID = @KPGroupId)
 ORDER BY g.KPGroupName, s.StoreName", conn))
         {
-            cmd.Parameters.Add("@KPGroupId", SqlDbType.Int).Value = storeFilterKpGroupId.HasValue ? storeFilterKpGroupId.Value : DBNull.Value;
+            cmd.Parameters.Add("@IsAdminUser", SqlDbType.Bit).Value = isAdminUser;
+            cmd.Parameters.Add("@KPGroupId", SqlDbType.Int).Value = storeFilterKpGroupId.HasValue ? storeFilterKpGroupId.Value : -1;
             using var rd = cmd.ExecuteReader();
             var groupMap = new Dictionary<int, SelectListGroup>();
             while (rd.Read())
@@ -550,33 +552,9 @@ WHERE i.ItemID = @ItemID", conn);
 
     private int GetCurrentKpGroupId()
     {
-        if (int.TryParse(User.FindFirst("KPGroupID")?.Value, out var kpGroupFromClaim) && kpGroupFromClaim > 0)
-        {
-            return kpGroupFromClaim;
-        }
-
-        var employeeId = int.Parse(User.FindFirst("EmployeeID")?.Value ?? User.FindFirst("EmpID")?.Value ?? "0");
-        using var connEmployee = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
-        using var cmdEmployee = new SqlCommand("SELECT TOP 1 StoreGR FROM dbo.MS_Employee WHERE EmployeeID=@EmployeeID", connEmployee);
-        cmdEmployee.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId;
-        connEmployee.Open();
-        var kpGroupFromEmployee = Convert.ToInt32(cmdEmployee.ExecuteScalar() ?? 0);
-        if (kpGroupFromEmployee > 0) return kpGroupFromEmployee;
-
-        var employeeCode = User.FindFirst("EmployeeCode")?.Value;
-        if (!string.IsNullOrWhiteSpace(employeeCode))
-        {
-            using var cmdEmployeeCode = new SqlCommand("SELECT TOP 1 StoreGR FROM dbo.MS_Employee WHERE EmployeeCode=@EmployeeCode", connEmployee);
-            cmdEmployeeCode.Parameters.Add("@EmployeeCode", SqlDbType.VarChar, 50).Value = employeeCode.Trim();
-            var kpGroupFromCode = Convert.ToInt32(cmdEmployeeCode.ExecuteScalar() ?? 0);
-            if (kpGroupFromCode > 0) return kpGroupFromCode;
-        }
-
-        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
-        using var cmd = new SqlCommand("SELECT TOP 1 KPGroupID FROM dbo.INV_KPGroupMember WHERE EmployeeID=@EmployeeID ORDER BY KPGroupID", conn);
-        cmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId;
-        conn.Open();
-        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
+        return int.TryParse(User.FindFirst("StoreGR")?.Value, out var kpGroupFromClaim) && kpGroupFromClaim > 0
+            ? kpGroupFromClaim
+            : 0;
     }
     private int GetCurrentEmployeeId() => int.Parse(User.FindFirst("EmployeeID")?.Value ?? "0");
     private int GetCurrentRoleId() => int.Parse(User.FindFirst("RoleID")?.Value ?? "0");
@@ -621,8 +599,3 @@ public class TransferItemLookup
     public string Unit { get; set; } = string.Empty;
     public decimal UnitPrice { get; set; }
 }
-
-
-
-
-

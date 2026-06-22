@@ -22,6 +22,11 @@
         return v.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
     }
 
+    string TrimDecimal(decimal v)
+    {
+        return decimal.Round(v, 2, System.MidpointRounding.AwayFromZero).ToString("#,##0.##", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
     string ImgTag(byte[]? bytes, string cssClass)
     {
         if (bytes == null || bytes.Length == 0) return string.Empty;
@@ -157,8 +162,8 @@
               <td>@item.ItemCode</td>
               <td class="po-rpt-tcvn3">@ToTcvn3Web(item.ItemName)</td>
               <td class="po-rpt-tc">@item.Unit</td>
-              <td class="po-rpt-tr">@Money(item.Quantity)</td>
-              <td class="po-rpt-tr">@Money(item.UnitPrice)</td>
+              <td class="po-rpt-tr">@TrimDecimal(item.Quantity)</td>
+              <td class="po-rpt-tr">@TrimDecimal(item.UnitPrice)</td>
               <td class="po-rpt-tr">@Money(item.Amount)</td>
               <td class="po-rpt-vni">@item.Remark</td>
           </tr>

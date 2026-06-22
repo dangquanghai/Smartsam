@@ -285,12 +285,14 @@ ORDER BY d.DetailID", conn);
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
         var kpGroupId = GetStoreFilterKpGroupId();
+        var isAdminUser = IsAdminRole();
         using var cmd = new SqlCommand(@"SELECT g.KPGroupID, g.KPGroupName, s.StoreID, s.StoreName
 FROM dbo.INV_KPGroup g
 INNER JOIN dbo.INV_StoreList s ON s.DeptID = g.KPGroupID
-WHERE s.StoreID <> 0 AND (@KPGroupId IS NULL OR s.DeptID = @KPGroupId)
+WHERE s.StoreID <> 0 AND (@IsAdminUser = 1 OR s.DeptID = @KPGroupId)
 ORDER BY g.KPGroupName, s.StoreName", conn);
-        cmd.Parameters.Add("@KPGroupId", SqlDbType.Int).Value = kpGroupId.HasValue ? kpGroupId.Value : DBNull.Value;
+        cmd.Parameters.Add("@IsAdminUser", SqlDbType.Bit).Value = isAdminUser;
+        cmd.Parameters.Add("@KPGroupId", SqlDbType.Int).Value = kpGroupId.HasValue ? kpGroupId.Value : -1;
         using var rd = cmd.ExecuteReader();
         var groupMap = new Dictionary<int, SelectListGroup>();
         while (rd.Read())
@@ -443,11 +445,3 @@ public class InventoryTransferRow
     public string FromStoreName { get; set; } = string.Empty;
     public string ToStoreName { get; set; } = string.Empty;
 }
-
-
-
-
-
-
-
-

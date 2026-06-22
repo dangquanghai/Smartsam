@@ -163,8 +163,8 @@ internal static class PurchaseOrderQuestPdfReport
                     text.Span(item.ItemName);
                 });
                 table.Cell().Element(BodyCell).AlignCenter().Text(item.Unit);
-                table.Cell().Element(BodyCell).AlignCenter().Text(FormatQuantity(item.Quantity));
-                table.Cell().Element(BodyCell).AlignRight().Text(FormatTableMoney(item.UnitPrice));
+                table.Cell().Element(BodyCell).AlignCenter().Text(FormatTrimDecimal(item.Quantity));
+                table.Cell().Element(BodyCell).AlignRight().Text(FormatTrimDecimal(item.UnitPrice));
                 table.Cell().Element(BodyCell).AlignRight().Text(FormatTableMoney(item.Amount));
                 table.Cell().Element(BodyCell).Element(content => ComposeStyledValueText(content, item.Remark, VniPdfFontFamily));
             }
@@ -455,6 +455,11 @@ internal static class PurchaseOrderQuestPdfReport
     private static string FormatQuantity(decimal value)
     {
         return value.ToString("#,##0", CultureInfo.InvariantCulture);
+    }
+
+    private static string FormatTrimDecimal(decimal value)
+    {
+        return decimal.Round(value, 2, MidpointRounding.AwayFromZero).ToString("#,##0.##", CultureInfo.InvariantCulture);
     }
 
     private static string FormatMoney(decimal value)
