@@ -1,5 +1,6 @@
 $(document).ready(function () {
     const mode = ($('#Mode').val() || 'add').toLowerCase();
+    initAutoDismissAlerts();
     initializePage(mode);
     syncBackToListUrl();
     closeDetailAfterWorkflowIfNeeded();
@@ -26,6 +27,17 @@ let purchaseOrderDetails = [];
 let purchaseOrderPrLines = [];
 const TCVN3_WEB_LOWER_U = '\uE001';
 const TCVN3_WEB_UPPER_U = '\uE002';
+
+// Tự động tắt thông báo thành công sau thời gian cấu hình.
+function initAutoDismissAlerts() {
+    $('.js-auto-dismiss-alert').each(function () {
+        const $alert = $(this);
+        const timeout = Number($alert.data('timeout')) || 10000;
+        setTimeout(function () {
+            $alert.alert('close');
+        }, timeout);
+    });
+}
 
 function syncBackToListUrl() {
     const fallbackUrl = window.purchaseOrderDetailPage?.returnUrl || '/Purchasing/PurchaseOrder';
