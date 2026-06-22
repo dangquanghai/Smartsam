@@ -144,8 +144,8 @@ internal static class PurchaseOrderViewDetailQuestPdfReport
                 table.Cell().Element(BodyCell).Text(Encode(row.PONo));
                 table.Cell().Element(BodyCell).Text(FormatDate(row.PODate, "MM/dd/yy"));
 
-                table.Cell().Element(BodyCell).AlignRight().Text(isUsd ? string.Empty : FormatMoney(row.UnitPrice, false));
-                table.Cell().Element(BodyCell).AlignRight().Text(isUsd ? FormatMoney(row.UnitPrice, true) : string.Empty);
+                table.Cell().Element(BodyCell).AlignRight().Text(isUsd ? string.Empty : FormatTrimDecimal(row.UnitPrice));
+                table.Cell().Element(BodyCell).AlignRight().Text(isUsd ? FormatTrimDecimal(row.UnitPrice) : string.Empty);
                 table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(row.Quantity));
                 table.Cell().Element(BodyCell).AlignRight().Text(isUsd ? string.Empty : FormatMoney(row.POAmount, false));
                 table.Cell().Element(BodyCell).AlignRight().Text(isUsd ? FormatMoney(row.POAmount, true) : string.Empty);
@@ -202,12 +202,17 @@ internal static class PurchaseOrderViewDetailQuestPdfReport
 
     private static string FormatQuantity(decimal value)
     {
-        return value == 0 ? string.Empty : value.ToString("#,##0", CultureInfo.InvariantCulture);
+        return value == 0 ? string.Empty : FormatTrimDecimal(value);
     }
 
     private static string FormatQuantityTotal(decimal value)
     {
-        return value.ToString("#,##0", CultureInfo.InvariantCulture);
+        return FormatTrimDecimal(value);
+    }
+
+    private static string FormatTrimDecimal(decimal value)
+    {
+        return decimal.Round(value, 2, MidpointRounding.AwayFromZero).ToString("#,##0.##", CultureInfo.InvariantCulture);
     }
 
     private static string FormatMoney(decimal value, bool withDecimals)
