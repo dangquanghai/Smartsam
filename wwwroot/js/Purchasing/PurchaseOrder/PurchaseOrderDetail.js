@@ -663,6 +663,7 @@ function bindMainEvents(mode) {
     });
 
     $(document).on('input', '.po-detail-qty, .po-detail-price, .po-detail-amount, .po-detail-recqty', function () {
+        this.value = sanitizeDecimalText(this.value);
         const $row = $(this).closest('tr');
         const rowKey = $(this).closest('tr').data('key');
         const row = purchaseOrderDetails.find(function (item) { return item.tempKey === rowKey; });
@@ -779,12 +780,12 @@ function renderDetailRows() {
                 <td class="po-detail-itemcode">${escapeHtml(row.itemCode)}</td>
                 <td class="tcvn3-font">${escapeHtml(row.itemName)}</td>
                 <td>${escapeHtml(row.unit)}</td>
-                <td><input type="text" class="form-control form-control-sm text-right po-detail-qty" value="${formatNumber(row.quantity)}" ${canSave ? '' : 'readonly'} /></td>
-                <td><input type="text" class="form-control form-control-sm text-right po-detail-price" value="${formatNumber(row.unitPrice)}" ${canSave ? '' : 'readonly'} /></td>
-                <td><input type="text" class="form-control form-control-sm text-right po-detail-amount" value="${formatNumber(row.poAmount)}" ${canSave ? '' : 'readonly'} /></td>
+                <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right po-detail-qty" value="${formatNumberTrimDecimal(row.quantity)}" ${canSave ? '' : 'readonly'} /></td>
+                <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right po-detail-price" value="${formatNumberTrimDecimal(row.unitPrice)}" ${canSave ? '' : 'readonly'} /></td>
+                <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right po-detail-amount" value="${formatNumber(row.poAmount)}" ${canSave ? '' : 'readonly'} /></td>
                 <td>${canSave ? `<select class="form-control form-control-sm po-detail-dept">${deptOptions(row.recDept)}</select>` : escapeHtml(row.recDeptName)}</td>
                 <td>${canSave ? `<input type="text" class="form-control form-control-sm vni-font po-detail-note" value="${escapeAttribute(row.note)}" />` : escapeHtml(row.note)}</td>
-                <td><input type="text" class="form-control form-control-sm text-right po-detail-recqty" value="${formatNumber(row.recQty)}" ${canSave ? '' : 'readonly'} /></td>
+                <td><input type="text" inputmode="decimal" class="form-control form-control-sm text-right po-detail-recqty" value="${formatNumber(row.recQty)}" ${canSave ? '' : 'readonly'} /></td>
                 <td><input type="text" class="form-control form-control-sm text-right po-detail-recamount" value="${formatNumber(row.recAmount)}" readonly /></td>
                 <td>${canSave ? `<input type="date" class="form-control form-control-sm po-detail-recdate" value="${formatDate(row.recDate)}" />` : escapeHtml(formatDate(row.recDate))}</td>
                 <td class="vni-font">${escapeHtml(row.mrRequestNo || '')}</td>
@@ -1029,14 +1030,70 @@ function buildDepartmentOptions() {
 
 // Ham nho de chuyen gia tri ve so.
 function toNumber(value) {
-    const normalized = String(value || '').replace(/,/g, '').trim();
+    const normalized = normalizeDecimalText(value);
     const parsed = parseFloat(normalized);
     return Number.isFinite(parsed) ? parsed : 0;
+}
+
+// Chỉ giữ số và một dấu thập phân cho ô nhập số.
+function sanitizeDecimalText(value) {
+    return normalizeDecimalText(value);
+}
+
+function normalizeDecimalText(value) {
+    let normalized = String(value || '').replace(/[^0-9.,]/g, '');
+    const separators = normalized.match(/[.,]/g) || [];
+    if (separators.length === 0) {
+        return normalized;
+    }
+
+    const lastDotIndex = normalized.lastIndexOf('.');
+    const lastCommaIndex = normalized.lastIndexOf(',');
+    const decimalIndex = Math.max(lastDotIndex, lastCommaIndex);
+    const hasDot = lastDotIndex >= 0;
+    const hasComma = lastCommaIndex >= 0;
+    const decimalLength = normalized.length - decimalIndex - 1;
+    const isSingleGroupSeparator = separators.length === 1 && decimalLength === 3;
+    const isGroupedInteger = separators.length > 1
+        && separators.every(function (separator) { return separator === separators[0]; })
+        && /^\d{1,3}([.,]\d{3})+$/.test(normalized);
+
+    if ((!hasDot || !hasComma) && (isSingleGroupSeparator || isGroupedInteger)) {
+        return normalized.replace(/[.,]/g, '');
+    }
+
+    const integerPart = normalized.slice(0, decimalIndex).replace(/[.,]/g, '');
+    const decimalPart = normalized.slice(decimalIndex + 1).replace(/[.,]/g, '');
+    normalized = `${integerPart}.${decimalPart}`;
+    const firstDotIndex = normalized.indexOf('.');
+    if (firstDotIndex >= 0) {
+        normalized = normalized.slice(0, firstDotIndex + 1) + normalized.slice(firstDotIndex + 1).replace(/\./g, '');
+    }
+
+    return normalized;
 }
 
 // Dinh dang so de hien thi trong bang.
 function formatNumber(value) {
     return Math.round(toNumber(value)).toLocaleString('en-US');
+}
+
+// Định dạng số lẻ: giữ 2 số thập phân, bỏ .00.
+function formatNumberTrimDecimal(value) {
+    const number = toNumber(value);
+    if (!Number.isFinite(number)) {
+        return '0';
+    }
+
+    const rounded = Math.round(number * 100) / 100;
+    if (Number.isInteger(rounded)) {
+        return rounded.toLocaleString('en-US');
+    }
+
+    return rounded.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
 }
 
 // Doi ngay ve dang yyyy-MM-dd cho input type=date.

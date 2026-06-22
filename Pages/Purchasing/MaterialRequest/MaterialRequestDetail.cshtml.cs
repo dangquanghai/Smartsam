@@ -1993,14 +1993,17 @@ public class MaterialRequestDetailModel : BasePageModel
             FROM dbo.SUPER_REQUEST sr
             INNER JOIN dbo.MS_Employee e ON e.EmployeeID = sr.EmployeeID
             WHERE sr.RequestNo = @RequestNo
-              AND sr.TypeEffective = @TypeEffective
-            ORDER BY sr.AutoNum ASC";
+              AND sr.TypeEffective IN (@CreateTypeEffective, @SubmitTypeEffective)
+            ORDER BY
+                CASE WHEN sr.TypeEffective = @CreateTypeEffective THEN 0 ELSE 1 END,
+                sr.AutoNum ASC";
 
         await using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         await conn.OpenAsync(cancellationToken);
         await using var cmd = new SqlCommand(sql, conn);
         Helper.AddParameter(cmd, "@RequestNo", requestNo, SqlDbType.Decimal);
-        Helper.AddParameter(cmd, "@TypeEffective", StatusJustCreated, SqlDbType.Int);
+        Helper.AddParameter(cmd, "@CreateTypeEffective", StatusJustCreated, SqlDbType.Int);
+        Helper.AddParameter(cmd, "@SubmitTypeEffective", StatusSubmittedToHead, SqlDbType.Int);
 
         var value = await cmd.ExecuteScalarAsync(cancellationToken);
         _draftCreatorEmployeeCode = value == null || value == DBNull.Value ? null : Convert.ToString(value);
