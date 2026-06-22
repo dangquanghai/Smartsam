@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Net;
 using System.Net.Mail;
 using System.Data;
@@ -966,25 +966,8 @@ ORDER BY ID DESC", conn);
 
     private int? GetEffectiveKpGroupId()
     {
-        var employeeId = GetCurrentEmployeeId();
-        if (employeeId <= 0) return null;
-
-        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
-        conn.Open();
-
         var storeGr = GetCurrentStoreGr();
-        if (storeGr > 0)
-        {
-            using var storeCmd = new SqlCommand("SELECT TOP 1 ISNULL(DeptID, 0) FROM dbo.INV_StoreList WHERE StoreID=@StoreID", conn);
-            storeCmd.Parameters.Add("@StoreID", SqlDbType.Int).Value = storeGr;
-            var storeDeptId = Convert.ToInt32(storeCmd.ExecuteScalar() ?? 0);
-            if (storeDeptId > 0) return storeDeptId;
-        }
-
-        using var empCmd = new SqlCommand("SELECT TOP 1 ISNULL(DeptID, 0) FROM dbo.MS_Employee WHERE EmployeeID=@EmployeeID", conn);
-        empCmd.Parameters.Add("@EmployeeID", SqlDbType.Int).Value = employeeId;
-        var employeeDeptId = Convert.ToInt32(empCmd.ExecuteScalar() ?? 0);
-        return employeeDeptId > 0 ? employeeDeptId : null;
+        return storeGr > 0 ? storeGr : null;
     }
 
     private int GetCurrentRoleId()
