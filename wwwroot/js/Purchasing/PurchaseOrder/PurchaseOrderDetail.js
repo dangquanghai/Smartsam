@@ -66,12 +66,7 @@ function closeDetailAfterWorkflowIfNeeded() {
 
     const backToListUrl = window.purchaseOrderDetailPage?.returnUrl || '/Purchasing/PurchaseOrder';
     setTimeout(function () {
-        window.open('', '_self');
-        window.close();
-
-        setTimeout(function () {
-            window.location.href = backToListUrl;
-        }, 300);
+        window.location.href = backToListUrl;
     }, 300);
 }
 

@@ -219,12 +219,7 @@ function closeDetailAfterWorkflowIfNeeded($form) {
 
     const backToListUrl = ($form.data('back-to-list-url') || '/Purchasing/MaterialRequest').toString();
     setTimeout(function () {
-        window.open('', '_self');
-        window.close();
-
-        setTimeout(function () {
-            window.location.href = backToListUrl;
-        }, 300);
+        window.location.href = backToListUrl;
     }, 300);
 }
 
