@@ -65,9 +65,29 @@ function closeDetailAfterWorkflowIfNeeded() {
     }
 
     const backToListUrl = window.purchaseOrderDetailPage?.returnUrl || '/Purchasing/PurchaseOrder';
+    const pendingApprovalCount = Number(window.purchaseOrderDetailPage?.pendingApprovalCount || 0);
     setTimeout(function () {
-        window.location.href = backToListUrl;
+        if (pendingApprovalCount > 0) {
+            window.location.href = backToListUrl;
+            return;
+        }
+
+        goBackAfterWorkflow(backToListUrl);
     }, 300);
+}
+
+function goBackAfterWorkflow(fallbackUrl) {
+    if (window.history.length > 2) {
+        window.history.go(-2);
+        return;
+    }
+
+    if (window.history.length > 1) {
+        window.history.back();
+        return;
+    }
+
+    window.location.href = fallbackUrl;
 }
 
 function isPurchaseOrderIndexUrl(url) {

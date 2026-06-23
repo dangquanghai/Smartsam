@@ -218,9 +218,29 @@ function closeDetailAfterWorkflowIfNeeded($form) {
     }
 
     const backToListUrl = ($form.data('back-to-list-url') || '/Purchasing/MaterialRequest').toString();
+    const pendingApprovalCount = Number($form.data('pending-approval-count')) || 0;
     setTimeout(function () {
-        window.location.href = backToListUrl;
+        if (pendingApprovalCount > 0) {
+            window.location.href = backToListUrl;
+            return;
+        }
+
+        goBackAfterWorkflow(backToListUrl);
     }, 300);
+}
+
+function goBackAfterWorkflow(fallbackUrl) {
+    if (window.history.length > 2) {
+        window.history.go(-2);
+        return;
+    }
+
+    if (window.history.length > 1) {
+        window.history.back();
+        return;
+    }
+
+    window.location.href = fallbackUrl;
 }
 
 // Validation helpers
