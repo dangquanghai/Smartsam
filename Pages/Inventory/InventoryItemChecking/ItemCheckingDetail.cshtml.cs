@@ -140,7 +140,7 @@ WHERE a1.POID = @POID
                 var remainQty = remainObj == null || remainObj == DBNull.Value ? 0m : Convert.ToDecimal(remainObj);
                 if (it.QuantityPassed > remainQty)
                 {
-                    return new JsonResult(new { success = false, message = $"Quantity Passed cannot exceed PO remain ({remainQty})." });
+                    return new JsonResult(new { success = false, message = $"Quantity Passed cannot exceed PO remain ({remainQty:N2})." });
                 }
 
                 validated.Add(new
@@ -383,7 +383,7 @@ WHERE CheckingID=@CheckingID", conn);
             foreach (var row in DetailRows.Where(x => x.ChekingDTID > 0))
             {
                 if (row.QuantityPassed <= 0) throw new Exception($"Quantity Passed must be greater than 0 for item {row.ItemName}.");
-                if (row.QuantityPassed > row.QuantityCheck) throw new Exception($"Quantity Passed cannot exceed Qlt ({Math.Round(row.QuantityCheck, 0)}) for item {row.ItemName}.");
+                if (row.QuantityPassed > row.QuantityCheck) throw new Exception($"Quantity Passed cannot exceed Qlt ({row.QuantityCheck:N2}) for item {row.ItemName}.");
                 if (row.Price < 0) throw new Exception($"Price cannot be negative for item {row.ItemName}.");
                 using var cmd = new SqlCommand(@"UPDATE dbo.INV_ReceivingChekingVoucherDT
 SET QuantityPassed=@QuantityPassed,
@@ -391,9 +391,9 @@ SET QuantityPassed=@QuantityPassed,
     Amount=@Amount,
     Notes=@Notes
 WHERE ChekingDTID=@ChekingDTID AND CheckingID=@CheckingID", conn, tx);
-                cmd.Parameters.Add("@QuantityPassed", SqlDbType.Decimal).Value = row.QuantityPassed;
-                cmd.Parameters.Add("@Price", SqlDbType.Decimal).Value = row.Price;
-                cmd.Parameters.Add("@Amount", SqlDbType.Decimal).Value = row.QuantityPassed * row.Price;
+                AddDecimalParameter(cmd, "@QuantityPassed", row.QuantityPassed, 18, 2);
+                AddDecimalParameter(cmd, "@Price", row.Price, 18, 2);
+                AddDecimalParameter(cmd, "@Amount", row.QuantityPassed * row.Price, 18, 2);
                 cmd.Parameters.Add("@Notes", SqlDbType.NVarChar, 200).Value = string.IsNullOrWhiteSpace(row.Notes) ? "" : row.Notes.Trim();
                 cmd.Parameters.Add("@ChekingDTID", SqlDbType.Int).Value = row.ChekingDTID;
                 cmd.Parameters.Add("@CheckingID", SqlDbType.Int).Value = checkingId;
@@ -439,16 +439,16 @@ WHERE ChekingDTID=@ChekingDTID AND CheckingID=@CheckingID", conn, tx);
                 var remainQty = remainObj == null || remainObj == DBNull.Value ? 0m : Convert.ToDecimal(remainObj);
                 if (it.QuantityPassed <= 0 || it.QuantityPassed > remainQty)
                 {
-                    throw new Exception($"Invalid quantity for item {it.ItemId}. Remain: {remainQty}");
+                    throw new Exception($"Invalid quantity for item {it.ItemId}. Remain: {remainQty:N2}");
                 }
                 using var cmd = new SqlCommand(@"INSERT INTO dbo.INV_ReceivingChekingVoucherDT(CheckingID,ItemID,QuantityCheck,QuantityPassed,Price,Amount,Notes,MRDetailID)
 VALUES(@CheckingID,@ItemID,@QuantityCheck,@QuantityPassed,@Price,@Amount,@Notes,@MRDetailID)", conn, tx);
                 cmd.Parameters.Add("@CheckingID", SqlDbType.Int).Value = checkingId;
                 cmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = it.ItemId;
-                cmd.Parameters.Add("@QuantityCheck", SqlDbType.Decimal).Value = it.QuantityPassed;
-                cmd.Parameters.Add("@QuantityPassed", SqlDbType.Decimal).Value = it.QuantityPassed;
-                cmd.Parameters.Add("@Price", SqlDbType.Decimal).Value = it.Price;
-                cmd.Parameters.Add("@Amount", SqlDbType.Decimal).Value = it.QuantityPassed * it.Price;
+                AddDecimalParameter(cmd, "@QuantityCheck", it.QuantityPassed, 18, 2);
+                AddDecimalParameter(cmd, "@QuantityPassed", it.QuantityPassed, 18, 2);
+                AddDecimalParameter(cmd, "@Price", it.Price, 18, 2);
+                AddDecimalParameter(cmd, "@Amount", it.QuantityPassed * it.Price, 18, 2);
                 cmd.Parameters.Add("@Notes", SqlDbType.NVarChar, 200).Value = string.IsNullOrWhiteSpace(it.Note) ? string.Empty : it.Note.Trim();
                 cmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = it.MrDetailId <= 0 ? DBNull.Value : it.MrDetailId;
                 cmd.ExecuteNonQuery();
@@ -504,16 +504,16 @@ VALUES(@CheckingID,@ItemID,@QuantityCheck,@QuantityPassed,@Price,@Amount,@Notes,
                 var remainQty = remainObj == null || remainObj == DBNull.Value ? 0m : Convert.ToDecimal(remainObj);
                 if (it.QuantityPassed <= 0 || it.QuantityPassed > remainQty)
                 {
-                    throw new Exception($"Invalid quantity for item {it.ItemId}. Remain: {remainQty}");
+                    throw new Exception($"Invalid quantity for item {it.ItemId}. Remain: {remainQty:N2}");
                 }
                 using var cmd = new SqlCommand(@"INSERT INTO dbo.INV_ReceivingChekingVoucherDT(CheckingID,ItemID,QuantityCheck,QuantityPassed,Price,Amount,Notes,MRDetailID)
 VALUES(@CheckingID,@ItemID,@QuantityCheck,@QuantityPassed,@Price,@Amount,@Notes,@MRDetailID)", conn, tx);
                 cmd.Parameters.Add("@CheckingID", SqlDbType.Int).Value = checkingId;
                 cmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = it.ItemId;
-                cmd.Parameters.Add("@QuantityCheck", SqlDbType.Decimal).Value = it.QuantityPassed;
-                cmd.Parameters.Add("@QuantityPassed", SqlDbType.Decimal).Value = it.QuantityPassed;
-                cmd.Parameters.Add("@Price", SqlDbType.Decimal).Value = it.Price;
-                cmd.Parameters.Add("@Amount", SqlDbType.Decimal).Value = it.QuantityPassed * it.Price;
+                AddDecimalParameter(cmd, "@QuantityCheck", it.QuantityPassed, 18, 2);
+                AddDecimalParameter(cmd, "@QuantityPassed", it.QuantityPassed, 18, 2);
+                AddDecimalParameter(cmd, "@Price", it.Price, 18, 2);
+                AddDecimalParameter(cmd, "@Amount", it.QuantityPassed * it.Price, 18, 2);
                 cmd.Parameters.Add("@Notes", SqlDbType.NVarChar, 200).Value = string.IsNullOrWhiteSpace(it.Note) ? string.Empty : it.Note.Trim();
                 cmd.Parameters.Add("@MRDetailID", SqlDbType.Int).Value = it.MrDetailId <= 0 ? DBNull.Value : it.MrDetailId;
                 cmd.ExecuteNonQuery();
@@ -1181,6 +1181,13 @@ WHERE DeptID=@DeptID AND ISNULL(IsInventoryControlInDep,0)=1 AND ISNULL(IsActive
             scope.IsHeadDept = !rd.IsDBNull(3) && Convert.ToInt32(rd[3]) == 1;
         }
         return scope;
+    }
+    private static void AddDecimalParameter(SqlCommand cmd, string name, decimal value, byte precision, byte scale)
+    {
+        var parameter = cmd.Parameters.Add(name, SqlDbType.Decimal);
+        parameter.Precision = precision;
+        parameter.Scale = scale;
+        parameter.Value = Math.Round(value, scale, MidpointRounding.AwayFromZero);
     }
     private SqlConnection OpenConnection() { var c = new SqlConnection(_config.GetConnectionString("DefaultConnection")); c.Open(); return c; }
     private PagePermissions GetUserPermissions() => IsAdminRole() ? new PagePermissions { AllowedNos = Enumerable.Range(1, 20).ToList() } : new PagePermissions { AllowedNos = _permissionService.GetPermissionsForPage(GetCurrentRoleId(), FunctionId) };

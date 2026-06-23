@@ -48,6 +48,49 @@ public class IndexModel : BasePageModel
     public bool CanSubmitReport { get; private set; }
     public bool CanApproveReport { get; private set; }
 
+    public IActionResult OnGetCompareAcc(DateTime? fromDate, DateTime? toDate)
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionViewList))
+        {
+            Response.StatusCode = StatusCodes.Status403Forbidden;
+            return new JsonResult(new { message = "No permission." });
+        }
+
+        var compareFromDate = fromDate?.Date ?? Filter.FromDate?.Date;
+        var compareToDate = toDate?.Date ?? Filter.ToDate?.Date;
+        var compareStoreId = Filter.StoreId;
+
+        if (!compareFromDate.HasValue || !compareToDate.HasValue)
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return new JsonResult(new { message = "Please select valid from/to date." });
+        }
+
+        if (compareStoreId <= 0)
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return new JsonResult(new { message = "Please select one store to compare ACCNET." });
+        }
+
+        try
+        {
+            var result = CompareInventoryWithAcc(compareFromDate.Value, compareToDate.Value, compareStoreId);
+            return new JsonResult(new
+            {
+                rows = result.Rows,
+                message = result.Message,
+                accStoreCode = result.AccStoreCode,
+                hasAccConnection = result.HasAccConnection
+            });
+        }
+        catch (Exception ex)
+        {
+            Response.StatusCode = StatusCodes.Status500InternalServerError;
+            return new JsonResult(new { message = "Compare ACC failed: " + ex.Message });
+        }
+    }
+
     public IActionResult OnGet()
     {
         PagePerm = GetUserPermissions();
@@ -891,6 +934,210 @@ ORDER BY ID DESC", conn);
         return result;
     }
 
+    private CompareAccResult CompareInventoryWithAcc(DateTime fromDate, DateTime toDate, int storeId)
+    {
+        var result = new CompareAccResult();
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+
+        var smartRows = LoadSmartCompareRows(conn, fromDate, toDate, storeId);
+        RefreshSmartCompareTemp(conn, smartRows);
+
+        var accStoreCode = MapAccStoreCode(storeId);
+        result.AccStoreCode = accStoreCode;
+
+        var accRows = new List<CompareAccSourceRow>();
+        if (!string.IsNullOrWhiteSpace(accStoreCode))
+        {
+            accRows = LoadAccCompareRows(fromDate, toDate, accStoreCode, out var hasAccConnection);
+            result.HasAccConnection = hasAccConnection;
+        }
+
+        RefreshAccCompareTemp(conn, accRows);
+        result.Rows = LoadCompareViewRows(conn);
+        result.Message = result.Rows.Count == 0
+            ? "No compare data returned from VIEW_InvCompare."
+            : "Compare ACC completed.";
+
+        return result;
+    }
+
+    private List<CompareAccSourceRow> LoadSmartCompareRows(SqlConnection conn, DateTime fromDate, DateTime toDate, int storeId)
+    {
+        using var cmd = new SqlCommand("exec dbo.sp_ItemCompareStore @FromDate, @ToDate, @StoreID", conn)
+        {
+            CommandType = CommandType.Text,
+            CommandTimeout = 120
+        };
+        cmd.Parameters.Add("@FromDate", SqlDbType.VarChar, 10).Value = fromDate.ToString("yyyy-MM-dd");
+        cmd.Parameters.Add("@ToDate", SqlDbType.VarChar, 10).Value = toDate.ToString("yyyy-MM-dd");
+        cmd.Parameters.Add("@StoreID", SqlDbType.Int).Value = storeId;
+
+        var rows = new List<CompareAccSourceRow>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var row = new CompareAccSourceRow
+            {
+                ItemCode = GetString(reader, "ItemCode"),
+                BeginQuantity = GetDecimal(reader, "BGQuantity") + GetDecimal(reader, "RecQty1") - GetDecimal(reader, "IssQty1"),
+                ReceiveQuantity = GetDecimal(reader, "RecQty"),
+                IssueQuantity = GetDecimal(reader, "IssQty")
+            };
+
+            if (!string.IsNullOrWhiteSpace(row.ItemCode)) rows.Add(row);
+        }
+
+        return rows;
+    }
+
+    private void RefreshSmartCompareTemp(SqlConnection conn, List<CompareAccSourceRow> rows)
+    {
+        using (var deleteCmd = new SqlCommand("delete from INV_ItemBalance_TMP", conn))
+        {
+            deleteCmd.ExecuteNonQuery();
+        }
+
+        if (rows.Count == 0) return;
+
+        using var insertCmd = new SqlCommand("insert into dbo.INV_ItemBalance_TMP(ItemCode, BeginQ, ReQ, IsQ) values(@ItemCode, @BeginQ, @ReQ, @IsQ)", conn);
+        insertCmd.Parameters.Add("@ItemCode", SqlDbType.VarChar, 50);
+        insertCmd.Parameters.Add("@BeginQ", SqlDbType.Decimal).Precision = 18;
+        insertCmd.Parameters["@BeginQ"].Scale = 2;
+        insertCmd.Parameters.Add("@ReQ", SqlDbType.Decimal).Precision = 18;
+        insertCmd.Parameters["@ReQ"].Scale = 2;
+        insertCmd.Parameters.Add("@IsQ", SqlDbType.Decimal).Precision = 18;
+        insertCmd.Parameters["@IsQ"].Scale = 2;
+
+        foreach (var row in rows)
+        {
+            insertCmd.Parameters["@ItemCode"].Value = row.ItemCode;
+            insertCmd.Parameters["@BeginQ"].Value = row.BeginQuantity;
+            insertCmd.Parameters["@ReQ"].Value = row.ReceiveQuantity;
+            insertCmd.Parameters["@IsQ"].Value = row.IssueQuantity;
+            insertCmd.ExecuteNonQuery();
+        }
+    }
+
+    private List<CompareAccSourceRow> LoadAccCompareRows(DateTime fromDate, DateTime toDate, string accStoreCode, out bool hasAccConnection)
+    {
+        hasAccConnection = false;
+        var rows = new List<CompareAccSourceRow>();
+        var accConnString = _config.GetConnectionString("ACCNETConnection");
+        if (string.IsNullOrWhiteSpace(accConnString)) return rows;
+
+        try
+        {
+            using var accConn = new SqlConnection(accConnString);
+            accConn.Open();
+            hasAccConnection = true;
+
+            using var cmd = new SqlCommand("exec CheckStoreInACCNET @FromDate, @ToDate, @StoreCode", accConn)
+            {
+                CommandType = CommandType.Text,
+                CommandTimeout = 120
+            };
+            cmd.Parameters.Add("@FromDate", SqlDbType.VarChar, 10).Value = fromDate.ToString("yyyy-MM-dd");
+            cmd.Parameters.Add("@ToDate", SqlDbType.VarChar, 10).Value = toDate.ToString("yyyy-MM-dd");
+            cmd.Parameters.Add("@StoreCode", SqlDbType.VarChar, 20).Value = accStoreCode;
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var row = new CompareAccSourceRow
+                {
+                    ItemCode = GetString(reader, "ItemID", "ItemCode"),
+                    BeginQuantity = Math.Round(GetDecimal(reader, "OnHand"), 2),
+                    ReceiveQuantity = GetDecimal(reader, "InPutQ"),
+                    IssueQuantity = -GetDecimal(reader, "OutPutQ")
+                };
+
+                if (!string.IsNullOrWhiteSpace(row.ItemCode)) rows.Add(row);
+            }
+        }
+        catch
+        {
+            hasAccConnection = false;
+        }
+
+        return rows;
+    }
+
+    private void RefreshAccCompareTemp(SqlConnection conn, List<CompareAccSourceRow> rows)
+    {
+        using (var deleteCmd = new SqlCommand("delete from INV_ItemBalanceACC_TMP", conn))
+        {
+            deleteCmd.ExecuteNonQuery();
+        }
+
+        if (rows.Count == 0) return;
+
+        using var insertCmd = new SqlCommand("insert into dbo.INV_ItemBalanceACC_TMP(ItemCode, BeQ, ReQ, IsQ) values(@ItemCode, @BeQ, @ReQ, @IsQ)", conn);
+        insertCmd.Parameters.Add("@ItemCode", SqlDbType.VarChar, 50);
+        insertCmd.Parameters.Add("@BeQ", SqlDbType.Decimal).Precision = 18;
+        insertCmd.Parameters["@BeQ"].Scale = 2;
+        insertCmd.Parameters.Add("@ReQ", SqlDbType.Decimal).Precision = 18;
+        insertCmd.Parameters["@ReQ"].Scale = 2;
+        insertCmd.Parameters.Add("@IsQ", SqlDbType.Decimal).Precision = 18;
+        insertCmd.Parameters["@IsQ"].Scale = 2;
+
+        foreach (var row in rows)
+        {
+            insertCmd.Parameters["@ItemCode"].Value = row.ItemCode;
+            insertCmd.Parameters["@BeQ"].Value = row.BeginQuantity;
+            insertCmd.Parameters["@ReQ"].Value = row.ReceiveQuantity;
+            insertCmd.Parameters["@IsQ"].Value = row.IssueQuantity;
+            insertCmd.ExecuteNonQuery();
+        }
+    }
+
+    private List<CompareAccViewRow> LoadCompareViewRows(SqlConnection conn)
+    {
+        using var cmd = new SqlCommand(@"SELECT v.ItemCode,
+       ISNULL(i.ItemName,'') AS ItemName,
+       ISNULL(v.BeginQ,0) AS BeginQ,
+       ISNULL(v.ReQ,0) AS ReQ,
+       ISNULL(v.IsQ,0) AS IsQ,
+       ISNULL(v.BeginQ,0) + ISNULL(v.ReQ,0) - ISNULL(v.IsQ,0) AS EndQ,
+       ISNULL(v.SmartOrAcc,'') AS SmartOrAcc
+FROM dbo.VIEW_InvCompare v
+INNER JOIN dbo.INV_ItemList i ON v.ItemCode = i.ItemCode
+ORDER BY i.ItemCode", conn)
+        {
+            CommandTimeout = 120
+        };
+
+        var rows = new List<CompareAccViewRow>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            rows.Add(new CompareAccViewRow
+            {
+                ItemCode = GetString(reader, "ItemCode"),
+                ItemName = GetString(reader, "ItemName"),
+                BeginQuantity = GetDecimal(reader, "BeginQ"),
+                ReceiveQuantity = GetDecimal(reader, "ReQ"),
+                IssueQuantity = GetDecimal(reader, "IsQ"),
+                EndQuantity = GetDecimal(reader, "EndQ"),
+                SmartOrAcc = GetString(reader, "SmartOrAcc"),
+            });
+        }
+
+        return rows;
+    }
+
+
+    private static string MapAccStoreCode(int storeId) => storeId switch
+    {
+        21 => "SS01",
+        2 => "SSG1",
+        3 => "SSG2",
+        7 => "SSG6",
+        8 => "SSG7",
+        _ => string.Empty
+    };
+
     private string BuildLegacyItemFilter()
     {
         var parts = new List<string>();
@@ -989,6 +1236,33 @@ ORDER BY ID DESC", conn);
         var value = User.FindFirst("StoreGR")?.Value;
         return int.TryParse(value, out var storeGr) ? storeGr : 0;
     }
+}
+
+internal sealed class CompareAccResult
+{
+    public List<CompareAccViewRow> Rows { get; set; } = new();
+    public string Message { get; set; } = string.Empty;
+    public string AccStoreCode { get; set; } = string.Empty;
+    public bool HasAccConnection { get; set; }
+}
+
+internal sealed class CompareAccSourceRow
+{
+    public string ItemCode { get; set; } = string.Empty;
+    public decimal BeginQuantity { get; set; }
+    public decimal ReceiveQuantity { get; set; }
+    public decimal IssueQuantity { get; set; }
+}
+
+public sealed class CompareAccViewRow
+{
+    public string ItemCode { get; set; } = string.Empty;
+    public string ItemName { get; set; } = string.Empty;
+    public decimal BeginQuantity { get; set; }
+    public decimal ReceiveQuantity { get; set; }
+    public decimal IssueQuantity { get; set; }
+    public decimal EndQuantity { get; set; }
+    public string SmartOrAcc { get; set; } = string.Empty;
 }
 
 public class InventoryReportFilter
