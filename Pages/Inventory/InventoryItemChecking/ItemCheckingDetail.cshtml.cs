@@ -247,7 +247,7 @@ WHERE CheckingID=@CheckingID";
             using var cmd = new SqlCommand(sql, conn);
             BindActionParams(cmd, 2);
             cmd.ExecuteNonQuery();
-            UpdatePoStatusAfterChecking(conn, Header.POID);
+            UpdatePoStatusAfterChecking(conn, Header.POID, Header.CheckingId);
             _ = TryQueueNotifyHeadDeptAsync(Header.CheckingId, Header.DeptChecked, "checked");
         }
         else if (currentStatus == 2 && IsHeadDept())
@@ -810,10 +810,12 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);", conn, tx);
         return value != null && value != DBNull.Value && Convert.ToInt32(value) == 1;
     }
     private int GetCurrentEmployeeId() => int.TryParse(User.FindFirst("EmployeeID")?.Value, out var employeeId) ? employeeId : 0;
-    private void UpdatePoStatusAfterChecking(SqlConnection conn, int? poid)
+    private void UpdatePoStatusAfterChecking(SqlConnection conn, int? poid, int checkingId)
     {
         if (!poid.HasValue || poid.Value <= 0) return;
-        using var cmd = new SqlCommand("UPDATE dbo.PC_PO SET StatusID = 4 WHERE POID=@POID", conn);
+        var allChecked = AreAllPoItemsCovered(conn, poid.Value, checkingId);
+        using var cmd = new SqlCommand("UPDATE dbo.PC_PO SET StatusID = @StatusID WHERE POID=@POID", conn);
+        cmd.Parameters.Add("@StatusID", SqlDbType.Int).Value = allChecked ? 5 : 4;
         cmd.Parameters.Add("@POID", SqlDbType.Int).Value = poid.Value;
         cmd.ExecuteNonQuery();
     }

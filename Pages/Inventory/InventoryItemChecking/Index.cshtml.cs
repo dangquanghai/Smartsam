@@ -111,6 +111,7 @@ public class IndexModel : BasePageModel
 FROM dbo.INV_RecevingChekingVoucher c
 WHERE 1=1
 AND (@DeptId IS NULL OR c.DeptChecked = @DeptId)
+AND (@CheckingId IS NULL OR c.CheckingID = @CheckingId)
 AND (@StatusId IS NULL OR c.StatusID = @StatusId)
 AND (@UseChecked = 0 OR (c.CheckedDate >= @ChkFrom AND c.CheckedDate < DATEADD(DAY,1,@ChkTo)))
 AND (@UseApproved = 0 OR (c.ApprovedDate >= @AprFrom AND c.ApprovedDate < DATEADD(DAY,1,@AprTo)))
@@ -133,6 +134,7 @@ LEFT JOIN dbo.MS_Employee e1 ON c.ApprovedBy = e1.EmployeeID
 LEFT JOIN dbo.MS_Employee e2 ON c.CheckedBy = e2.EmployeeID
 WHERE 1=1
 AND (@DeptId IS NULL OR c.DeptChecked = @DeptId)
+AND (@CheckingId IS NULL OR c.CheckingID = @CheckingId)
 AND (@StatusId IS NULL OR c.StatusID = @StatusId)
 AND (@UseChecked = 0 OR (c.CheckedDate >= @ChkFrom AND c.CheckedDate < DATEADD(DAY,1,@ChkTo)))
 AND (@UseApproved = 0 OR (c.ApprovedDate >= @AprFrom AND c.ApprovedDate < DATEADD(DAY,1,@AprTo)))
@@ -192,6 +194,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn);
     private void BindFilterParams(SqlCommand cmd)
     {
         cmd.Parameters.Add("@DeptId", SqlDbType.Int).Value = Filter.DeptId ?? (object)DBNull.Value;
+        cmd.Parameters.Add("@CheckingId", SqlDbType.Int).Value = Filter.CheckingId ?? (object)DBNull.Value;
         cmd.Parameters.Add("@StatusId", SqlDbType.Int).Value = Filter.StatusId ?? (object)DBNull.Value;
         cmd.Parameters.Add("@UseChecked", SqlDbType.Bit).Value = Filter.UseCheckedDate;
         cmd.Parameters.Add("@ChkFrom", SqlDbType.DateTime).Value = Filter.CheckedFrom ?? DateTime.Today.AddDays(-30);
@@ -255,6 +258,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn);
 public class ItemCheckingFilter
 {
     public int? DeptId { get; set; }
+    public int? CheckingId { get; set; }
     public int? StatusId { get; set; }
     public bool UseCheckedDate { get; set; } = false;
     public DateTime? CheckedFrom { get; set; }
