@@ -150,18 +150,18 @@
                                             <input type="hidden" name="DetailRows[@(Model.DetailRows.IndexOf(row))].ChekingDTID" value="@row.ChekingDTID" />
                                             <input type="hidden" name="DetailRows[@(Model.DetailRows.IndexOf(row))].ItemID" value="@row.ItemID" />
                                             <input type="hidden" name="DetailRows[@(Model.DetailRows.IndexOf(row))].ItemName" value="@row.ItemName" />
-                                            <input type="hidden" name="DetailRows[@(Model.DetailRows.IndexOf(row))].QuantityCheck" value="@row.QuantityCheck" />
+                                            <input type="hidden" name="DetailRows[@(Model.DetailRows.IndexOf(row))].QuantityCheck" value="@row.QuantityCheck.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                                             <input type="hidden" name="DetailRows[@(Model.DetailRows.IndexOf(row))].MRDetailID" value="@row.MRDetailID" />
                                         </td>
-                                        <td class="text-right item-checking-qlt-col">@row.QuantityCheck.ToString("N0")</td>
+                                        <td class="text-right item-checking-qlt-col">@row.QuantityCheck.ToString(row.QuantityCheck == System.Math.Truncate(row.QuantityCheck) ? "N0" : "N2")</td>
                                         <td class="text-right item-checking-qtypassed-col">
                                             @if (Model.CanSaveDraft && row.ChekingDTID > 0)
                                             {
-                                                <input type="text" inputmode="numeric" class="form-control form-control-sm text-right stage-qty-passed" name="DetailRows[@(Model.DetailRows.IndexOf(row))].QuantityPassed" value="@row.QuantityPassed.ToString("N0")" data-max="@Math.Round(row.QuantityCheck, 0)" />
+                                                <input type="text" inputmode="decimal" class="form-control form-control-sm text-right stage-qty-passed" name="DetailRows[@(Model.DetailRows.IndexOf(row))].QuantityPassed" value="@row.QuantityPassed.ToString(row.QuantityPassed == System.Math.Truncate(row.QuantityPassed) ? "N0" : "N2")" data-max="@row.QuantityCheck.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                                             }
                                             else
                                             {
-                                                @row.QuantityPassed.ToString("N0")
+                                                @row.QuantityPassed.ToString(row.QuantityPassed == System.Math.Truncate(row.QuantityPassed) ? "N0" : "N2")
                                             }
                                         </td>
                                         <td class="text-right item-checking-price-col">
@@ -352,6 +352,18 @@
             }
             function toNumber(v) { const n = parseFloat((v || '').toString().replace(/,/g, '')); return Number.isFinite(n) ? n : 0; }
             function formatInt(v) { return Math.round(toNumber(v)).toLocaleString('en-US'); }
+            function round2(v) { return Math.round((toNumber(v) + Number.EPSILON) * 100) / 100; }
+            function formatQty(v) { return round2(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
+            function sanitizeDecimalInput(input) {
+                let value = (input.value || '').replace(/,/g, '').replace(/[^0-9.]/g, '');
+                const dotIndex = value.indexOf('.');
+                if (dotIndex >= 0) {
+                    value = value.slice(0, dotIndex + 1) + value.slice(dotIndex + 1).replace(/\./g, '');
+                    const parts = value.split('.');
+                    value = parts[0] + '.' + (parts[1] || '').slice(0, 2);
+                }
+                input.value = value;
+            }
             function normalizeRow(r) { return { itemId: parseInt(r.itemId || '0'), itemText: (r.itemText || '').toString(), quantity: toNumber(r.quantity), quantityPassed: toNumber(r.quantityPassed), price: toNumber(r.price), note: (r.note || '').toString(), mrDetailId: parseInt(r.mrDetailId || '0') }; }
             function getStageKey(row) { return `${row.itemId}|${row.mrDetailId || 0}`; }
             function escapeAttr(v) { return (v || '').toString().replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -385,8 +397,8 @@
                 const stagedHtml = stagedRows.map((r, idx) => `<tr data-stage-index="${idx}">
                     <td class="text-center"><button type="button" class="btn btn-xs btn-danger stage-remove" title="Remove"><i class="fas fa-trash"></i></button></td>
                     <td class="text-left inventory-item-ellipsis tcvn3-font" title="${escapeAttr(r.itemText)}">${escapeAttr(r.itemText)}</td>
-                    <td class="text-right item-checking-qlt-col" title="${formatInt(r.quantity)}">${formatInt(r.quantity)}</td>
-                    <td class="text-right item-checking-qtypassed-col"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right stage-qty-passed" value="${formatInt(r.quantityPassed)}" title="${formatInt(r.quantityPassed)}" maxlength="6" /></td>
+                    <td class="text-right item-checking-qlt-col" title="${formatQty(r.quantity)}">${formatQty(r.quantity)}</td>
+                    <td class="text-right item-checking-qtypassed-col"><input type="text" inputmode="decimal" class="form-control form-control-sm text-right stage-qty-passed" value="${formatQty(r.quantityPassed)}" title="${formatQty(r.quantityPassed)}" /></td>
                     <td class="text-right item-checking-price-col"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right stage-price" value="${formatInt(r.price)}" title="${formatInt(r.price)}" /></td>
                     <td class="text-right item-checking-amount-col" title="${formatInt(r.quantityPassed * r.price)}">${formatInt(r.quantityPassed * r.price)}</td>
                     <td class="text-left item-checking-notes-cell"><input type="text" class="form-control form-control-sm stage-note" value="${escapeAttr(r.note)}" title="${escapeAttr(r.note)}" /></td>
@@ -428,8 +440,8 @@
                 else tbody.innerHTML = showRows.map(r => `<tr data-item-id="${r.itemId}" data-mr-detail-id="${r.mrDetailId}" data-item-text="${escapeAttr(r.itemText)}" data-remain-qty="${r.quantity}" data-price="${r.price}" data-note="${escapeAttr(r.note)}">
                     <td class="text-center"><input type="checkbox" class="po-select" /></td>
                     <td class="tcvn3-font" title="${escapeAttr(r.itemText)}">${escapeAttr(r.itemText)}</td>
-                    <td class="text-right" title="${formatInt(r.quantity)}">${formatInt(r.quantity)}</td>
-                    <td class="po-checkqty-col"><input type="text" inputmode="numeric" class="form-control form-control-sm text-right po-qty-passed" value="${formatInt(r.quantity)}" maxlength="6" disabled /></td>
+                    <td class="text-right" title="${formatQty(r.quantity)}">${formatQty(r.quantity)}</td>
+                    <td class="po-checkqty-col"><input type="text" inputmode="decimal" class="form-control form-control-sm text-right po-qty-passed" value="${formatQty(r.quantity)}" disabled /></td>
                     <td class="text-right" title="${formatInt(r.price)}">${formatInt(r.price)}</td>
                     <td title="${escapeAttr(r.note)}">${escapeAttr(r.note)}</td>
                 </tr>`).join('');
@@ -454,6 +466,10 @@
                 modal.modal('hide');
             }
             detailBody.addEventListener('click', function (e) { const btn = e.target.closest('.stage-remove'); if (!btn) return; const index = parseInt(btn.closest('tr')?.dataset.stageIndex || '-1'); if (index < 0 || index >= stagedRows.length) return; stagedRows.splice(index, 1); renderStagedRows(); });
+            detailBody.addEventListener('input', function (e) {
+                const qtyInput = e.target.closest('.stage-qty-passed');
+                if (qtyInput) sanitizeDecimalInput(qtyInput);
+            });
             detailBody.addEventListener('change', function (e) {
                 const tr = e.target.closest('tr');
                 const index = parseInt(tr?.dataset.stageIndex || '-1');
@@ -464,8 +480,8 @@
                 const noteInput = e.target.closest('.stage-note');
                 if (qtyInput) {
                     const newQty = toNumber(qtyInput.value);
-                    if (newQty <= 0 || newQty > row.quantity) { showNotify('warning', `Quantity Passed must be > 0 and <= ${row.quantity}.`); qtyInput.value = formatInt(row.quantityPassed); return; }
-                    row.quantityPassed = newQty;
+                    if (newQty <= 0 || newQty > row.quantity) { showNotify('warning', `Quantity Passed must be > 0 and <= ${formatQty(row.quantity)}.`); qtyInput.value = formatQty(row.quantityPassed); return; }
+                    row.quantityPassed = round2(newQty);
                     renderStagedRows();
                     return;
                 }
@@ -481,22 +497,22 @@
                     syncStagedInput();
                 }
             });
-            detailBody.addEventListener('input', function (e) {
+            detailBody.addEventListener('change', function (e) {
                 const tr = e.target.closest('tr[data-existing-row="true"]');
                 if (!tr) return;
                 const qtyInput = tr.querySelector('input[name*=".QuantityPassed"]');
                 const priceInput = tr.querySelector('input[name*=".Price"]');
                 const amountCell = tr.querySelector('.item-checking-amount-col');
                 if (!qtyInput || !priceInput || !amountCell) return;
-                const qty = Math.round(toNumber(qtyInput.value || '0'));
+                const qty = round2(toNumber(qtyInput.value || '0'));
                 const price = toNumber(priceInput.value || '0');
-                const maxQty = Math.round(toNumber(qtyInput.dataset.max || '0'));
+                const maxQty = round2(toNumber(qtyInput.dataset.max || '0'));
                 if (maxQty > 0 && qty > maxQty) {
-                    showNotify('warning', `QltPassed cannot exceed Qlt (${maxQty.toLocaleString('en-US')}).`);
-                    qtyInput.value = formatInt(maxQty);
+                    showNotify('warning', `QltPassed cannot exceed Qlt (${formatQty(maxQty)}).`);
+                    qtyInput.value = formatQty(maxQty);
                 }
-                const normalizedQty = Math.round(toNumber(qtyInput.value || '0'));
-                qtyInput.value = formatInt(normalizedQty);
+                const normalizedQty = round2(toNumber(qtyInput.value || '0'));
+                qtyInput.value = formatQty(normalizedQty);
                 priceInput.value = formatInt(price);
                 const amount = normalizedQty * price;
                 amountCell.textContent = formatInt(amount);
@@ -508,7 +524,10 @@
                 }
                 formSubmitting = true;
                 disableFormActionButtons();
-                detailBody.querySelectorAll('.stage-qty-passed, .stage-price, .po-qty-passed, .existing-price').forEach(function (input) {
+                detailBody.querySelectorAll('.stage-qty-passed, .po-qty-passed').forEach(function (input) {
+                    input.value = round2(toNumber(input.value || '0')).toString();
+                });
+                detailBody.querySelectorAll('.stage-price, .existing-price').forEach(function (input) {
                     input.value = Math.round(toNumber(input.value || '0')).toString();
                 });
             });
@@ -543,6 +562,10 @@
                 confirmBypass = true;
                 confirmActionModal.modal('hide');
                 pendingSubmitButton.click();
+            });
+            tbody.addEventListener('input', function (e) {
+                const qtyInput = e.target.closest('.po-qty-passed');
+                if (qtyInput) sanitizeDecimalInput(qtyInput);
             });
             tbody.addEventListener('change', function (e) {
                 const checkbox = e.target.closest('.po-select');

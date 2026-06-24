@@ -78,9 +78,9 @@ public class InventoryIssueDetailModel : BasePageModel
             ? messageType
             : ((TempData["MessageType"] as string) ?? "info");
         if (id.HasValue && IsViewMode && !PagePerm.HasPermission(PermissionViewDetail)) return Redirect("/");
-        if (!id.HasValue && !PagePerm.HasPermission(PermissionAdd)) return Redirect("/");
-        if (IsApprovedMode && !HasIssueApprovalAccess()) return Redirect("/");
-        if (IsEditMode && !PagePerm.HasPermission(PermissionEdit)) return Redirect("/");
+        if (!id.HasValue && !PagePerm.HasPermission(PermissionAdd)) return RedirectToListWithMessage("You do not have permission to create an issue voucher.");
+        if (IsApprovedMode && !HasIssueApprovalAccess()) return RedirectToListWithMessage("You do not have permission to approve this issue voucher at the current status.");
+        if (IsEditMode && !PagePerm.HasPermission(PermissionEdit)) return RedirectToListWithMessage("You do not have permission to edit this issue voucher.");
 
         if (id.HasValue)
         {
@@ -110,8 +110,9 @@ public class InventoryIssueDetailModel : BasePageModel
         PagePerm = GetUserPermissions();
         Mode = string.IsNullOrWhiteSpace(mode) ? "view" : mode.Trim().ToLowerInvariant();
         var isAdjustedItemLocked = id.HasValue && IsApartmentAdjustCreated(id.Value);
-        if ((id.HasValue && !PagePerm.HasPermission(PermissionEdit)) || (!id.HasValue && !PagePerm.HasPermission(PermissionAdd))) return Redirect("/");
-        if (IsApprovedMode) return Redirect("/");
+        if (id.HasValue && !PagePerm.HasPermission(PermissionEdit)) return RedirectToListWithMessage("You do not have permission to save changes to this issue voucher.");
+        if (!id.HasValue && !PagePerm.HasPermission(PermissionAdd)) return RedirectToListWithMessage("You do not have permission to create an issue voucher.");
+        if (IsApprovedMode) return RedirectToListWithMessage("Approved mode does not allow saving this issue voucher.");
 
         if (id.HasValue && !EvaluateCanEditVoucherBusiness())
         {
@@ -361,7 +362,7 @@ WHERE FlowID=@FlowID", conn, tran);
     {
         PagePerm = GetUserPermissions();
         Mode = string.IsNullOrWhiteSpace(mode) ? "edit" : mode.Trim().ToLowerInvariant();
-        if (!PagePerm.HasPermission(PermissionEdit) && !HasIssueApprovalAccess()) return Redirect("/");
+        if (!PagePerm.HasPermission(PermissionEdit) && !HasIssueApprovalAccess()) return RedirectToListWithMessage("You do not have permission to update this issue voucher.");
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
@@ -537,6 +538,12 @@ WHERE FlowID=@FlowID", conn);
         return Convert.ToInt32(cmd.ExecuteScalar() ?? 0) == 1;
     }
 
+    private IActionResult RedirectToListWithMessage(string message)
+    {
+        TempData["Message"] = message;
+        TempData["MessageType"] = "error";
+        return RedirectToPage("./Index");
+    }
     private IActionResult RedirectWithMessage(long id, string mode, string message, string type)
     {
         TempData["Message"] = message;
@@ -616,8 +623,8 @@ WHERE EmployeeID = @ReceivedByEmployeeID", conn);
         var subject = includeApprovalLink
             ? ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}")
             : ApplyMailSubjectPrefix($"[Inventory Item Checking] Issue voucher {flowNo} has been confirmed by storeman");
-        QueueConfirmMail(email, subject, flowNo, "Issue Voucher", true, recipientLabel, code, statusName, includeApprovalLink);
-        return null;
+        var mailError = SendConfirmMailAndGetError(email, subject, flowNo, "Issue Voucher", true, recipientLabel, code, statusName, includeApprovalLink);
+        return string.IsNullOrWhiteSpace(mailError) ? null : $"Confirm successfully, but notification email failed: {mailError}.";
     }
 
     private void NotifyNextByIssueVoucherLevel(SqlConnection conn, int storeGr, int level, string flowNo)
@@ -629,6 +636,7 @@ ORDER BY ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
         cmd.Parameters.Add("@Level", SqlDbType.Int).Value = level;
         using var rd = cmd.ExecuteReader();
         var hasRecipient = false;
+        var mailErrors = new List<string>();
         while (rd.Read())
         {
             var email = Convert.ToString(rd["TheEmail"]) ?? string.Empty;
@@ -639,32 +647,54 @@ ORDER BY ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
             var title = Convert.ToString(rd["Title"]) ?? string.Empty;
             var recipientLabel = BuildRecipientDisplayName(title, name, code, email);
             var statusName = GetStatusName(level - 1, 1);
-            QueueConfirmMail(email, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Issue Voucher", true, recipientLabel, code, statusName);
+            AddMailError(mailErrors, SendConfirmMailAndGetError(email, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Issue Voucher", true, recipientLabel, code, statusName));
         }
         if (!hasRecipient)
         {
             var fallbackStatusName = GetStatusName(level - 1, 1);
-            QueueConfirmMail(NotifyCcEmail, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Issue Voucher", false, statusName: fallbackStatusName);
+            AddMailError(mailErrors, SendConfirmMailAndGetError(NotifyCcEmail, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Issue Voucher", false, statusName: fallbackStatusName));
+        }
+
+        if (mailErrors.Count > 0)
+        {
+            TempData["Message"] = BuildMailErrorNotice(mailErrors);
+            TempData["MessageType"] = "warning";
         }
     }
 
-    private void QueueConfirmMail(string toEmail, string subject, string voucherNo, string voucherType, bool addDefaultCc = true, string recipientLabel = "", string employeeCode = "", string statusName = "", bool includeApprovalLink = true)
+    private string SendConfirmMailAndGetError(string toEmail, string subject, string voucherNo, string voucherType, bool addDefaultCc = true, string recipientLabel = "", string employeeCode = "", string statusName = "", bool includeApprovalLink = true)
     {
         var flowId = GetFlowIdByNo(voucherNo);
         var detailUrl = Url.Page("/Inventory/InventoryIssue/InventoryIssueDetail", values: new { id = flowId, mode = "approved" });
         var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl) ? string.Empty : $"{Request.Scheme}://{Request.Host}{detailUrl}";
         var submittedBy = GetCurrentEmployeeDisplayName();
 
-        _ = Task.Run(async () =>
+        try
         {
-            try
-            {
-                await SendConfirmMailAsync(toEmail, subject, voucherNo, voucherType, absoluteUrl, submittedBy, addDefaultCc, recipientLabel, employeeCode, statusName, includeApprovalLink);
-            }
-            catch
-            {
-            }
-        });
+            SendConfirmMailAsync(toEmail, subject, voucherNo, voucherType, absoluteUrl, submittedBy, addDefaultCc, recipientLabel, employeeCode, statusName, includeApprovalLink).GetAwaiter().GetResult();
+            return string.Empty;
+        }
+        catch (Exception ex)
+        {
+            return $"{toEmail}: {GetMailExceptionMessage(ex)}";
+        }
+    }
+
+    private static void AddMailError(List<string> mailErrors, string error)
+    {
+        if (!string.IsNullOrWhiteSpace(error)) mailErrors.Add(error);
+    }
+
+    private static string BuildMailErrorNotice(List<string> mailErrors)
+    {
+        var errors = mailErrors.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
+        return errors.Count == 0 ? string.Empty : $"Mail sending failed: {string.Join("; ", errors)}.";
+    }
+
+    private static string GetMailExceptionMessage(Exception ex)
+    {
+        var baseException = ex.GetBaseException();
+        return string.IsNullOrWhiteSpace(baseException.Message) ? ex.Message : baseException.Message;
     }
 
     private async Task SendConfirmMailAsync(string toEmail, string subject, string voucherNo, string voucherType, string absoluteUrl, string submittedBy, bool addDefaultCc = true, string recipientLabel = "", string employeeCode = "", string statusName = "", bool includeApprovalLink = true)
@@ -971,29 +1001,19 @@ WHERE dt.FlowID=@FlowID
         var mailSubject = subject;
         var mailBody = body;
 
-        ThreadPool.QueueUserWorkItem(_ =>
+        try
         {
-            try
-            {
-                using var mail = new MailMessage { From = new MailAddress(senderEmail, "SmartSam System"), Subject = mailSubject, Body = mailBody, IsBodyHtml = true };
-                mail.To.Add(mailTo);
-                if (!string.IsNullOrWhiteSpace(mailCc)) mail.CC.Add(mailCc);
-                using var smtp = new SmtpClient(mailServer, mailPort) { EnableSsl = true, Credentials = new NetworkCredential(senderEmail, password) };
-                smtp.Send(mail);
-            }
-            catch (Exception ex)
-            {
-                try
-                {
-                    var logDir = Path.Combine(Directory.GetCurrentDirectory(), "logs");
-                    Directory.CreateDirectory(logDir);
-                    var logPath = Path.Combine(logDir, "inventory-issue-mail.log");
-                    var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] AdjustMail FAIL Flow={flow.FlowNo} To={mailTo} Error={ex.Message}{Environment.NewLine}";
-                    System.IO.File.AppendAllText(logPath, line);
-                }
-                catch { }
-            }
-        });
+            using var mail = new MailMessage { From = new MailAddress(senderEmail, "SmartSam System"), Subject = mailSubject, Body = mailBody, IsBodyHtml = true };
+            mail.To.Add(mailTo);
+            if (!string.IsNullOrWhiteSpace(mailCc)) mail.CC.Add(mailCc);
+            using var smtp = new SmtpClient(mailServer, mailPort) { EnableSsl = true, Credentials = new NetworkCredential(senderEmail, password) };
+            smtp.Send(mail);
+        }
+        catch (Exception ex)
+        {
+            TempData["Message"] = $"Adjust apartment created, but notification email failed: {GetMailExceptionMessage(ex)}";
+            TempData["MessageType"] = "warning";
+        }
     }
 
     private AdjustApartmentMailContext LoadAdjustApartmentMailContext(SqlConnection conn, long flowId, int adjustedByEmployeeId)

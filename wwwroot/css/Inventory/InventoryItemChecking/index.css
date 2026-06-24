@@ -1,5 +1,5 @@
 .inventory-item-checking-page,
-.inventory-item-checking-page :not(i):not(svg):not(.fa):not(.fas):not(.far):not(.fab) {
+.inventory-item-checking-page :not(i):not(svg):not(.fa):not(.fas):not(.far):not(.fab):not(.tcvn3-font) {
     font-family: "VNI-Times", "VNI-Helve", sans-serif !important;
 }
 
@@ -345,6 +345,11 @@
     white-space: nowrap;
     overflow: visible;
     text-overflow: clip;
+}
+
+.inventory-item-checking-page .inventory-item-checking-detail-table .tcvn3-font,
+.inventory-item-checking-page .inventory-item-checking-detail-table td.tcvn3-font {
+    font-family: "TCVN3", ".VnTime", ".VnArial", ".VnHelvetica", sans-serif !important;
 }
 
 .inventory-item-checking-detail-table .item-checking-notes-cell {
