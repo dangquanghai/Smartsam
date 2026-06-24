@@ -919,9 +919,9 @@ ORDER BY ID DESC", conn);
                 ItemName = GetString(reader, "ItemName"),
                 Unit = GetString(reader, "Unit", "UnitName"),
                 ReorderPoint = GetDecimal(reader, "ReorderPo", "ReorderPoint", "ReOrderPoint"),
-                BeginQuantity = GetDecimal(reader, "BegQuanti", "BeginQ", "BGQuantity", "BeginQuantity"),
-                ReceiveQuantity = GetDecimal(reader, "RecQuanti", "RecQty", "ReceiveQuantity"),
-                IssueQuantity = GetDecimal(reader, "IssQuanti", "IssQty", "IssueQuantity"),
+                BeginQuantity = GetDecimal(reader, "BegQuanti", "BegQuantity", "BeginQ", "BGQuantity", "BeginQuantity"),
+                ReceiveQuantity = GetDecimal(reader, "RecQuanti", "RecQuantity", "RecQty", "ReceiveQuantity"),
+                IssueQuantity = GetDecimal(reader, "IssQuanti", "IssQuantity", "IssQty", "IssueQuantity"),
                 EndQuantity = GetDecimal(reader, "EndQuanti", "EndQ", "EndQuantity")
             };
             if (row.EndQuantity == 0 && (row.BeginQuantity != 0 || row.ReceiveQuantity != 0 || row.IssueQuantity != 0))
