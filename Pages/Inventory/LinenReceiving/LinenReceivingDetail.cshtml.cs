@@ -316,7 +316,7 @@ FROM dbo.LN_ReceiveDT dt
 LEFT JOIN dbo.LN_DeliveryMT de ON de.DeliveryID = dt.SendID
 LEFT JOIN dbo.LN_Linnen ln ON ln.ID = dt.LinnenID
 WHERE dt.ReceiveID = @ReceiveID
-ORDER BY dt.ID;", conn, trans);
+ORDER BY ISNULL(dt.Location, ''), ISNULL(CASE WHEN ISNULL(dt.LinnenCode, '') <> '' THEN dt.LinnenCode ELSE ln.LinnenCode END, ''), dt.ID;", conn, trans);
         cmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = Header.ReceiveID;
 
         using var rd = cmd.ExecuteReader();
