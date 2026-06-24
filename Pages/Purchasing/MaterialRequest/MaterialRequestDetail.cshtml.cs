@@ -204,6 +204,8 @@ public class MaterialRequestDetailModel : BasePageModel
         get { return string.Equals(Request.Query["closeAfterWorkflow"].ToString(), "true", StringComparison.OrdinalIgnoreCase); }
     }
 
+    public int PendingApprovalCount { get; private set; }
+
     // ==========================================
     // 1. PAGE LOAD AND INITIALIZATION
     // ==========================================
@@ -217,6 +219,8 @@ public class MaterialRequestDetailModel : BasePageModel
         {
             return Forbid();
         }
+
+        PendingApprovalCount = await CountPendingApprovalRowsForCurrentUserAsync(cancellationToken);
 
         LoadDropdowns();
         ApplyTempDataMessagesToModelState();
@@ -2779,6 +2783,44 @@ public class MaterialRequestDetailModel : BasePageModel
         }
 
         return trimmed;
+    }
+
+    private async Task<int> CountPendingApprovalRowsForCurrentUserAsync(CancellationToken cancellationToken)
+    {
+        var criteria = new MaterialRequestFilterCriteria
+        {
+            StoreGroup = StoreGroupLocked ? (_dataScope.StoreGroup ?? NoScopeStoreGroup) : null,
+            StatusIds = new List<int> { GetDefaultPendingApprovalStatusId() },
+            IsAuto = false,
+            BuyGreaterThanZero = _dataScope.IsCFO || _dataScope.ApprovalLevel >= 3 ? true : null,
+            FromDate = DateTime.Today.AddMonths(-3).Date,
+            ToDate = DateTime.Today.Date,
+            PageIndex = 1,
+            PageSize = 1
+        };
+
+        var result = await _materialRequestService.SearchPagedAsync(criteria, cancellationToken);
+        return result.TotalCount;
+    }
+
+    private int GetDefaultPendingApprovalStatusId()
+    {
+        if (_dataScope.IsCFO || _dataScope.ApprovalLevel >= 3)
+        {
+            return StatusPurchaserChecked;
+        }
+
+        if (_dataScope.IsPurchaser || _dataScope.ApprovalLevel >= 2)
+        {
+            return StatusHeadDeptApproved;
+        }
+
+        if (_dataScope.IsHeadDept)
+        {
+            return StatusSubmittedToHead;
+        }
+
+        return StatusJustCreated;
     }
 
     private void ApplyTempDataMessagesToModelState()

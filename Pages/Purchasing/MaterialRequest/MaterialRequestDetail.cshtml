@@ -45,6 +45,7 @@
               data-show-advanced-columns="@Model.ShowAdvancedDetailColumns.ToString().ToLowerInvariant()"
               data-hide-zero-buy-lines="@Model.HideZeroBuyLines.ToString().ToLowerInvariant()"
               data-close-after-workflow="@Model.ShouldCloseDetailAfterWorkflow.ToString().ToLowerInvariant()"
+              data-pending-approval-count="@Model.PendingApprovalCount"
               data-back-to-list-url="@Model.BackToListUrl">
               <input type="hidden" asp-for="Id" />
               <input type="hidden" asp-for="LinesJson" id="linesJsonInput" />

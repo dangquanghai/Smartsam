@@ -19,6 +19,7 @@
     Func<int, string> pageUrl = page => Url.Page("./Index", new Dictionary<string, object?>
     {
         ["Filter.DeptId"] = Model.Filter.DeptId,
+        ["Filter.CheckingId"] = Model.Filter.CheckingId,
         ["Filter.StatusId"] = Model.Filter.StatusId,
         ["Filter.UseCheckedDate"] = Model.Filter.UseCheckedDate,
         ["Filter.CheckedFrom"] = Model.Filter.CheckedFrom?.ToString("yyyy-MM-dd"),
@@ -68,6 +69,7 @@
                                     <select asp-for="Filter.DeptId" asp-items="Model.Departments" class="form-control form-control-sm select2 vni-font" data-placeholder="--- All ---" disabled></select>
                                 }
                             </div>
+                            <div class="form-group mb-2"><label>Checking Id</label><input asp-for="Filter.CheckingId" type="number" min="1" class="form-control form-control-sm" /></div>
                             <div class="form-group mb-2"><label>Status</label><select asp-for="Filter.StatusId" asp-items="Model.Statuses" class="form-control form-control-sm select2 vni-font" data-placeholder="--- All ---"></select></div>
                             <div class="form-group mb-1"><div class="custom-control custom-checkbox"><input asp-for="Filter.UseCheckedDate" class="custom-control-input" /><label asp-for="Filter.UseCheckedDate" class="custom-control-label">Checked Date</label></div></div>
                             <div class="form-group mb-2"><label>From</label><input id="CheckedFromDateDisplay" type="text" class="form-control form-control-sm app-date-picker" value="@Model.Filter.CheckedFrom?.ToString("dd/MM/yyyy")" data-hidden-target="#CheckedFromDateHidden" autocomplete="off" readonly /><input id="CheckedFromDateHidden" name="Filter.CheckedFrom" type="hidden" value="@Model.Filter.CheckedFrom?.ToString("yyyy-MM-dd")" /></div>

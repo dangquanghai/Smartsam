@@ -8,7 +8,7 @@
     <div class="container-fluid">
         @if (TempData["SuccessMessage"] != null)
         {
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <div class="alert alert-success alert-dismissible fade show js-auto-dismiss-alert" role="alert" data-timeout="10000">
                 <strong><i class="fas fa-check-circle"></i></strong> @TempData["SuccessMessage"]
                 <button type="button" class="close" data-dismiss="alert" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
@@ -602,6 +602,7 @@
             canApprove: @(Model.CanApprove ? "true" : "false"),
             canBackToProcessing: @(Model.CanBackToProcessing ? "true" : "false"),
             closeAfterWorkflow: @(Model.ShouldCloseDetailAfterWorkflow ? "true" : "false"),
+            pendingApprovalCount: @Model.PendingApprovalCount,
             canManageAttachments: @(Model.CanManageAttachments ? "true" : "false"),
             canUploadAttachments: @(Model.CanUploadAttachments ? "true" : "false"),
             canDeleteAttachments: @(Model.CanDeleteAttachments ? "true" : "false"),

@@ -1,4 +1,4 @@
-﻿@page
+@page
 @model SmartSam.Pages.Inventory.InventoryReport.IndexModel
 @{
     ViewData["Title"] = "Item Store";
@@ -22,6 +22,17 @@
         Page = page,
         PageSize = Model.Filter.PageSize
     }) ?? "#";
+    var exportExcelUrl = Url.Page("./Index", "ExportExcel", new
+    {
+        FromDate = Model.Filter.FromDate?.ToString("yyyy-MM-dd"),
+        ToDate = Model.Filter.ToDate?.ToString("yyyy-MM-dd"),
+        ItemCode = Model.Filter.ItemCode,
+        ItemName = Model.Filter.ItemName,
+        KpGroupId = Model.Filter.KpGroupId,
+        StoreId = Model.Filter.StoreId,
+        ViewType = Model.Filter.ViewType,
+        PageSize = Model.Filter.PageSize
+    }) ?? "#";
 }
 <section class="content vni-font inventory-received-page inventory-report-page">
     <div class="container-fluid">
@@ -37,6 +48,17 @@
             <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
         </form>
         <form method="post" asp-page-handler="ApproveReport" id="approveStockReportForm">
+            <input type="hidden" name="Filter.FromDate" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" />
+            <input type="hidden" name="Filter.ToDate" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" />
+            <input type="hidden" name="Filter.ItemCode" value="@Model.Filter.ItemCode" />
+            <input type="hidden" name="Filter.ItemName" value="@Model.Filter.ItemName" />
+            <input type="hidden" name="Filter.KpGroupId" value="@Model.Filter.KpGroupId" />
+            <input type="hidden" name="Filter.StoreId" value="@Model.Filter.StoreId" />
+            <input type="hidden" name="Filter.ViewType" value="0" />
+            <input type="hidden" name="Filter.Page" value="@Model.Filter.Page" />
+            <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+        </form>
+        <form method="post" asp-page-handler="AnnualBalance" id="annualBalanceForm">
             <input type="hidden" name="Filter.FromDate" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" />
             <input type="hidden" name="Filter.ToDate" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" />
             <input type="hidden" name="Filter.ItemCode" value="@Model.Filter.ItemCode" />
@@ -129,7 +151,11 @@
                         {
                             <div class="alert alert-@(string.Equals(Model.SubmitMessageType, "success", StringComparison.OrdinalIgnoreCase) ? "success" : "warning") py-2 m-2">@Model.SubmitMessage</div>
                         }
-                        <div class="table-responsive prq-table-wrap">
+                        <div class="table-responsive prq-table-wrap inventory-report-table-wrap position-relative">
+                            <div id="maskStockReportOverlay" class="inventory-report-mask-overlay d-none">
+                                <div class="spinner-border text-secondary" role="status" aria-hidden="true"></div>
+                                <div class="mt-2">Masking...</div>
+                            </div>
                             <table class="table table-sm table-bordered table-hover mb-0 text-nowrap prq-table inventory-report-table">
                                 <thead class="thead-light">
                                     <tr>
@@ -179,12 +205,13 @@
                         {
                             <button type="button" id="btnApproveStockReport" class="btn btn-sm btn-success border mx-1 my-1"><i class="fas fa-check-circle"></i> Approved</button>
                         }
-                        <button type="button" class="btn btn-sm btn-warning border mx-1 my-1" disabled><i class="fas fa-balance-scale"></i> CompareACC</button>
+                        <button type="button" id="btnCompareAcc" class="btn btn-sm btn-warning border mx-1 my-1" @(Model.Filter.StoreId > 0 ? null : "disabled")><i class="fas fa-balance-scale"></i> CompareACC</button>
                         <button type="button" id="btnMaskStockReport" class="btn btn-sm btn-secondary border mx-1 my-1"><i class="fas fa-mask"></i> Mask</button>
                         <button type="button" id="btnPreviewStockReport" class="btn btn-sm btn-primary border mx-1 my-1 d-none" @(Model.TotalRecords > 0 ? null : "disabled")><i class="fas fa-file-alt"></i> Report</button>
                         <button type="button" id="btnListStockReport" class="btn btn-sm btn-outline-primary border mx-1 my-1"><i class="fas fa-list-alt"></i> List Report</button>
                         <button type="button" id="btnPrintStockReport" class="btn btn-sm btn-info border mx-1 my-1" @(Model.TotalRecords > 0 ? null : "disabled")><i class="fas fa-print"></i> Print</button>
-                        <button type="button" class="btn btn-sm btn-success border mx-1 my-1" disabled><i class="fas fa-file-excel"></i> Export Excel</button>
+                        @* Annual Balance is intentionally hidden until business confirms using the legacy maintenance flow. *@
+                        <a href="@exportExcelUrl" class="btn btn-sm btn-success border mx-1 my-1 @(Model.TotalRecords > 0 ? "" : "disabled")" aria-disabled="@(Model.TotalRecords > 0 ? "false" : "true")"><i class="fas fa-file-excel"></i> Export Excel</a>
 
                     </div>
                 </div>
@@ -193,6 +220,28 @@
     </div>
 </section>
 
+
+<div class="modal fade vni-font" id="compareAccModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog compare-acc-modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header py-2 bg-warning"><h5 class="modal-title text-dark"><i class="fas fa-balance-scale"></i> Compare ACCNET</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div>
+            <div class="modal-body">
+                <div id="compareAccLoading" class="text-center py-4 d-none"><div class="spinner-border text-warning" role="status"></div><div class="mt-2 text-muted">Comparing SmartSam with ACCNET, please wait...</div></div>
+                <div id="compareAccContent" class="d-none">
+                    <div class="mb-2 small text-muted" id="compareAccSummary"></div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered table-hover text-nowrap mb-0">
+                            <thead class="thead-light"><tr><th>Source</th><th>ItemCode</th><th>ItemName</th><th class="text-right">BeginQ</th><th class="text-right">ReQ</th><th class="text-right">IsQ</th><th class="text-right">EndQ</th></tr></thead>
+                            <tbody id="compareAccTableBody"><tr><td colspan="7" class="text-center text-muted py-3">No data.</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="compareAccError" class="alert alert-warning d-none mb-0"></div>
+            </div>
+            <div class="modal-footer py-2"><button type="button" class="btn btn-sm btn-secondary border" data-dismiss="modal">Close</button></div>
+        </div>
+    </div>
+</div>
 
 <div class="modal fade vni-font" id="stockReportPreviewModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog inventory-transfer-report-preview-modal-dialog" role="document">
@@ -336,6 +385,11 @@ $(function(){
         $('#submitStockReportForm').trigger('submit');
     });
 
+    $('#btnAnnualBalance').on('click', function(){
+        if (!confirm('Do you want to run Annual Balance exactly like legacy VB? This action is admin-only and will update Sheet1 / insert INV_ItemFlowDetail rows.')) return;
+        $('#annualBalanceForm').trigger('submit');
+    });
+
     $('#btnApproveStockReport').on('click', function(){
         syncApproveReportForm();
         const storeText = $('#storeSelect option:selected').text() || '';
@@ -354,26 +408,36 @@ $(function(){
     }
 
     $('#btnMaskStockReport').on('click', function(){
-        const isAllStores = Number($('#storeSelect').val() || -1) <= 0;
-        let maskedCount = 0;
-        $('.inventory-report-table tbody tr').each(function(){
-            const row = $(this);
-            const target = row.find('.js-mask-target');
-            target.removeClass('bg-danger text-white');
-            if (!isAllStores) return;
+        const button = $(this);
+        const originalHtml = button.html();
+        const overlay = $('#maskStockReportOverlay');
+        button.prop('disabled', true).html('<span class="spinner-border spinner-border-sm mr-1" role="status" aria-hidden="true"></span> Masking...');
+        overlay.removeClass('d-none');
 
-            const reorderPoint = Number(row.data('reorder-point') || 0);
-            const endQuantity = Number(row.data('end-quantity') || 0);
-            if (reorderPoint > endQuantity) {
-                target.addClass('bg-danger text-white');
-                maskedCount++;
+        setTimeout(function(){
+            const isAllStores = Number($('#storeSelect').val() || -1) <= 0;
+            let maskedCount = 0;
+            $('.inventory-report-table tbody tr').each(function(){
+                const row = $(this);
+                const target = row.find('.js-mask-target');
+                target.removeClass('bg-danger text-white');
+                if (!isAllStores) return;
+
+                const reorderPoint = Number(row.data('reorder-point') || 0);
+                const endQuantity = Number(row.data('end-quantity') || 0);
+                if (reorderPoint > endQuantity) {
+                    target.addClass('bg-danger text-white');
+                    maskedCount++;
+                }
+            });
+            button.prop('disabled', false).html(originalHtml);
+            overlay.addClass('d-none');
+            if (!isAllStores) {
+                showMaskMessage('Mask only applies when Store Name is [All Stores], same as legacy VB.');
+            } else if (maskedCount === 0) {
+                showMaskMessage('No item needs masking.');
             }
-        });
-        if (!isAllStores) {
-            showMaskMessage('Mask only applies when Store Name is [All Stores], same as legacy VB.');
-        } else if (maskedCount === 0) {
-            showMaskMessage('No item needs masking.');
-        }
+        }, 500);
     });
 
     syncSubmitReportButton();
@@ -464,6 +528,64 @@ $(function(){
             });
     }
 
+    const compareAccModal = $('#compareAccModal');
+    const compareAccLoading = $('#compareAccLoading');
+    const compareAccContent = $('#compareAccContent');
+    const compareAccError = $('#compareAccError');
+    const compareAccSummary = $('#compareAccSummary');
+    const compareAccTableBody = $('#compareAccTableBody');
+
+    function formatCompareAccNumber(value){
+        const number = Number(value || 0);
+        return number.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    }
+
+    function renderCompareAccRows(realRows){
+        const rows = [];
+        (realRows || []).forEach(function(item){
+            const safe = $('<div/>');
+            rows.push(`<tr><td>${safe.text(item.smartOrAcc || '').html()}</td><td>${safe.text(item.itemCode || '').html()}</td><td>${safe.text(item.itemName || '').html()}</td><td class="text-right">${formatCompareAccNumber(item.beginQuantity)}</td><td class="text-right">${formatCompareAccNumber(item.receiveQuantity)}</td><td class="text-right">${formatCompareAccNumber(item.issueQuantity)}</td><td class="text-right">${formatCompareAccNumber(item.endQuantity)}</td></tr>`);
+        });
+        compareAccTableBody.html(rows.length ? rows.join('') : '<tr><td colspan="7" class="text-center text-muted py-3">No data.</td></tr>');
+    }
+
+    function toggleCompareAccButton(){
+        $('#btnCompareAcc').prop('disabled', Number($('#storeSelect').val() || '-1') <= 0);
+    }
+
+    $('#btnCompareAcc').on('click', function(){
+        const fromDate = $('#FromDateHidden').val() || '';
+        const toDate = $('#ToDateHidden').val() || '';
+        const storeId = $('#storeSelect').val() || '-1';
+        if (!fromDate || !toDate || Number(storeId) <= 0) {
+            showMaskMessage('Please select From, To and one Store Name before compare ACCNET.');
+            return;
+        }
+
+        compareAccError.addClass('d-none').text('');
+        compareAccContent.addClass('d-none');
+        compareAccLoading.removeClass('d-none');
+        compareAccSummary.text('');
+        compareAccTableBody.html('<tr><td colspan="7" class="text-center text-muted py-3">Loading...</td></tr>');
+        compareAccModal.modal('show');
+
+        $.getJSON('@Url.Page("./Index", new { handler = "CompareAcc" })', { fromDate: fromDate, toDate: toDate, StoreId: storeId })
+            .done(function(res){
+                compareAccLoading.addClass('d-none');
+                compareAccContent.removeClass('d-none');
+                renderCompareAccRows(res.rows || []);
+                compareAccSummary.text((res.message || '') + ' ACC Store: ' + (res.accStoreCode || '[No Mapping]') + (res.hasAccConnection ? '' : ' | ACCNET connection/data unavailable.'));
+            })
+            .fail(function(xhr){
+                const msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Cannot compare ACCNET now.';
+                compareAccLoading.addClass('d-none');
+                compareAccError.removeClass('d-none').text(msg);
+                compareAccContent.removeClass('d-none');
+                renderCompareAccRows([]);
+                compareAccSummary.text('No compare data available.');
+            });
+    });
+
     (function initStockReportYears(){
         const currentYear = new Date().getFullYear();
         const years = [];
@@ -481,6 +603,8 @@ $(function(){
         loadSubmittedReports();
     });
     $('#btnReloadStockReportList, #stockReportListYear').on('click change', function(){ loadSubmittedReports(); });
+    $('#storeSelect').on('change', toggleCompareAccButton);
+    toggleCompareAccButton();
     $(document).on('click', '.js-stock-report-view', function(){
         const url = $(this).data('url');
         if (url) window.location.href = url;
@@ -513,7 +637,7 @@ $(function(){
 }
 
 @section Styles {
-    <style>.tcvn3-font { font-family: '.VnTime', '.TCVN3', serif; } #stockReportPreviewModal { z-index: 2050; } #stockReportPreviewModal .modal-dialog { z-index: 2051; width: 100vw; max-width: 100vw; height: 100vh; margin: 0; } #stockReportPreviewModal .modal-content { height: 100vh; border-radius: 0; display: flex; flex-direction: column; } #stockReportPreviewModal .modal-body { flex: 1 1 auto; overflow: auto; min-height: 0; } #stockReportPreviewModal .inventory-transfer-report-preview-frame { display: block; width: 100%; height: 100%; min-height: calc(100vh - 106px); border: 0; background: #fff; } #stockReportListModal .stock-report-list-modal-dialog { width: 98vw; max-width: 98vw; margin: 1vh auto; } #stockReportListModal .modal-content { min-height: 90vh; } #stockReportListModal .modal-body { overflow: auto; }</style>
+    <style>.tcvn3-font { font-family: '.VnTime', '.TCVN3', serif; } #stockReportPreviewModal { z-index: 2050; } #stockReportPreviewModal .modal-dialog { z-index: 2051; width: 100vw; max-width: 100vw; height: 100vh; margin: 0; } #stockReportPreviewModal .modal-content { height: 100vh; border-radius: 0; display: flex; flex-direction: column; } #stockReportPreviewModal .modal-body { flex: 1 1 auto; overflow: auto; min-height: 0; } #stockReportPreviewModal .inventory-transfer-report-preview-frame { display: block; width: 100%; height: 100%; min-height: calc(100vh - 106px); border: 0; background: #fff; } #stockReportListModal .stock-report-list-modal-dialog { width: 98vw; max-width: 98vw; margin: 1vh auto; } #stockReportListModal .modal-content { min-height: 90vh; } #stockReportListModal .modal-body { overflow: auto; }#compareAccModal .compare-acc-modal-dialog { width: 95vw; max-width: 95vw; margin: 2vh auto; } #compareAccModal .modal-content { min-height: 80vh; } #compareAccModal .modal-body { overflow: auto; } .inventory-report-table-wrap { position: relative; } .inventory-report-mask-overlay { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(255,255,255,.78); color: #495057; font-weight: 600; } </style>
     <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/adminlte/plugins/jquery-ui/jquery-ui.min.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/common/app-datepicker.css" asp-append-version="true" />

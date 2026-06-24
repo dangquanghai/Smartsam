@@ -57,6 +57,7 @@ public class PurchaseOrderDetailModel : BasePageModel
     public bool CanManageAttachments { get; private set; }
     public bool CanUploadAttachments { get; private set; }
     public bool CanDeleteAttachments { get; private set; }
+    public int PendingApprovalCount { get; private set; }
     public bool OpenConvertModal { get; private set; }
     public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
     public string BackToListUrl => string.IsNullOrWhiteSpace(ReturnUrl) ? Url.Page("./Index") ?? "./Index" : ReturnUrl;
@@ -111,6 +112,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         OpenConvertModal = openConvertModal;
         LoadAllDropdowns();
         LoadWorkflowUser();
+        PendingApprovalCount = CountPendingApprovalRowsForCurrentUser();
 
         if (id.HasValue && id.Value > 0)
         {
@@ -279,7 +281,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         }
 
         TempData["SuccessMessage"] = "Purchase order sent to approval successfully.";
-        return RedirectToPage("/Purchasing/PurchaseOrder/Index");
+        return RedirectToCurrentDetail("view", true);
     }
 
     public IActionResult OnGetPrLines(int prId, int? currentPoId)
@@ -708,7 +710,7 @@ public class PurchaseOrderDetailModel : BasePageModel
         }
 
         TempData["SuccessMessage"] = "Purchase order approved successfully.";
-        return RedirectToPage("/Purchasing/PurchaseOrder/Index");
+        return RedirectToCurrentDetail("view", true);
     }
 
     public IActionResult OnPostBackToProcessing()
@@ -1876,6 +1878,57 @@ public class PurchaseOrderDetailModel : BasePageModel
             IsCFO = Convert.ToBoolean(reader["IsCFO"]),
             IsBOD = Convert.ToBoolean(reader["IsBOD"])
         };
+    }
+
+    private int CountPendingApprovalRowsForCurrentUser()
+    {
+        var statusIds = _workflowUser.IsPurchaser ? new[] { StatusProcessing, StatusWaitingForApproval } : new[] { StatusWaitingForApproval };
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        using var cmd = conn.CreateCommand();
+        var statusParams = new List<string>();
+        for (var i = 0; i < statusIds.Length; i++)
+        {
+            var parameterName = $"@StatusId{i}";
+            statusParams.Add(parameterName);
+            cmd.Parameters.Add(parameterName, SqlDbType.Int).Value = statusIds[i];
+        }
+
+        var whereParts = new List<string>
+        {
+            $"ISNULL(p.StatusID, 0) IN ({string.Join(", ", statusParams)})",
+            "CAST(p.PODate AS date) >= @FromDate",
+            "CAST(p.PODate AS date) <= @ToDate"
+        };
+        cmd.Parameters.Add("@FromDate", SqlDbType.Date).Value = DateTime.Today.AddDays(-30).Date;
+        cmd.Parameters.Add("@ToDate", SqlDbType.Date).Value = DateTime.Today.Date;
+
+        if (!_workflowUser.IsPurchaser)
+        {
+            var stepParts = new List<string>();
+            if (_workflowUser.IsCFO)
+            {
+                stepParts.Add("(p.PurId IS NOT NULL AND p.CAId IS NULL)");
+            }
+
+            if (_workflowUser.IsBOD)
+            {
+                stepParts.Add("(p.CAId IS NOT NULL AND p.GDId IS NULL)");
+            }
+
+            if (stepParts.Count > 0)
+            {
+                whereParts.Add($"({string.Join(" OR ", stepParts)})");
+            }
+        }
+
+        cmd.CommandText = $@"
+        SELECT COUNT(1)
+        FROM dbo.PC_PO p
+        WHERE {string.Join(" AND ", whereParts)}";
+
+        conn.Open();
+        var value = cmd.ExecuteScalar();
+        return value == null || value == DBNull.Value ? 0 : Convert.ToInt32(value);
     }
 
     private void SetActionFlags()
