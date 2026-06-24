@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Mail;
 using System.Data;
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
@@ -47,6 +48,7 @@ public class IndexModel : BasePageModel
     public bool HasNextPage => Filter.Page < TotalPages;
     public bool CanSubmitReport { get; private set; }
     public bool CanApproveReport { get; private set; }
+    public bool CanRunAnnualBalance => IsAdminRole();
 
     public IActionResult OnGetCompareAcc(DateTime? fromDate, DateTime? toDate)
     {
@@ -104,6 +106,117 @@ public class IndexModel : BasePageModel
         return Page();
     }
 
+    public IActionResult OnGetExportExcel()
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionViewList)) return Redirect("/");
+
+        NormalizeFilter();
+        LoadLookups();
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+        var rows = ExecuteLegacyReportProcedure(conn);
+        var storeName = Stores.FirstOrDefault(x => x.Value == Filter.StoreId.ToString())?.Text ?? "[All Stores]";
+        var kpGroupName = KpGroups.FirstOrDefault(x => x.Value == Filter.KpGroupId?.ToString())?.Text ?? string.Empty;
+
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Item Store");
+        worksheet.Cell(1, 1).Value = "Item Store";
+        worksheet.Range(1, 1, 1, 8).Merge().Style.Font.SetBold().Font.FontSize = 16;
+        worksheet.Cell(2, 1).Value = "From";
+        worksheet.Cell(2, 2).Value = Filter.FromDate?.ToString("dd/MM/yyyy") ?? string.Empty;
+        worksheet.Cell(2, 3).Value = "To";
+        worksheet.Cell(2, 4).Value = Filter.ToDate?.ToString("dd/MM/yyyy") ?? string.Empty;
+        worksheet.Cell(3, 1).Value = "Inventory Group";
+        worksheet.Cell(3, 2).Value = kpGroupName;
+        worksheet.Cell(3, 3).Value = "Store Name";
+        worksheet.Cell(3, 4).Value = storeName;
+
+        var headers = new[] { "ItemCode", "ItemName", "unit", "ReorderPo", "BegQuanti", "RecQuanti", "IssQuanti", "EndQuanti" };
+        for (var i = 0; i < headers.Length; i++)
+        {
+            worksheet.Cell(5, i + 1).Value = headers[i];
+        }
+        var headerRange = worksheet.Range(5, 1, 5, headers.Length);
+        headerRange.Style.Font.SetBold();
+        headerRange.Style.Fill.BackgroundColor = XLColor.LightGray;
+        headerRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        headerRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var row = rows[i];
+            var excelRow = i + 6;
+            worksheet.Cell(excelRow, 1).Value = row.ItemCode;
+            worksheet.Cell(excelRow, 2).Value = row.ItemName;
+            worksheet.Cell(excelRow, 3).Value = row.Unit;
+            worksheet.Cell(excelRow, 4).Value = row.ReorderPoint;
+            worksheet.Cell(excelRow, 5).Value = row.BeginQuantity;
+            worksheet.Cell(excelRow, 6).Value = row.ReceiveQuantity;
+            worksheet.Cell(excelRow, 7).Value = row.IssueQuantity;
+            worksheet.Cell(excelRow, 8).Value = row.EndQuantity;
+        }
+
+        if (rows.Count > 0)
+        {
+            var dataRange = worksheet.Range(6, 1, rows.Count + 5, headers.Length);
+            dataRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            dataRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+            worksheet.Range(6, 4, rows.Count + 5, 8).Style.NumberFormat.Format = "#,##0.##";
+        }
+
+        worksheet.SheetView.FreezeRows(5);
+        worksheet.Columns().AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        var fileName = $"inventory_stock_report_{DateTime.Now:yyyyMMddHHmmss}.xlsx";
+        return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+    }
+
+
+    public IActionResult OnPostAnnualBalance()
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionViewList)) return Redirect("/");
+        if (!IsAdminRole())
+        {
+            SubmitMessage = "Only admin can run this balance function.";
+            SubmitMessageType = "error";
+            return RedirectToPage("./Index", new
+            {
+                FromDate = Filter.FromDate?.ToString("yyyy-MM-dd"),
+                ToDate = Filter.ToDate?.ToString("yyyy-MM-dd"),
+                ItemCode = Filter.ItemCode,
+                ItemName = Filter.ItemName,
+                KpGroupId = Filter.KpGroupId,
+                StoreId = Filter.StoreId,
+                ViewType = 0,
+                Page = Filter.Page,
+                PageSize = Filter.PageSize
+            });
+        }
+
+        NormalizeFilter();
+        LoadLookups();
+        var result = RunAnnualBalanceFlow();
+        SubmitMessage = result.Message;
+        SubmitMessageType = result.Success ? "success" : "error";
+
+        return RedirectToPage("./Index", new
+        {
+            FromDate = Filter.FromDate?.ToString("yyyy-MM-dd"),
+            ToDate = Filter.ToDate?.ToString("yyyy-MM-dd"),
+            ItemCode = Filter.ItemCode,
+            ItemName = Filter.ItemName,
+            KpGroupId = Filter.KpGroupId,
+            StoreId = Filter.StoreId,
+            ViewType = 0,
+            Page = Filter.Page,
+            PageSize = Filter.PageSize
+        });
+    }
 
     public IActionResult OnPostSubmitReport()
     {
@@ -1138,6 +1251,124 @@ ORDER BY i.ItemCode", conn)
         _ => string.Empty
     };
 
+    private (bool Success, string Message) RunAnnualBalanceFlow()
+    {
+        if (!Filter.FromDate.HasValue || !Filter.ToDate.HasValue)
+        {
+            return (false, "Please select From Date and To Date.");
+        }
+
+        using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+        conn.Open();
+
+        if (!TableExists(conn, "dbo", "Sheet1"))
+        {
+            return (false, "Legacy table dbo.Sheet1 does not exist in current database.");
+        }
+
+        var balanceRows = new List<AnnualBalanceRow>();
+        using (var cmd = new SqlCommand("exec dbo.sp_ItemRpt_Rpt @FromDate, @ToDate, @StoreID", conn))
+        {
+            cmd.CommandType = CommandType.Text;
+            cmd.CommandTimeout = 120;
+            cmd.Parameters.Add("@FromDate", SqlDbType.DateTime).Value = Filter.FromDate.Value;
+            cmd.Parameters.Add("@ToDate", SqlDbType.DateTime).Value = Filter.ToDate.Value;
+            cmd.Parameters.Add("@StoreID", SqlDbType.Int).Value = 21;
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var itemId = GetInt64(reader, "ItemID");
+                if (itemId <= 0) continue;
+                var beq = GetDecimal(reader, "BGQuantity") + GetDecimal(reader, "RecQty1") - GetDecimal(reader, "IssQty1");
+                var req = GetDecimal(reader, "RecQty");
+                var isq = GetDecimal(reader, "IssQty");
+                balanceRows.Add(new AnnualBalanceRow
+                {
+                    ItemId = itemId,
+                    Balance = beq + req - isq
+                });
+            }
+        }
+
+        using var tx = conn.BeginTransaction();
+        try
+        {
+            using (var resetCmd = new SqlCommand("UPDATE dbo.Sheet1 SET Balance = 0", conn, tx))
+            {
+                resetCmd.ExecuteNonQuery();
+            }
+
+            using (var updateCmd = new SqlCommand("UPDATE dbo.Sheet1 SET Balance = @Balance WHERE ItemID = @ItemID", conn, tx))
+            {
+                updateCmd.Parameters.Add("@Balance", SqlDbType.Decimal).Precision = 18;
+                updateCmd.Parameters["@Balance"].Scale = 2;
+                updateCmd.Parameters.Add("@ItemID", SqlDbType.BigInt);
+                foreach (var row in balanceRows)
+                {
+                    updateCmd.Parameters["@Balance"].Value = row.Balance;
+                    updateCmd.Parameters["@ItemID"].Value = row.ItemId;
+                    updateCmd.ExecuteNonQuery();
+                }
+            }
+
+            var sheetRows = new List<SheetBalanceRow>();
+            using (var sheetCmd = new SqlCommand("SELECT ItemID, StoreID, Balance FROM dbo.Sheet1", conn, tx))
+            using (var reader = sheetCmd.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    sheetRows.Add(new SheetBalanceRow
+                    {
+                        ItemId = reader["ItemID"] == DBNull.Value ? 0 : Convert.ToInt64(reader["ItemID"]),
+                        StoreId = reader["StoreID"] == DBNull.Value ? 0 : Convert.ToInt32(reader["StoreID"]),
+                        Balance = reader["Balance"] == DBNull.Value ? 0 : Convert.ToDecimal(reader["Balance"])
+                    });
+                }
+            }
+
+            using var insertCmd = new SqlCommand("INSERT INTO dbo.INV_ItemFlowDetail(FlowID, ItemID, Act_Qty) VALUES(@FlowID, @ItemID, @Act_Qty)", conn, tx);
+            insertCmd.Parameters.Add("@FlowID", SqlDbType.BigInt);
+            insertCmd.Parameters.Add("@ItemID", SqlDbType.BigInt);
+            insertCmd.Parameters.Add("@Act_Qty", SqlDbType.Decimal).Precision = 18;
+            insertCmd.Parameters["@Act_Qty"].Scale = 2;
+
+            var insertedCount = 0;
+            foreach (var row in sheetRows)
+            {
+                var flowId = row.StoreId switch
+                {
+                    2 => 47721,
+                    3 => 47722,
+                    7 => 47723,
+                    8 => 47724,
+                    _ => 0
+                };
+                if (flowId <= 0 || row.ItemId <= 0) continue;
+                insertCmd.Parameters["@FlowID"].Value = flowId;
+                insertCmd.Parameters["@ItemID"].Value = row.ItemId;
+                insertCmd.Parameters["@Act_Qty"].Value = row.Balance;
+                insertCmd.ExecuteNonQuery();
+                insertedCount++;
+            }
+
+            tx.Commit();
+            return (true, $"Annual balance completed. Updated {balanceRows.Count} items and inserted {insertedCount} flow detail rows.");
+        }
+        catch (Exception ex)
+        {
+            tx.Rollback();
+            return (false, "Annual balance failed: " + ex.Message);
+        }
+    }
+
+    private static bool TableExists(SqlConnection conn, string schemaName, string tableName)
+    {
+        using var cmd = new SqlCommand("SELECT COUNT(1) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=@SchemaName AND TABLE_NAME=@TableName", conn);
+        cmd.Parameters.Add("@SchemaName", SqlDbType.NVarChar, 128).Value = schemaName;
+        cmd.Parameters.Add("@TableName", SqlDbType.NVarChar, 128).Value = tableName;
+        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0) > 0;
+    }
+
     private string BuildLegacyItemFilter()
     {
         var parts = new List<string>();
@@ -1244,6 +1475,19 @@ internal sealed class CompareAccResult
     public string Message { get; set; } = string.Empty;
     public string AccStoreCode { get; set; } = string.Empty;
     public bool HasAccConnection { get; set; }
+}
+
+internal sealed class AnnualBalanceRow
+{
+    public long ItemId { get; set; }
+    public decimal Balance { get; set; }
+}
+
+internal sealed class SheetBalanceRow
+{
+    public long ItemId { get; set; }
+    public int StoreId { get; set; }
+    public decimal Balance { get; set; }
 }
 
 internal sealed class CompareAccSourceRow

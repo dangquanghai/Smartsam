@@ -22,6 +22,17 @@
         Page = page,
         PageSize = Model.Filter.PageSize
     }) ?? "#";
+    var exportExcelUrl = Url.Page("./Index", "ExportExcel", new
+    {
+        FromDate = Model.Filter.FromDate?.ToString("yyyy-MM-dd"),
+        ToDate = Model.Filter.ToDate?.ToString("yyyy-MM-dd"),
+        ItemCode = Model.Filter.ItemCode,
+        ItemName = Model.Filter.ItemName,
+        KpGroupId = Model.Filter.KpGroupId,
+        StoreId = Model.Filter.StoreId,
+        ViewType = Model.Filter.ViewType,
+        PageSize = Model.Filter.PageSize
+    }) ?? "#";
 }
 <section class="content vni-font inventory-received-page inventory-report-page">
     <div class="container-fluid">
@@ -37,6 +48,17 @@
             <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
         </form>
         <form method="post" asp-page-handler="ApproveReport" id="approveStockReportForm">
+            <input type="hidden" name="Filter.FromDate" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" />
+            <input type="hidden" name="Filter.ToDate" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" />
+            <input type="hidden" name="Filter.ItemCode" value="@Model.Filter.ItemCode" />
+            <input type="hidden" name="Filter.ItemName" value="@Model.Filter.ItemName" />
+            <input type="hidden" name="Filter.KpGroupId" value="@Model.Filter.KpGroupId" />
+            <input type="hidden" name="Filter.StoreId" value="@Model.Filter.StoreId" />
+            <input type="hidden" name="Filter.ViewType" value="0" />
+            <input type="hidden" name="Filter.Page" value="@Model.Filter.Page" />
+            <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+        </form>
+        <form method="post" asp-page-handler="AnnualBalance" id="annualBalanceForm">
             <input type="hidden" name="Filter.FromDate" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" />
             <input type="hidden" name="Filter.ToDate" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" />
             <input type="hidden" name="Filter.ItemCode" value="@Model.Filter.ItemCode" />
@@ -188,7 +210,8 @@
                         <button type="button" id="btnPreviewStockReport" class="btn btn-sm btn-primary border mx-1 my-1 d-none" @(Model.TotalRecords > 0 ? null : "disabled")><i class="fas fa-file-alt"></i> Report</button>
                         <button type="button" id="btnListStockReport" class="btn btn-sm btn-outline-primary border mx-1 my-1"><i class="fas fa-list-alt"></i> List Report</button>
                         <button type="button" id="btnPrintStockReport" class="btn btn-sm btn-info border mx-1 my-1" @(Model.TotalRecords > 0 ? null : "disabled")><i class="fas fa-print"></i> Print</button>
-                        <button type="button" class="btn btn-sm btn-success border mx-1 my-1" disabled><i class="fas fa-file-excel"></i> Export Excel</button>
+                        @* Annual Balance is intentionally hidden until business confirms using the legacy maintenance flow. *@
+                        <a href="@exportExcelUrl" class="btn btn-sm btn-success border mx-1 my-1 @(Model.TotalRecords > 0 ? "" : "disabled")" aria-disabled="@(Model.TotalRecords > 0 ? "false" : "true")"><i class="fas fa-file-excel"></i> Export Excel</a>
 
                     </div>
                 </div>
@@ -360,6 +383,11 @@ $(function(){
     $('#btnConfirmSubmitStockReport').on('click', function(){
         $('#submitStockReportConfirmModal').modal('hide');
         $('#submitStockReportForm').trigger('submit');
+    });
+
+    $('#btnAnnualBalance').on('click', function(){
+        if (!confirm('Do you want to run Annual Balance exactly like legacy VB? This action is admin-only and will update Sheet1 / insert INV_ItemFlowDetail rows.')) return;
+        $('#annualBalanceForm').trigger('submit');
     });
 
     $('#btnApproveStockReport').on('click', function(){
