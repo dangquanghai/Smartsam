@@ -71,10 +71,10 @@ public class InventoryReceivedDetailModel : BasePageModel
         Message = message;
         MessageType = string.IsNullOrWhiteSpace(messageType) ? "info" : messageType;
         if (id.HasValue && IsViewMode && !PagePerm.HasPermission(PermissionViewDetail)) return RedirectHomeWithLayoutError("You do not have permission to view this receive voucher.");
-        if (!id.HasValue && !PagePerm.HasPermission(PermissionAdd)) return RedirectHomeWithLayoutError("You do not have permission to create a receive voucher.");
+        if (!id.HasValue && !PagePerm.HasPermission(PermissionAdd)) return RedirectToListWithMessage("You do not have permission to create a receive voucher.");
         if (id.HasValue && !CanAccessVoucher(id.Value)) return RedirectToPage("./Index");
-        if (IsApprovedMode && !EvaluateCanConfirmVoucherBusiness(id)) return RedirectHomeWithLayoutError("You do not have permission to approve this receive voucher at the current status.");
-        if (IsEditMode && !PagePerm.HasPermission(PermissionEdit)) return RedirectHomeWithLayoutError("You do not have permission to edit this receive voucher.");
+        if (IsApprovedMode && !EvaluateCanConfirmVoucherBusiness(id)) return RedirectToListWithMessage("You do not have permission to approve this receive voucher at the current status.");
+        if (IsEditMode && !PagePerm.HasPermission(PermissionEdit)) return RedirectToListWithMessage("You do not have permission to edit this receive voucher.");
 
         if (id.HasValue)
         {
@@ -101,9 +101,9 @@ public class InventoryReceivedDetailModel : BasePageModel
     {
         PagePerm = GetUserPermissions();
         Mode = string.IsNullOrWhiteSpace(mode) ? "view" : mode.Trim().ToLowerInvariant();
-        if (id.HasValue && !PagePerm.HasPermission(PermissionEdit)) return RedirectHomeWithLayoutError("You do not have permission to save changes to this receive voucher.");
-        if (!id.HasValue && !PagePerm.HasPermission(PermissionAdd)) return RedirectHomeWithLayoutError("You do not have permission to create a receive voucher.");
-        if (IsApprovedMode) return RedirectHomeWithLayoutError("Approved mode does not allow saving this receive voucher.");
+        if (id.HasValue && !PagePerm.HasPermission(PermissionEdit)) return RedirectToListWithMessage("You do not have permission to save changes to this receive voucher.");
+        if (!id.HasValue && !PagePerm.HasPermission(PermissionAdd)) return RedirectToListWithMessage("You do not have permission to create a receive voucher.");
+        if (IsApprovedMode) return RedirectToListWithMessage("Approved mode does not allow saving this receive voucher.");
         if (id.HasValue && !CanAccessVoucher(id.Value)) return RedirectToPage("./Index");
 
         if (id.HasValue && !EvaluateCanEditVoucherBusiness())
@@ -807,6 +807,12 @@ ORDER BY ReturnVoucher ASC, ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
             : $"{nameTrim}({employeeCode})";
     }
 
+    private IActionResult RedirectToListWithMessage(string message)
+    {
+        TempData["Message"] = message;
+        TempData["MessageType"] = "error";
+        return RedirectToPage("./Index");
+    }
     private IActionResult RedirectHomeWithLayoutError(string message)
     {
         TempData["LayoutErrorMessage"] = message;
