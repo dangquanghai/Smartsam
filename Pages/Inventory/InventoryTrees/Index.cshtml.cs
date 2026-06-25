@@ -130,7 +130,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
         }
 
         using var conn = OpenConnection();
-        if (HasChildNode(conn, selectedCatgId))
+        if (HasChildNode(conn, groupId, selectedCatgId))
         {
             SetMessage("Node này dang có node con. Xóa node con tru?c.", "warning");
             return RedirectToList(groupId, selectedCatgId, Filter.Page);
@@ -213,7 +213,18 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
     {
         GroupList = new List<SelectListItem> { new() { Value = "0", Text = "--No Group--", Selected = Filter.GroupId == 0 } };
         using var conn = OpenConnection();
-        using var cmd = new SqlCommand("SELECT KPGroupID, KPGroupName FROM dbo.INV_KPGroup ORDER BY KPGroupName", conn);
+
+        using var cmd = IsAdminRole()
+            ? new SqlCommand("SELECT KPGroupID, KPGroupName FROM dbo.INV_KPGroup ORDER BY KPGroupName", conn)
+            : new SqlCommand("SELECT KPGroupID, KPGroupName FROM dbo.INV_KPGroup WHERE KPGroupID = @KPGroupID", conn);
+
+        if (!IsAdminRole())
+        {
+            var storeGroupId = GetCurrentStoreGroupId();
+            if (Filter.GroupId != 0) Filter.GroupId = storeGroupId ?? 0;
+            cmd.Parameters.Add("@KPGroupID", SqlDbType.Int).Value = storeGroupId ?? 0;
+        }
+
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
@@ -362,9 +373,10 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
         return value == null || value == DBNull.Value ? 0 : Convert.ToInt32(value);
     }
 
-    private bool HasChildNode(SqlConnection conn, int catgId)
+    private bool HasChildNode(SqlConnection conn, int groupId, int catgId)
     {
-        using var cmd = new SqlCommand("SELECT COUNT(1) FROM dbo.INV_CatgTree WHERE ParentID=@CatgID", conn);
+        using var cmd = new SqlCommand("SELECT COUNT(1) FROM dbo.INV_CatgTree WHERE KPGroupID=@KPGroupID AND ParentID=@CatgID", conn);
+        cmd.Parameters.Add("@KPGroupID", SqlDbType.Int).Value = groupId;
         cmd.Parameters.Add("@CatgID", SqlDbType.Int).Value = catgId;
         return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
     }
@@ -402,6 +414,11 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
     }
 
     private int GetCurrentRoleId() => int.TryParse(User.FindFirst("RoleID")?.Value, out var roleId) ? roleId : 0;
+
+    private int? GetCurrentStoreGroupId()
+    {
+        return int.TryParse(User.FindFirst("StoreGR")?.Value, out var storeGroupId) && storeGroupId > 0 ? storeGroupId : null;
+    }
 
     private bool IsAdminRole()
     {
