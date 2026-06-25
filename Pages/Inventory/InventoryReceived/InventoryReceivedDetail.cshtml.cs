@@ -70,11 +70,11 @@ public class InventoryReceivedDetailModel : BasePageModel
         Mode = string.IsNullOrWhiteSpace(mode) ? "view" : mode.Trim().ToLowerInvariant();
         Message = message;
         MessageType = string.IsNullOrWhiteSpace(messageType) ? "info" : messageType;
-        if (id.HasValue && IsViewMode && !PagePerm.HasPermission(PermissionViewDetail)) return Redirect("/");
-        if (!id.HasValue && !PagePerm.HasPermission(PermissionAdd)) return Redirect("/");
+        if (id.HasValue && IsViewMode && !PagePerm.HasPermission(PermissionViewDetail)) return RedirectHomeWithLayoutError("You do not have permission to view this receive voucher.");
+        if (!id.HasValue && !PagePerm.HasPermission(PermissionAdd)) return RedirectHomeWithLayoutError("You do not have permission to create a receive voucher.");
         if (id.HasValue && !CanAccessVoucher(id.Value)) return RedirectToPage("./Index");
-        if (IsApprovedMode && !EvaluateCanConfirmVoucherBusiness(id)) return Redirect("/");
-        if (IsEditMode && !PagePerm.HasPermission(PermissionEdit)) return Redirect("/");
+        if (IsApprovedMode && !EvaluateCanConfirmVoucherBusiness(id)) return RedirectHomeWithLayoutError("You do not have permission to approve this receive voucher at the current status.");
+        if (IsEditMode && !PagePerm.HasPermission(PermissionEdit)) return RedirectHomeWithLayoutError("You do not have permission to edit this receive voucher.");
 
         if (id.HasValue)
         {
@@ -101,8 +101,9 @@ public class InventoryReceivedDetailModel : BasePageModel
     {
         PagePerm = GetUserPermissions();
         Mode = string.IsNullOrWhiteSpace(mode) ? "view" : mode.Trim().ToLowerInvariant();
-        if ((id.HasValue && !PagePerm.HasPermission(PermissionEdit)) || (!id.HasValue && !PagePerm.HasPermission(PermissionAdd))) return Redirect("/");
-        if (IsApprovedMode) return Redirect("/");
+        if (id.HasValue && !PagePerm.HasPermission(PermissionEdit)) return RedirectHomeWithLayoutError("You do not have permission to save changes to this receive voucher.");
+        if (!id.HasValue && !PagePerm.HasPermission(PermissionAdd)) return RedirectHomeWithLayoutError("You do not have permission to create a receive voucher.");
+        if (IsApprovedMode) return RedirectHomeWithLayoutError("Approved mode does not allow saving this receive voucher.");
         if (id.HasValue && !CanAccessVoucher(id.Value)) return RedirectToPage("./Index");
 
         if (id.HasValue && !EvaluateCanEditVoucherBusiness())
@@ -271,7 +272,7 @@ WHERE FlowID=@FlowID", conn, tran);
     public IActionResult OnGetReport(long id, bool inline = false)
     {
         PagePerm = GetUserPermissions();
-        if (!PagePerm.HasPermission(PermissionViewDetail)) return Redirect("/");
+        if (!PagePerm.HasPermission(PermissionViewDetail)) return RedirectHomeWithLayoutError("You do not have permission to view this receive voucher report.");
         if (!CanAccessVoucher(id)) return RedirectToPage("./Index");
 
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -562,6 +563,7 @@ ORDER BY ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
         var hasUser = false;
         var hasEmailRecipient = false;
         var missingEmailCodes = new List<string>();
+        var mailErrors = new List<string>();
         while (rd.Read())
         {
             hasUser = true;
@@ -578,16 +580,17 @@ ORDER BY ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
             hasEmailRecipient = true;
             var recipientLabel = BuildRecipientDisplayName(title, name, code, email);
             var statusName = GetStatusName(level - 1, 1);
-            QueueConfirmMail(email, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Receive Voucher", true, recipientLabel, code, statusName);
+            AddMailError(mailErrors, SendConfirmMailAndGetError(email, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Receive Voucher", true, recipientLabel, code, statusName));
         }
 
-        if (hasEmailRecipient) return BuildMissingEmailNotice(missingEmailCodes, "ReceiveVoucher", level, storeGr);
+        if (hasEmailRecipient) return CombineMailNotices(BuildMissingEmailNotice(missingEmailCodes, "ReceiveVoucher", level, storeGr), BuildMailErrorNotice(mailErrors));
 
         var fallbackStatusName = GetStatusName(level - 1, 1);
-        QueueConfirmMail(NotifyCcEmail, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Receive Voucher", false, statusName: fallbackStatusName);
-        return hasUser
+        AddMailError(mailErrors, SendConfirmMailAndGetError(NotifyCcEmail, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Receive Voucher", false, statusName: fallbackStatusName));
+        var fallbackNotice = hasUser
             ? $"Cannot find email for user ReceiveVoucher={level}, Store Group={storeGr}; fallback email was sent to {NotifyCcEmail}."
             : $"Cannot find user ReceiveVoucher={level}, Store Group={storeGr}; fallback email was sent to {NotifyCcEmail}.";
+        return CombineMailNotices(fallbackNotice, BuildMailErrorNotice(mailErrors));
     }
 
     private string NotifyNextByReturnVoucherLevel(SqlConnection conn, int storeGr, int level, string flowNo)
@@ -601,6 +604,7 @@ ORDER BY ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
         var hasUser = false;
         var hasEmailRecipient = false;
         var missingEmailCodes = new List<string>();
+        var mailErrors = new List<string>();
         while (rd.Read())
         {
             hasUser = true;
@@ -617,16 +621,17 @@ ORDER BY ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
             hasEmailRecipient = true;
             var recipientLabel = BuildRecipientDisplayName(title, name, code, email);
             var statusName = GetStatusName(level - 1, 2);
-            QueueConfirmMail(email, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Return Voucher", true, recipientLabel, code, statusName);
+            AddMailError(mailErrors, SendConfirmMailAndGetError(email, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Return Voucher", true, recipientLabel, code, statusName));
         }
 
-        if (hasEmailRecipient) return BuildMissingEmailNotice(missingEmailCodes, "ReturnVoucher", level, storeGr);
+        if (hasEmailRecipient) return CombineMailNotices(BuildMissingEmailNotice(missingEmailCodes, "ReturnVoucher", level, storeGr), BuildMailErrorNotice(mailErrors));
 
         var fallbackStatusName = GetStatusName(level - 1, 2);
-        QueueConfirmMail(NotifyCcEmail, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Return Voucher", false, statusName: fallbackStatusName);
-        return hasUser
+        AddMailError(mailErrors, SendConfirmMailAndGetError(NotifyCcEmail, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please approve voucher {flowNo}"), flowNo, "Return Voucher", false, statusName: fallbackStatusName));
+        var fallbackNotice = hasUser
             ? $"Cannot find email for user ReturnVoucher={level}, Store Group={storeGr}; fallback email was sent to {NotifyCcEmail}."
             : $"Cannot find user ReturnVoucher={level}, Store Group={storeGr}; fallback email was sent to {NotifyCcEmail}.";
+        return CombineMailNotices(fallbackNotice, BuildMailErrorNotice(mailErrors));
     }
 
     private string NotifyCompanyStoreReturnApprovers(SqlConnection conn, string flowNo)
@@ -638,6 +643,7 @@ ORDER BY ReturnVoucher ASC, ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
         var hasUser = false;
         var hasEmailRecipient = false;
         var missingEmailCodes = new List<string>();
+        var mailErrors = new List<string>();
         while (rd.Read())
         {
             hasUser = true;
@@ -654,15 +660,16 @@ ORDER BY ReturnVoucher ASC, ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
 
             hasEmailRecipient = true;
             var recipientLabel = BuildRecipientDisplayName(title, name, code, email);
-            QueueConfirmMail(email, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please check and confirm return voucher {flowNo}"), flowNo, "Return Voucher", true, recipientLabel, code, "Moved to Company Store");
+            AddMailError(mailErrors, SendConfirmMailAndGetError(email, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please check and confirm return voucher {flowNo}"), flowNo, "Return Voucher", true, recipientLabel, code, "Moved to Company Store"));
         }
 
-        if (hasEmailRecipient) return BuildMissingEmailNotice(missingEmailCodes, "main-store ReturnVoucher=2/4", 0, 1);
+        if (hasEmailRecipient) return CombineMailNotices(BuildMissingEmailNotice(missingEmailCodes, "main-store ReturnVoucher=2/4", 0, 1), BuildMailErrorNotice(mailErrors));
 
-        QueueConfirmMail(NotifyCcEmail, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please check and confirm return voucher {flowNo}"), flowNo, "Return Voucher", false, statusName: "Moved to Company Store");
-        return hasUser
+        AddMailError(mailErrors, SendConfirmMailAndGetError(NotifyCcEmail, ApplyMailSubjectPrefix($"[Inventory Item Checking] Please check and confirm return voucher {flowNo}"), flowNo, "Return Voucher", false, statusName: "Moved to Company Store"));
+        var fallbackNotice = hasUser
             ? $"Cannot find email for main-store users with ReturnVoucher=2 or ReturnVoucher=4; fallback email was sent to {NotifyCcEmail}."
             : $"Cannot find main-store users with ReturnVoucher=2 or ReturnVoucher=4; fallback email was sent to {NotifyCcEmail}.";
+        return CombineMailNotices(fallbackNotice, BuildMailErrorNotice(mailErrors));
     }
 
     private static string BuildMissingEmailNotice(List<string> missingEmailCodes, string roleName, int level, int storeGr)
@@ -683,23 +690,44 @@ ORDER BY ReturnVoucher ASC, ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
         return $"{prefix}-{next:000}";
     }
 
-    private void QueueConfirmMail(string toEmail, string subject, string voucherNo, string voucherType, bool addDefaultCc = true, string recipientLabel = "", string employeeCode = "", string statusName = "")
+    private string SendConfirmMailAndGetError(string toEmail, string subject, string voucherNo, string voucherType, bool addDefaultCc = true, string recipientLabel = "", string employeeCode = "", string statusName = "")
     {
         var flowId = GetFlowIdByNo(voucherNo);
         var detailUrl = Url.Page("/Inventory/InventoryReceived/InventoryReceivedDetail", values: new { id = flowId, mode = "approved" });
         var absoluteUrl = string.IsNullOrWhiteSpace(detailUrl) ? string.Empty : $"{Request.Scheme}://{Request.Host}{detailUrl}";
         var submittedBy = GetCurrentEmployeeDisplayName();
 
-        _ = Task.Run(async () =>
+        try
         {
-            try
-            {
-                await SendConfirmMailAsync(toEmail, subject, voucherNo, voucherType, absoluteUrl, submittedBy, addDefaultCc, recipientLabel, employeeCode, statusName);
-            }
-            catch
-            {
-            }
-        });
+            SendConfirmMailAsync(toEmail, subject, voucherNo, voucherType, absoluteUrl, submittedBy, addDefaultCc, recipientLabel, employeeCode, statusName).GetAwaiter().GetResult();
+            return string.Empty;
+        }
+        catch (Exception ex)
+        {
+            return $"{toEmail}: {GetMailExceptionMessage(ex)}";
+        }
+    }
+
+    private static void AddMailError(List<string> mailErrors, string error)
+    {
+        if (!string.IsNullOrWhiteSpace(error)) mailErrors.Add(error);
+    }
+
+    private static string BuildMailErrorNotice(List<string> mailErrors)
+    {
+        var errors = mailErrors.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
+        return errors.Count == 0 ? string.Empty : $"Mail sending failed: {string.Join("; ", errors)}.";
+    }
+
+    private static string CombineMailNotices(params string[] notices)
+    {
+        return string.Join(" ", notices.Where(x => !string.IsNullOrWhiteSpace(x)));
+    }
+
+    private static string GetMailExceptionMessage(Exception ex)
+    {
+        var baseException = ex.GetBaseException();
+        return string.IsNullOrWhiteSpace(baseException.Message) ? ex.Message : baseException.Message;
     }
 
     private async Task SendConfirmMailAsync(string toEmail, string subject, string voucherNo, string voucherType, string absoluteUrl, string submittedBy, bool addDefaultCc = true, string recipientLabel = "", string employeeCode = "", string statusName = "")
@@ -779,6 +807,11 @@ ORDER BY ReturnVoucher ASC, ISNULL(IsAdminUser,0) ASC, EmployeeID ASC", conn);
             : $"{nameTrim}({employeeCode})";
     }
 
+    private IActionResult RedirectHomeWithLayoutError(string message)
+    {
+        TempData["LayoutErrorMessage"] = message;
+        return Redirect("/");
+    }
     private string GetCurrentEmployeeDisplayName()
     {
         var employeeId = GetCurrentEmployeeId();
