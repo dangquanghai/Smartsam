@@ -352,6 +352,8 @@
             $element.select2({
                 width: '100%',
                 placeholder: '-- Select --',
+                dropdownCssClass: 'vni-font',
+                selectionCssClass: 'vni-font',
                 minimumInputLength: 0,
                 ajax: {
                     delay: 250,

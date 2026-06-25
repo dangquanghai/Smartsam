@@ -101,10 +101,28 @@ public class IndexModel : BasePageModel
         using var trans = conn.BeginTransaction();
         try
         {
-            using (var lockCmd = new SqlCommand("SELECT ISNULL([Lock], 0) FROM dbo.LN_ReceiveMT WHERE ReceiveID = @ReceiveID;", conn, trans))
+            DateTime? receiveDate = null;
+            int? deliveryId = null;
+
+            using (var headerCmd = new SqlCommand(@"
+SELECT ReceiveDate,
+       SendID,
+       ISNULL([Lock], 0) AS IsLocked
+FROM dbo.LN_ReceiveMT
+WHERE ReceiveID = @ReceiveID;", conn, trans))
             {
-                lockCmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = request.ReceiveId;
-                if (ToBool(lockCmd.ExecuteScalar() ?? 0))
+                headerCmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = request.ReceiveId;
+                using var rd = headerCmd.ExecuteReader();
+                if (!rd.Read())
+                {
+                    trans.Rollback();
+                    return new JsonResult(new { success = false, message = "Linen receiving not found." })
+                    {
+                        StatusCode = StatusCodes.Status404NotFound
+                    };
+                }
+
+                if (ToBool(rd["IsLocked"]))
                 {
                     trans.Rollback();
                     return new JsonResult(new { success = false, message = "Linen receiving is locked and cannot be deleted." })
@@ -112,6 +130,9 @@ public class IndexModel : BasePageModel
                         StatusCode = StatusCodes.Status400BadRequest
                     };
                 }
+
+                receiveDate = rd["ReceiveDate"] == DBNull.Value ? null : Convert.ToDateTime(rd["ReceiveDate"]);
+                deliveryId = rd["SendID"] == DBNull.Value ? null : Convert.ToInt32(rd["SendID"]);
             }
 
             using (var detailCmd = new SqlCommand("DELETE FROM dbo.LN_ReceiveDT WHERE ReceiveID = @ReceiveID;", conn, trans))
@@ -126,6 +147,18 @@ public class IndexModel : BasePageModel
                 masterCmd.ExecuteNonQuery();
             }
 
+            if (deliveryId.HasValue)
+            {
+                using var markCmd = new SqlCommand("exec LN_MarkFullReceiveOnDelevery @DeliveryID", conn, trans);
+                markCmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = deliveryId.Value;
+                markCmd.ExecuteNonQuery();
+            }
+
+            if (receiveDate.HasValue)
+            {
+                RefreshLaundryRecordForBusinessDate(conn, trans, receiveDate.Value);
+            }
+
             trans.Commit();
         }
         catch
@@ -136,7 +169,6 @@ public class IndexModel : BasePageModel
 
         return new JsonResult(new { success = true });
     }
-
     private (List<LinenReceivingRow> rows, int totalRecords) SearchRows(LinenReceivingSearchRequest request)
     {
         var rows = new List<LinenReceivingRow>();
@@ -224,6 +256,21 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;", conn))
         }
     }
 
+    private void RefreshLaundryRecordForBusinessDate(SqlConnection conn, SqlTransaction trans, DateTime businessDate)
+    {
+        var dayStart = businessDate.Date.AddSeconds(1);
+        var dayEnd = businessDate.Date.AddDays(1).AddSeconds(-1);
+        var userCode = User.Identity?.Name ?? "SYSTEM";
+
+        using var cmd = new SqlCommand("dbo.LN_LaundryRecordRPT", conn, trans);
+        cmd.CommandType = CommandType.StoredProcedure;
+        cmd.Parameters.Add("@Month", SqlDbType.Int).Value = businessDate.Month;
+        cmd.Parameters.Add("@Year", SqlDbType.Int).Value = businessDate.Year;
+        cmd.Parameters.Add("@FromDate", SqlDbType.VarChar, 50).Value = dayStart.ToString("MM/dd/yyyy hh:mm:ss tt");
+        cmd.Parameters.Add("@ToDate", SqlDbType.VarChar, 50).Value = dayEnd.ToString("MM/dd/yyyy hh:mm:ss tt");
+        cmd.Parameters.Add("@UserCode", SqlDbType.VarChar, 15).Value = userCode;
+        cmd.ExecuteNonQuery();
+    }
     private void NormalizeFilter(LinenReceivingFilter filter)
     {
         filter.FromDate ??= DateTime.Today.AddDays(-10);
