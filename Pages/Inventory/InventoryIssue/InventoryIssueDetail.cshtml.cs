@@ -19,10 +19,10 @@ public class InventoryIssueDetailModel : BasePageModel
     private const int PermissionViewDetail = 2;
     private const int PermissionAdd = 3;
     private const int PermissionEdit = 4;
-    // private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
-    // private const string ReturnMoveToCpnNotifyEmail = "maiquangvinhi4@gmail.com";
-    private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
-    private const string ReturnMoveToCpnNotifyEmail = "hai.dq@saigonskygarden.com.vn";
+    private const string NotifyCcEmail = "maiquangvinhi4@gmail.com";
+    private const string ReturnMoveToCpnNotifyEmail = "maiquangvinhi4@gmail.com";
+    // private const string NotifyCcEmail = "hai.dq@saigonskygarden.com.vn";
+    // private const string ReturnMoveToCpnNotifyEmail = "hai.dq@saigonskygarden.com.vn";
     private readonly PermissionService _permissionService;
 
     public InventoryIssueDetailModel(IConfiguration config, PermissionService permissionService) : base(config) { _permissionService = permissionService; }
@@ -268,17 +268,6 @@ WHERE FlowID=@FlowID", conn, tran);
 
             if (!id.HasValue)
             {
-                if (Header.FlowSubType == 2)
-                {
-                    return RedirectToPage(new
-                    {
-                        id = flowId,
-                        mode = "edit",
-                        message = "Saved successfully. Please run Adjust Item in Apmt before confirm.",
-                        messageType = "info"
-                    });
-                }
-
                 return RedirectToPage(new
                 {
                     id = flowId,
@@ -498,7 +487,8 @@ WHERE FlowID=@FlowID", conn, tran);
         InsertFlowAction(conn, id, nextLevel, GetCurrentEmployeeId(), "Storeman Confirmed issue");
 
         string? mailWarning = null;
-        if (nextLevel > 1)
+        var shouldSendConfirmMail = nextLevel > 1 && !(flow.FlowSubType == 2 && nextLevel >= 3);
+        if (shouldSendConfirmMail)
         {
             if (flow.ReceivedBy.HasValue && flow.ReceivedBy.Value > 0)
             {
@@ -1103,15 +1093,8 @@ ORDER BY i.ItemCode", conn))
     private string ApplyMailSubjectPrefix(string subject)
     {
         var prefix = _config.GetValue<string>("EmailSettings:PrefixSubject")?.Trim();
-        if (string.IsNullOrWhiteSpace(prefix) || !ShouldApplyTestSubjectPrefix()) return subject;
+        if (string.IsNullOrWhiteSpace(prefix)) return subject;
         return $"{prefix} - {subject}";
-    }
-
-    private bool ShouldApplyTestSubjectPrefix()
-    {
-        var configuredIds = _config.GetValue<string>("EmailSettings:TestFunctionIDs");
-        if (string.IsNullOrWhiteSpace(configuredIds)) return false;
-        return configuredIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Any(x => int.TryParse(x, out var parsed) && parsed == FunctionId);
     }
 
     public IActionResult OnGetDownloadAttachment(long id, int docId)
@@ -2130,7 +2113,6 @@ WHERE h.FlowID=@FlowID", conn);
         using var rd = cmd.ExecuteReader();
         if (!rd.Read()) return null;
         var operatorId = rd["OperatorID"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["OperatorID"]);
-        var receiverId = rd["ReceivedBy"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["ReceivedBy"]);
         var statusId = Convert.ToInt32(rd["StatusID"] == DBNull.Value ? 1 : rd["StatusID"]);
         var report = new InventoryIssueReportModel
         {
@@ -2148,12 +2130,13 @@ WHERE h.FlowID=@FlowID", conn);
 
         if (statusId >= 2)
         {
-            report.StoremanSignature = LoadEmployeeSignature(conn, operatorId);
+            report.StoremanSignature = LoadConfirmSignatureByActionType(conn, flowId, 2) ?? LoadEmployeeSignature(conn, operatorId);
         }
 
         if (statusId >= 3 || previewSign)
         {
-            report.ReceiverSignature = LoadEmployeeSignature(conn, receiverId);
+            report.ReceiverSignature = LoadConfirmSignatureByActionType(conn, flowId, 3)
+                ?? (previewSign ? LoadEmployeeSignature(conn, GetCurrentEmployeeId()) : null);
         }
 
         using var detailCmd = new SqlCommand(@"SELECT ISNULL(i.ItemCode,'') AS ItemCode,ISNULL(i.ItemName,'') AS ItemName,ISNULL(dt.Unit,'') AS Unit,
@@ -2191,6 +2174,19 @@ ORDER BY i.ItemCode", conn);
         if (string.IsNullOrWhiteSpace(fileName)) return null;
         var path = ResolveEmployeeSignaturePath(fileName);
         return string.IsNullOrWhiteSpace(path) || !System.IO.File.Exists(path) ? null : System.IO.File.ReadAllBytes(path);
+    }
+
+    private byte[]? LoadConfirmSignatureByActionType(SqlConnection conn, long flowId, int actionTypeId)
+    {
+        using var cmd = new SqlCommand(@"SELECT TOP 1 UserID
+FROM dbo.INV_ItemFlowAction
+WHERE FlowID=@FlowID AND ActionTypeID=@ActionTypeID
+ORDER BY TheDateTime DESC", conn);
+        cmd.Parameters.Add("@FlowID", SqlDbType.BigInt).Value = flowId;
+        cmd.Parameters.Add("@ActionTypeID", SqlDbType.Int).Value = actionTypeId;
+        var employeeId = cmd.ExecuteScalar();
+        if (employeeId == null || employeeId == DBNull.Value) return null;
+        return LoadEmployeeSignature(conn, Convert.ToInt32(employeeId));
     }
 
     private string ResolveEmployeeSignaturePath(string fileName)
