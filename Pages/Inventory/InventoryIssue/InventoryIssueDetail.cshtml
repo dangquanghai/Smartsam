@@ -38,7 +38,7 @@
                     <div class="inventory-issue-header-section mb-3">
                         <div class="row inventory-issue-header-grid-row">
                             <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Issue No.<span class="required-mark">*</span></label><div class="inventory-issue-header-control-wrap"><input asp-for="Header.FlowNo" class="form-control form-control-sm vni-font" readonly="@(Model.IsAddMode && Model.CanEditVoucherBusiness ? null : "readonly")" /><span asp-validation-for="Header.FlowNo" class="text-danger small"></span></div></div></div>
-                            <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Issue Type<span class="required-mark">*</span></label><div class="inventory-issue-header-control-wrap"><small id="issueType2Hint" class="d-none inventory-issue-type-hint">Save first to open Adjust Item in Apmt, then Confirm in edit mode.</small><select asp-for="Header.FlowSubType" asp-items="Model.IssueTypes" class="form-control form-control-sm select2" disabled="@((Model.CanEditVoucherBusiness && !Model.HasAdjustedApartmentItems) ? null : "disabled")"></select>@if (Model.HasAdjustedApartmentItems){<input type="hidden" name="Header.FlowSubType" value="@Model.Header.FlowSubType" />}<span asp-validation-for="Header.FlowSubType" class="text-danger small"></span></div></div></div>
+                            <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Issue Type<span class="required-mark">*</span></label><div class="inventory-issue-header-control-wrap"><select asp-for="Header.FlowSubType" asp-items="Model.IssueTypes" class="form-control form-control-sm select2" disabled="@((Model.CanEditVoucherBusiness && !Model.HasAdjustedApartmentItems) ? null : "disabled")"></select>@if (Model.HasAdjustedApartmentItems){<input type="hidden" name="Header.FlowSubType" value="@Model.Header.FlowSubType" />}<span asp-validation-for="Header.FlowSubType" class="text-danger small"></span><small id="issueType2Hint" class="d-none inventory-issue-type-hint mt-1">Save first to open Adjust Item in Apmt, then Confirm in edit mode.</small></div></div></div>
                             <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Received Department</label><div class="inventory-issue-header-control-wrap"><select asp-for="Header.RecDept" asp-items="Model.Departments" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select><span asp-validation-for="Header.RecDept" class="text-danger small"></span></div></div></div>
                             <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Issue Date</label><div class="inventory-issue-header-control-wrap"><input id="Header_FlowDateDisplay" type="text" class="form-control form-control-sm @(Model.CanEditVoucherBusiness ? "app-date-picker" : string.Empty)" value="@Model.Header.FlowDate.ToString("dd/MM/yyyy")" data-hidden-target="#Header_FlowDate" autocomplete="off" readonly />
                                 <input id="Header_FlowDate" name="Header.FlowDate" type="hidden" value="@Model.Header.FlowDate.ToString("yyyy-MM-dd")" /></div></div></div>
@@ -334,8 +334,8 @@
                     <div class="inventory-issue-mr-filter-item"><label>Item Code</label><input id="mrItemCode" class="form-control form-control-sm" /></div>
                     <div class="inventory-issue-mr-filter-item"><label>According To</label><input id="mrAccording" class="form-control form-control-sm" /></div>
                     <div class="inventory-issue-mr-filter-item"><label>Dept</label><select id="mrDept" class="form-control form-control-sm select2"><option value="">All</option>@foreach (var dept in Model.MrDepartments.Where(x => !string.IsNullOrWhiteSpace(x.Value))) {<option value="@dept.Value">@dept.Text</option>}</select></div>
-                    <div class="inventory-issue-mr-filter-item"><label>From</label><input id="mrFromDate" type="date" class="form-control form-control-sm" /></div>
-                    <div class="inventory-issue-mr-filter-item inventory-issue-mr-filter-item-search"><label>To</label><div class="inventory-issue-mr-search-wrap"><input id="mrToDate" type="date" class="form-control form-control-sm" /><button id="btnSearchMr" type="button" class="btn btn-sm btn-primary ml-2 flex-shrink-0"><i class="fas fa-search"></i> Search</button></div></div>
+                    <div class="inventory-issue-mr-filter-item"><label>From</label><input id="mrFromDateDisplay" type="text" class="form-control form-control-sm app-date-picker" data-hidden-target="#mrFromDate" autocomplete="off" readonly /><input id="mrFromDate" type="hidden" /></div>
+                    <div class="inventory-issue-mr-filter-item inventory-issue-mr-filter-item-search"><label>To</label><div class="inventory-issue-mr-search-wrap"><input id="mrToDateDisplay" type="text" class="form-control form-control-sm app-date-picker" data-hidden-target="#mrToDate" autocomplete="off" readonly /><input id="mrToDate" type="hidden" /><button id="btnSearchMr" type="button" class="btn btn-sm btn-primary ml-2 flex-shrink-0"><i class="fas fa-search"></i> Search</button></div></div>
                 </div>
                 <div class="border-top pt-3 pb-2 mt-2 mb-2 font-weight-bold text-left">Material Request</div>
                 <div class="table-responsive" style="max-height:220px;overflow:auto;">
@@ -463,7 +463,7 @@
         .inventory-issue-header-control-wrap .select2-container { width: 100% !important; }
         .inventory-issue-add-detail-form-row .inventory-issue-header-field { margin-bottom: 6px; }
         .inventory-issue-add-detail-form-row .inventory-issue-header-control-wrap small { display: block; margin-top: 3px; }
-        .inventory-issue-type-hint { display: block; color: #ff0707; line-height: 1.2; margin-bottom: 2px; }
+        .inventory-issue-type-hint { display: block; color: #ff6707; line-height: 1.2; margin-bottom: 2px; }
         @@media (max-width: 575.98px) {
             .inventory-issue-header-field { display: block; min-height: 0; }
             .inventory-issue-header-label { display: block; max-width: none; margin-bottom: 3px; }
@@ -1604,6 +1604,7 @@ const incomingRow = {
             });
 
             initSelect2();
+            initializeMrDatePickers();
             applyFieldRuleByFlowSubType();
             syncConfirmButtonState();
             let selectedMrNo = 0;
@@ -1617,7 +1618,64 @@ const incomingRow = {
                 }
             }
 
-            function showMrMessage(message) {
+            function formatDisplayDate(isoDate) {
+                if (!isoDate || typeof isoDate !== 'string' || isoDate.length < 10) return '';
+                const parts = isoDate.slice(0, 10).split('-');
+                if (parts.length !== 3) return isoDate;
+                return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            }
+
+            function initializeMrDatePickers() {
+                initMrSingleDatePicker('#mrFromDateDisplay', '#mrFromDate');
+                initMrSingleDatePicker('#mrToDateDisplay', '#mrToDate');
+            }
+
+            function initMrSingleDatePicker(displaySelector, hiddenSelector) {
+                const $display = $(displaySelector);
+                if (!$display.length || typeof $display.daterangepicker !== 'function' || typeof moment === 'undefined') {
+                    return;
+                }
+
+                const existingPicker = $display.data('daterangepicker');
+                if (existingPicker) {
+                    existingPicker.remove();
+                }
+
+                $display.daterangepicker({
+                    singleDatePicker: true,
+                    autoApply: true,
+                    autoUpdateInput: false,
+                    showDropdowns: true,
+                    locale: {
+                        format: 'DD/MM/YYYY',
+                        applyLabel: 'Apply',
+                        cancelLabel: 'Clear'
+                    }
+                });
+
+                $display.off('apply.daterangepicker.mrdate cancel.daterangepicker.mrdate');
+
+                $display.on('apply.daterangepicker.mrdate', function (ev, picker) {
+                    $display.val(picker.startDate.format('DD/MM/YYYY'));
+                    $(hiddenSelector).val(picker.startDate.format('YYYY-MM-DD'));
+                });
+
+                $display.on('cancel.daterangepicker.mrdate', function () {
+                    $display.val('');
+                    $(hiddenSelector).val('');
+                });
+            }
+
+            function setMrSingleDateValue(displaySelector, hiddenSelector, isoDate) {
+                $(hiddenSelector).val(isoDate || '');
+                $(displaySelector).val(formatDisplayDate(isoDate));
+
+                const picker = $(displaySelector).data('daterangepicker');
+                if (picker && isoDate && typeof moment !== 'undefined') {
+                    picker.setStartDate(moment(isoDate));
+                    picker.setEndDate(moment(isoDate));
+                }
+            }            function showMrMessage(message) {
                 if ($('#FromMrModal').hasClass('show')) {
                     setMrAlert(message);
                     return;
@@ -1629,10 +1687,13 @@ const incomingRow = {
 
             function renderMrRows(items) {
                 const $b = $('#mrRows'); $b.empty();
-                if (!items.length) { $b.html('<tr><td colspan="6" class="text-center text-muted">No data</td></tr>'); return; }
-                items.forEach(x => {
-                    const rowClass = x.allItemsOutOfStock ? 'mr-row mr-row-out-of-stock' : 'mr-row';
-                    $b.append(`<tr class="${rowClass}" data-request-no="${x.requestNo}" style="cursor:pointer;"><td class="text-center"><input type="radio" name="mrSelect" class="mr-select" value="${x.requestNo}" /></td><td>${x.requestNo}</td><td>${x.dateCreate || ''}</td><td>${x.according || ''}</td><td>${x.deptName || ''}</td><td>${x.materialStatusName || ''}</td></tr>`);
+                const availableItems = Array.isArray(items) ? items.filter(x => !x.allItemsOutOfStock) : [];
+                if (!availableItems.length) {
+                    $b.html('<tr><td colspan="6" class="text-center text-muted">All material requests have already been fully issued.</td></tr>');
+                    return;
+                }
+                availableItems.forEach(x => {
+                    $b.append(`<tr class="mr-row" data-request-no="${x.requestNo}" style="cursor:pointer;"><td class="text-center"><input type="radio" name="mrSelect" class="mr-select" value="${x.requestNo}" /></td><td>${x.requestNo}</td><td>${formatDisplayDate(x.dateCreate) || ''}</td><td>${x.according || ''}</td><td>${x.deptName || ''}</td><td>${x.materialStatusName || ''}</td></tr>`);
                 });
             }
 
@@ -1640,20 +1701,21 @@ const incomingRow = {
                 const $b = $('#mrDetailRows');
                 $b.empty();
                 $('#mrCheckAll').prop('checked', false);
-                if (!items.length) {
-                    $b.html('<tr><td colspan="8" class="text-center text-muted">No data</td></tr>');
+                const availableItems = Array.isArray(items) ? items.filter(x => {
+                    const hasStockQty = x.stockQty !== null && x.stockQty !== undefined;
+                    return Number(x.remainQty || 0) > 0 && (!hasStockQty || Number(x.stockQty || 0) > 0);
+                }) : [];
+                if (!availableItems.length) {
+                    $b.html('<tr><td colspan="8" class="text-center text-muted">All items in this material request have already been fully issued.</td></tr>');
                     setMrAlert('');
                     return;
                 }
-                items.forEach(x => {
+                availableItems.forEach(x => {
                     const hasStockQty = x.stockQty !== null && x.stockQty !== undefined;
                     const defaultIssueQty = hasStockQty ? Math.min(Number(x.remainQty || 0), Number(x.stockQty || 0)) : Number(x.remainQty || 0);
-                    const outOfStock = hasStockQty && Number(x.stockQty || 0) <= 0;
-                    const rowClass = outOfStock ? 'mr-item-out-of-stock' : '';
-                    const disabledAttr = outOfStock ? 'disabled' : '';
-                    $b.append(`<tr class="${rowClass}"><td class="text-center"><input type="checkbox" class="mr-detail-check" data-id="${x.id}" ${disabledAttr} /></td><td>${x.itemCode || ''}</td><td class="tcvn3-font">${toTcvn3WebText(x.itemName || '')}</td><td>${x.unit || ''}</td><td class="text-right">${Number(x.remainQty || 0).toLocaleString()}</td><td class="text-right">${hasStockQty ? Number(x.stockQty || 0).toLocaleString() : ''}</td><td><input type="text" class="form-control form-control-sm text-right mr-issue-qty" data-id="${x.id}" value="${formatNumber(defaultIssueQty)}" disabled /></td><td><input type="text" class="form-control form-control-sm text-right mr-price" data-id="${x.id}" value="0" disabled /></td></tr>`);
+                    $b.append(`<tr><td class="text-center"><input type="checkbox" class="mr-detail-check" data-id="${x.id}" /></td><td>${x.itemCode || ''}</td><td class="tcvn3-font">${toTcvn3WebText(x.itemName || '')}</td><td>${x.unit || ''}</td><td class="text-right">${Number(x.remainQty || 0).toLocaleString()}</td><td class="text-right">${hasStockQty ? Number(x.stockQty || 0).toLocaleString() : ''}</td><td><input type="text" class="form-control form-control-sm text-right mr-issue-qty" data-id="${x.id}" value="${formatNumber(defaultIssueQty)}" disabled /></td><td><input type="text" class="form-control form-control-sm text-right mr-price" data-id="${x.id}" value="0" disabled /></td></tr>`);
                 });
-                const missing = items.filter(x => x.missingItemName);
+                const missing = availableItems.filter(x => x.missingItemName);
                 if (missing.length) {
                     setMrAlert(`Missing Item Name master data for ${missing.length} item(s). Please update item master.`);
                 } else {
@@ -1717,8 +1779,10 @@ const incomingRow = {
                 const today = new Date();
                 const from = new Date();
                 from.setDate(today.getDate() - 60);
-                $('#mrFromDate').val(from.toISOString().slice(0, 10));
-                $('#mrToDate').val(today.toISOString().slice(0, 10));
+                const fromValue = from.toISOString().slice(0, 10);
+                const toValue = today.toISOString().slice(0, 10);
+                setMrSingleDateValue('#mrFromDateDisplay', '#mrFromDate', fromValue);
+                setMrSingleDateValue('#mrToDateDisplay', '#mrToDate', toValue);
                 selectedMrNo = 0;
                 mrDetails = [];
                 setMrAlert('');

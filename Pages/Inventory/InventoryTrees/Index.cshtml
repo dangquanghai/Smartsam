@@ -1,4 +1,4 @@
-﻿@page
+@page
 @model SmartSam.Pages.Inventory.InventoryTrees.IndexModel
 @{
     ViewData["Title"] = "Inventory Tree-view Control";
@@ -56,8 +56,8 @@
                     </div>
                     <div class="card-footer p-2 text-center module-action-bar prq-action-bar">
                         @if (Model.CanAdd){<button type="button" class="btn btn-sm btn-action-add border mx-1 my-1" data-toggle="modal" data-target="#nodeAddModal"><i class="fas fa-plus"></i> Add Node</button>}
-                        @if (Model.CanEdit){<button type="button" class="btn btn-sm btn-action-copy border mx-1 my-1" data-toggle="modal" data-target="#nodeEditModal"><i class="fas fa-edit"></i> Edit Node</button>}
-                        @if (Model.CanDeleteNode){<button type="button" class="btn btn-sm btn-action-close border mx-1 my-1" data-toggle="modal" data-target="#nodeDeleteModal"><i class="fas fa-trash"></i> Delete Node</button>}
+                        @if (Model.CanEdit){<button type="button" class="btn btn-sm btn-action-copy border mx-1 my-1" data-toggle="modal" data-target="#nodeEditModal" disabled="@(Model.Filter.SelectedCatgId <= 0 ? "disabled" : null)"><i class="fas fa-edit"></i> Edit Node</button>}
+                        @if (Model.CanDeleteNode){<button type="button" class="btn btn-sm btn-action-close border mx-1 my-1" data-toggle="modal" data-target="#nodeDeleteModal" disabled="@(Model.Filter.SelectedCatgId <= 0 ? "disabled" : null)"><i class="fas fa-trash"></i> Delete Node</button>}
                     </div>
                 </div>
             </div>
@@ -99,7 +99,7 @@
 
                 <div class="card card-outline card-primary">
                     <div class="card-footer p-2 text-center module-action-bar prq-action-bar">
-                        @if (Model.CanDeleteItem){<button form="removeItemsForm" class="btn btn-sm btn-action-close border mx-1 my-1" onclick="return confirm('Remove item đã chọn khỏi node?')"><i class="fas fa-minus-circle"></i> Remove from node</button>}
+                        @if (Model.CanDeleteItem){<button form="removeItemsForm" class="btn btn-sm btn-action-close border mx-1 my-1" onclick="return confirm('Remove selected item(s) from the node?')"><i class="fas fa-minus-circle"></i> Remove from node</button>}
                         @if (Model.CanAddItem){<button type="button" class="btn btn-sm btn-action-add border mx-1 my-1" disabled><i class="fas fa-plus-circle"></i> Add to Node</button>}
                         @if (Model.CanCheckStock){<button type="button" class="btn btn-sm btn-action-copy border mx-1 my-1" disabled><i class="fas fa-boxes"></i> Check Item Stock</button>}
                         <button type="button" class="btn btn-sm btn-action-export border mx-1 my-1" disabled><i class="fas fa-file-excel"></i> Export Excel</button>
@@ -116,7 +116,7 @@
 
 <div class="modal fade vni-font" id="nodeAddModal" tabindex="-1" role="dialog"><div class="modal-dialog" role="document"><div class="modal-content"><div class="modal-header py-2"><h5 class="modal-title">Add Node</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div><div class="modal-body"><div class="form-group mb-2"><label>Node Code</label><input id="addNodeCode" class="form-control form-control-sm" /></div><div class="form-group mb-2"><label>Node Name</label><input id="addNodeName" class="form-control form-control-sm" /></div><div class="form-group mb-0"><label>Description</label><input id="addNodeDesc" class="form-control form-control-sm" /></div></div><div class="modal-footer py-2"><button type="button" class="btn btn-sm btn-action-save border" onclick="submitNodeModal('addNodeForm','addNodeCode','addNodeName','addNodeDesc')"><i class="fas fa-save"></i> Save</button><button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal"><i class="fas fa-times"></i> Close</button></div></div></div></div>
 <div class="modal fade vni-font" id="nodeEditModal" tabindex="-1" role="dialog"><div class="modal-dialog" role="document"><div class="modal-content"><div class="modal-header py-2"><h5 class="modal-title">Edit Node</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div><div class="modal-body"><div class="form-group mb-2"><label>Node Code</label><input id="editNodeCode" class="form-control form-control-sm" value="@Model.SelectedNodeForm.NodeCode" /></div><div class="form-group mb-2"><label>Node Name</label><input id="editNodeName" class="form-control form-control-sm" value="@Model.SelectedNodeForm.NodeName" /></div><div class="form-group mb-0"><label>Description</label><input id="editNodeDesc" class="form-control form-control-sm" value="@Model.SelectedNodeForm.Description" /></div></div><div class="modal-footer py-2"><button type="button" class="btn btn-sm btn-action-save border" onclick="submitNodeModal('editNodeForm','editNodeCode','editNodeName','editNodeDesc')"><i class="fas fa-save"></i> Save</button><button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal"><i class="fas fa-times"></i> Close</button></div></div></div></div>
-<div class="modal fade vni-font" id="nodeDeleteModal" tabindex="-1" role="dialog"><div class="modal-dialog modal-dialog-centered" role="document"><div class="modal-content border-danger"><div class="modal-header bg-danger text-white py-2"><h5 class="modal-title">Confirm Delete</h5><button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button></div><div class="modal-body">Xóa node đang chọn?</div><div class="modal-footer py-2"><button type="button" class="btn btn-sm btn-action-close border" onclick="document.getElementById('deleteNodeForm').submit()"><i class="fas fa-trash"></i> Delete</button><button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal"><i class="fas fa-times"></i> Close</button></div></div></div></div>
+<div class="modal fade vni-font" id="nodeDeleteModal" tabindex="-1" role="dialog"><div class="modal-dialog modal-dialog-centered" role="document"><div class="modal-content border-danger"><div class="modal-header bg-danger text-white py-2"><h5 class="modal-title">Confirm Delete</h5><button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button></div><div class="modal-body">Delete the selected node?</div><div class="modal-footer py-2"><button type="button" class="btn btn-sm btn-action-close border" onclick="document.getElementById('deleteNodeForm').submit()"><i class="fas fa-trash"></i> Delete</button><button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal"><i class="fas fa-times"></i> Close</button></div></div></div></div>
 
 @section Styles {
     <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
@@ -156,7 +156,11 @@ if (typeof window.jQuery !== 'undefined' && typeof window.jQuery.fn.select2 === 
   const $group = window.jQuery('#kpGroupSelect');
   if ($group.length) {
     $group.select2({ width: '100%', minimumResultsForSearch: 8 });
-    $group.on('change', function(){ document.getElementById('invTreeSearchForm').submit(); });
+    $group.on('change', function(){
+      const form = document.getElementById('invTreeSearchForm');
+      form.querySelector('input[name="Filter.SelectedCatgId"]').value = '0';
+      form.submit();
+    });
   }
 }
 document.querySelectorAll('.inv-tree-toggle').forEach(function(btn){
@@ -166,7 +170,7 @@ document.querySelectorAll('.inv-tree-toggle').forEach(function(btn){
     if(!block) return;
     const expanded = block.style.display !== 'none';
     block.style.display = expanded ? 'none' : 'block';
-    this.textContent = expanded ? '▸' : '▾';
+    this.innerHTML = expanded ? '&#9656;' : '&#9662;';
   });
 });
 </script>

@@ -530,8 +530,8 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn);
 
     private void NormalizeFilter()
     {
-        if (!Filter.FromDate.HasValue) Filter.FromDate = DateTime.Today.AddDays(-2);
-        if (!Filter.ToDate.HasValue) Filter.ToDate = DateTime.Today;
+        if (!Filter.FromDate.HasValue) Filter.FromDate = DateTime.Today.AddDays(-29);
+        if (!Filter.ToDate.HasValue) Filter.ToDate = DateTime.Today.AddDays(1);
         if (Filter.Page <= 0) Filter.Page = 1;
         if (Filter.PageSize is not (10 or 20 or 50 or 100 or 200)) Filter.PageSize = 10;
     }

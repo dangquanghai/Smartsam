@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -1161,12 +1161,12 @@ namespace SmartSam.Pages.Purchasing.Supplier
         private void TryQueueNotifyNewSupplierAfterSubmit(int supplierId, SupplierViewModel supplier, string operatorCode)
         {
             // 1. After submit, a new supplier always moves to Status = 1, so the next approval level is level 2.
-            const int nextLevel = 2;
-            var recipients = GetEmailsByLevelCheck(nextLevel, supplier.DeptID);
+            const int nextLevel = 1;
+            var recipients = GetEmailsByEmployeeFlag("HeadDept", supplier.DeptID);
             if (recipients.Count == 0)
             {
                 // _logger.LogWarning(
-                //     "Khong tim thay nguoi nhan mail submit supplier moi. SupplierID={SupplierID}, DeptID={DeptID}, LevelCheckSupplier={LevelCheckSupplier}.",
+                //     "Khong tim thay nguoi nhan mail submit supplier moi. SupplierID={SupplierID}, DeptID={DeptID}, HeadDept=true.",
                 //     supplierId,
                 //     supplier.DeptID,
                 //     nextLevel);
@@ -1183,7 +1183,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 mailPort <= 0)
             {
                 // _logger.LogWarning(
-                //     "Thieu cau hinh SMTP khi gui mail submit supplier moi. SupplierID={SupplierID}, DeptID={DeptID}, LevelCheckSupplier={LevelCheckSupplier}.",
+                //     "Thieu cau hinh SMTP khi gui mail submit supplier moi. SupplierID={SupplierID}, DeptID={DeptID}, HeadDept=true.",
                 //     supplierId,
                 //     supplier.DeptID,
                 //     nextLevel);
@@ -1263,7 +1263,9 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 .Any(value => int.TryParse(value, out var id) && id == FUNCTION_ID);
         }
 
-        private List<SupplierSubmitNotifyRecipientViewModel> GetEmailsByLevelCheck(int levelCheckSupplier, int? deptId)
+        
+
+        private List<SupplierSubmitNotifyRecipientViewModel> GetEmailsByEmployeeFlag(string flagColumnName, int? deptId)
         {
             var rows = new List<SupplierSubmitNotifyRecipientViewModel>();
 
@@ -1272,20 +1274,31 @@ namespace SmartSam.Pages.Purchasing.Supplier
                 return rows;
             }
 
+            var allowedColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "HeadDept",
+                "IsCFO",
+                "IsBOD",
+                "IsPurchaser"
+            };
+            if (!allowedColumns.Contains(flagColumnName))
+            {
+                return rows;
+            }
+
             using var conn = new SqlConnection(_connectionString);
-            using var cmd = new SqlCommand(@"
+            using var cmd = new SqlCommand($@"
                 SELECT DISTINCT
                     LTRIM(RTRIM(TheEmail)) AS TheEmail,
                     LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode,
                     LTRIM(RTRIM(EmployeeName)) AS EmployeeName,
                     LTRIM(RTRIM(ISNULL(Title, ''))) AS Title
                 FROM dbo.MS_Employee
-                WHERE LevelCheckSupplier = @LevelCheckSupplier
+                WHERE ISNULL({flagColumnName}, 0) = 1
                   AND DeptID = @DeptID
                   AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
                   AND ISNULL(IsActive, 0) = 1", conn);
 
-            cmd.Parameters.AddWithValue("@LevelCheckSupplier", levelCheckSupplier);
             cmd.Parameters.AddWithValue("@DeptID", deptId.Value);
             conn.Open();
 
@@ -1308,6 +1321,7 @@ namespace SmartSam.Pages.Purchasing.Supplier
             return rows;
         }
 
+        
         private async Task SendNotifyEmailAsync(SupplierSubmitNotifyRequestViewModel notifyRequest)
         {
             try
