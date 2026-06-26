@@ -69,9 +69,9 @@ public class IndexModel : BasePageModel
             actions = new
             {
                 canAccess,
-                accessMode = canEdit && !row.Closed ? "edit" : "view",
+                accessMode = canEdit ? "edit" : "view",
                 canView = canAccess,
-                canEdit = canEdit && !row.Closed
+                canEdit = canEdit
             }
         });
 

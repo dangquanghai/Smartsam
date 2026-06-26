@@ -35,13 +35,13 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         private ApproveEmployeeDataScopeViewModel _dataScope = new ApproveEmployeeDataScopeViewModel();
         private bool _isAdminRole;
 
-        // Khởi tạo các service và thành phần cần dùng cho màn hình duyệt supplier.
+        // Kh?i t?o c�c service v� th�nh ph?n c?n d�ng cho m�n h�nh duy?t supplier.
         public ApproveSupplierDetailModel(ISecurityService securityService, IConfiguration config, ILogger<ApproveSupplierDetailModel> logger) : base(config)
         {
             _securityService = securityService;
             _logger = logger;
         }
-        // ID chức năng trong bảng SYS_Function
+        // ID ch?c nang trong b?ng SYS_Function
         private const int FUNCTION_ID = 145;
 
         [BindProperty(SupportsGet = true)]
@@ -105,12 +105,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             && _dataScope.LevelCheckSupplier.Value is >= 1 and <= 4
             && Rows.Any(x => !IsProcessedSupplierInCurrentLogin(x.SupplierID));
 
-        // Xử lý tải dữ liệu ban đầu của màn hình.
+        // X? l� t?i d? li?u ban d?u c?a m�n h�nh.
         public IActionResult OnGet()
         {
             SupplierId = ResolveSupplierIdFromRequest();
 
-            // 1. Lấy tập quyền thực tế của role login
+            // 1. L?y t?p quy?n th?c t? c?a role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
             if (!HasPermission(PermissionViewList))
@@ -136,7 +136,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
             RefreshCurrentApprovalScopeActionLock();
 
-            // 2. Load dữ liệu màn hình theo đúng phạm vi quyền
+            // 2. Load d? li?u m�n h�nh theo d�ng ph?m vi quy?n
             LoadSupplierRows();
             LoadCurrentSupplierDetailData();
             if (IsSupplierLinkMode && CurrentSupplierDetail is null)
@@ -152,12 +152,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return Page();
         }
 
-        // Xử lý yêu cầu lưu thông tin từ giao diện.
+        // X? l� y�u c?u luu th�ng tin t? giao di?n.
         public IActionResult OnPostSave()
         {
             SupplierId = ResolveSupplierIdFromRequest();
 
-            // 1. Lấy tập quyền thực tế của role login
+            // 1. L?y t?p quy?n th?c t? c?a role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
             if (!HasPermission(PermissionViewList))
@@ -214,12 +214,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return RedirectToCurrentList();
         }
 
-        // Xử lý điều hướng đến đúng supplier theo số thứ tự người dùng nhập.
+        // X? l� di?u hu?ng d?n d�ng supplier theo s? th? t? ngu?i d�ng nh?p.
         public IActionResult OnPostGoTo()
         {
             SupplierId = ResolveSupplierIdFromRequest();
 
-            // 1. Lấy tập quyền thực tế của role login
+            // 1. L?y t?p quy?n th?c t? c?a role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
             if (!HasPermission(PermissionViewList))
@@ -252,12 +252,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return RedirectToCurrentList();
         }
 
-        // Xử lý thao tác duyệt supplier trên màn hình.
+        // X? l� thao t�c duy?t supplier tr�n m�n h�nh.
         public IActionResult OnPostApprove()
         {
             SupplierId = ResolveSupplierIdFromRequest();
 
-            // 1. Lấy tập quyền thực tế của role login
+            // 1. L?y t?p quy?n th?c t? c?a role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
             if (!HasPermission(PermissionApprove))
@@ -391,12 +391,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return RedirectToCurrentList();
         }
 
-        // Xử lý thao tác từ chối supplier trên màn hình.
+        // X? l� thao t�c t? ch?i supplier tr�n m�n h�nh.
         public IActionResult OnPostDisapprove()
         {
             SupplierId = ResolveSupplierIdFromRequest();
 
-            // 1. Lấy tập quyền thực tế của role login
+            // 1. L?y t?p quy?n th?c t? c?a role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
             if (!HasPermission(PermissionApprove))
@@ -484,7 +484,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return RedirectToCurrentList();
         }
 
-        // Khôi phục lại trạng thái trước khi vừa approve/disapprove.
+        // Kh�i ph?c l?i tr?ng th�i tru?c khi v?a approve/disapprove.
         public IActionResult OnPostRestore()
         {
             SupplierId = ResolveSupplierIdFromRequest();
@@ -541,7 +541,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return RedirectToCurrentList();
         }
 
-        // Duyệt hàng loạt tất cả supplier đang chờ duyệt trong scope hiện tại.
+        // Duy?t h�ng lo?t t?t c? supplier dang ch? duy?t trong scope hi?n t?i.
         public IActionResult OnPostBatchApprove()
         {
             SupplierId = ResolveSupplierIdFromRequest();
@@ -616,12 +616,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return RedirectToCurrentList();
         }
 
-        // Xử lý lưu nhanh phần ghi chú bổ sung của supplier.
+        // X? l� luu nhanh ph?n ghi ch� b? sung c?a supplier.
         public IActionResult OnPostSaveMoreComment()
         {
             SupplierId = ResolveSupplierIdFromRequest();
 
-            // 1. Lấy tập quyền thực tế của role login
+            // 1. L?y t?p quy?n th?c t? c?a role login
             PagePerm = GetUserPermissions();
             LoadUserDataScope();
             if (!HasPermission(PermissionViewList))
@@ -665,7 +665,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return RedirectToCurrentList();
         }
 
-        // Nạp danh sách supplier theo đúng phạm vi quyền hiện tại.
+        // N?p danh s�ch supplier theo d�ng ph?m vi quy?n hi?n t?i.
         private void LoadSupplierRows()
         {
             var criteria = BuildCriteria();
@@ -673,7 +673,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             Rows = MergeProcessedSupplierRows(Rows);
         }
 
-        // Nạp chi tiết supplier đang được chọn trên màn hình.
+        // N?p chi ti?t supplier dang du?c ch?n tr�n m�n h�nh.
         private void LoadCurrentSupplierDetailData()
         {
             CurrentSupplierDetail = null;
@@ -699,7 +699,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 return;
             }
 
-            // 2. Xác định vị trí record đang chọn trên danh sách hiện tại
+            // 2. X�c d?nh v? tr� record dang ch?n tr�n danh s�ch hi?n t?i
             var selectedId = CurrentSupplierId.GetValueOrDefault();
             var selectedIndex = CurrentSupplierId.HasValue
                 ? Rows.FindIndex(x => x.SupplierID == selectedId)
@@ -723,7 +723,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             PrevSupplierId = selectedIndex > 0 ? Rows[selectedIndex - 1].SupplierID : null;
             NextSupplierId = selectedIndex < Rows.Count - 1 ? Rows[selectedIndex + 1].SupplierID : null;
 
-            // 3. Load chi tiết, thông tin PO và lịch sử service
+            // 3. Load chi ti?t, th�ng tin PO v� l?ch s? service
             CurrentSupplierDetail = GetSupplierDetail(Rows[selectedIndex].SupplierID);
             EditSupplier = CurrentSupplierDetail is null ? new ApproveSupplierDetailViewModel() : CloneForEdit(CurrentSupplierDetail);
 
@@ -755,7 +755,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
                 if (!IsSupplierLinkMode && IsProcessedSupplierInCurrentLogin(CurrentSupplierDetail.SupplierID))
                 {
-                    // 4. Trong cùng phiên đăng nhập, supplier đã approve/disapprove vẫn hiển thị nhưng bị khóa thao tác.
+                    // 4. Trong c�ng phi�n dang nh?p, supplier d� approve/disapprove v?n hi?n th? nhung b? kh�a thao t�c.
                     IsCurrentSupplierReadOnly = true;
 
                     var undoState = GetSupplierUndoStateInCurrentLogin(CurrentSupplierDetail.SupplierID);
@@ -770,7 +770,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             }
         }
 
-        // Truy vấn danh sách supplier theo điều kiện lọc hiện tại.
+        // Truy v?n danh s�ch supplier theo di?u ki?n l?c hi?n t?i.
         private List<ApproveListRowViewModel> SearchSupplierRows(ApproveFilterCriteria criteria)
         {
             var rows = new List<ApproveListRowViewModel>();
@@ -831,7 +831,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return rows;
         }
 
-        // Lấy thông tin chi tiết của supplier để hiển thị và xử lý.
+        // L?y th�ng tin chi ti?t c?a supplier d? hi?n th? v� x? l�.
         private ApproveSupplierDetailViewModel? GetSupplierDetail(int supplierId)
         {
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -857,7 +857,9 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                     s.DeptID,
                     d.DeptCode,
                     s.[Status],
-                    st.SupplierStatusName
+                    st.SupplierStatusName,
+                    s.PurchaserCode,
+                    s.PurchaserPreparedDate
                 FROM dbo.PC_Suppliers s
                 LEFT JOIN dbo.PC_SupplierStatus st ON s.[Status] = st.SupplierStatusID
                 LEFT JOIN dbo.MS_Department d ON s.DeptID = d.DeptID
@@ -895,11 +897,13 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 DeptID = rd.IsDBNull(17) ? null : Convert.ToInt32(rd[17]),
                 DeptCode = Convert.ToString(rd[18]) ?? string.Empty,
                 Status = rd.IsDBNull(19) ? null : Convert.ToInt32(rd[19]),
-                SupplierStatusName = Convert.ToString(rd[20]) ?? string.Empty
+                SupplierStatusName = Convert.ToString(rd[20]) ?? string.Empty,
+                PurchaserCode = Convert.ToString(rd[21]) ?? string.Empty,
+                PurchaserPreparedDate = rd.IsDBNull(22) ? null : Convert.ToDateTime(rd[22])
             };
         }
 
-        // Lấy thông tin Purchase Order liên quan của supplier.
+        // L?y th�ng tin Purchase Order li�n quan c?a supplier.
         private ApprovePurchaseOrderInfoViewModel GetPurchaseOrderInfo(int supplierId, int currentYear)
         {
             var result = new ApprovePurchaseOrderInfoViewModel
@@ -972,7 +976,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return result;
         }
 
-        // Lấy lịch sử dịch vụ của supplier để hiển thị.
+        // L?y l?ch s? d?ch v? c?a supplier d? hi?n th?.
         private List<ApproveSupplierServiceRowViewModel> GetSupplierServiceRows(int supplierId)
         {
             var rows = new List<ApproveSupplierServiceRowViewModel>();
@@ -1003,13 +1007,13 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return rows;
         }
 
-        // Nạp phạm vi dữ liệu của người dùng đăng nhập.
+        // N?p ph?m vi d? li?u c?a ngu?i d�ng dang nh?p.
         private void LoadUserDataScope()
         {
             _isAdminRole = string.Equals(User.FindFirst("IsAdminRole")?.Value, "True", StringComparison.OrdinalIgnoreCase);
             _dataScope = new ApproveEmployeeDataScopeViewModel();
 
-            // 2. Lấy mã nhân viên để đọc phạm vi phòng ban và cấp duyệt
+            // 2. L?y m� nh�n vi�n d? d?c ph?m vi ph�ng ban v� c?p duy?t
             var employeeCode = User.Identity?.Name?.Trim();
             if (string.IsNullOrWhiteSpace(employeeCode))
             {
@@ -1018,7 +1022,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
 
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
             using var cmd = new SqlCommand(@"
-                SELECT TOP 1 DeptID, LevelCheckSupplier
+                SELECT TOP 1 DeptID, LevelCheckSupplier, ISNULL(HeadDept,0) AS HeadDept, ISNULL(IsCFO,0) AS IsCFO, ISNULL(IsBOD,0) AS IsBOD, ISNULL(IsPurchaser,0) AS IsPurchaser
                 FROM dbo.MS_Employee
                 WHERE EmployeeCode = @EmployeeCode", conn);
 
@@ -1029,38 +1033,62 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             {
                 _dataScope.DeptID = rd.IsDBNull(0) ? null : Convert.ToInt32(rd[0]);
                 _dataScope.LevelCheckSupplier = rd.IsDBNull(1) ? null : Convert.ToInt32(rd[1]);
+                _dataScope.HeadDept = !rd.IsDBNull(2) && Convert.ToInt32(rd[2]) == 1;
+                _dataScope.IsCFO = !rd.IsDBNull(3) && Convert.ToInt32(rd[3]) == 1;
+                _dataScope.IsBOD = !rd.IsDBNull(4) && Convert.ToInt32(rd[4]) == 1;
+                _dataScope.IsPurchaser = !rd.IsDBNull(5) && Convert.ToInt32(rd[5]) == 1;
+
+                if (IsSupplierLinkMode)
+                {
+                    _dataScope.LevelCheckSupplier = _dataScope.HeadDept ? 2
+                        : _dataScope.IsCFO ? 3
+                        : _dataScope.IsBOD ? 4
+                        : _dataScope.LevelCheckSupplier;
+                }
+                _dataScope.HeadDept = !rd.IsDBNull(2) && Convert.ToInt32(rd[2]) == 1;
+                _dataScope.IsCFO = !rd.IsDBNull(3) && Convert.ToInt32(rd[3]) == 1;
+                _dataScope.IsBOD = !rd.IsDBNull(4) && Convert.ToInt32(rd[4]) == 1;
+                _dataScope.IsPurchaser = !rd.IsDBNull(5) && Convert.ToInt32(rd[5]) == 1;
+
+                if (IsSupplierLinkMode)
+                {
+                    _dataScope.LevelCheckSupplier = _dataScope.HeadDept ? 2
+                        : _dataScope.IsCFO ? 3
+                        : _dataScope.IsBOD ? 4
+                        : _dataScope.LevelCheckSupplier;
+                }
             }
 
         }
 
-        // Lấy tập quyền thực tế của người dùng trên chức năng hiện tại.
+        // L?y t?p quy?n th?c t? c?a ngu?i d�ng tr�n ch?c nang hi?n t?i.
         private PagePermissions GetUserPermissions()
         {
             bool isAdmin = string.Equals(User.FindFirst("IsAdminRole")?.Value, "True", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(User.FindFirst("IsAdminRole")?.Value, "1", StringComparison.OrdinalIgnoreCase);
             int roleId = int.Parse(User.FindFirst("RoleID")?.Value ?? "-1");
 
-            // 1. Khởi tạo đối tượng PagePermissions mới
+            // 1. Kh?i t?o d?i tu?ng PagePermissions m?i
             var permsObj = new PagePermissions();
 
             if (isAdmin)
             {
-                // 2. Nếu là admin thì cấp đầy đủ quyền để đồng bộ với cách hiển thị menu
+                // 2. N?u l� admin th� c?p d?y d? quy?n d? d?ng b? v?i c�ch hi?n th? menu
                 permsObj.AllowedNos = Enumerable.Range(1, 20).ToList();
             }
             else
             {
-                // 3. User thường lấy tập quyền thực tế của role theo đúng FunctionID
+                // 3. User thu?ng l?y t?p quy?n th?c t? c?a role theo d�ng FunctionID
                 permsObj.AllowedNos = _securityService.GetEffectivePermissions(FUNCTION_ID, roleId, 1);
             }
 
-            // 4. Trả về object chứa tập quyền của người dùng
+            // 4. Tr? v? object ch?a t?p quy?n c?a ngu?i d�ng
             return permsObj;
         }
 
         private bool HasPermission(int permissionNo) => PagePerm.HasPermission(permissionNo);
 
-        // Kiểm tra người dùng có được xem tất cả phòng ban hay không.
+        // Ki?m tra ngu?i d�ng c� du?c xem t?t c? ph�ng ban hay kh�ng.
         private bool CanViewAllDepartments()
         {
             return _isAdminRole
@@ -1070,7 +1098,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                     || _dataScope.LevelCheckSupplier.Value == 4));
         }
 
-        // Kiểm tra supplier có thuộc phạm vi phòng ban được phép truy cập hay không.
+        // Ki?m tra supplier c� thu?c ph?m vi ph�ng ban du?c ph�p truy c?p hay kh�ng.
         private bool CanAccessDepartment(int? supplierDeptId)
         {
             if (CanViewAllDepartments())
@@ -1086,7 +1114,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return _dataScope.DeptID.Value == supplierDeptId.Value;
         }
 
-        // Tạo điều kiện tìm kiếm supplier theo phạm vi dữ liệu hiện tại.
+        // T?o di?u ki?n t�m ki?m supplier theo ph?m vi d? li?u hi?n t?i.
         private ApproveFilterCriteria BuildCriteria()
         {
             return new ApproveFilterCriteria
@@ -1099,7 +1127,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             };
         }
 
-        // Xác định phòng ban cần áp dụng khi truy vấn danh sách.
+        // X�c d?nh ph�ng ban c?n �p d?ng khi truy v?n danh s�ch.
         private int? ResolveDepartmentFilter()
         {
             if (CanViewAllDepartments())
@@ -1110,7 +1138,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return _dataScope.DeptID ?? NoDepartmentScopeValue;
         }
 
-        // Xác định trạng thái cần duyệt theo cấp duyệt hiện tại.
+        // X�c d?nh tr?ng th�i c?n duy?t theo c?p duy?t hi?n t?i.
         private int? ResolveStatusFilterByLevel()
         {
             if (!_dataScope.LevelCheckSupplier.HasValue)
@@ -1127,7 +1155,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return currentLevel - 1;
         }
 
-        // Gán tham số tìm kiếm vào câu lệnh truy vấn supplier.
+        // G�n tham s? t�m ki?m v�o c�u l?nh truy v?n supplier.
         private void BindSearchParams(SqlCommand cmd, ApproveFilterCriteria criteria)
         {
             cmd.Parameters.Add("@DeptID", SqlDbType.Int).Value = criteria.DeptId.HasValue ? criteria.DeptId.Value : DBNull.Value;
@@ -1137,7 +1165,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             cmd.Parameters.Add("@IsNew", SqlDbType.Bit).Value = criteria.IsNew;
         }
 
-        // Đọc mã supplier từ request hiện tại để xử lý đúng bản ghi.
+        // �?c m� supplier t? request hi?n t?i d? x? l� d�ng b?n ghi.
         private int? ResolveSupplierIdFromRequest()
         {
             if (Request.HasFormContentType && Request.Form.ContainsKey("supplier_id"))
@@ -1153,7 +1181,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return int.TryParse(rawQuery, out var parsedQuery) ? parsedQuery : null;
         }
 
-        // Tìm supplier theo Supplier Code hoặc Supplier Name trong danh sách hiện tại.
+        // T�m supplier theo Supplier Code ho?c Supplier Name trong danh s�ch hi?n t?i.
         private int? FindSupplierIdByKeyword(string keyword)
         {
             if (string.IsNullOrWhiteSpace(keyword) || Rows.Count == 0)
@@ -1175,7 +1203,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 ?? Rows.FirstOrDefault(x => TextContains(x.SupplierName, normalizedKeyword))?.SupplierID;
         }
 
-        // Đếm số supplier còn đang chờ duyệt trong scope hiện tại sau khi thao tác.
+        // �?m s? supplier c�n dang ch? duy?t trong scope hi?n t?i sau khi thao t�c.
         private int CountPendingSuppliersInCurrentApprovalScope()
         {
             if (IsSupplierLinkMode)
@@ -1186,7 +1214,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return SearchSupplierRows(BuildCriteria()).Count;
         }
 
-        // Đồng bộ cờ ẩn thao tác của scope hiện tại theo trạng thái pending thực tế.
+        // �?ng b? c? ?n thao t�c c?a scope hi?n t?i theo tr?ng th�i pending th?c t?.
         private void RefreshCurrentApprovalScopeActionLock()
         {
             if (!IsCurrentApprovalScopeActionLocked())
@@ -1199,7 +1227,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 return;
             }
 
-            // Khi scope đã bước sang phát mail thì giữ nguyên cờ khóa cho toàn bộ phiên hiện tại.
+            // Khi scope d� bu?c sang ph�t mail th� gi? nguy�n c? kh�a cho to�n b? phi�n hi?n t?i.
         }
 
         private bool DidTriggerScopeMailNotification(string? notifyResult)
@@ -1208,7 +1236,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 && notifyResult.Contains("being sent", StringComparison.OrdinalIgnoreCase);
         }
 
-        // Áp dụng qu tắc truy cập khi mở supplier theo link trực tiếp.
+        // �p d?ng qu t?c truy c?p khi m? supplier theo link tr?c ti?p.
         private bool ApplySupplierLinkAccessRule(ApproveSupplierDetailViewModel supplier)
         {
             if (!IsSupplierLinkMode)
@@ -1231,7 +1259,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             var currentLevel = _dataScope.LevelCheckSupplier.Value;
             var supplierStatus = supplier.Status ?? 0;
 
-            // 4. Link duyệt mới chỉ cho phép 3 trạng thái: đang chờ mình duyệt, đã duyệt xong bởi mình, hoặc ẩn nếu lệch workflow.
+            // 4. Link duy?t m?i ch? cho ph�p 3 tr?ng th�i: dang ch? m�nh duy?t, d� duy?t xong b?i m�nh, ho?c ?n n?u l?ch workflow.
             if (supplierStatus == currentLevel - 1)
             {
                 IsCurrentSupplierReadOnly = false;
@@ -1254,7 +1282,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return false;
         }
 
-        // Kiểm tra supplier có còn được phép chỉnh sửa ở bước duyệt hiện tại hay không.
+        // Ki?m tra supplier c� c�n du?c ph�p ch?nh s?a ? bu?c duy?t hi?n t?i hay kh�ng.
         private bool CanEditBySupplierLinkState(ApproveSupplierDetailViewModel supplier)
         {
             if (!_dataScope.LevelCheckSupplier.HasValue || _dataScope.LevelCheckSupplier.Value is < 1 or > 4)
@@ -1265,7 +1293,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return (supplier.Status ?? 0) == _dataScope.LevelCheckSupplier.Value - 1;
         }
 
-        // Kiểm tra mã supplier đã tồn tại trong hệ thống hay chưa.
+        // Ki?m tra m� supplier d� t?n t?i trong h? th?ng hay chua.
         private bool SupplierCodeExists(string supplierCode, int? excludeSupplierId = null)
         {
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -1281,7 +1309,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return Convert.ToInt32(cmd.ExecuteScalar() ?? 0) > 0;
         }
 
-        // Cập nhật phần ghi chú của supplier theo yêu cầu duyệt.
+        // C?p nh?t ph?n ghi ch� c?a supplier theo y�u c?u duy?t.
         private void UpdateSupplierComment(int supplierId, string? comment)
         {
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -1296,7 +1324,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             cmd.ExecuteNonQuery();
         }
 
-        // Cập nhật thông tin supplier phục vụ thao tác duyệt.
+        // C?p nh?t th�ng tin supplier ph?c v? thao t�c duy?t.
         private void UpdateSupplierForApproval(int supplierId, ApproveSupplierDetailViewModel input, bool canEditAllFields)
         {
             var sql = canEditAllFields
@@ -1348,7 +1376,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             cmd.ExecuteNonQuery();
         }
 
-        // Duyệt hàng loạt danh sách supplier đang ở cùng một bước workflow.
+        // Duy?t h�ng lo?t danh s�ch supplier dang ? c�ng m?t bu?c workflow.
         private int BatchApproveSuppliers(List<int> supplierIds, int levelCheckSupplier, string operatorCode)
         {
             if (supplierIds.Count == 0)
@@ -1397,7 +1425,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return totalUpdated;
         }
 
-        // Thực hiện nghiệp vụ duyệt supplier theo cấp duyệt hiện tại.
+        // Th?c hi?n nghi?p v? duy?t supplier theo c?p duy?t hi?n t?i.
         private bool ApproveByLevel(int supplierId, int levelCheckSupplier, string operatorCode, ApproveSupplierDetailViewModel input, bool canEditAllFields, bool canEditComment)
         {
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -1456,7 +1484,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return cmd.ExecuteNonQuery() > 0;
         }
 
-        // Thực hiện nghiệp vụ từ chối supplier theo cấp duyệt hiện tại.
+        // Th?c hi?n nghi?p v? t? ch?i supplier theo c?p duy?t hi?n t?i.
         private bool DisapproveByLevel(int supplierId, int levelCheckSupplier, string operatorCode, string? comment, bool canEditComment)
         {
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -1486,7 +1514,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return cmd.ExecuteNonQuery() > 0;
         }
 
-        // Lấy danh sách người nhận mail theo cấp duyệt kế tiếp.
+        // L?y danh s�ch ngu?i nh?n mail theo c?p duy?t k? ti?p.
         private List<ApproveSupplierNotifyRecipientViewModel> GetEmailsByLevelCheck(int levelCheckSupplier, int? deptId)
         {
             var rows = new List<ApproveSupplierNotifyRecipientViewModel>();
@@ -1530,7 +1558,121 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return rows;
         }
 
-        // Tạo yêu cầu gửi mail thông báo cho cấp duyệt tiếp theo.
+        private List<ApproveSupplierNotifyRecipientViewModel> GetEmailsByEmployeeFlag(string flagColumnName, int? deptId)
+        {
+            var rows = new List<ApproveSupplierNotifyRecipientViewModel>();
+            if (!deptId.HasValue)
+            {
+                return rows;
+            }
+
+            var allowedColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "HeadDept",
+                "IsCFO",
+                "IsBOD",
+                "IsPurchaser"
+            };
+            if (!allowedColumns.Contains(flagColumnName))
+            {
+                return rows;
+            }
+
+            using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+            using var cmd = new SqlCommand($@"
+                SELECT DISTINCT
+                    LTRIM(RTRIM(TheEmail)) AS TheEmail,
+                    LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode,
+                    LTRIM(RTRIM(EmployeeName)) AS EmployeeName,
+                    LTRIM(RTRIM(ISNULL(Title, ''))) AS Title
+                FROM dbo.MS_Employee
+                WHERE ISNULL({flagColumnName}, 0) = 1
+                  AND DeptID = @DeptID
+                  AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
+                  AND ISNULL(IsActive, 0) = 1", conn);
+            cmd.Parameters.Add("@DeptID", SqlDbType.Int).Value = deptId.Value;
+            conn.Open();
+
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read())
+            {
+                var email = Convert.ToString(rd["TheEmail"]) ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(email))
+                {
+                    rows.Add(new ApproveSupplierNotifyRecipientViewModel
+                    {
+                        Email = email.Trim(),
+                        EmployeeCode = Convert.ToString(rd["EmployeeCode"])?.Trim() ?? string.Empty,
+                        EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty,
+                        Title = Convert.ToString(rd["Title"])?.Trim() ?? string.Empty
+                    });
+                }
+            }
+
+            return rows;
+        }
+
+        private List<ApproveSupplierNotifyRecipientViewModel> GetPurchaserRecipientsByCode(string? purchaserCode)
+        {
+            var rows = new List<ApproveSupplierNotifyRecipientViewModel>();
+            if (string.IsNullOrWhiteSpace(purchaserCode))
+            {
+                return rows;
+            }
+
+            using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
+            using var cmd = new SqlCommand(@"
+                SELECT DISTINCT
+                    LTRIM(RTRIM(TheEmail)) AS TheEmail,
+                    LTRIM(RTRIM(EmployeeCode)) AS EmployeeCode,
+                    LTRIM(RTRIM(EmployeeName)) AS EmployeeName,
+                    LTRIM(RTRIM(ISNULL(Title, ''))) AS Title
+                FROM dbo.MS_Employee
+                WHERE EmployeeCode = @EmployeeCode
+                  AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
+                  AND ISNULL(IsActive, 0) = 1", conn);
+            cmd.Parameters.Add("@EmployeeCode", SqlDbType.NVarChar, 50).Value = purchaserCode.Trim();
+            conn.Open();
+
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read())
+            {
+                var email = Convert.ToString(rd["TheEmail"]) ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(email))
+                {
+                    rows.Add(new ApproveSupplierNotifyRecipientViewModel
+                    {
+                        Email = email.Trim(),
+                        EmployeeCode = Convert.ToString(rd["EmployeeCode"])?.Trim() ?? string.Empty,
+                        EmployeeName = Convert.ToString(rd["EmployeeName"])?.Trim() ?? string.Empty,
+                        Title = Convert.ToString(rd["Title"])?.Trim() ?? string.Empty
+                    });
+                }
+            }
+
+            return rows;
+        }
+        private static string? GetNewSupplierNextRecipientFlag(int currentLevel)
+        {
+            return currentLevel switch
+            {
+                2 => "IsCFO",
+                3 => "IsBOD",
+                _ => null
+            };
+        }
+
+        private static string GetNewSupplierApprovalRoleName(int currentLevel)
+        {
+            return currentLevel switch
+            {
+                2 => "CFO",
+                3 => "BOD",
+                _ => "next approver"
+            };
+        }
+
+        // T?o y�u c?u g?i mail th�ng b�o cho c?p duy?t ti?p theo.
         private string? TryQueueNotifyNextLevel(int currentLevel, ApproveSupplierDetailViewModel supplier, string action)
         {
             if (currentLevel >= 4)
@@ -1539,10 +1681,14 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             }
 
             var nextLevel = currentLevel + 1;
-            var recipients = GetEmailsByLevelCheck(nextLevel, supplier.DeptID);
+            var recipients = IsApproveSupplierNewMode
+                ? GetEmailsByEmployeeFlag(GetNewSupplierNextRecipientFlag(currentLevel) ?? string.Empty, supplier.DeptID)
+                : GetEmailsByLevelCheck(nextLevel, supplier.DeptID);
             if (recipients.Count == 0)
             {
-                return $"No email recipients were found for the next level.";
+                return IsApproveSupplierNewMode
+                    ? $"No email recipients were found for {GetNewSupplierApprovalRoleName(currentLevel)} in the same department."
+                    : $"No email recipients were found for the next level.";
             }
 
             var senderEmail = _config.GetValue<string>("EmailSettings:SenderEmail");
@@ -1563,7 +1709,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             var recipientDisplayNames = string.Join(", ", recipients.Select(BuildRecipientDisplayName));
             var actionTimeText = DateTime.Now.ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
 
-            // 1. Dùng chung một page duyệt supplier, chỉ phân biệt bằng tham số type=new
+            // 1. D�ng chung m?t page duy?t supplier, ch? ph�n bi?t b?ng tham s? type=new
             var detailUrl = Url.Page("/Purchasing/ApproveSupplier/Index", values: new
             {
                 Type = IsApproveSupplierNewMode ? "new" : null,
@@ -1575,13 +1721,13 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 : $"{Request.Scheme}://{Request.Host}{detailUrl}";
 
             var subject = IsApproveSupplierNewMode
-                ? $"[Approve Supplier New] Last supplier processed at level {currentLevel}"
+                ? $"[Approve Supplier New] Supplier is waiting for {GetNewSupplierApprovalRoleName(currentLevel)} approval"
                 : $"[Supplier Approval] Last supplier processed at level {currentLevel}";
             subject = ApplyMailSubjectPrefix(subject);
             var body = IsApproveSupplierNewMode
                 ? $@"
 <p>Dear {{RECIPIENT_LABEL}},</p>
-<p>The last supplier in current approval list has been <b>{action}</b> at level {currentLevel}.</p>
+<p>The supplier has been <b>{action}</b> and is now waiting for {WebUtility.HtmlEncode(GetNewSupplierApprovalRoleName(currentLevel))} approval.</p>
 <ul>
   <li>Supplier Code: <b>{WebUtility.HtmlEncode(supplierCode)}</b></li>
   <li>Supplier Name: <b>{WebUtility.HtmlEncode(supplierName)}</b></li>
@@ -1605,7 +1751,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 ? EmailTemplateHelper.WrapInNotifyTemplate("APPROVE SUPPLIER NEW", "#17a2b8", DateTime.Now, body)
                 : EmailTemplateHelper.WrapInNotifyTemplate("APPROVE SUPPLIER", "#007bff", DateTime.Now, body);
 
-            // 2. Đẩy tác vụ gửi mail sang nền để người dùng không phải chờ SMTP phản hồi
+            // 2. �?y t�c v? g?i mail sang n?n d? ngu?i d�ng kh�ng ph?i ch? SMTP ph?n h?i
             var notifyRequest = new ApproveSupplierNotifyRequestViewModel
             {
                 NextLevel = nextLevel,
@@ -1622,10 +1768,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             };
 
             _ = SendNotifyEmailAsync(notifyRequest);
-            return $"The notification email is being sent to the next level.";
+            return IsApproveSupplierNewMode
+                ? $"The notification email is being sent to {GetNewSupplierApprovalRoleName(currentLevel)}."
+                : $"The notification email is being sent to the next level.";
         }
 
-        // Tạo yêu cầu gửi mail thông báo đã hoàn tất duyệt supplier cho purchaser.
+        // T?o y�u c?u g?i mail th�ng b�o d� ho�n t?t duy?t supplier cho purchaser.
         private string? TryQueueNotifyApprovalCompleted(int currentLevel, ApproveSupplierDetailViewModel supplier, string action)
         {
             if (currentLevel != 4)
@@ -1633,11 +1781,13 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 return null;
             }
 
-            var recipients = GetEmailsByLevelCheck(1, supplier.DeptID);
+            var recipients = IsApproveSupplierNewMode
+                ? GetPurchaserRecipientsByCode(supplier.PurchaserCode)
+                : GetEmailsByLevelCheck(1, supplier.DeptID);
             if (recipients.Count == 0)
             {
                 return IsApproveSupplierNewMode
-                    ? "No PU email recipients were found for the same department."
+                    ? "No purchaser email recipient was found for the original submitter."
                     : "No PU email recipients were found.";
             }
 
@@ -1683,6 +1833,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 ? $@"
 <p>Dear {{RECIPIENT_LABEL}},</p>
 <p>The supplier new approval workflow has been <b>{action}</b> completely by BOD.</p>
+<p>This is a notification email for the purchaser. No further approval action is required.</p>
 <ul>
   <li>Supplier Code: <b>{WebUtility.HtmlEncode(supplierCode)}</b></li>
   <li>Supplier Name: <b>{WebUtility.HtmlEncode(supplierName)}</b></li>
@@ -1724,16 +1875,18 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             };
 
             _ = SendNotifyEmailAsync(notifyRequest);
-            return "The completion notification email is being sent to PU.";
+            return IsApproveSupplierNewMode
+                ? "The completion notification email is being sent to the purchaser."
+                : "The completion notification email is being sent to PU.";
         }
 
-        // Chỉ áp font cho nội dung riêng của chức năng, còn khung ngoài dùng template hệ thống.
+        // Ch? �p font cho n?i dung ri�ng c?a ch?c nang, c�n khung ngo�i d�ng template h? th?ng.
         private static string WrapNotifyMessageBody(string messageBody)
         {
             return $"<div style='font-family:{NotifyFontFamily};'>{messageBody}</div>";
         }
 
-        // Áp tiền tố subject theo cấu hình EmailSettings khi FunctionID hiện tại thuộc danh sách test.
+        // �p ti?n t? subject theo c?u h�nh EmailSettings khi FunctionID hi?n t?i thu?c danh s�ch test.
         private string ApplyMailSubjectPrefix(string subject)
         {
             if (string.IsNullOrWhiteSpace(subject))
@@ -1750,7 +1903,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return $"{prefix} - {subject}";
         }
 
-        // Kiểm tra FunctionID của chức năng duyệt supplier có nằm trong cấu hình TestFunctionIDs hay không.
+        // Ki?m tra FunctionID c?a ch?c nang duy?t supplier c� n?m trong c?u h�nh TestFunctionIDs hay kh�ng.
         private bool ShouldApplyTestSubjectPrefix()
         {
             var configuredIds = _config.GetValue<string>("EmailSettings:TestFunctionIDs");
@@ -1764,7 +1917,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 .Any(value => int.TryParse(value, out var id) && id == FUNCTION_ID);
         }
 
-        // Gửi email thông báo bất đồng bộ cho cấp duyệt tiếp theo.
+        // G?i email th�ng b�o b?t d?ng b? cho c?p duy?t ti?p theo.
         private async Task SendNotifyEmailAsync(ApproveSupplierNotifyRequestViewModel notifyRequest)
         {
             try
@@ -1827,7 +1980,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             }
         }
 
-        // Chuẩn hóa tên hiển thị của người nhận trong nội dung mail.
+        // Chu?n h�a t�n hi?n th? c?a ngu?i nh?n trong n?i dung mail.
         private static string BuildRecipientDisplayName(ApproveSupplierNotifyRecipientViewModel recipient)
         {
             var title = (recipient.Title ?? string.Empty).Trim();
@@ -1845,12 +1998,11 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 : $"{employeeName} ({recipient.EmployeeCode})";
         }
 
-        // Gán thông báo tạm thời để hiển thị lại sau khi redirect.
+        // G�n th�ng b�o t?m th?i d? hi?n th? l?i sau khi redirect.
         private void SetFlashMessage(string message, string type = "info")
         {
             FlashMessage = message;
             FlashMessageType = type;
-            SetGlobalFlashMessage(message, type);
         }
 
         private void SetGlobalFlashMessage(string message, string type = "info")
@@ -1880,7 +2032,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         }
 
 
-        // Điều hướng người dùng về đúng màn hình danh sách hiện tại.
+        // �i?u hu?ng ngu?i d�ng v? d�ng m�n h�nh danh s�ch hi?n t?i.
         private IActionResult RedirectToCurrentList()
         {
             var routeValues = new Dictionary<string, object?>();
@@ -1899,7 +2051,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return RedirectToPage("./Index", routeValues);
         }
 
-        // Chụp snapshot phục vụ thao tác khôi phục sau approve/disapprove.
+        // Ch?p snapshot ph?c v? thao t�c kh�i ph?c sau approve/disapprove.
         private ApproveSupplierUndoSnapshot? GetSupplierUndoSnapshot(int supplierId)
         {
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -1977,7 +2129,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             };
         }
 
-        // Khôi phục supplier về trạng thái trước khi vừa thao tác.
+        // Kh�i ph?c supplier v? tr?ng th�i tru?c khi v?a thao t�c.
         private bool RestoreSupplierFromUndoState(ApproveSupplierUndoState undoState)
         {
             var snapshot = undoState.Snapshot;
@@ -2049,7 +2201,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return cmd.ExecuteNonQuery() > 0;
         }
 
-        // Gộp các supplier đã xử lý trong phiên vào danh sách đang hiển thị.
+        // G?p c�c supplier d� x? l� trong phi�n v�o danh s�ch dang hi?n th?.
         private List<ApproveListRowViewModel> MergeProcessedSupplierRows(List<ApproveListRowViewModel> rows)
         {
             if (IsSupplierLinkMode)
@@ -2086,14 +2238,14 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                 .ToList();
         }
 
-        // Xác định vị trí mặc định cần focus khi mở màn hình duyệt.
+        // X�c d?nh v? tr� m?c d?nh c?n focus khi m? m�n h�nh duy?t.
         private int GetDefaultCurrentSupplierIndex()
         {
             var unprocessedIndex = Rows.FindIndex(x => !IsProcessedSupplierInCurrentLogin(x.SupplierID));
             return unprocessedIndex >= 0 ? unprocessedIndex : 0;
         }
 
-        // Lấy lại dòng supplier đã xử lý để hiển thị trong cùng phiên đăng nhập.
+        // L?y l?i d�ng supplier d� x? l� d? hi?n th? trong c�ng phi�n dang nh?p.
         private ApproveListRowViewModel? GetSupplierRowForCurrentSession(int supplierId)
         {
             using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
@@ -2154,13 +2306,13 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return row;
         }
 
-        // Kiểm tra supplier đã được xử lý trong phiên đăng nhập hiện tại hay chưa.
+        // Ki?m tra supplier d� du?c x? l� trong phi�n dang nh?p hi?n t?i hay chua.
         private bool IsProcessedSupplierInCurrentLogin(int supplierId)
         {
             return GetProcessedSupplierIdsInCurrentLogin().Contains(supplierId);
         }
 
-        // Xác định supplier chưa xử lý tiếp theo sau khi vừa duyệt xong.
+        // X�c d?nh supplier chua x? l� ti?p theo sau khi v?a duy?t xong.
         private int? GetNextActiveSupplierIdAfterProcessing(int supplierId)
         {
             if (Rows.Count == 0)
@@ -2198,7 +2350,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return supplierId;
         }
 
-        // Đánh dấu supplier đã xử lý trong phiên đăng nhập hiện tại.
+        // ��nh d?u supplier d� x? l� trong phi�n dang nh?p hi?n t?i.
         private void MarkSupplierProcessedInCurrentLogin(int supplierId)
         {
             var processedIds = GetProcessedSupplierIdsInCurrentLogin();
@@ -2231,7 +2383,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             HttpContext.Session.SetString(GetProcessedSupplierSessionKey(), string.Join(",", processedIds.OrderBy(x => x)));
         }
 
-        // Bỏ đánh dấu supplier đã xử lý trong phiên hiện tại.
+        // B? d�nh d?u supplier d� x? l� trong phi�n hi?n t?i.
         private void UnmarkSupplierProcessedInCurrentLogin(int supplierId)
         {
             var processedIds = GetProcessedSupplierIdsInCurrentLogin();
@@ -2249,7 +2401,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             HttpContext.Session.SetString(GetProcessedSupplierSessionKey(), string.Join(",", processedIds.OrderBy(x => x)));
         }
 
-        // Lấy tập supplier đã xử lý trong phiên đăng nhập hiện tại.
+        // L?y t?p supplier d� x? l� trong phi�n dang nh?p hi?n t?i.
         private HashSet<int> GetProcessedSupplierIdsInCurrentLogin()
         {
             var rawValue = HttpContext.Session.GetString(GetProcessedSupplierSessionKey());
@@ -2270,7 +2422,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return supplierIds;
         }
 
-        // Tạo khóa session riêng cho danh sách supplier đã xử lý.
+        // T?o kh�a session ri�ng cho danh s�ch supplier d� x? l�.
         private string GetProcessedSupplierSessionKey()
         {
             var employeeCode = User.Identity?.Name?.Trim() ?? "ANONYMOUS";
@@ -2279,7 +2431,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return $"{ProcessedSupplierSessionKeyPrefix}:{employeeCode}:{authCookieHash}";
         }
 
-        // Lưu trạng thái khôi phục của supplier trong phiên hiện tại.
+        // Luu tr?ng th�i kh�i ph?c c?a supplier trong phi�n hi?n t?i.
         private void SetSupplierUndoStateInCurrentLogin(ApproveSupplierUndoState state)
         {
             var undoStates = GetAllSupplierUndoStatesInCurrentLogin();
@@ -2287,14 +2439,14 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             HttpContext.Session.SetString(GetUndoSupplierSessionKey(), JsonSerializer.Serialize(undoStates));
         }
 
-        // Lấy trạng thái khôi phục của supplier trong phiên hiện tại.
+        // L?y tr?ng th�i kh�i ph?c c?a supplier trong phi�n hi?n t?i.
         private ApproveSupplierUndoState? GetSupplierUndoStateInCurrentLogin(int supplierId)
         {
             var undoStates = GetAllSupplierUndoStatesInCurrentLogin();
             return undoStates.TryGetValue(supplierId, out var state) ? state : null;
         }
 
-        // Xóa trạng thái khôi phục của supplier trong phiên hiện tại.
+        // X�a tr?ng th�i kh�i ph?c c?a supplier trong phi�n hi?n t?i.
         private void RemoveSupplierUndoStateInCurrentLogin(int supplierId)
         {
             var undoStates = GetAllSupplierUndoStatesInCurrentLogin();
@@ -2312,7 +2464,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             HttpContext.Session.SetString(GetUndoSupplierSessionKey(), JsonSerializer.Serialize(undoStates));
         }
 
-        // Xóa toàn bộ trạng thái khôi phục trong phiên hiện tại.
+        // X�a to�n b? tr?ng th�i kh�i ph?c trong phi�n hi?n t?i.
         private void ClearAllSupplierUndoStatesInCurrentLogin()
         {
             HttpContext.Session.Remove(GetUndoSupplierSessionKey());
@@ -2410,7 +2562,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return $"{ScopeActionLockedSessionKeyPrefix}:{employeeCode}:{authCookieHash}:{mode}:{approvalType}:{level}:{deptScope}:{supplierScope}";
         }
 
-        // Tạo mã băm để tách dữ liệu phiên làm việc theo đăng nhập hiện tại.
+        // T?o m� bam d? t�ch d? li?u phi�n l�m vi?c theo dang nh?p hi?n t?i.
         private static string ComputeSha256(string value)
         {
             if (string.IsNullOrEmpty(value))
@@ -2422,7 +2574,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return Convert.ToHexString(bytes);
         }
 
-        // Sao chép dữ liệu supplier sang model chỉnh sửa trên giao diện.
+        // Sao ch�p d? li?u supplier sang model ch?nh s?a tr�n giao di?n.
         private static ApproveSupplierDetailViewModel CloneForEdit(ApproveSupplierDetailViewModel source)
         {
             return new ApproveSupplierDetailViewModel
@@ -2451,7 +2603,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             };
         }
 
-        // Kiểm tra dữ liệu supplier trước khi lưu theo qu tắc của màn hình chi tiết.
+        // Ki?m tra d? li?u supplier tru?c khi luu theo qu t?c c?a m�n h�nh chi ti?t.
         private string? ValidateSupplierInputLikeDetail(int supplierId, ApproveSupplierDetailViewModel current, ApproveSupplierDetailViewModel posted, bool canEditAllFields, bool canEditComment)
         {
             var model = new ApproveSupplierValidationViewModel
@@ -2519,7 +2671,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             return null;
         }
 
-        // Chuẩn hóa chuỗi nhập liệu trước khi so sánh và lưu dữ liệu.
+        // Chu?n h�a chu?i nh?p li?u tru?c khi so s�nh v� luu d? li?u.
         private static string? NormalizeText(string? value)
         {
             return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
@@ -2597,6 +2749,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public int? DeptID { get; set; }
         public string DeptCode { get; set; } = string.Empty;
         public string SupplierStatusName { get; set; } = string.Empty;
+        public string PurchaserCode { get; set; } = string.Empty;
+        public DateTime? PurchaserPreparedDate { get; set; }
         public int? Status { get; set; }
     }
 
@@ -2623,12 +2777,18 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public string DeptCode { get; set; } = string.Empty;
         public int? Status { get; set; }
         public string SupplierStatusName { get; set; } = string.Empty;
+        public string PurchaserCode { get; set; } = string.Empty;
+        public DateTime? PurchaserPreparedDate { get; set; }
     }
 
     public class ApproveEmployeeDataScopeViewModel
     {
         public int? DeptID { get; set; }
         public int? LevelCheckSupplier { get; set; }
+        public bool HeadDept { get; set; }
+        public bool IsCFO { get; set; }
+        public bool IsBOD { get; set; }
+        public bool IsPurchaser { get; set; }
     }
 
     public class ApprovePurchaseOrderInfoViewModel

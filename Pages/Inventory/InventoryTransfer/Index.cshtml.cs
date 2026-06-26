@@ -401,8 +401,8 @@ ORDER BY h.FlowDate DESC, h.FlowID DESC", conn);
 
     private void NormalizeFilter()
     {
-        if (!Filter.FromDate.HasValue) Filter.FromDate = DateTime.Today.AddDays(-2);
-        if (!Filter.ToDate.HasValue) Filter.ToDate = DateTime.Today;
+        if (!Filter.FromDate.HasValue) Filter.FromDate = DateTime.Today.AddDays(-29);
+        if (!Filter.ToDate.HasValue) Filter.ToDate = DateTime.Today.AddDays(1);
         Filter.Page = Filter.Page <= 0 ? 1 : Filter.Page;
         Filter.PageSize = PageSizeOptions.Contains(Filter.PageSize) ? Filter.PageSize : 10;
     }

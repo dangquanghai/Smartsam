@@ -172,6 +172,15 @@ public class LinenReceivingDetailModel : BasePageModel
                 SaveDetailRows(conn, trans);
             }
 
+            if (Header.SendID.HasValue)
+            {
+                using var markCmd = new SqlCommand("exec LN_MarkFullReceiveOnDelevery @DeliveryID", conn, trans);
+                markCmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = Header.SendID.Value;
+                markCmd.ExecuteNonQuery();
+            }
+
+            RefreshLaundryRecordForBusinessDate(conn, trans, Header.ReceiveDate);
+
             trans.Commit();
         }
         catch
@@ -316,7 +325,7 @@ FROM dbo.LN_ReceiveDT dt
 LEFT JOIN dbo.LN_DeliveryMT de ON de.DeliveryID = dt.SendID
 LEFT JOIN dbo.LN_Linnen ln ON ln.ID = dt.LinnenID
 WHERE dt.ReceiveID = @ReceiveID
-ORDER BY dt.ID;", conn, trans);
+ORDER BY ISNULL(dt.Location, ''), ISNULL(CASE WHEN ISNULL(dt.LinnenCode, '') <> '' THEN dt.LinnenCode ELSE ln.LinnenCode END, ''), dt.ID;", conn, trans);
         cmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = Header.ReceiveID;
 
         using var rd = cmd.ExecuteReader();
@@ -410,19 +419,11 @@ ORDER BY DeliveryID DESC;", conn);
 
         var keyword = (term ?? string.Empty).Trim();
         var sql = @"
-WITH ReceivedDelivery AS
-(
-    SELECT dt.SendID
-    FROM dbo.LN_ReceiveDT dt
-    WHERE dt.SendID IS NOT NULL
-    GROUP BY dt.SendID
-)
 SELECT TOP (100) de.DeliveryID, de.Des
 FROM dbo.LN_DeliveryMT de
-LEFT JOIN ReceivedDelivery rd ON rd.SendID = de.DeliveryID
 WHERE (@CurrentDeliveryID IS NOT NULL AND de.DeliveryID = @CurrentDeliveryID)
    OR (
-       rd.SendID IS NULL
+       ISNULL(de.FullReceive, 0) = 0
        AND (@SearchText = '' OR de.Des LIKE @SearchPattern OR CONVERT(varchar(20), de.DeliveryID) LIKE @SearchPattern)
    )
 ORDER BY CASE WHEN de.DeliveryID = @CurrentDeliveryID THEN 0 ELSE 1 END,
@@ -920,6 +921,22 @@ WHERE rm.Operator = @EmployeeID
         }
 
         return Convert.ToDecimal(value);
+    }
+
+    private void RefreshLaundryRecordForBusinessDate(SqlConnection conn, SqlTransaction trans, DateTime businessDate)
+    {
+        var dayStart = businessDate.Date.AddSeconds(1);
+        var dayEnd = businessDate.Date.AddDays(1).AddSeconds(-1);
+        var userCode = User.Identity?.Name ?? "SYSTEM";
+
+        using var cmd = new SqlCommand("dbo.LN_LaundryRecordRPT", conn, trans);
+        cmd.CommandType = CommandType.StoredProcedure;
+        cmd.Parameters.Add("@Month", SqlDbType.Int).Value = businessDate.Month;
+        cmd.Parameters.Add("@Year", SqlDbType.Int).Value = businessDate.Year;
+        cmd.Parameters.Add("@FromDate", SqlDbType.VarChar, 50).Value = dayStart.ToString("MM/dd/yyyy hh:mm:ss tt");
+        cmd.Parameters.Add("@ToDate", SqlDbType.VarChar, 50).Value = dayEnd.ToString("MM/dd/yyyy hh:mm:ss tt");
+        cmd.Parameters.Add("@UserCode", SqlDbType.VarChar, 15).Value = userCode;
+        cmd.ExecuteNonQuery();
     }
 }
 

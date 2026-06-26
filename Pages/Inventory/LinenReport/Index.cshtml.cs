@@ -378,7 +378,8 @@ SELECT Location,
        Note
 FROM dbo.ViewLinenDelivery
 WHERE DeliveryID = @DeliveryID
-  AND (@LinenCode = '' OR ISNULL(LinnenCode, '') = @LinenCode);", conn);
+  AND (@LinenCode = '' OR ISNULL(LinnenCode, '') = @LinenCode)
+ORDER BY ISNULL(Location, ''), ISNULL(LinnenCode, '');", conn);
         cmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = descriptionId.Value;
         cmd.Parameters.Add("@LinenCode", SqlDbType.VarChar, 50).Value = linenCode;
 
@@ -465,7 +466,8 @@ SELECT ReceiveID,
        Note
 FROM dbo.ViewLinenReceive
 WHERE ReceiveID = @ReceiveID
-  AND (@LinenCode = '' OR ISNULL(LinnenCode, '') = @LinenCode);", conn);
+  AND (@LinenCode = '' OR ISNULL(LinnenCode, '') = @LinenCode)
+ORDER BY ISNULL(Location, ''), ISNULL(LinnenCode, '');", conn);
         cmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = descriptionId.Value;
         cmd.Parameters.Add("@LinenCode", SqlDbType.VarChar, 50).Value = linenCode;
 

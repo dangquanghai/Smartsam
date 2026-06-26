@@ -266,14 +266,25 @@ WHERE FlowID=@FlowID", conn, tran);
                 return ExecuteConfirm(flowId, "edit");
             }
 
-            if (!id.HasValue && Header.FlowSubType == 2)
+            if (!id.HasValue)
             {
+                if (Header.FlowSubType == 2)
+                {
+                    return RedirectToPage(new
+                    {
+                        id = flowId,
+                        mode = "edit",
+                        message = "Saved successfully. Please run Adjust Item in Apmt before confirm.",
+                        messageType = "info"
+                    });
+                }
+
                 return RedirectToPage(new
                 {
                     id = flowId,
                     mode = "edit",
-                    message = "Saved successfully. Please run Adjust Item in Apmt before confirm.",
-                    messageType = "info"
+                    message = "Saved successfully.",
+                    messageType = "success"
                 });
             }
 
@@ -1814,8 +1825,7 @@ VALUES(@FlowID,@UserID,GETDATE(),3,@ComputerName,'Issuer Confirmed')", conn, tra
     private string GetNextVoucherNo(int? flowSubType)
     {
         var now = DateTime.Now;
-        var IssueFrom = GetIssueFrom(flowSubType, GetCurrentKpGroupId());
-        var prefix = BuildVoucherPrefix(now, GetCurrentKpGroupId(), IssueFrom);
+        var prefix = BuildVoucherPrefix(now, GetCurrentKpGroupId(), flowSubType);
         using var conn = new SqlConnection(_config.GetConnectionString("DefaultConnection"));
         conn.Open();
         using var cmd = new SqlCommand("SELECT ISNULL(MAX(RIGHT(FlowNo,3)),'000') FROM dbo.INV_ItemFlow WHERE MONTH(FlowDate)=@Month AND YEAR(FlowDate)=@Year AND LEFT(FlowNo,8)=@Prefix", conn);
@@ -1826,23 +1836,12 @@ VALUES(@FlowID,@UserID,GETDATE(),3,@ComputerName,'Issuer Confirmed')", conn, tra
         return $"{prefix}-{seq:000}";
     }
 
-    private static string GetIssueFrom(int? flowSubType, int kpGroupId)
-    {
-        if (!flowSubType.HasValue) return string.Empty;
-        return flowSubType.Value switch
-        {
-            1 => "SUPPLIER",
-            6 when kpGroupId != 1 => "MAIN_STORE",
-            _ => string.Empty
-        };
-    }
-
-    private static string BuildVoucherPrefix(DateTime now, int kpGroupId, string IssueFrom)
+    private static string BuildVoucherPrefix(DateTime now, int kpGroupId, int? flowSubType)
     {
         var basePrefix = now.ToString("yyMM");
         if (kpGroupId == 1)
         {
-            return IssueFrom == "SUPPLIER" ? $"{basePrefix}-XRC" : $"{basePrefix}-XRT";
+            return flowSubType == 4 ? $"{basePrefix}-XLQ" : $"{basePrefix}-XIS";
         }
 
         var groupCode = kpGroupId switch
@@ -1856,8 +1855,7 @@ VALUES(@FlowID,@UserID,GETDATE(),3,@ComputerName,'Issuer Confirmed')", conn, tra
             16 => "S",
             _ => "T"
         };
-        var flowCode = IssueFrom == "MAIN_STORE" ? "RC" : "RT";
-        return $"{basePrefix}-{groupCode}{flowCode}";
+        return $"{basePrefix}-{groupCode}IS";
     }
 
     private string? ValidateAttachment(IFormFile file)

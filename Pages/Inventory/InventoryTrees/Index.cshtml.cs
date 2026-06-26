@@ -68,7 +68,7 @@ public class IndexModel : BasePageModel
         if (!PagePerm.HasPermission(PermissionAddNode)) return Redirect("/");
         if (string.IsNullOrWhiteSpace(nodeCode) || string.IsNullOrWhiteSpace(nodeName))
         {
-            SetMessage("Nh?p Node Code và Node Name.", "warning");
+            SetMessage("Please enter Node Code and Node Name.", "warning");
             return RedirectToList(groupId, selectedCatgId, Filter.Page);
         }
 
@@ -92,7 +92,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
         cmd.Parameters.Add("@Description", SqlDbType.NVarChar, -1).Value = (object?)description?.Trim() ?? DBNull.Value;
         var newId = Convert.ToInt32(cmd.ExecuteScalar());
 
-        SetMessage("Ðã thêm node.", "success");
+        SetMessage("Node added successfully.", "success");
         return RedirectToList(groupId, newId, 1);
     }
 
@@ -102,7 +102,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
         if (!PagePerm.HasPermission(PermissionEditNode)) return Redirect("/");
         if (selectedCatgId <= 0)
         {
-            SetMessage("Không th? s?a root node.", "warning");
+            SetMessage("Cannot edit the root node.", "warning");
             return RedirectToList(groupId, 0, Filter.Page);
         }
 
@@ -115,7 +115,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
         cmd.Parameters.Add("@CatgID", SqlDbType.Int).Value = selectedCatgId;
         cmd.ExecuteNonQuery();
 
-        SetMessage("Ðã c?p nh?t node.", "success");
+        SetMessage("Node updated successfully.", "success");
         return RedirectToList(groupId, selectedCatgId, Filter.Page);
     }
 
@@ -125,14 +125,14 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
         if (!PagePerm.HasPermission(PermissionDeleteNode)) return Redirect("/");
         if (selectedCatgId <= 0)
         {
-            SetMessage("Không th? xóa root node.", "warning");
+            SetMessage("Cannot delete the root node.", "warning");
             return RedirectToList(groupId, 0, Filter.Page);
         }
 
         using var conn = OpenConnection();
         if (HasChildNode(conn, groupId, selectedCatgId))
         {
-            SetMessage("Node này dang có node con. Xóa node con tru?c.", "warning");
+            SetMessage("This node has child nodes. Please delete the child nodes first.", "warning");
             return RedirectToList(groupId, selectedCatgId, Filter.Page);
         }
 
@@ -145,7 +145,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
         if (groupId != 0) cmd.Parameters.Add("@KPGroupID", SqlDbType.Int).Value = groupId;
         cmd.ExecuteNonQuery();
 
-        SetMessage("Ðã xóa node.", "success");
+        SetMessage("Node deleted successfully.", "success");
         return RedirectToList(groupId, parentId, 1);
     }
 
@@ -155,7 +155,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
         if (!PagePerm.HasPermission(PermissionDeleteItem)) return Redirect("/");
         if (selectedItemIds == null || selectedItemIds.Count == 0)
         {
-            SetMessage("Ch?n item c?n remove kh?i node.", "warning");
+            SetMessage("Please select item(s) to remove from the node.", "warning");
             return RedirectToList(groupId, selectedCatgId, Filter.Page);
         }
 
@@ -173,13 +173,19 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
         for (var i = 0; i < selectedItemIds.Count; i++) cmd.Parameters.Add($"@p{i}", SqlDbType.Int).Value = selectedItemIds[i];
         cmd.ExecuteNonQuery();
 
-        SetMessage("Ðã remove item kh?i node.", "success");
+        SetMessage("Item(s) removed from node successfully.", "success");
         return RedirectToList(groupId, selectedCatgId, Filter.Page);
     }
 
     private IActionResult RedirectToList(int groupId, int selectedCatgId, int page)
     {
-        return RedirectToPage(new { Filter_GroupId = groupId, Filter_SelectedCatgId = selectedCatgId, Filter_Page = page, Filter_PageSize = Filter.PageSize });
+        return RedirectToPage(new Dictionary<string, object?>
+        {
+            ["Filter.GroupId"] = groupId,
+            ["Filter.SelectedCatgId"] = selectedCatgId,
+            ["Filter.Page"] = page,
+            ["Filter.PageSize"] = Filter.PageSize
+        });
     }
 
     private void NormalizeFilter()

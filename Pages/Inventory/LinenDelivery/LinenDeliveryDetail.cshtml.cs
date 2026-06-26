@@ -39,7 +39,7 @@ public class LinenDeliveryDetailModel : BasePageModel
 
     public PagePermissions PagePerm { get; private set; } = new PagePermissions();
     public bool CanSave { get; private set; }
-    public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase) || Header.Closed;
+    public bool IsViewMode => string.Equals(Mode, "view", StringComparison.OrdinalIgnoreCase);
     public bool IsTypeLocked => IsViewMode || !string.Equals(Mode, "edit", StringComparison.OrdinalIgnoreCase) || Header.DeliveryType.HasValue;
     public bool IsSpecialLocked => IsViewMode || Header.DeliveryType.HasValue;
     public bool IsPantryNoteLocked { get; private set; }
@@ -107,10 +107,7 @@ public class LinenDeliveryDetailModel : BasePageModel
             Mode = "view";
         }
 
-        if (Mode == "edit" && Header.Closed)
-        {
-            Mode = "view";
-        }
+
 
         LoadDetails();
         LoadLookupData();
@@ -152,13 +149,7 @@ public class LinenDeliveryDetailModel : BasePageModel
                 return NotFound();
             }
 
-            if (currentHeader.Closed)
-            {
-                trans.Rollback();
-                ModelState.AddModelError(string.Empty, "Linen delivery is locked and cannot be edited.");
-                ReloadCurrentPage(Header.DeliveryID, viewMode: true);
-                return Page();
-            }
+
 
             var shouldCreatePantryDetails = Header.DeliveryType == 1
                 && Header.NoteID.HasValue
@@ -193,6 +184,8 @@ public class LinenDeliveryDetailModel : BasePageModel
                 markCmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = Header.DeliveryID;
                 markCmd.ExecuteNonQuery();
             }
+
+            RefreshLaundryRecordForBusinessDate(conn, trans, Header.DeliveryDate);
 
             trans.Commit();
         }
@@ -667,7 +660,7 @@ SELECT dt.ID,
        ISNULL(dt.CollectToBill, 0) AS CollectToBill
 FROM dbo.LN_DeliveryDT dt
 WHERE dt.DeliveryID = @DeliveryID
-ORDER BY dt.ID;", conn, trans);
+ORDER BY ISNULL(dt.Location, ''), ISNULL(dt.LinenCode, ''), dt.ID;", conn, trans);
         cmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = Header.DeliveryID;
 
         using var rd = cmd.ExecuteReader();
@@ -1095,7 +1088,7 @@ LEFT JOIN dbo.PC_Suppliers sp ON sp.SupplierID = mt.SupplierID
 LEFT JOIN dbo.LN_Linnen ln ON ln.ID = dt.LinnenID
 WHERE mt.DeliveryID = @DeliveryID
   AND (@LinenCode = '' OR ISNULL(CASE WHEN ISNULL(dt.LinenCode, '') <> '' THEN dt.LinenCode ELSE ln.LinnenCode END, '') = @LinenCode)
-ORDER BY dt.ID;", conn);
+ORDER BY ISNULL(dt.Location, ''), ISNULL(CASE WHEN ISNULL(dt.LinenCode, '') <> '' THEN dt.LinenCode ELSE ln.LinnenCode END, ''), dt.ID;", conn);
         cmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = deliveryId;
         cmd.Parameters.Add("@LinenCode", SqlDbType.VarChar, 50).Value = (linenCode ?? string.Empty).Trim();
 
@@ -1550,6 +1543,22 @@ GROUP BY locationID;";
         }
 
         return Convert.ToDecimal(value);
+    }
+
+    private void RefreshLaundryRecordForBusinessDate(SqlConnection conn, SqlTransaction trans, DateTime businessDate)
+    {
+        var dayStart = businessDate.Date.AddSeconds(1);
+        var dayEnd = businessDate.Date.AddDays(1).AddSeconds(-1);
+        var userCode = User.Identity?.Name ?? "SYSTEM";
+
+        using var cmd = new SqlCommand("dbo.LN_LaundryRecordRPT", conn, trans);
+        cmd.CommandType = CommandType.StoredProcedure;
+        cmd.Parameters.Add("@Month", SqlDbType.Int).Value = businessDate.Month;
+        cmd.Parameters.Add("@Year", SqlDbType.Int).Value = businessDate.Year;
+        cmd.Parameters.Add("@FromDate", SqlDbType.VarChar, 50).Value = dayStart.ToString("MM/dd/yyyy hh:mm:ss tt");
+        cmd.Parameters.Add("@ToDate", SqlDbType.VarChar, 50).Value = dayEnd.ToString("MM/dd/yyyy hh:mm:ss tt");
+        cmd.Parameters.Add("@UserCode", SqlDbType.VarChar, 15).Value = userCode;
+        cmd.ExecuteNonQuery();
     }
 }
 
