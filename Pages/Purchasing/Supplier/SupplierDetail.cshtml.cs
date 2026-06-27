@@ -1268,7 +1268,6 @@ namespace SmartSam.Pages.Purchasing.Supplier
         private List<SupplierSubmitNotifyRecipientViewModel> GetEmailsByEmployeeFlag(string flagColumnName, int? deptId)
         {
             var rows = new List<SupplierSubmitNotifyRecipientViewModel>();
-
             if (!deptId.HasValue)
             {
                 return rows;
@@ -1298,7 +1297,6 @@ namespace SmartSam.Pages.Purchasing.Supplier
                   AND DeptID = @DeptID
                   AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
                   AND ISNULL(IsActive, 0) = 1", conn);
-
             cmd.Parameters.AddWithValue("@DeptID", deptId.Value);
             conn.Open();
 
