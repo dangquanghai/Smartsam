@@ -153,6 +153,12 @@ WHERE mt.ReceiveID = @ReceiveID;", conn, trans))
 
             if (deliveryId.HasValue)
             {
+                using (var reopenCmd = new SqlCommand("UPDATE dbo.LN_DeliveryMT SET Closed = 0 WHERE DeliveryID = @DeliveryID;", conn, trans))
+                {
+                    reopenCmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = deliveryId.Value;
+                    reopenCmd.ExecuteNonQuery();
+                }
+
                 using var markCmd = new SqlCommand("exec LN_MarkFullReceiveOnDelevery @DeliveryID", conn, trans);
                 markCmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = deliveryId.Value;
                 markCmd.ExecuteNonQuery();
