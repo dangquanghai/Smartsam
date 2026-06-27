@@ -102,14 +102,17 @@ public class IndexModel : BasePageModel
         try
         {
             DateTime? receiveDate = null;
+            DateTime? deliveryDate = null;
             int? deliveryId = null;
 
             using (var headerCmd = new SqlCommand(@"
-SELECT ReceiveDate,
-       SendID,
-       ISNULL([Lock], 0) AS IsLocked
-FROM dbo.LN_ReceiveMT
-WHERE ReceiveID = @ReceiveID;", conn, trans))
+SELECT mt.ReceiveDate,
+       mt.SendID,
+       de.DeliveryDate,
+       ISNULL(mt.[Lock], 0) AS IsLocked
+FROM dbo.LN_ReceiveMT mt
+LEFT JOIN dbo.LN_DeliveryMT de ON de.DeliveryID = mt.SendID
+WHERE mt.ReceiveID = @ReceiveID;", conn, trans))
             {
                 headerCmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = request.ReceiveId;
                 using var rd = headerCmd.ExecuteReader();
@@ -132,6 +135,7 @@ WHERE ReceiveID = @ReceiveID;", conn, trans))
                 }
 
                 receiveDate = rd["ReceiveDate"] == DBNull.Value ? null : Convert.ToDateTime(rd["ReceiveDate"]);
+                deliveryDate = rd["DeliveryDate"] == DBNull.Value ? null : Convert.ToDateTime(rd["DeliveryDate"]);
                 deliveryId = rd["SendID"] == DBNull.Value ? null : Convert.ToInt32(rd["SendID"]);
             }
 
@@ -154,9 +158,10 @@ WHERE ReceiveID = @ReceiveID;", conn, trans))
                 markCmd.ExecuteNonQuery();
             }
 
-            if (receiveDate.HasValue)
+            var laundryRecordDate = deliveryDate ?? receiveDate;
+            if (laundryRecordDate.HasValue)
             {
-                RefreshLaundryRecordForBusinessDate(conn, trans, receiveDate.Value);
+                RefreshLaundryRecordForBusinessMonth(conn, trans, laundryRecordDate.Value);
             }
 
             trans.Commit();
@@ -256,19 +261,19 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;", conn))
         }
     }
 
-    private void RefreshLaundryRecordForBusinessDate(SqlConnection conn, SqlTransaction trans, DateTime businessDate)
+    private static void RefreshLaundryRecordForBusinessMonth(SqlConnection conn, SqlTransaction trans, DateTime businessDate)
     {
-        var dayStart = businessDate.Date.AddSeconds(1);
-        var dayEnd = businessDate.Date.AddDays(1).AddSeconds(-1);
-        var userCode = User.Identity?.Name ?? "SYSTEM";
+        var monthStart = new DateTime(businessDate.Year, businessDate.Month, 1).AddSeconds(1);
+        var monthEnd = new DateTime(businessDate.Year, businessDate.Month, DateTime.DaysInMonth(businessDate.Year, businessDate.Month)).AddDays(1).AddSeconds(-1);
 
         using var cmd = new SqlCommand("dbo.LN_LaundryRecordRPT", conn, trans);
         cmd.CommandType = CommandType.StoredProcedure;
+        cmd.CommandTimeout = 300;
         cmd.Parameters.Add("@Month", SqlDbType.Int).Value = businessDate.Month;
         cmd.Parameters.Add("@Year", SqlDbType.Int).Value = businessDate.Year;
-        cmd.Parameters.Add("@FromDate", SqlDbType.VarChar, 50).Value = dayStart.ToString("MM/dd/yyyy hh:mm:ss tt");
-        cmd.Parameters.Add("@ToDate", SqlDbType.VarChar, 50).Value = dayEnd.ToString("MM/dd/yyyy hh:mm:ss tt");
-        cmd.Parameters.Add("@UserCode", SqlDbType.VarChar, 15).Value = userCode;
+        cmd.Parameters.Add("@FromDate", SqlDbType.VarChar, 50).Value = monthStart.ToString("MM/dd/yyyy hh:mm:ss tt");
+        cmd.Parameters.Add("@ToDate", SqlDbType.VarChar, 50).Value = monthEnd.ToString("MM/dd/yyyy hh:mm:ss tt");
+        cmd.Parameters.Add("@UserCode", SqlDbType.VarChar, 15).Value = LinenLaundryRecordCacheService.CacheUserCode;
         cmd.ExecuteNonQuery();
     }
     private void NormalizeFilter(LinenReceivingFilter filter)
