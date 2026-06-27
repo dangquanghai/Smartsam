@@ -1102,25 +1102,39 @@ function normalizeDecimalText(value) {
 
 // Dinh dang so de hien thi trong bang.
 function formatNumber(value) {
-    return Math.round(toNumber(value)).toLocaleString('en-US');
+    return formatDecimalText(value);
 }
 
-// Định dạng số lẻ: giữ 2 số thập phân, bỏ .00.
+// Định dạng số lẻ: giữ phần thập phân, bỏ .00.
 function formatNumberTrimDecimal(value) {
-    const number = toNumber(value);
-    if (!Number.isFinite(number)) {
+    return formatDecimalText(value);
+}
+
+function formatDecimalText(value) {
+    const raw = (value ?? '').toString().trim();
+    if (!raw) {
         return '0';
     }
 
-    const rounded = Math.round(number * 100) / 100;
-    if (Number.isInteger(rounded)) {
-        return rounded.toLocaleString('en-US');
+    let normalized = normalizeNumericString(raw);
+    if (!/^-?\d+(\.\d+)?$/.test(normalized)) {
+        const number = toNumber(value);
+        if (!Number.isFinite(number)) {
+            return '0';
+        }
+
+        normalized = number.toString();
     }
 
-    return rounded.toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    });
+    const negative = normalized.startsWith('-');
+    if (negative) {
+        normalized = normalized.slice(1);
+    }
+
+    const parts = normalized.split('.');
+    const integerPart = (parts[0].replace(/^0+(?=\d)/, '') || '0').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const decimalPart = (parts[1] || '').replace(/0+$/, '');
+    return `${negative ? '-' : ''}${integerPart}${decimalPart ? `.${decimalPart}` : ''}`;
 }
 
 // Doi ngay ve dang yyyy-MM-dd cho input type=date.

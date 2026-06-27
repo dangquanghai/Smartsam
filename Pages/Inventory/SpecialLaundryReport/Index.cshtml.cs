@@ -12,6 +12,7 @@ namespace SmartSam.Pages.Inventory.SpecialLaundryReport;
 public class IndexModel : BasePageModel
 {
     private const int FunctionId = 161;
+    private const string DecimalNumberFormat = "#,##0.############################";
     private static readonly DateTime DefaultFromDate = new DateTime(2019, 4, 1);
 
     private readonly ISecurityService _securityService;
@@ -278,7 +279,7 @@ public class IndexModel : BasePageModel
             {
                 worksheet.Cell(currentRow, 1).Value = agg.ApartmentNo;
                 worksheet.Cell(currentRow, 2).Value = agg.TotalQuantity;
-                worksheet.Cell(currentRow, 2).Style.NumberFormat.Format = "#,##0";
+                worksheet.Cell(currentRow, 2).Style.NumberFormat.Format = DecimalNumberFormat;
 
                 for (int i = 1; i <= 2; i++)
                 {
@@ -306,11 +307,11 @@ public class IndexModel : BasePageModel
                 worksheet.Cell(currentRow, 2).Value = delivery.ApartmentNo;
                 worksheet.Cell(currentRow, 3).Value = delivery.LinenCode;
                 worksheet.Cell(currentRow, 4).Value = delivery.Quantity;
-                worksheet.Cell(currentRow, 4).Style.NumberFormat.Format = "#,##0";
+                worksheet.Cell(currentRow, 4).Style.NumberFormat.Format = DecimalNumberFormat;
                 worksheet.Cell(currentRow, 5).Value = delivery.Price;
-                worksheet.Cell(currentRow, 5).Style.NumberFormat.Format = "#,##0";
+                worksheet.Cell(currentRow, 5).Style.NumberFormat.Format = DecimalNumberFormat;
                 worksheet.Cell(currentRow, 6).Value = delivery.Amount;
-                worksheet.Cell(currentRow, 6).Style.NumberFormat.Format = "#,##0";
+                worksheet.Cell(currentRow, 6).Style.NumberFormat.Format = DecimalNumberFormat;
                 worksheet.Cell(currentRow, 7).Value = delivery.DeliveryDate;
                 worksheet.Cell(currentRow, 7).Style.NumberFormat.Format = "dd/MM/yyyy";
 
@@ -326,13 +327,13 @@ public class IndexModel : BasePageModel
             if (deliveryRows.Count > 0)
             {
                 worksheet.Cell(currentRow, 4).Value = deliveryRows.Sum(d => d.Quantity);
-                worksheet.Cell(currentRow, 4).Style.NumberFormat.Format = "#,##0";
+                worksheet.Cell(currentRow, 4).Style.NumberFormat.Format = DecimalNumberFormat;
                 worksheet.Cell(currentRow, 4).Style.Font.Bold = true;
                 worksheet.Cell(currentRow, 5).Value = deliveryRows.Sum(d => d.Price);
-                worksheet.Cell(currentRow, 5).Style.NumberFormat.Format = "#,##0";
+                worksheet.Cell(currentRow, 5).Style.NumberFormat.Format = DecimalNumberFormat;
                 worksheet.Cell(currentRow, 5).Style.Font.Bold = true;
                 worksheet.Cell(currentRow, 6).Value = deliveryRows.Sum(d => d.Amount);
-                worksheet.Cell(currentRow, 6).Style.NumberFormat.Format = "#,##0";
+                worksheet.Cell(currentRow, 6).Style.NumberFormat.Format = DecimalNumberFormat;
                 worksheet.Cell(currentRow, 6).Style.Font.Bold = true;
             }
         }

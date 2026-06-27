@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
@@ -617,9 +618,9 @@ ORDER BY View_LNLinenRecord.SupplierID ASC,
                 rows = x.Select(r => new
                 {
                     linenCode = r.LinenCode,
-                    price = r.Price.ToString("0"),
-                    days = r.DayValues.Select(d => d.ToString("0")).ToList(),
-                    total = r.DayValues.Sum().ToString("0")
+                    price = FormatDecimal(r.Price),
+                    days = r.DayValues.Select(FormatDecimal).ToList(),
+                    total = FormatDecimal(r.DayValues.Sum())
                 }).ToList()
             })
             .ToList();
@@ -687,9 +688,9 @@ ORDER BY DeliveryDate DESC, DeliveryID DESC, LinenCode ASC;", conn))
                 description = x.Description,
                 supplierName = x.SupplierName,
                 linenCode = x.LinenCode,
-                quantityDe = x.QuantityDe.ToString("0"),
-                quantityRe = x.QuantityRe.ToString("0"),
-                remain = x.Remain.ToString("0")
+                quantityDe = FormatDecimal(x.QuantityDe),
+                quantityRe = FormatDecimal(x.QuantityRe),
+                remain = FormatDecimal(x.Remain)
             })
         });
     }
@@ -736,12 +737,12 @@ ORDER BY DeliveryDate DESC, DeliveryID DESC, LinenCode ASC;", conn))
             rows = rows.Select(x => new
             {
                 linenCode = x.LinenCode,
-                begin = x.Begin.ToString("0"),
-                receiveApartment = x.ReceiveApartment.ToString("0"),
-                receiveSupplier = x.ReceiveSupplier.ToString("0"),
-                deliveryApartment = x.DeliveryApartment.ToString("0"),
-                deliverySupplier = x.DeliverySupplier.ToString("0"),
-                end = x.End.ToString("0")
+                begin = FormatDecimal(x.Begin),
+                receiveApartment = FormatDecimal(x.ReceiveApartment),
+                receiveSupplier = FormatDecimal(x.ReceiveSupplier),
+                deliveryApartment = FormatDecimal(x.DeliveryApartment),
+                deliverySupplier = FormatDecimal(x.DeliverySupplier),
+                end = FormatDecimal(x.End)
             })
         });
     }
@@ -797,12 +798,17 @@ ORDER BY DeliveryDate DESC, DeliveryID DESC, LinenCode ASC;", conn))
             rows = rows.Select(x => new
             {
                 linenCode = x.LinenCode,
-                begin = x.Begin.ToString("0"),
-                receiveApartment = x.ReceiveApartment.ToString("0"),
-                deliveryApartment = x.DeliveryApartment.ToString("0"),
-                end = x.End.ToString("0")
+                begin = FormatDecimal(x.Begin),
+                receiveApartment = FormatDecimal(x.ReceiveApartment),
+                deliveryApartment = FormatDecimal(x.DeliveryApartment),
+                end = FormatDecimal(x.End)
             })
         });
+    }
+
+    private static string FormatDecimal(decimal value)
+    {
+        return value.ToString("0.############################", CultureInfo.InvariantCulture);
     }
 
     private LinenReportModeState BuildModeState(SqlConnection conn, string reportType, int? requestedDescriptionId, DateTime? fromDate, DateTime? toDate)
