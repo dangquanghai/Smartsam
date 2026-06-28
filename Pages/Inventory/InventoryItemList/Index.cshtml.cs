@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using System.Globalization;
 using ClosedXML.Excel;
 using Microsoft.AspNetCore.Mvc;
@@ -578,9 +578,9 @@ WHERE (@ItemCode IS NULL OR item.ItemCode LIKE '%' + @ItemCode + '%')
         )
       )
 ORDER BY
+    item.ItemCode,
     TRY_CONVERT(datetime2, item.CreatedDate) DESC,
-    item.ItemID DESC,
-    item.ItemCode
+    item.ItemID DESC
 OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;", conn);
 
         BindSearchParams(cmd, filter);
@@ -939,6 +939,7 @@ WHERE StoreID IN ({string.Join(", ", parameterNames)});", conn);
             if (row.UnitPrice.HasValue)
             {
                 worksheet.Cell(rowIndex, 6).Value = row.UnitPrice.Value;
+                worksheet.Cell(rowIndex, 6).Style.NumberFormat.Format = "#,##0.##";
             }
             worksheet.Cell(rowIndex, 7).Value = row.CurrencyName;
             worksheet.Cell(rowIndex, 8).Value = row.Specification;
@@ -1507,7 +1508,7 @@ public class RecallLostItemCandidate
     public string Specification { get; set; } = string.Empty;
     public string KPGroupName { get; set; } = string.Empty;
 
-    public string UnitPriceDisplay => UnitPrice.HasValue ? UnitPrice.Value.ToString("#,##0", CultureInfo.InvariantCulture) : string.Empty;
+    public string UnitPriceDisplay => UnitPrice.HasValue ? UnitPrice.Value.ToString("#,##0.##", CultureInfo.InvariantCulture) : string.Empty;
 }
 
 public class InventoryItemRow
@@ -1543,9 +1544,9 @@ public class InventoryItemRow
     public string ReplaceForItemCode { get; set; } = string.Empty;
     public string CreatedDate { get; set; } = string.Empty;
 
-    public string UnitPriceInput => UnitPrice.HasValue ? UnitPrice.Value.ToString("0", CultureInfo.InvariantCulture) : string.Empty;
+    public string UnitPriceInput => UnitPrice.HasValue ? UnitPrice.Value.ToString("0.##", CultureInfo.InvariantCulture) : string.Empty;
     public string ReOrderPointInput => ReOrderPoint.HasValue ? ReOrderPoint.Value.ToString("0", CultureInfo.InvariantCulture) : string.Empty;
-    public string UnitPriceDisplay => UnitPrice.HasValue ? UnitPrice.Value.ToString("#,##0", CultureInfo.InvariantCulture) : string.Empty;
+    public string UnitPriceDisplay => UnitPrice.HasValue ? UnitPrice.Value.ToString("#,##0.##", CultureInfo.InvariantCulture) : string.Empty;
     public string ReOrderPointDisplay => ReOrderPoint.HasValue ? ReOrderPoint.Value.ToString("#,##0", CultureInfo.InvariantCulture) : string.Empty;
     public string CreatedDateDisplay
     {
@@ -1634,3 +1635,5 @@ public class CategoryOptionRow
         }
     }
 }
+
+

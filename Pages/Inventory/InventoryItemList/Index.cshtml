@@ -1,4 +1,4 @@
-@page
+﻿@page
 @model SmartSam.Pages.Inventory.InventoryItemList.IndexModel
 @{
     ViewData["Title"] = "Inventory Item List";
@@ -396,7 +396,7 @@
                     <div class="form-row">
                         <div class="form-group col-md-3 mb-2">
                             <label>Unit Price</label>
-                            <input asp-for="ItemInput.UnitPrice" type="number" min="0" step="0.0001" class="form-control form-control-sm text-right" />
+                            <input asp-for="ItemInput.UnitPrice" type="text" inputmode="decimal" autocomplete="off" class="form-control form-control-sm text-right iil-unit-price-input" />
                         </div>
                         <div class="form-group col-md-3 mb-2">
                             <label>Re-Order Point</label>
@@ -681,3 +681,4 @@
 @section Scripts {
     <script src="~/js/Inventory/InventoryItemList/index.js" asp-append-version="true"></script>
 }
+

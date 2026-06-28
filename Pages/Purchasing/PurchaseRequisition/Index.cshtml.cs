@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
@@ -583,6 +583,10 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
             detailSheet.Cell(rowIndex, 8).Value = detail.QtyPur * detail.UnitPrice;
             detailSheet.Cell(rowIndex, 9).Value = detail.Remark ?? string.Empty;
             detailSheet.Cell(rowIndex, 10).Value = detail.SupplierText;
+            ApplyOptionalTwoDecimalNumberFormat(detailSheet.Cell(rowIndex, 5), detail.QtyFromM);
+            ApplyOptionalTwoDecimalNumberFormat(detailSheet.Cell(rowIndex, 6), detail.QtyPur);
+            ApplyOptionalTwoDecimalNumberFormat(detailSheet.Cell(rowIndex, 7), detail.UnitPrice);
+            ApplyOptionalTwoDecimalNumberFormat(detailSheet.Cell(rowIndex, 8), detail.QtyPur * detail.UnitPrice);
             rowIndex++;
             orderNo++;
         }
@@ -590,8 +594,6 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY", conn))
         FormatWorksheetAsTable(detailSheet, 1, Math.Max(1, rowIndex - 1), detailHeaders.Length);
         ApplyWorksheetFont(detailSheet, 1, Math.Max(1, rowIndex - 1), detailHeaders.Length, ExcelVniFontName);
         ApplyColumnFont(detailSheet, 1, Math.Max(1, rowIndex - 1), 3, ExcelTcvn3FontName);
-        detailSheet.Column(7).Style.NumberFormat.Format = "#,##0.00";
-        detailSheet.Column(8).Style.NumberFormat.Format = "#,##0.00";
         return BuildExcelFileResult(workbook, $"purchase_requisition_{requisition.RequestNo}");
     }
 
@@ -1096,6 +1098,11 @@ ORDER BY d.RecordID", conn);
     }
 
     // Thá»±c hiá»‡n xá»­ lÃ½ cho hÃ m FormatWorksheetAsTable theo nghiá»‡p vá»¥ cá»§a mÃ n hÃ¬nh.
+    private static void ApplyOptionalTwoDecimalNumberFormat(IXLCell cell, decimal value)
+    {
+        cell.Style.NumberFormat.Format = decimal.Truncate(value) == value ? "#,##0" : "#,##0.00";
+    }
+
     private void FormatWorksheetAsTable(IXLWorksheet worksheet, int fromRow, int toRow, int totalColumns)
     {
         var range = worksheet.Range(fromRow, 1, toRow, totalColumns);
@@ -1533,7 +1540,7 @@ VALUES
             {
                 foreach (var attachment in AddAtAttachments.Where(file => file != null && file.Length > 0))
                 {
-                    SaveAddAtAttachment(conn, trans, newPrId, purchaserId, attachment, savedFilePaths);
+                    SaveAddAtAttachment(conn, trans, newPrId, requestNo, purchaserId, attachment, savedFilePaths);
                 }
             }
 
@@ -1549,7 +1556,7 @@ VALUES
     }
 
     // LÆ°u file Ä‘Ã­nh kÃ¨m cá»§a Add AT vÃ o thÆ° má»¥c cáº¥u hÃ¬nh vÃ  ghi tÃªn file vÃ o báº£ng PC_PR_Doc.
-    private void SaveAddAtAttachment(SqlConnection conn, SqlTransaction trans, int prId, int? userId, IFormFile attachment, List<string> savedFilePaths)
+    private void SaveAddAtAttachment(SqlConnection conn, SqlTransaction trans, int prId, string? requestNo, int? userId, IFormFile attachment, List<string> savedFilePaths)
     {
         if (attachment == null || attachment.Length <= 0)
         {
@@ -1559,7 +1566,7 @@ VALUES
         var uploadFolder = ResolveAddAtUploadFolder();
         Directory.CreateDirectory(uploadFolder);
 
-        var savedFileName = BuildAttachmentFileName(attachment.FileName);
+        var savedFileName = BuildAttachmentFileName(requestNo, attachment.FileName);
         var fullPath = Path.Combine(uploadFolder, savedFileName);
 
         using (var stream = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None))
@@ -1628,19 +1635,19 @@ VALUES
     }
 
     // Sinh tÃªn file má»›i cÃ³ gáº¯n timestamp Ä‘á»ƒ trÃ¡nh trÃ¹ng tÃªn khi upload nhiá»u láº§n.
-    private static string BuildAttachmentFileName(string originalFileName)
+    private static string BuildAttachmentFileName(string? requestNo, string originalFileName)
     {
         var sourceName = Path.GetFileName(originalFileName);
-        var nameOnly = Path.GetFileNameWithoutExtension(sourceName);
         var extension = Path.GetExtension(sourceName);
-        var safeName = string.Concat(nameOnly.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries)).Trim();
+        var baseName = string.IsNullOrWhiteSpace(requestNo) ? Path.GetFileNameWithoutExtension(sourceName) : requestNo.Trim();
+        var invalidFileNameChars = Path.GetInvalidFileNameChars().ToHashSet();
+        var safeName = new string(baseName.Select(ch => invalidFileNameChars.Contains(ch) ? '-' : ch).ToArray()).Trim().Trim('-');
         if (string.IsNullOrWhiteSpace(safeName))
         {
-            safeName = "attachment";
+            safeName = "PR";
         }
 
-        var timeLong = DateTime.UtcNow.Ticks;
-        return $"{safeName}_{timeLong}{extension}";
+        return $"{safeName}{extension}";
     }
 
     // XÃ³a cÃ¡c file Ä‘Ã£ ghi ra Ä‘Ä©a náº¿u transaction lÆ°u PR bá»‹ lá»—i vÃ  pháº£i rollback.

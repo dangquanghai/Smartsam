@@ -145,20 +145,50 @@
         });
     }
 
+    function normalizeUnitPriceValue(rawValue) {
+        const cleaned = (rawValue || "")
+            .replace(/,/g, "")
+            .replace(/[^\d.]/g, "")
+            .replace(/(\..*)\./g, "$1");
+
+        if (!cleaned) return "";
+
+        const parts = cleaned.split(".");
+        const integerPart = parts[0] || "0";
+        const hasDecimalPoint = cleaned.includes(".");
+        const decimalPart = parts.length > 1 ? parts[1].slice(0, 2) : "";
+        return hasDecimalPoint ? `${integerPart}.${decimalPart}` : integerPart;
+    }
+
+    function formatUnitPriceValue(rawValue) {
+        const normalized = normalizeUnitPriceValue(rawValue);
+        if (!normalized) return "";
+
+        const parts = normalized.split(".");
+        const integerPart = parts[0] || "0";
+        const decimalPart = parts.length > 1 ? parts[1] : "";
+        const withCommas = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        return decimalPart ? `${withCommas}.${decimalPart}` : withCommas;
+    }
+
     function sanitizeNonNegativeNumber(input) {
         if (!input) return;
 
-        const rawValue = input.value.trim();
-        if (!rawValue) {
+        const normalized = normalizeUnitPriceValue(input.value.trim());
+        if (!normalized) {
+            input.value = "";
             input.setCustomValidity("");
             return;
         }
 
-        const numericValue = Number(rawValue);
-        if (rawValue.includes("-") || Number.isNaN(numericValue) || numericValue < 0) {
+        const numericValue = Number(normalized);
+        if (Number.isNaN(numericValue) || numericValue < 0) {
             input.value = "";
+            input.setCustomValidity("");
+            return;
         }
 
+        input.value = normalized;
         input.setCustomValidity("");
     }
 
@@ -168,31 +198,51 @@
         if (!input) return;
 
         input.addEventListener("keydown", (ev) => {
-            if (ev.key === "-" || ev.key === "Subtract") {
+            if (ev.key === "-" || ev.key === "Subtract" || ev.key === ",") {
                 ev.preventDefault();
             }
         });
 
         input.addEventListener("beforeinput", (ev) => {
-            if (typeof ev.data === "string" && ev.data.includes("-")) {
+            if (typeof ev.data === "string" && (ev.data.includes("-") || ev.data.includes(","))) {
                 ev.preventDefault();
             }
         });
 
         input.addEventListener("input", () => {
-            sanitizeNonNegativeNumber(input);
+            const start = input.selectionStart;
+            const oldValue = input.value;
+            const oldPrefix = typeof start === "number" ? oldValue.slice(0, start) : oldValue;
+            const normalized = normalizeUnitPriceValue(oldValue);
+            const normalizedPrefix = normalizeUnitPriceValue(oldPrefix);
+
+            input.value = normalized;
+            if (typeof start === "number") {
+                const nextPosition = Math.min(normalizedPrefix.length, input.value.length);
+                input.setSelectionRange(nextPosition, nextPosition);
+            }
+            input.setCustomValidity("");
+        });
+
+        input.addEventListener("blur", () => {
+            input.value = formatUnitPriceValue(input.value);
+        });
+
+        input.addEventListener("focus", () => {
+            input.value = normalizeUnitPriceValue(input.value);
         });
 
         form?.addEventListener("submit", (ev) => {
-            const rawValue = input.value.trim();
-            const numericValue = Number(rawValue);
-            if (rawValue && (rawValue.includes("-") || Number.isNaN(numericValue) || numericValue < 0)) {
+            const normalized = normalizeUnitPriceValue(input.value.trim()).replace(/\.$/, "");
+            const numericValue = Number(normalized);
+            if (normalized && (Number.isNaN(numericValue) || numericValue < 0)) {
                 ev.preventDefault();
                 input.setCustomValidity("Unit Price cannot be negative.");
                 input.reportValidity();
                 return;
             }
 
+            input.value = normalized;
             input.setCustomValidity("");
         });
     }
@@ -300,8 +350,9 @@
             unitInput.value = isEdit ? row.getAttribute("data-unit") || "" : "";
         }
         if (unitPriceInput) {
-            unitPriceInput.value = isEdit ? row.getAttribute("data-unit-price") || "" : "";
+            unitPriceInput.value = isEdit ? formatUnitPriceValue(row.getAttribute("data-unit-price") || "") : "";
             sanitizeNonNegativeNumber(unitPriceInput);
+            unitPriceInput.value = formatUnitPriceValue(unitPriceInput.value);
         }
         setSelectValue(
             currencySelect,

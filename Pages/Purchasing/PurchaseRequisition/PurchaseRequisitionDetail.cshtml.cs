@@ -1,4 +1,4 @@
-
+﻿
 using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Net;
@@ -453,7 +453,7 @@ WHERE PRID = @PRID", conn))
             {
                 TempData["Message"] = "Cannot move item back to MR because purchase requisition must contain at least 1 item after To MR.";
                 TempData["MessageType"] = "error";
-                return RedirectToCurrentDetail("edit");
+                return RedirectToCurrentDetail();
             }
         }
 
@@ -801,14 +801,14 @@ WHERE PRID = @PRID
         {
             TempData["Message"] = "You have no permission to upload attachment.";
             TempData["MessageType"] = "warning";
-            return RedirectToCurrentDetail("edit");
+            return RedirectToCurrentDetail();
         }
 
         if (AttachmentUploads == null || AttachmentUploads.Count == 0)
         {
             TempData["Message"] = "Please select at least one file to upload.";
             TempData["MessageType"] = "warning";
-            return RedirectToCurrentDetail("edit");
+            return RedirectToCurrentDetail();
         }
 
         var validationMessages = AttachmentUploads
@@ -820,7 +820,7 @@ WHERE PRID = @PRID
         {
             TempData["Message"] = string.Join(" ", validationMessages);
             TempData["MessageType"] = "error";
-            return RedirectToCurrentDetail("edit");
+            return RedirectToCurrentDetail();
         }
 
         var savedFilePaths = new List<string>();
@@ -832,7 +832,7 @@ WHERE PRID = @PRID
         {
             foreach (var attachment in AttachmentUploads.Where(file => file != null && file.Length > 0))
             {
-                SaveAttachment(conn, trans, Requisition.Id, _workflowUser.EmployeeId, attachment, savedFilePaths);
+                SaveAttachment(conn, trans, Requisition.Id, Requisition.RequestNo, _workflowUser.EmployeeId, attachment, savedFilePaths);
             }
             trans.Commit();
             TempData["Message"] = "Attachments uploaded successfully.";
@@ -1849,7 +1849,13 @@ WHERE EmployeeCode = @EmployeeCode", conn);
     // �i?u hu?ng quay l?i d�ng record hi?n t?i sau khi x? l� workflow ho?c file d�nh k�m.
     private IActionResult RedirectToCurrentDetail(string? mode = null)
     {
-        var currentMode = string.IsNullOrWhiteSpace(mode) ? "view" : mode.Trim().ToLowerInvariant();
+        var currentMode = string.IsNullOrWhiteSpace(mode) ? Mode : mode;
+        currentMode = string.IsNullOrWhiteSpace(currentMode) ? "view" : currentMode.Trim().ToLowerInvariant();
+        if (currentMode != "edit" && currentMode != "view" && currentMode != "add")
+        {
+            currentMode = "view";
+        }
+
         return RedirectToPage("./PurchaseRequisitionDetail", new { id = Requisition.Id, mode = currentMode });
     }
 
@@ -2251,12 +2257,12 @@ WHERE PRID = @PRID", conn, trans);
     }
 
     // Luu file d�nh k�m v?t l� v� ghi t�n file v�o b?ng PC_PR_Doc.
-    private void SaveAttachment(SqlConnection conn, SqlTransaction trans, int prId, int? userId, IFormFile file, List<string> savedFilePaths)
+    private void SaveAttachment(SqlConnection conn, SqlTransaction trans, int prId, string? requestNo, int? userId, IFormFile file, List<string> savedFilePaths)
     {
         var uploadFolder = ResolveUploadFolder();
         Directory.CreateDirectory(uploadFolder);
 
-        var savedFileName = BuildAttachmentFileName(file.FileName);
+        var savedFileName = BuildAttachmentFileName(requestNo, file.FileName);
         var fullPath = Path.Combine(uploadFolder, savedFileName);
 
         using (var stream = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None))
@@ -2325,18 +2331,19 @@ VALUES
     }
 
     // Sinh t�n file m?i c� th�m ticks d? tr�nh tr�ng t�n khi upload.
-    private static string BuildAttachmentFileName(string originalFileName)
+    private static string BuildAttachmentFileName(string? requestNo, string originalFileName)
     {
         var sourceName = Path.GetFileName(originalFileName);
-        var nameOnly = Path.GetFileNameWithoutExtension(sourceName);
         var extension = Path.GetExtension(sourceName);
-        var safeName = string.Concat(nameOnly.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries)).Trim();
+        var baseName = string.IsNullOrWhiteSpace(requestNo) ? Path.GetFileNameWithoutExtension(sourceName) : requestNo.Trim();
+        var invalidFileNameChars = Path.GetInvalidFileNameChars().ToHashSet();
+        var safeName = new string(baseName.Select(ch => invalidFileNameChars.Contains(ch) ? '-' : ch).ToArray()).Trim().Trim('-');
         if (string.IsNullOrWhiteSpace(safeName))
         {
-            safeName = "attachment";
+            safeName = "PR";
         }
 
-        return $"{safeName}_{DateTime.UtcNow.Ticks}{extension}";
+        return $"{safeName}{extension}";
     }
 
     // X�a file v?t l� d� luu n?u transaction insert file d�nh k�m b? l?i v� ph?i rollback.

@@ -1,4 +1,5 @@
 using System.Data;
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
@@ -41,6 +42,7 @@ public class IndexModel : BasePageModel
     public List<SelectListItem> GroupList { get; set; } = new();
     public List<TreeNodeVm> TreeRoots { get; set; } = new();
     public List<InventoryTreeItemRow> Items { get; set; } = new();
+    public List<InventoryTreeItemRow> AvailableItems { get; set; } = new();
     public InventoryTreeNodeForm SelectedNodeForm { get; set; } = new();
     public int TotalRecords { get; set; }
     public int TotalPages => Filter.PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)Filter.PageSize));
@@ -60,6 +62,117 @@ public class IndexModel : BasePageModel
         NormalizeFilter();
         LoadPageData();
         return Page();
+    }
+
+
+    public IActionResult OnGetItemStock(int itemId)
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionCheckStock)) return new JsonResult(new { success = false, message = "You do not have permission to check item stock." }) { StatusCode = 403 };
+        if (itemId <= 0) return new JsonResult(new { success = false, message = "Invalid item." });
+
+        using var conn = OpenConnection();
+        string itemCode;
+        string itemName;
+        using (var itemCmd = new SqlCommand("SELECT ItemCode, ItemName FROM dbo.INV_ItemList WHERE ItemID=@ItemID", conn))
+        {
+            itemCmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = itemId;
+            using var itemReader = itemCmd.ExecuteReader();
+            if (!itemReader.Read()) return new JsonResult(new { success = false, message = "Invalid item." });
+            itemCode = Convert.ToString(itemReader["ItemCode"]) ?? string.Empty;
+            itemName = Convert.ToString(itemReader["ItemName"]) ?? string.Empty;
+        }
+
+        var rows = new List<ItemStockRow>();
+        using (var stockCmd = new SqlCommand("exec sp_CheckItemStock @ItemID", conn))
+        {
+            stockCmd.Parameters.Add("@ItemID", SqlDbType.Int).Value = itemId;
+            using var stockReader = stockCmd.ExecuteReader();
+            while (stockReader.Read())
+            {
+                var storeId = stockReader.FieldCount > 0 && stockReader[0] != DBNull.Value ? Convert.ToInt32(stockReader[0]) : 0;
+                var quantity = stockReader.FieldCount > 1 && stockReader[1] != DBNull.Value ? Convert.ToDecimal(stockReader[1]) : 0m;
+                rows.Add(new ItemStockRow { StoreID = storeId, Quantity = quantity });
+            }
+        }
+
+        if (rows.Count == 1 && rows[0].StoreID == 0 && rows[0].Quantity == 0)
+        {
+            return new JsonResult(new { success = false, itemCode, itemName, message = "Item does not have stock on any Store-house." });
+        }
+
+        var storeNames = LoadStoreNames(conn, rows.Select(x => x.StoreID).Where(x => x > 0).Distinct().ToList());
+        var data = rows
+            .Where(x => x.StoreID > 0 || x.Quantity != 0)
+            .Select(x => new
+            {
+                storeId = x.StoreID,
+                storeName = storeNames.TryGetValue(x.StoreID, out var storeName) ? storeName : x.StoreID.ToString(),
+                quantity = x.Quantity,
+                quantityText = FormatQuantity(x.Quantity)
+            })
+            .ToList();
+
+        return new JsonResult(new { success = true, itemCode, itemName, data });
+    }
+
+
+    public IActionResult OnGetExportExcel()
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionViewList)) return Redirect("/");
+
+        NormalizeFilter();
+        LoadGroups();
+
+        using var conn = OpenConnection();
+        var rows = LoadExportItems(conn, Filter.GroupId, Filter.SelectedCatgId);
+        var groupName = GroupList.FirstOrDefault(x => x.Value == Filter.GroupId.ToString())?.Text ?? "--No Group--";
+        var nodeName = Filter.SelectedCatgId > 0 ? LoadSelectedNodeForm(Filter.GroupId, Filter.SelectedCatgId).NodeName : string.Empty;
+
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Item List");
+        worksheet.Cell(1, 1).Value = "Inventory Tree Item List";
+        worksheet.Range(1, 1, 1, 6).Merge().Style.Font.SetBold().Font.FontSize = 16;
+        worksheet.Cell(2, 1).Value = "KP Group";
+        worksheet.Cell(2, 2).Value = groupName;
+        worksheet.Cell(3, 1).Value = "Node";
+        worksheet.Cell(3, 2).Value = nodeName;
+
+        var headers = new[] { "Item Code", "Item Name", "Unit", "U.Price", "Curr" };
+        for (var i = 0; i < headers.Length; i++) worksheet.Cell(5, i + 1).Value = headers[i];
+        var headerRange = worksheet.Range(5, 1, 5, headers.Length);
+        headerRange.Style.Font.SetBold();
+        headerRange.Style.Fill.BackgroundColor = XLColor.LightGray;
+        headerRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        headerRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var row = rows[i];
+            var excelRow = i + 6;
+            worksheet.Cell(excelRow, 1).Value = row.ItemCode;
+            worksheet.Cell(excelRow, 2).Value = row.ItemName;
+            worksheet.Cell(excelRow, 3).Value = row.Unit;
+            worksheet.Cell(excelRow, 4).Value = row.UnitPrice;
+            worksheet.Cell(excelRow, 5).Value = row.CurrencyName;
+        }
+
+        if (rows.Count > 0)
+        {
+            var dataRange = worksheet.Range(6, 1, rows.Count + 5, headers.Length);
+            dataRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            dataRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+            worksheet.Range(6, 4, rows.Count + 5, 4).Style.NumberFormat.Format = "#,##0.##";
+        }
+
+        worksheet.SheetView.FreezeRows(5);
+        worksheet.Columns().AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        var fileName = $"inventory_trees_{DateTime.Now:yyyyMMddHHmmss}.xlsx";
+        return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }
 
     public IActionResult OnPostAddNode(int groupId, int selectedCatgId, string nodeCode, string nodeName, string? description)
@@ -177,6 +290,47 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
         return RedirectToList(groupId, selectedCatgId, Filter.Page);
     }
 
+    public IActionResult OnPostAddItems(int groupId, int selectedCatgId, List<int>? selectedItemIds)
+    {
+        PagePerm = GetUserPermissions();
+        if (!PagePerm.HasPermission(PermissionAddItem)) return Redirect("/");
+        if (selectedCatgId <= 0)
+        {
+            SetMessage("Please select a node before adding item(s).", "warning");
+            return RedirectToList(groupId, selectedCatgId, Filter.Page);
+        }
+
+        if (selectedItemIds == null || selectedItemIds.Count == 0)
+        {
+            SetMessage("Please select item(s) to add to the node.", "warning");
+            return RedirectToList(groupId, selectedCatgId, Filter.Page);
+        }
+
+        using var conn = OpenConnection();
+        var placeholders = string.Join(",", selectedItemIds.Select((_, index) => $"@p{index}"));
+        var sql = groupId == 0
+            ? $"UPDATE dbo.INV_ItemList SET ItemCatg=@CatgID WHERE ItemID IN ({placeholders})"
+            : $@"INSERT INTO dbo.INV_KPGroupIndex (ItemID, KPGroupID, CatgID)
+SELECT item.ItemID, @KPGroupID, @CatgID
+FROM dbo.INV_ItemList item
+WHERE item.ItemID IN ({placeholders})
+  AND item.ItemID NOT IN (
+      SELECT idx.ItemID
+      FROM dbo.INV_KPGroupIndex idx
+      WHERE idx.KPGroupID = @KPGroupID
+  )";
+
+        using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.Add("@CatgID", SqlDbType.Int).Value = selectedCatgId;
+        if (groupId != 0) cmd.Parameters.Add("@KPGroupID", SqlDbType.Int).Value = groupId;
+        for (var i = 0; i < selectedItemIds.Count; i++) cmd.Parameters.Add($"@p{i}", SqlDbType.Int).Value = selectedItemIds[i];
+        cmd.ExecuteNonQuery();
+
+        SetMessage("Item(s) added to node successfully.", "success");
+        return RedirectToList(groupId, selectedCatgId, 1);
+    }
+
+
     private IActionResult RedirectToList(int groupId, int selectedCatgId, int page)
     {
         return RedirectToPage(new Dictionary<string, object?>
@@ -212,6 +366,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
         (Items, TotalRecords) = LoadItems(Filter.GroupId, Filter.SelectedCatgId);
         if (Filter.Page > TotalPages) Filter.Page = TotalPages;
         (Items, TotalRecords) = LoadItems(Filter.GroupId, Filter.SelectedCatgId);
+        AvailableItems = LoadAvailableItems(Filter.GroupId, Filter.SelectedCatgId);
         SelectedNodeForm = LoadSelectedNodeForm(Filter.GroupId, Filter.SelectedCatgId);
     }
 
@@ -369,6 +524,54 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
         return (list, total);
     }
 
+    private List<InventoryTreeItemRow> LoadAvailableItems(int groupId, int catgId)
+    {
+        if (catgId <= 0) return new List<InventoryTreeItemRow>();
+
+        using var conn = OpenConnection();
+        var sql = groupId == 0
+            ? @"SELECT item.ItemID, item.ItemCode, item.ItemName, item.Unit, item.UnitPrice, cur.CurrencyName
+FROM dbo.INV_ItemList item
+LEFT JOIN dbo.MS_CurrencyFL cur ON cur.CurrencyID = item.Currency
+WHERE item.ItemCatg = 0
+ORDER BY item.ItemCode"
+            : @"SELECT item.ItemID, item.ItemCode, item.ItemName, item.Unit, item.UnitPrice, cur.CurrencyName
+FROM dbo.INV_ItemList item
+LEFT JOIN dbo.MS_CurrencyFL cur ON cur.CurrencyID = item.Currency
+WHERE item.ItemID NOT IN (
+    SELECT idx.ItemID
+    FROM dbo.INV_KPGroupIndex idx
+    WHERE idx.KPGroupID = @KPGroupID
+)
+ORDER BY item.ItemCode";
+
+        using var cmd = new SqlCommand(sql, conn);
+        if (groupId != 0)
+        {
+            cmd.Parameters.Add("@KPGroupID", SqlDbType.Int).Value = groupId;
+            cmd.Parameters.Add("@CatgID", SqlDbType.Int).Value = catgId;
+        }
+
+        var list = new List<InventoryTreeItemRow>();
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            var unitPrice = rd["UnitPrice"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(rd["UnitPrice"]);
+            list.Add(new InventoryTreeItemRow
+            {
+                ItemID = Convert.ToInt32(rd["ItemID"]),
+                ItemCode = Convert.ToString(rd["ItemCode"]) ?? string.Empty,
+                ItemName = Convert.ToString(rd["ItemName"]) ?? string.Empty,
+                Unit = Convert.ToString(rd["Unit"]) ?? string.Empty,
+                UnitPrice = unitPrice,
+                CurrencyName = Convert.ToString(rd["CurrencyName"]) ?? string.Empty
+            });
+        }
+
+        return list;
+    }
+
+
     private int GetNodeLevel(SqlConnection conn, int groupId, int catgId)
     {
         if (catgId == 0) return 0;
@@ -392,6 +595,68 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
         using var cmd = new SqlCommand("SELECT ISNULL(ParentID,0) FROM dbo.INV_CatgTree WHERE CatgID=@CatgID", conn);
         cmd.Parameters.Add("@CatgID", SqlDbType.Int).Value = catgId;
         return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
+    }
+
+
+    private Dictionary<int, string> LoadStoreNames(SqlConnection conn, List<int> storeIds)
+    {
+        if (storeIds.Count == 0) return new Dictionary<int, string>();
+
+        var placeholders = string.Join(",", storeIds.Select((_, index) => $"@p{index}"));
+        using var cmd = new SqlCommand($"SELECT StoreID, StoreName FROM dbo.INV_StoreList WHERE StoreID IN ({placeholders})", conn);
+        for (var i = 0; i < storeIds.Count; i++) cmd.Parameters.Add($"@p{i}", SqlDbType.Int).Value = storeIds[i];
+
+        var result = new Dictionary<int, string>();
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            result[Convert.ToInt32(rd["StoreID"])] = Convert.ToString(rd["StoreName"]) ?? string.Empty;
+        }
+        return result;
+    }
+
+    private static string FormatQuantity(decimal value)
+    {
+        return value == decimal.Truncate(value) ? value.ToString("N0") : value.ToString("N2").TrimEnd('0').TrimEnd('.');
+    }
+
+
+    private List<InventoryTreeItemRow> LoadExportItems(SqlConnection conn, int groupId, int catgId)
+    {
+        var sql = groupId == 0
+            ? @"SELECT item.ItemID, item.ItemCode, item.ItemName, item.Unit, item.UnitPrice, cur.CurrencyName
+FROM dbo.INV_ItemList item
+LEFT JOIN dbo.MS_CurrencyFL cur ON cur.CurrencyID = item.Currency
+WHERE item.IsActive = 1 AND item.ItemCatg = @CatgID
+ORDER BY item.ItemCode"
+            : @"SELECT item.ItemID, item.ItemCode, item.ItemName, item.Unit, item.UnitPrice, cur.CurrencyName
+FROM dbo.INV_KPGroupIndex idx
+LEFT JOIN dbo.INV_ItemList item ON item.ItemID = idx.ItemID
+LEFT JOIN dbo.MS_CurrencyFL cur ON cur.CurrencyID = item.Currency
+WHERE idx.CatgID = @CatgID AND idx.KPGroupID = @KPGroupID
+ORDER BY item.ItemCode";
+
+        using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.Add("@CatgID", SqlDbType.Int).Value = catgId;
+        if (groupId != 0) cmd.Parameters.Add("@KPGroupID", SqlDbType.Int).Value = groupId;
+
+        var list = new List<InventoryTreeItemRow>();
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            var unitPrice = rd["UnitPrice"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(rd["UnitPrice"]);
+            list.Add(new InventoryTreeItemRow
+            {
+                ItemID = Convert.ToInt32(rd["ItemID"]),
+                ItemCode = Convert.ToString(rd["ItemCode"]) ?? string.Empty,
+                ItemName = Convert.ToString(rd["ItemName"]) ?? string.Empty,
+                Unit = Convert.ToString(rd["Unit"]) ?? string.Empty,
+                UnitPrice = unitPrice,
+                CurrencyName = Convert.ToString(rd["CurrencyName"]) ?? string.Empty
+            });
+        }
+
+        return list;
     }
 
     private SqlConnection OpenConnection()
@@ -471,6 +736,12 @@ public class InventoryTreeItemRow
     public decimal? UnitPrice { get; set; }
     public string CurrencyName { get; set; } = string.Empty;
     public string UnitPriceText => UnitPrice.HasValue ? UnitPrice.Value.ToString("N0") : string.Empty;
+}
+
+public class ItemStockRow
+{
+    public int StoreID { get; set; }
+    public decimal Quantity { get; set; }
 }
 
 public class InventoryTreeNodeForm
