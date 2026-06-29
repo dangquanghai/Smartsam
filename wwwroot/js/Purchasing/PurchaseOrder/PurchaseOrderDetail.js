@@ -1116,7 +1116,7 @@ function formatDecimalText(value) {
         return '0';
     }
 
-    let normalized = normalizeNumericString(raw);
+    let normalized = normalizeDecimalText(raw);
     if (!/^-?\d+(\.\d+)?$/.test(normalized)) {
         const number = toNumber(value);
         if (!Number.isFinite(number)) {
