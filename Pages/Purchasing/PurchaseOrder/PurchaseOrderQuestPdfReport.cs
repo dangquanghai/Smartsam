@@ -454,12 +454,12 @@ internal static class PurchaseOrderQuestPdfReport
 
     private static string FormatQuantity(decimal value)
     {
-        return value.ToString("#,##0", CultureInfo.InvariantCulture);
+        return value.ToString("#,##0.############################", CultureInfo.InvariantCulture);
     }
 
     private static string FormatTrimDecimal(decimal value)
     {
-        return decimal.Round(value, 2, MidpointRounding.AwayFromZero).ToString("#,##0.##", CultureInfo.InvariantCulture);
+        return value.ToString("#,##0.############################", CultureInfo.InvariantCulture);
     }
 
     private static string FormatMoney(decimal value)

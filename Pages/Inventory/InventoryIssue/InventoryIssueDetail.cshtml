@@ -1,4 +1,4 @@
-@page
+﻿@page
 @using System.Text.Json
 @model SmartSam.Pages.Inventory.InventoryIssue.InventoryIssueDetailModel
 @{
@@ -38,7 +38,7 @@
                     <div class="inventory-issue-header-section mb-3">
                         <div class="row inventory-issue-header-grid-row">
                             <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Issue No.<span class="required-mark">*</span></label><div class="inventory-issue-header-control-wrap"><input asp-for="Header.FlowNo" class="form-control form-control-sm vni-font" readonly="@(Model.IsAddMode && Model.CanEditVoucherBusiness ? null : "readonly")" /><span asp-validation-for="Header.FlowNo" class="text-danger small"></span></div></div></div>
-                            <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Issue Type<span class="required-mark">*</span></label><div class="inventory-issue-header-control-wrap"><select asp-for="Header.FlowSubType" asp-items="Model.IssueTypes" class="form-control form-control-sm select2" disabled="@((Model.CanEditVoucherBusiness && !Model.HasAdjustedApartmentItems) ? null : "disabled")"></select>@if (Model.HasAdjustedApartmentItems){<input type="hidden" name="Header.FlowSubType" value="@Model.Header.FlowSubType" />}<span asp-validation-for="Header.FlowSubType" class="text-danger small"></span><small id="issueType2Hint" class="d-none inventory-issue-type-hint mt-1">Save first to open Adjust Item in Apmt, then Confirm in edit mode.</small></div></div></div>
+                            <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Issue Type<span class="required-mark">*</span></label><div class="inventory-issue-header-control-wrap"><select asp-for="Header.FlowSubType" asp-items="Model.IssueTypes" class="form-control form-control-sm select2" disabled="@((Model.CanEditVoucherBusiness && !Model.HasAdjustedApartmentItems) ? null : "disabled")"></select>@if (Model.HasAdjustedApartmentItems){<input type="hidden" name="Header.FlowSubType" value="@Model.Header.FlowSubType" />}<span asp-validation-for="Header.FlowSubType" class="text-danger small"></span></div></div></div>
                             <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Received Department</label><div class="inventory-issue-header-control-wrap"><select asp-for="Header.RecDept" asp-items="Model.Departments" class="form-control form-control-sm select2" disabled="@(Model.CanEditVoucherBusiness ? null : "disabled")"></select><span asp-validation-for="Header.RecDept" class="text-danger small"></span></div></div></div>
                             <div class="col-xl-4 col-md-6 col-12"><div class="inventory-issue-header-field prq-detail-form-col"><label class="prq-detail-label inventory-issue-header-label">Issue Date</label><div class="inventory-issue-header-control-wrap"><input id="Header_FlowDateDisplay" type="text" class="form-control form-control-sm @(Model.CanEditVoucherBusiness ? "app-date-picker" : string.Empty)" value="@Model.Header.FlowDate.ToString("dd/MM/yyyy")" data-hidden-target="#Header_FlowDate" autocomplete="off" readonly />
                                 <input id="Header_FlowDate" name="Header.FlowDate" type="hidden" value="@Model.Header.FlowDate.ToString("yyyy-MM-dd")" /></div></div></div>
@@ -106,10 +106,9 @@
                     @{ var userHasConfirmAccess = Model.HasIssueApprovalAccess(); }
                     @if ((Model.IsAddMode && Model.CanEditVoucherBusiness) || (!Model.IsAddMode && Model.CanConfirmVoucherBusiness))
                     {
-                        var disableConfirmForApartmentAdd = Model.IsAddMode && Model.Header.FlowSubType == 2;
                         var disableConfirmForNoAccess = Model.IsAddMode && !userHasConfirmAccess;
                         var confirmButtonText = Model.IsApprovedMode ? "Sign" : "Confirm";
-                        <button type="button" id="btnOpenConfirmVoucher" class="btn btn-sm btn-success border mx-1 my-1" data-toggle="modal" data-target="#confirmInventoryIssueModal" data-has-confirm-access="@(userHasConfirmAccess ? "true" : "false")" disabled="@((disableConfirmForApartmentAdd || disableConfirmForNoAccess) ? "disabled" : null)"><i class="fas fa-check"></i> @confirmButtonText</button>
+                        <button type="button" id="btnOpenConfirmVoucher" class="btn btn-sm btn-success border mx-1 my-1" data-toggle="modal" data-target="#confirmInventoryIssueModal" data-has-confirm-access="@(userHasConfirmAccess ? "true" : "false")" disabled="@(disableConfirmForNoAccess ? "disabled" : null)"><i class="fas fa-check"></i> @confirmButtonText</button>
                     }
                     @if (Model.Id.HasValue)
                     {
@@ -587,7 +586,23 @@
             let pendingAttachments = [];
             let deletedAttachmentDocIds = [];
             let isSubmittingConfirmAfterSave = false;
+            let isSubmittingInventoryIssue = false;
             let pendingDuplicateIncomingRow = null;
+
+            function setInventoryIssueSubmitting() {
+                isSubmittingInventoryIssue = true;
+                $('#InventoryIssueDetailForm button[type="submit"], #btnOpenConfirmVoucher, #btnConfirmVoucherAction')
+                    .prop('disabled', true);
+            }
+
+            $('#InventoryIssueDetailForm, #confirmInventoryIssueForm').on('submit', function () {
+                if (isSubmittingInventoryIssue) {
+                    return false;
+                }
+
+                setInventoryIssueSubmitting();
+                return true;
+            });
 
             function formatBytes(bytes) {
                 const value = Number(bytes || 0);
@@ -741,11 +756,9 @@
 
             function syncConfirmButtonState() {
                 const mode = ($('input[name="mode"]').val() || '').toLowerCase();
-                const flowSubType = Number($('#Header_FlowSubType').val() || 0);
                 const hasConfirmAccess = ($('#btnOpenConfirmVoucher').attr('data-has-confirm-access') || '').toLowerCase() === 'true';
-                const disable = mode === 'add' && (!hasConfirmAccess || flowSubType === 2);
+                const disable = mode === 'add' && !hasConfirmAccess;
                 $('#btnOpenConfirmVoucher').prop('disabled', disable);
-                $('#issueType2Hint').toggleClass('d-none', !(mode === 'add' && flowSubType === 2));
             }
 
             function applyFieldRuleByFlowSubType() {
@@ -1265,6 +1278,10 @@
             });
 
             $('#btnConfirmVoucherAction').on('click', function () {
+                if (isSubmittingInventoryIssue) {
+                    return;
+                }
+
                 const mode = ($('input[name="mode"]').val() || '').toLowerCase();
                 if (mode === 'add') {
                     isSubmittingConfirmAfterSave = true;

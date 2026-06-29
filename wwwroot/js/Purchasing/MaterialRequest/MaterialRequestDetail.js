@@ -952,7 +952,7 @@ function normalizeEditableNumeric(value) {
     if (!Number.isFinite(parsed)) return text;
     return parsed.toLocaleString('en-US', {
         minimumFractionDigits: 0,
-        maximumFractionDigits: 2
+        maximumFractionDigits: 20
     });
 }
 
@@ -1355,7 +1355,7 @@ function formatLookupNumber(value) {
     if (!Number.isFinite(parsed)) return '0';
     return parsed.toLocaleString('en-US', {
         minimumFractionDigits: 0,
-        maximumFractionDigits: 2
+        maximumFractionDigits: 20
     });
 }
 

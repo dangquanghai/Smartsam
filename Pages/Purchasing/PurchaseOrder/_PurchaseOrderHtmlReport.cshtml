@@ -24,7 +24,7 @@
 
     string TrimDecimal(decimal v)
     {
-        return decimal.Round(v, 2, System.MidpointRounding.AwayFromZero).ToString("#,##0.##", System.Globalization.CultureInfo.InvariantCulture);
+        return v.ToString("#,##0.############################", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     string ImgTag(byte[]? bytes, string cssClass)

@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -164,13 +164,13 @@ internal static class PurchaseRequisitionPdfReport
                     table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(item.QtyMr));
                     table.Cell().Element(BodyCell).AlignRight().Text(FormatQuantity(item.QtyPur));
                     table.Cell().Element(BodyCell).AlignRight().Text(FormatAmount(item.UnitPrice));
-                    table.Cell().Element(BodyCell).AlignRight().Text(FormatWholeAmount(item.Amount));
+                    table.Cell().Element(BodyCell).AlignRight().Text(FormatAmount(item.Amount));
                     table.Cell().Element(BodyCell).AlignLeft().Text(item.Remark);
                 }
 
                 table.Cell().ColumnSpan(6).Border(0).PaddingTop(2);
                 table.Cell().Border(0).Padding(3).AlignRight().Text("Total:").Bold();
-                table.Cell().Border(1).Padding(3).AlignRight().Text(FormatWholeAmount(model.TotalAmount)).Bold();
+                table.Cell().Border(1).Padding(3).AlignRight().Text(FormatAmount(model.TotalAmount)).Bold();
                 table.Cell().Border(0).PaddingTop(2);
             });
 
@@ -344,7 +344,7 @@ internal static class PurchaseRequisitionPdfReport
 
     private static string FormatAmount(decimal value)
     {
-        return value.ToString("#,##0.00", CultureInfo.InvariantCulture);
+        return value.ToString("#,##0.##", CultureInfo.InvariantCulture);
     }
 
     private static string FormatWholeAmount(decimal value)

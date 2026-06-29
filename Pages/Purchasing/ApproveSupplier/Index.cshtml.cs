@@ -1561,10 +1561,6 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         private List<ApproveSupplierNotifyRecipientViewModel> GetEmailsByEmployeeFlag(string flagColumnName, int? deptId)
         {
             var rows = new List<ApproveSupplierNotifyRecipientViewModel>();
-            if (!deptId.HasValue)
-            {
-                return rows;
-            }
 
             var allowedColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -1587,10 +1583,8 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
                     LTRIM(RTRIM(ISNULL(Title, ''))) AS Title
                 FROM dbo.MS_Employee
                 WHERE ISNULL({flagColumnName}, 0) = 1
-                  AND DeptID = @DeptID
                   AND ISNULL(LTRIM(RTRIM(TheEmail)), '') <> ''
                   AND ISNULL(IsActive, 0) = 1", conn);
-            cmd.Parameters.Add("@DeptID", SqlDbType.Int).Value = deptId.Value;
             conn.Open();
 
             using var rd = cmd.ExecuteReader();
@@ -1687,7 +1681,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             if (recipients.Count == 0)
             {
                 return IsApproveSupplierNewMode
-                    ? $"No email recipients were found for {GetNewSupplierApprovalRoleName(currentLevel)} in the same department."
+                    ? $"No email recipients were found for {GetNewSupplierApprovalRoleName(currentLevel)}."
                     : $"No email recipients were found for the next level.";
             }
 
@@ -1782,12 +1776,12 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
             }
 
             var recipients = IsApproveSupplierNewMode
-                ? GetPurchaserRecipientsByCode(supplier.PurchaserCode)
+                ? GetEmailsByEmployeeFlag("IsPurchaser", supplier.DeptID)
                 : GetEmailsByLevelCheck(1, supplier.DeptID);
             if (recipients.Count == 0)
             {
                 return IsApproveSupplierNewMode
-                    ? "No purchaser email recipient was found for the original submitter."
+                    ? "No purchaser email recipients were found."
                     : "No PU email recipients were found.";
             }
 
@@ -2894,6 +2888,7 @@ namespace SmartSam.Pages.Purchasing.ApproveSupplier
         public int? Status { get; set; }
     }
 }
+
 
 
 

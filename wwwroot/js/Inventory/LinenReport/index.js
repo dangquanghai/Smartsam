@@ -592,20 +592,45 @@
     }
 
     function formatDecimalOrZero(value, blankZero) {
-        const numeric = parseNumber(value);
-        if (!Number.isFinite(numeric)) {
+        const formatted = formatDecimalText(value);
+        if (!formatted) {
             return blankZero ? '' : '0';
         }
 
-        if (numeric === 0 && blankZero) {
+        if (formatted === '0' && blankZero) {
             return '';
         }
 
-        if (Number.isInteger(numeric)) {
-            return numeric.toString();
+        return formatted;
+    }
+
+    function formatDecimalText(value) {
+        const raw = (value ?? '').toString().trim();
+        if (!raw) {
+            return '0';
         }
 
-        return Math.round(numeric).toLocaleString('en-US');
+        let normalized = raw.replace(/,/g, '');
+        if (!/^-?\d+(\.\d+)?$/.test(normalized)) {
+            const numeric = parseNumber(value);
+            if (!Number.isFinite(numeric)) {
+                return '0';
+            }
+
+            normalized = numeric.toString();
+        }
+
+        const negative = normalized.startsWith('-');
+        if (negative) {
+            normalized = normalized.slice(1);
+        }
+
+        const parts = normalized.split('.');
+        let integerPart = parts[0].replace(/^0+(?=\d)/, '') || '0';
+        let decimalPart = (parts[1] || '').replace(/0+$/, '');
+        integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+        return `${negative ? '-' : ''}${integerPart}${decimalPart ? `.${decimalPart}` : ''}`;
     }
 
     function parseNumber(value) {

@@ -11,6 +11,7 @@
         else if (pageItems.Count == 0 || pageItems[^1].HasValue) pageItems.Add(null);
     }
     Func<int, string> pageUrl = (page) => Url.Page("/Inventory/InventoryTrees/Index", new Dictionary<string, object?> { ["Filter.GroupId"] = Model.Filter.GroupId, ["Filter.SelectedCatgId"] = Model.Filter.SelectedCatgId, ["Filter.Page"] = page, ["Filter.PageSize"] = Model.Filter.PageSize }) ?? "#";
+    var exportExcelUrl = Url.Page("/Inventory/InventoryTrees/Index", "ExportExcel", new Dictionary<string, object?> { ["Filter.GroupId"] = Model.Filter.GroupId, ["Filter.SelectedCatgId"] = Model.Filter.SelectedCatgId, ["Filter.PageSize"] = Model.Filter.PageSize }) ?? "#";
 }
 
 <section class="content vni-font">
@@ -55,9 +56,9 @@
                         </form>
                     </div>
                     <div class="card-footer p-2 text-center module-action-bar prq-action-bar">
-                        @if (Model.CanAdd){<button type="button" class="btn btn-sm btn-action-add border mx-1 my-1" data-toggle="modal" data-target="#nodeAddModal"><i class="fas fa-plus"></i> Add Node</button>}
-                        @if (Model.CanEdit){<button type="button" class="btn btn-sm btn-action-copy border mx-1 my-1" data-toggle="modal" data-target="#nodeEditModal" disabled="@(Model.Filter.SelectedCatgId <= 0 ? "disabled" : null)"><i class="fas fa-edit"></i> Edit Node</button>}
-                        @if (Model.CanDeleteNode){<button type="button" class="btn btn-sm btn-action-close border mx-1 my-1" data-toggle="modal" data-target="#nodeDeleteModal" disabled="@(Model.Filter.SelectedCatgId <= 0 ? "disabled" : null)"><i class="fas fa-trash"></i> Delete Node</button>}
+                        @if (Model.CanAdd){<button type="button" class="btn btn-sm btn-primary border mx-1 my-1" data-toggle="modal" data-target="#nodeAddModal"><i class="fas fa-plus"></i> Add Node</button>}
+                        @if (Model.CanEdit){<button type="button" class="btn btn-sm btn-success border mx-1 my-1" data-toggle="modal" data-target="#nodeEditModal" disabled="@(Model.Filter.SelectedCatgId <= 0 ? "disabled" : null)"><i class="fas fa-edit"></i> Edit Node</button>}
+                        @if (Model.CanDeleteNode){<button type="button" class="btn btn-sm btn-danger border mx-1 my-1" data-toggle="modal" data-target="#nodeDeleteModal" disabled="@(Model.Filter.SelectedCatgId <= 0 ? "disabled" : null)"><i class="fas fa-trash"></i> Delete Node</button>}
                     </div>
                 </div>
             </div>
@@ -89,7 +90,7 @@
                                     <thead class="thead-light"><tr><th style="width:32px;"></th><th>Item Code</th><th class="iil-col-name">Item Name</th><th style="width:90px;">Unit</th><th style="width:110px;" class="text-right">U.Price</th><th style="width:70px;">Curr</th></tr></thead>
                                     <tbody>
                                     @if(Model.Items.Count==0){<tr><td colspan="6" class="text-center text-muted">No data</td></tr>}
-                                    else{foreach(var item in Model.Items){<tr><td><input type="checkbox" name="selectedItemIds" value="@item.ItemID" /></td><td>@item.ItemCode</td><td class="iil-col-name"><span class="iil-ellipsis tcvn3-font" title="@item.ItemName">@item.ItemName</span></td><td>@item.Unit</td><td class="text-right">@item.UnitPriceText</td><td>@item.CurrencyName</td></tr>}}
+                                    else{foreach(var item in Model.Items){<tr class="remove-item-row" data-item-id="@item.ItemID" data-item-code="@item.ItemCode" data-item-name="@item.ItemName"><td><input type="checkbox" class="remove-item-checkbox stock-item-selector" name="selectedItemIds" value="@item.ItemID" data-item-code="@item.ItemCode" data-item-name="@item.ItemName" /></td><td>@item.ItemCode</td><td class="iil-col-name"><span class="iil-ellipsis tcvn3-font" title="@item.ItemName">@item.ItemName</span></td><td>@item.Unit</td><td class="text-right">@item.UnitPriceText</td><td>@item.CurrencyName</td></tr>}}
                                     </tbody>
                                 </table>
                             </div>
@@ -99,10 +100,10 @@
 
                 <div class="card card-outline card-primary">
                     <div class="card-footer p-2 text-center module-action-bar prq-action-bar">
-                        @if (Model.CanDeleteItem){<button form="removeItemsForm" class="btn btn-sm btn-action-close border mx-1 my-1" onclick="return confirm('Remove selected item(s) from the node?')"><i class="fas fa-minus-circle"></i> Remove from node</button>}
-                        @if (Model.CanAddItem){<button type="button" class="btn btn-sm btn-action-add border mx-1 my-1" disabled><i class="fas fa-plus-circle"></i> Add to Node</button>}
-                        @if (Model.CanCheckStock){<button type="button" class="btn btn-sm btn-action-copy border mx-1 my-1" disabled><i class="fas fa-boxes"></i> Check Item Stock</button>}
-                        <button type="button" class="btn btn-sm btn-action-export border mx-1 my-1" disabled><i class="fas fa-file-excel"></i> Export Excel</button>
+                        @if (Model.CanAddItem){<button type="button" class="btn btn-sm btn-action-add border mx-1 my-1" data-toggle="modal" data-target="#addItemsModal" disabled="@(Model.Filter.SelectedCatgId <= 0 ? "disabled" : null)"><i class="fas fa-plus-circle"></i> Add to Node</button>}
+                        @if (Model.CanDeleteItem){<button type="button" id="openRemoveItemsModal" class="btn btn-sm btn-danger border mx-1 my-1" disabled><i class="fas fa-minus-circle"></i> Delete From Node</button>}
+                        @if (Model.CanCheckStock){<button type="button" id="openItemStockModal" class="btn btn-sm btn-warning border mx-1 my-1" disabled><i class="fas fa-boxes"></i> Check Item Stock</button>}
+                        <a class="btn btn-sm btn-action-export border mx-1 my-1" href="@exportExcelUrl"><i class="fas fa-file-excel"></i> Export Excel</a>
                     </div>
                 </div>
             </div>
@@ -114,9 +115,98 @@
 <form id="editNodeForm" method="post" asp-page-handler="EditNode"><input type="hidden" name="groupId" value="@Model.Filter.GroupId" /><input type="hidden" name="selectedCatgId" value="@Model.Filter.SelectedCatgId" /><input type="hidden" name="Filter.Page" value="@Model.Filter.Page" /><input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" /><input type="hidden" name="nodeCode" /><input type="hidden" name="nodeName" /><input type="hidden" name="description" /></form>
 <form id="deleteNodeForm" method="post" asp-page-handler="DeleteNode"><input type="hidden" name="groupId" value="@Model.Filter.GroupId" /><input type="hidden" name="selectedCatgId" value="@Model.Filter.SelectedCatgId" /><input type="hidden" name="Filter.Page" value="@Model.Filter.Page" /><input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" /></form>
 
+<form id="addItemsForm" method="post" asp-page-handler="AddItems">
+    <input type="hidden" name="groupId" value="@Model.Filter.GroupId" />
+    <input type="hidden" name="selectedCatgId" value="@Model.Filter.SelectedCatgId" />
+    <input type="hidden" name="Filter.Page" value="@Model.Filter.Page" />
+    <input type="hidden" name="Filter.PageSize" value="@Model.Filter.PageSize" />
+    <div class="modal fade vni-font" id="addItemsModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-xl" role="document">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title">Add To Node</h5>
+                    <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div class="table-responsive px-3 pt-3 pb-2" style="max-height:520px;overflow:auto;">
+                        <table class="table table-sm table-hover table-bordered mb-0">
+                            <thead class="thead-light">
+                                <tr><th style="width:32px;"></th><th>Item Code</th><th class="iil-col-name">Item Name</th><th style="width:90px;">Unit</th><th style="width:110px;" class="text-right">U.Price</th><th style="width:70px;">Curr</th></tr>
+                            </thead>
+                            <tbody>
+                            @if (Model.AvailableItems.Count == 0)
+                            {
+                                <tr><td colspan="6" class="text-center text-muted">No available item(s) to add</td></tr>
+                            }
+                            else
+                            {
+                                foreach (var item in Model.AvailableItems)
+                                {
+                                    <tr><td><input type="checkbox" name="selectedItemIds" value="@item.ItemID" /></td><td>@item.ItemCode</td><td class="iil-col-name"><span class="iil-ellipsis tcvn3-font" title="@item.ItemName">@item.ItemName</span></td><td>@item.Unit</td><td class="text-right">@item.UnitPriceText</td><td>@item.CurrencyName</td></tr>
+                                }
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="submit" class="btn btn-sm btn-action-save border"><i class="fas fa-plus-circle"></i> Add</button>
+                    <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal"><i class="fas fa-times"></i> Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+
+<div class="modal fade vni-font" id="removeItemsModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-danger">
+            <div class="modal-header bg-danger text-white py-2">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">Delete the selected item(s) from this node?</div>
+                <div id="removeItemsSummary" class="small"></div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" id="confirmRemoveItemsBtn" class="btn btn-sm btn-danger border"><i class="fas fa-trash"></i> Delete</button>
+                <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal"><i class="fas fa-times"></i> Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade vni-font" id="itemStockModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-warning py-2">
+                <h5 class="modal-title">Check Item Stock</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div id="itemStockAlert" class="alert alert-warning d-none mb-2"></div>
+                <div class="mb-2"><strong>Item Code:</strong> <span id="itemStockCode"></span></div>
+                <div class="mb-3"><strong>Item Name:</strong> <span id="itemStockName" class="tcvn3-font"></span></div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead class="thead-light"><tr><th>Store-House Name</th><th class="text-right">Current Stock Qty</th></tr></thead>
+                        <tbody id="itemStockTableBody"><tr><td colspan="2" class="text-center text-muted">No data</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal"><i class="fas fa-times"></i> Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade vni-font" id="nodeAddModal" tabindex="-1" role="dialog"><div class="modal-dialog" role="document"><div class="modal-content"><div class="modal-header py-2"><h5 class="modal-title">Add Node</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div><div class="modal-body"><div class="form-group mb-2"><label>Node Code</label><input id="addNodeCode" class="form-control form-control-sm" /></div><div class="form-group mb-2"><label>Node Name</label><input id="addNodeName" class="form-control form-control-sm" /></div><div class="form-group mb-0"><label>Description</label><input id="addNodeDesc" class="form-control form-control-sm" /></div></div><div class="modal-footer py-2"><button type="button" class="btn btn-sm btn-action-save border" onclick="submitNodeModal('addNodeForm','addNodeCode','addNodeName','addNodeDesc')"><i class="fas fa-save"></i> Save</button><button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal"><i class="fas fa-times"></i> Close</button></div></div></div></div>
 <div class="modal fade vni-font" id="nodeEditModal" tabindex="-1" role="dialog"><div class="modal-dialog" role="document"><div class="modal-content"><div class="modal-header py-2"><h5 class="modal-title">Edit Node</h5><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button></div><div class="modal-body"><div class="form-group mb-2"><label>Node Code</label><input id="editNodeCode" class="form-control form-control-sm" value="@Model.SelectedNodeForm.NodeCode" /></div><div class="form-group mb-2"><label>Node Name</label><input id="editNodeName" class="form-control form-control-sm" value="@Model.SelectedNodeForm.NodeName" /></div><div class="form-group mb-0"><label>Description</label><input id="editNodeDesc" class="form-control form-control-sm" value="@Model.SelectedNodeForm.Description" /></div></div><div class="modal-footer py-2"><button type="button" class="btn btn-sm btn-action-save border" onclick="submitNodeModal('editNodeForm','editNodeCode','editNodeName','editNodeDesc')"><i class="fas fa-save"></i> Save</button><button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal"><i class="fas fa-times"></i> Close</button></div></div></div></div>
-<div class="modal fade vni-font" id="nodeDeleteModal" tabindex="-1" role="dialog"><div class="modal-dialog modal-dialog-centered" role="document"><div class="modal-content border-danger"><div class="modal-header bg-danger text-white py-2"><h5 class="modal-title">Confirm Delete</h5><button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button></div><div class="modal-body">Delete the selected node?</div><div class="modal-footer py-2"><button type="button" class="btn btn-sm btn-action-close border" onclick="document.getElementById('deleteNodeForm').submit()"><i class="fas fa-trash"></i> Delete</button><button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal"><i class="fas fa-times"></i> Close</button></div></div></div></div>
+<div class="modal fade vni-font" id="nodeDeleteModal" tabindex="-1" role="dialog"><div class="modal-dialog modal-dialog-centered" role="document"><div class="modal-content border-danger"><div class="modal-header bg-danger text-white py-2"><h5 class="modal-title">Confirm Delete</h5><button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button></div><div class="modal-body">Delete the selected node?</div><div class="modal-footer py-2"><button type="button" class="btn btn-sm btn-danger border" onclick="document.getElementById('deleteNodeForm').submit()"><i class="fas fa-trash"></i> Delete</button><button type="button" class="btn btn-sm btn-action-close border" data-dismiss="modal"><i class="fas fa-times"></i> Close</button></div></div></div></div>
 
 @section Styles {
     <link rel="stylesheet" href="~/css/common/common.css" asp-append-version="true" />
@@ -135,6 +225,7 @@
         .inv-tree-node-link{color:#212529;text-decoration:none;display:inline-block;overflow:visible;padding:1px 5px;border-radius:4px;}
         .inv-tree-node-row:hover .inv-tree-node-link{background:#f1f5f9;text-decoration:none;} .inv-tree-toggle:hover{background:#e8f1ff;color:#0b4ea2;}
         .inv-tree-node-selected .inv-tree-node-link{font-weight:700 !important;color:#0b4ea2 !important;background:#dbeafe;} .inv-tree-node-selected .inv-tree-toggle{color:#0b4ea2;}
+        .remove-item-row{cursor:pointer;}
     </style>
 }
 
@@ -173,6 +264,126 @@ document.querySelectorAll('.inv-tree-toggle').forEach(function(btn){
     this.innerHTML = expanded ? '&#9656;' : '&#9662;';
   });
 });
+
+const removeItemsForm = document.getElementById('removeItemsForm');
+const removeModalButton = document.getElementById('openRemoveItemsModal');
+const stockModalButton = document.getElementById('openItemStockModal');
+const removeSummary = document.getElementById('removeItemsSummary');
+const confirmRemoveItemsBtn = document.getElementById('confirmRemoveItemsBtn');
+const removeItemCheckboxes = Array.from(document.querySelectorAll('.remove-item-checkbox'));
+const removeItemRows = Array.from(document.querySelectorAll('.remove-item-row'));
+const itemStockAlert = document.getElementById('itemStockAlert');
+const itemStockCode = document.getElementById('itemStockCode');
+const itemStockName = document.getElementById('itemStockName');
+const itemStockTableBody = document.getElementById('itemStockTableBody');
+
+function escapeHtml(value){
+  const div = document.createElement('div');
+  div.textContent = value == null ? '' : String(value);
+  return div.innerHTML;
+}
+
+function getSelectedRemoveItems(){
+  return removeItemCheckboxes.filter(function(cb){ return cb.checked; }).map(function(cb){
+    return { id: cb.value, code: cb.getAttribute('data-item-code') || '', name: cb.getAttribute('data-item-name') || '' };
+  });
+}
+
+function getSingleSelectedStockItem(){
+  const items = getSelectedRemoveItems();
+  return items.length === 1 ? items[0] : null;
+}
+
+function refreshRemoveButtonState(){
+  const selectedCount = getSelectedRemoveItems().length;
+  if(removeModalButton) removeModalButton.disabled = selectedCount === 0;
+  if(stockModalButton) stockModalButton.disabled = selectedCount !== 1;
+}
+
+function renderRemoveSummary(){
+  if(!removeSummary) return;
+  const items = getSelectedRemoveItems();
+  if(items.length === 0){
+    removeSummary.innerHTML = '<div class="text-muted">No item selected.</div>';
+    return;
+  }
+  removeSummary.innerHTML = items.map(function(item){
+    return '<div><strong>' + escapeHtml(item.code) + '</strong> - ' + escapeHtml(item.name) + '</div>';
+  }).join('');
+}
+
+removeItemCheckboxes.forEach(function(cb){
+  cb.addEventListener('change', refreshRemoveButtonState);
+});
+
+removeItemRows.forEach(function(row){
+  row.addEventListener('click', function(e){
+    if(e.target.closest('input, a, button, label')) return;
+    const cb = row.querySelector('.remove-item-checkbox');
+    if(!cb) return;
+    cb.checked = !cb.checked;
+    refreshRemoveButtonState();
+  });
+});
+
+removeModalButton?.addEventListener('click', function(){
+  renderRemoveSummary();
+  if (typeof window.jQuery !== 'undefined') {
+    window.jQuery('#removeItemsModal').modal('show');
+  }
+});
+
+confirmRemoveItemsBtn?.addEventListener('click', function(){
+  removeItemsForm?.submit();
+});
+
+stockModalButton?.addEventListener('click', async function(){
+  const item = getSingleSelectedStockItem();
+  if(!item) return;
+
+  itemStockCode.textContent = '';
+  itemStockName.textContent = '';
+  itemStockTableBody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">Loading...</td></tr>';
+  itemStockAlert.classList.add('d-none');
+  itemStockAlert.textContent = '';
+
+  if (typeof window.jQuery !== 'undefined') {
+    window.jQuery('#itemStockModal').modal('show');
+  }
+
+  try {
+    const response = await fetch(`@Url.Page("/Inventory/InventoryTrees/Index", "ItemStock")&itemId=${encodeURIComponent(item.id)}`, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    });
+    const result = await response.json();
+    itemStockCode.textContent = result.itemCode || item.code || '';
+    itemStockName.textContent = result.itemName || item.name || '';
+
+    if (!response.ok || !result.success) {
+      itemStockTableBody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">No data</td></tr>';
+      itemStockAlert.textContent = result.message || 'Unable to load stock data.';
+      itemStockAlert.classList.remove('d-none');
+      return;
+    }
+
+    if (!Array.isArray(result.data) || result.data.length === 0) {
+      itemStockTableBody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">No data</td></tr>';
+      itemStockAlert.textContent = 'Item does not have stock on any Store-house.';
+      itemStockAlert.classList.remove('d-none');
+      return;
+    }
+
+    itemStockTableBody.innerHTML = result.data.map(function(row){
+      return `<tr><td>${escapeHtml(row.storeName)}</td><td class="text-right">${escapeHtml(row.quantityText)}</td></tr>`;
+    }).join('');
+  } catch (error) {
+    itemStockTableBody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">No data</td></tr>';
+    itemStockAlert.textContent = 'Unable to load stock data.';
+    itemStockAlert.classList.remove('d-none');
+  }
+});
+
+refreshRemoveButtonState();
 </script>
 }
 

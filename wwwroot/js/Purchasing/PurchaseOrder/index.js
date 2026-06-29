@@ -1015,12 +1015,35 @@ async function downloadPurchaseOrderPdf(reportUrl, fileName) {
     }
 
     function formatNumber(value) {
-        const number = Number(value || 0);
-        if (Number.isNaN(number)) {
+        const formatted = formatDecimalText(value);
+        return formatted || '0';
+    }
+
+    function formatDecimalText(value) {
+        const raw = (value ?? '').toString().trim();
+        if (!raw) {
             return '0';
         }
 
-        return Math.round(number).toLocaleString('en-US');
+        let normalized = raw.replace(/,/g, '');
+        if (!/^-?\d+(\.\d+)?$/.test(normalized)) {
+            const number = Number(value || 0);
+            if (Number.isNaN(number)) {
+                return '0';
+            }
+
+            normalized = number.toString();
+        }
+
+        const negative = normalized.startsWith('-');
+        if (negative) {
+            normalized = normalized.slice(1);
+        }
+
+        const parts = normalized.split('.');
+        const integerPart = (parts[0].replace(/^0+(?=\d)/, '') || '0').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        const decimalPart = (parts[1] || '').replace(/0+$/, '');
+        return `${negative ? '-' : ''}${integerPart}${decimalPart ? `.${decimalPart}` : ''}`;
     }
 
     function buildViewDetailRequest(page = 1) {

@@ -1,4 +1,4 @@
-using System.Globalization;
+ï»¿using System.Globalization;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -41,7 +41,7 @@ internal static class InventoryReceivedPdfReport
             table.Cell().AlignCenter().Column(c =>
             {
                 c.Item().AlignCenter().Text("ITEM RECEIVED VOUCHER").FontFamily("Lato").FontSize(16).Bold();
-                c.Item().PaddingTop(2).AlignCenter().Text("PHI?U NH?P HÀNG").FontFamily("Lato").FontSize(16).Bold();
+                c.Item().PaddingTop(2).AlignCenter().Text("PHI\u1EBEU NH\u1EACP H\u00C0NG").FontFamily("Lato").FontSize(16).Bold();
             });
             table.Cell().AlignRight().Text(model.FlowDateText).Bold();
             table.Cell().PaddingTop(8).Text($"Receive House: {model.StoreName}");
