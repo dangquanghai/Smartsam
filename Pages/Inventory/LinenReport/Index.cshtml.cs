@@ -371,16 +371,20 @@ ORDER BY IsOrder, TimeSection;", conn))
 
         var rows = new List<LinenDeliveryPreviewRow>();
         using var cmd = new SqlCommand(@"
-SELECT Location,
-       LinnenCode AS LinenCode,
-       Quantity,
-       Price,
-       Amount,
-       Note
-FROM dbo.ViewLinenDelivery
-WHERE DeliveryID = @DeliveryID
-  AND (@LinenCode = '' OR ISNULL(LinnenCode, '') = @LinenCode)
-ORDER BY ISNULL(Location, ''), ISNULL(LinnenCode, '');", conn);
+SELECT ISNULL(dt.Location, '') AS Location,
+       ISNULL(CASE WHEN ISNULL(dt.LinenCode, '') <> '' THEN dt.LinenCode ELSE ln.LinnenCode END, '') AS LinenCode,
+       ISNULL(dt.Quantity, 0) AS Quantity,
+       ISNULL(dt.Price, 0) AS Price,
+       ISNULL(dt.Amount, 0) AS Amount,
+       ISNULL(dt.Note, '') AS Note
+FROM dbo.LN_DeliveryDT dt
+LEFT JOIN dbo.LN_Linnen ln ON ln.ID = dt.LinnenID
+WHERE dt.DeliveryID = @DeliveryID
+  AND (@LinenCode = '' OR ISNULL(CASE WHEN ISNULL(dt.LinenCode, '') <> '' THEN dt.LinenCode ELSE ln.LinnenCode END, '') = @LinenCode)
+ORDER BY ISNULL(dt.Location, ''),
+         ISNULL(ln.IsOrder, 999999),
+         ISNULL(CASE WHEN ISNULL(dt.LinenCode, '') <> '' THEN dt.LinenCode ELSE ln.LinnenCode END, ''),
+         dt.ID;", conn);
         cmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = descriptionId.Value;
         cmd.Parameters.Add("@LinenCode", SqlDbType.VarChar, 50).Value = linenCode;
 
@@ -454,21 +458,28 @@ WHERE mt.DeliveryID = @DeliveryID;", conn);
         var preview = new LinenReceivePreviewHeader();
 
         using var cmd = new SqlCommand(@"
-SELECT ReceiveID,
-       Des,
-       DesOfDe AS RefDeliveryDes,
-       SupplierName,
-       ReceiveDate,
-       Location,
-       LinnenCode AS LinenCode,
-       Quantity,
-       Price,
-       Amount,
-       Note
-FROM dbo.ViewLinenReceive
-WHERE ReceiveID = @ReceiveID
-  AND (@LinenCode = '' OR ISNULL(LinnenCode, '') = @LinenCode)
-ORDER BY ISNULL(Location, ''), ISNULL(LinnenCode, '');", conn);
+SELECT mt.ReceiveID,
+       ISNULL(mt.Des, '') AS Des,
+       ISNULL(de.Des, '') AS RefDeliveryDes,
+       ISNULL(sp.SupplierName, '') AS SupplierName,
+       mt.ReceiveDate,
+       ISNULL(dt.Location, '') AS Location,
+       ISNULL(CASE WHEN ISNULL(dt.LinnenCode, '') <> '' THEN dt.LinnenCode ELSE ln.LinnenCode END, '') AS LinenCode,
+       ISNULL(dt.Quantity, 0) AS Quantity,
+       ISNULL(dt.Price, 0) AS Price,
+       ISNULL(dt.Amount, 0) AS Amount,
+       ISNULL(dt.Note, '') AS Note
+FROM dbo.LN_ReceiveMT mt
+INNER JOIN dbo.LN_ReceiveDT dt ON mt.ReceiveID = dt.ReceiveID
+LEFT JOIN dbo.LN_DeliveryMT de ON de.DeliveryID = mt.SendID
+LEFT JOIN dbo.PC_Suppliers sp ON sp.SupplierID = mt.SupplierID
+LEFT JOIN dbo.LN_Linnen ln ON ln.ID = dt.LinnenID
+WHERE mt.ReceiveID = @ReceiveID
+  AND (@LinenCode = '' OR ISNULL(CASE WHEN ISNULL(dt.LinnenCode, '') <> '' THEN dt.LinnenCode ELSE ln.LinnenCode END, '') = @LinenCode)
+ORDER BY ISNULL(dt.Location, ''),
+         ISNULL(ln.IsOrder, 999999),
+         ISNULL(CASE WHEN ISNULL(dt.LinnenCode, '') <> '' THEN dt.LinnenCode ELSE ln.LinnenCode END, ''),
+         dt.ID;", conn);
         cmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = descriptionId.Value;
         cmd.Parameters.Add("@LinenCode", SqlDbType.VarChar, 50).Value = linenCode;
 

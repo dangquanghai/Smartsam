@@ -32,6 +32,14 @@
         return Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
     }
 
+    function amountsEqual(left, right) {
+        return Math.abs(roundToTwoDecimals(left) - roundToTwoDecimals(right)) < 0.01;
+    }
+
+    function isAutoCalculatedAmount(detail) {
+        return amountsEqual(detail.amount, toNumber(detail.qtyPur) * toNumber(detail.unitPrice));
+    }
+
     function formatQuantity(value) {
         const number = roundToTwoDecimals(value);
         return number.toLocaleString("en-US", {
@@ -719,15 +727,15 @@
             const priceInput = row.querySelector(".prq-detail-edit-price");
 
             if (target.classList.contains("prq-detail-edit-price")) {
+                const shouldRecalculateAmount = isAutoCalculatedAmount(detail);
                 sanitizeNonNegativeDecimalInputPreserveCaret(target);
                 detail.unitPrice = toNumber(target.value);
-                detail.amount = toNumber(detail.qtyPur) * toNumber(detail.unitPrice);
+                if (shouldRecalculateAmount) {
+                    detail.amount = toNumber(detail.qtyPur) * toNumber(detail.unitPrice);
+                }
             } else if (target.classList.contains("prq-detail-edit-amount")) {
                 sanitizeNonNegativeDecimalInputPreserveCaret(target);
                 detail.amount = toNumber(target.value);
-                detail.unitPrice = toNumber(detail.qtyPur) > 0
-                    ? detail.amount / toNumber(detail.qtyPur)
-                    : 0;
             } else if (target.classList.contains("prq-detail-edit-remark")) {
                 detail.remark = target.value || "";
             } else {

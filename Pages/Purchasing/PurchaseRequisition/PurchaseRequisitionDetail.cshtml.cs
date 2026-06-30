@@ -1621,16 +1621,16 @@ WHERE pr.PRID = @PRID", conn, trans);
         }
 
         detail.QtyPur = Math.Round(detail.QtyPur, 2, MidpointRounding.AwayFromZero);
-        detail.Amount = Math.Round(detail.QtyPur * detail.UnitPrice, 2, MidpointRounding.AwayFromZero);
+        detail.Amount = Math.Round(detail.Amount, 2, MidpointRounding.AwayFromZero);
 
         if (detail.QtyPur <= 0)
         {
             ModelState.AddModelError(string.Empty, $"Row {rowNo}: QtyPur must be greater than 0.");
         }
 
-        if (detail.QtyFromM < 0 || detail.UnitPrice < 0)
+        if (detail.QtyFromM < 0 || detail.UnitPrice < 0 || detail.Amount < 0)
         {
-            ModelState.AddModelError(string.Empty, $"Row {rowNo}: QtyFromM and U.Price must be valid numbers.");
+            ModelState.AddModelError(string.Empty, $"Row {rowNo}: QtyFromM, U.Price and Amount must be valid numbers.");
         }
 
     }
