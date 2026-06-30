@@ -659,12 +659,9 @@ SELECT dt.ID,
        ISNULL(dt.OutOfOffer, 0) AS OutOfOffer,
        ISNULL(dt.CollectToBill, 0) AS CollectToBill
 FROM dbo.LN_DeliveryDT dt
-LEFT JOIN dbo.AM_Apmt ap ON ap.ApmtID = dt.LocationID
+LEFT JOIN dbo.LN_Linnen ln ON ln.ID = dt.LinnenID
 WHERE dt.DeliveryID = @DeliveryID
-ORDER BY CASE WHEN ap.ApmtID IS NULL THEN 1 ELSE 0 END,
-         ap.FloorNo,
-         ap.BlockNo,
-         ISNULL(dt.Location, ''),
+ORDER BY ISNULL(ln.IsOrder, 999999),
          ISNULL(dt.LinenCode, ''),
          dt.ID;", conn, trans);
         cmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = Header.DeliveryID;
@@ -1092,13 +1089,9 @@ INNER JOIN dbo.LN_DeliveryDT dt ON mt.DeliveryID = dt.DeliveryID
 LEFT JOIN dbo.LN_LaudryType tp ON tp.LaundryTypeID = mt.DeliveryType
 LEFT JOIN dbo.PC_Suppliers sp ON sp.SupplierID = mt.SupplierID
 LEFT JOIN dbo.LN_Linnen ln ON ln.ID = dt.LinnenID
-LEFT JOIN dbo.AM_Apmt ap ON ap.ApmtID = dt.LocationID
 WHERE mt.DeliveryID = @DeliveryID
   AND (@LinenCode = '' OR ISNULL(CASE WHEN ISNULL(dt.LinenCode, '') <> '' THEN dt.LinenCode ELSE ln.LinnenCode END, '') = @LinenCode)
-ORDER BY CASE WHEN ap.ApmtID IS NULL THEN 1 ELSE 0 END,
-         ap.FloorNo,
-         ap.BlockNo,
-         ISNULL(dt.Location, ''),
+ORDER BY ISNULL(ln.IsOrder, 999999),
          ISNULL(CASE WHEN ISNULL(dt.LinenCode, '') <> '' THEN dt.LinenCode ELSE ln.LinnenCode END, ''),
          dt.ID;", conn);
         cmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = deliveryId;

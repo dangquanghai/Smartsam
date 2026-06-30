@@ -324,12 +324,8 @@ SELECT dt.ID,
 FROM dbo.LN_ReceiveDT dt
 LEFT JOIN dbo.LN_DeliveryMT de ON de.DeliveryID = dt.SendID
 LEFT JOIN dbo.LN_Linnen ln ON ln.ID = dt.LinnenID
-LEFT JOIN dbo.AM_Apmt ap ON ap.ApmtID = dt.LocationID
 WHERE dt.ReceiveID = @ReceiveID
-ORDER BY CASE WHEN ap.ApmtID IS NULL THEN 1 ELSE 0 END,
-         ap.FloorNo,
-         ap.BlockNo,
-         ISNULL(dt.Location, ''),
+ORDER BY ISNULL(ln.IsOrder, 999999),
          ISNULL(CASE WHEN ISNULL(dt.LinnenCode, '') <> '' THEN dt.LinnenCode ELSE ln.LinnenCode END, ''),
          dt.ID;", conn, trans);
         cmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = Header.ReceiveID;
