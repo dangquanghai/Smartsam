@@ -58,6 +58,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="wwwroot\htmlpage.html" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Content Update="wwwroot\js\Sales\STContract\STContractDetail.js">
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>

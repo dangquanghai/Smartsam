@@ -39,6 +39,9 @@ builder.Services.AddScoped<LinenLaundryRecordCacheService>();
 // Đăng ký Service xử lý Review của bạn
 builder.Services.AddScoped<SixMonthsStayReviewService>();
 
+// Service báo cáo tình trạng căn hộ (Apartment Status Report) gửi mail hàng ngày
+builder.Services.AddScoped<ApartmentStatusReportService>();
+
 
 
 builder.Services.Configure<FormOptions>(options =>
@@ -142,6 +145,17 @@ RecurringJob.AddOrUpdate<LinenLaundryRecordCacheService>(
     "DailyLinenLaundryRecordCache",
     service => service.CollectRecentLaundryRecordCache(),
     Cron.Daily(23, 30),
+    new RecurringJobOptions
+    {
+        TimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time")
+    }
+);
+
+// Job báo cáo tình trạng căn hộ (Apartment Status Report) - chạy lúc 1:00 sáng hàng ngày
+RecurringJob.AddOrUpdate<ApartmentStatusReportService>(
+    "DailyApartmentStatusReport",
+    service => service.ProcessApartmentStatusReport(),
+    Cron.Daily(1, 0),
     new RecurringJobOptions
     {
         TimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time")

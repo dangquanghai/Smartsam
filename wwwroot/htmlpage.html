@@ -1,0 +1,390 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bootstrap & jQuery Gantt Tool - Bản Sửa Lỗi Tuyệt Đối</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/frappe-gantt/0.6.1/frappe-gantt.css">
+
+    <style>
+        .gantt .bar {
+            fill: #0d6efd;
+            cursor: pointer;
+        }
+
+        .gantt .bar-progress {
+            fill: #0a58ca;
+        }
+
+        .gantt .bar-label {
+            fill: #fff;
+            font-weight: 500;
+            font-family: system-ui, sans-serif;
+            pointer-events: none;
+        }
+
+        .gantt .handle {
+            fill: #ffc107;
+            cursor: ew-resize;
+        }
+
+        .gantt-wrapper {
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            padding: 15px;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        /* Điểm kết nối ở 2 đầu: Luôn hiện đè lên trên cùng */
+        .gantt-knob {
+            stroke: #ffffff !important;
+            stroke-width: 2px !important;
+            cursor: crosshair !important;
+            pointer-events: auto !important;
+            transition: r 0.1s ease, fill 0.1s;
+        }
+
+        .knob-left {
+            fill: #2ecc71 !important;
+        }
+        /* Đầu vào (Start) - Xanh lá */
+        .knob-right {
+            fill: #e67e22 !important;
+        }
+        /* Đầu ra (Finish) - Cam */
+
+        .gantt-knob:hover {
+            r: 10px !important;
+            stroke: #000000 !important;
+        }
+
+        /* Đường dây nối tạm thời và đường nối chính thức */
+        #temp-edge, .custom-relation-line {
+            stroke: #ff5722 !important;
+            stroke-width: 3px !important;
+            fill: none !important;
+        }
+
+        #temp-edge {
+            stroke-dasharray: 6, 4;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div class="container-fluid py-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white border-bottom py-3">
+                <div class="row align-items-center g-3">
+                    <div class="col-md-6">
+                        <h5 class="mb-0 fw-bold text-dark">
+                            <i class="fa-solid fa-diagram-project text-primary me-2"></i>Gantt Link Engine Premium
+                        </h5>
+                    </div>
+                    <div class="col-md-6 text-md-end">
+                        <div class="btn-group shadow-sm" id="view-mode-trigger">
+                            <button type="button" class="btn btn-outline-secondary active" data-view="Day">Ngày</button>
+                            <button type="button" class="btn btn-outline-secondary" data-view="Week">Tuần</button>
+                            <button type="button" class="btn btn-outline-secondary" data-view="Month">Tháng</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-body p-0">
+                <div class="gantt-wrapper">
+                    <svg id="gantt-target"></svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="linkModal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="linkModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark" id="linkModalLabel">
+                        <i class="fa-solid fa-link text-warning me-2"></i>Cấu hình mối quan hệ công việc
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Loại liên kết đã kéo:</label>
+                        <input type="text" id="modal-link-type" class="form-control bg-light" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="modal-lag-days" class="form-label fw-semibold">Số ngày điều chỉnh (Lag / Lead):</label>
+                        <input type="number" id="modal-lag-days" class="form-control" value="0">
+                        <div class="form-text mt-2">
+                            * Nhập <strong>số dương (Lag)</strong>: Hoãn ngày bắt đầu lại.<br>
+                            * Nhập <strong>số âm (Lead)</strong>: Cho phép làm sớm gối đầu ngày.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy bỏ</button>
+                    <button type="button" id="btn-save-link" class="btn btn-primary px-4">Xác nhận nối</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/frappe-gantt/0.6.1/frappe-gantt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        $(document).ready(function () {
+            let tasks = [
+                { id: 'Task_1', name: '1. Thiết lập Core Backend', start: '2026-06-01', end: '2026-06-05', progress: 40, dependencies: '' },
+                { id: 'Task_2', name: '2. Xây dựng UI Component', start: '2026-06-06', end: '2026-06-12', progress: 10, dependencies: '' },
+                { id: 'Task_3', name: '3. Khởi chạy UAT Testing', start: '2026-06-15', end: '2026-06-20', progress: 0, dependencies: '' }
+            ];
+
+            let relations = [];
+            let currentPendingLink = null;
+            let gantt;
+            let bootstrapModal = new bootstrap.Modal(document.getElementById('linkModal'));
+
+            function initGantt() {
+                gantt = new Gantt("#gantt-target", tasks, {
+                    header_height: 50,
+                    column_width: 30,
+                    step: 24,
+                    view_mode: 'Day',
+                    language: 'en',
+                    on_date_change: function (task, start, end) {
+                        let t = tasks.find(x => x.id === task.id);
+                        if (t) { t.start = start; t.end = end; }
+                        recalculateSchedule();
+                    }
+                });
+                setupUniversalKnobs();
+            }
+
+            // Tạo các chấm tròn bằng phương thức createElementNS thuần của SVG (Bỏ Snap.svg để tránh lỗi mất context)
+            function createSVGElement(tag, attrs) {
+                let el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+                for (let k in attrs) {
+                    el.setAttribute(k, attrs[k]);
+                }
+                return el;
+            }
+
+            function setupUniversalKnobs() {
+                // Xóa sạch các thành phần cũ
+                $('.gantt-knob, .custom-relation-line').remove();
+
+                // Vẽ lại các chấm tròn hai đầu
+                $('#gantt-target .bar-wrapper').each(function () {
+                    const $wrapper = $(this);
+                    const taskId = $wrapper.attr('data-id');
+                    const $bar = $wrapper.find('.bar');
+
+                    const x = parseFloat($bar.attr('x'));
+                    const y = parseFloat($bar.attr('y'));
+                    const width = parseFloat($bar.attr('width'));
+                    const height = parseFloat($bar.attr('height'));
+                    const centerY = y + (height / 2);
+
+                    // Chấm XANH LÁ (START) bên trái
+                    let leftKnob = createSVGElement('circle', {
+                        cx: x - 10,
+                        cy: centerY,
+                        r: 6,
+                        class: 'gantt-knob knob-left',
+                        'data-task-id': taskId,
+                        'data-type': 'START'
+                    });
+                    $('#gantt-target').append(leftKnob);
+
+                    // Chấm CAM (FINISH) bên phải
+                    let rightKnob = createSVGElement('circle', {
+                        cx: x + width + 10,
+                        cy: centerY,
+                        r: 6,
+                        class: 'gantt-knob knob-right',
+                        'data-task-id': taskId,
+                        'data-type': 'FINISH'
+                    });
+                    $('#gantt-target').append(rightKnob);
+                });
+
+                // Vẽ đường nối cứng từ mảng dữ liệu relations
+                drawCustomRelations();
+
+                let isDrawing = false;
+                let sourceTaskId = null;
+                let sourceType = null;
+
+                // SỰ KIỆN NHẤN CHUỘT
+                $(document).off('mousedown', '.gantt-knob').on('mousedown', '.gantt-knob', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    isDrawing = true;
+                    sourceTaskId = $(this).attr('data-task-id');
+                    sourceType = $(this).attr('data-type');
+
+                    const svgOffset = $('#gantt-target').offset();
+                    const startX = e.pageX - svgOffset.left;
+                    const startY = e.pageY - svgOffset.top;
+
+                    if (!document.getElementById('temp-edge')) {
+                        let line = createSVGElement('line', {
+                            id: 'temp-edge',
+                            x1: startX,
+                            y1: startY,
+                            x2: startX,
+                            y2: startY
+                        });
+                        $('#gantt-target').append(line);
+                    }
+                });
+
+                // SỰ KIỆN DI CHUYỂN CHUỘT (Vẽ dây nét đứt tạm thời)
+                $('#gantt-target').off('mousemove').on('mousemove', function (e) {
+                    if (!isDrawing) return;
+                    const tempLine = document.getElementById('temp-edge');
+                    if (!tempLine) return;
+
+                    const svgOffset = $('#gantt-target').offset();
+                    tempLine.setAttribute('x2', e.pageX - svgOffset.left);
+                    tempLine.setAttribute('y2', e.pageY - svgOffset.top);
+                });
+
+                // SỰ KIỆN THẢ CHUỘT
+                $(document).off('mouseup').on('mouseup', function (e) {
+                    if (!isDrawing) return;
+                    isDrawing = false;
+
+                    const tempLine = document.getElementById('temp-edge');
+                    if (tempLine) tempLine.remove();
+
+                    const $targetKnob = $(e.target).closest('.gantt-knob');
+                    if ($targetKnob.length > 0) {
+                        const targetTaskId = $targetKnob.attr('data-task-id');
+                        const targetType = $targetKnob.attr('data-type');
+
+                        if (targetTaskId && targetTaskId !== sourceTaskId) {
+                            currentPendingLink = {
+                                fromId: sourceTaskId,
+                                fromType: sourceType,
+                                toId: targetTaskId,
+                                toType: targetType
+                            };
+
+                            $('#modal-link-type').val(`${sourceTaskId} (${sourceType}) -> ${targetTaskId} (${targetType})`);
+                            $('#modal-lag-days').val(0);
+                            bootstrapModal.show();
+                        }
+                    }
+                });
+            }
+
+            // HÀM VẼ ĐƯỜNG NỐI CỨNG (Sử dụng Javascript DOM thuần, loại bỏ Snap.svg)
+            function drawCustomRelations() {
+                relations.forEach(rel => {
+                    const $sourceKnob = $(`.gantt-knob[data-task-id="${rel.fromId}"][data-type="${rel.fromType}"]`);
+                    const $targetKnob = $(`.gantt-knob[data-task-id="${rel.toId}"][data-type="${rel.toType}"]`);
+
+                    if ($sourceKnob.length > 0 && $targetKnob.length > 0) {
+                        const x1 = $sourceKnob.attr('cx');
+                        const y1 = $sourceKnob.attr('cy');
+                        const x2 = $targetKnob.attr('cx');
+                        const y2 = $targetKnob.attr('cy');
+
+                        if (x1 && y1 && x2 && y2) {
+                            let pathLine = createSVGElement('line', {
+                                class: 'custom-relation-line',
+                                x1: x1,
+                                y1: y1,
+                                x2: x2,
+                                y2: y2
+                            });
+                            $('#gantt-target').append(pathLine);
+                        }
+                    }
+                });
+            }
+
+            // XỬ LÝ LƯU TRÊN MODAL POPUP
+            $('#btn-save-link').off('click').on('click', function () {
+                if (!currentPendingLink) {
+                    bootstrapModal.hide();
+                    return;
+                }
+
+                let lagDays = parseInt($('#modal-lag-days').val(), 10) || 0;
+                currentPendingLink.lag = lagDays;
+
+                relations.push(currentPendingLink);
+                recalculateSchedule();
+
+                bootstrapModal.hide();
+                currentPendingLink = null;
+            });
+
+            // ĐỘNG CƠ TÍNH TOÁN LẠI NGÀY THÁNG TIẾN ĐỘ
+            function recalculateSchedule() {
+                relations.forEach(rel => {
+                    let source = tasks.find(t => t.id === rel.fromId);
+                    let target = tasks.find(t => t.id === rel.toId);
+                    if (!source || !target) return;
+
+                    let baseDateStr = (rel.fromType === 'FINISH') ? source.end : source.start;
+                    let baseDate = new Date(baseDateStr);
+
+                    baseDate.setDate(baseDate.getDate() + rel.lag);
+
+                    if (rel.toType === 'START') {
+                        let currentDuration = Math.round((new Date(target.end) - new Date(target.start)) / (1000 * 60 * 60 * 24));
+                        target.start = formatDate(baseDate);
+
+                        baseDate.setDate(baseDate.getDate() + currentDuration);
+                        target.end = formatDate(baseDate);
+                    }
+                    else if (rel.toType === 'FINISH') {
+                        target.end = formatDate(baseDate);
+                    }
+                });
+
+                gantt.refresh(tasks);
+
+                // Trì hoãn 50ms để DOM vẽ xong rồi mới đè các điểm nối và đường dây lên trên
+                setTimeout(function () {
+                    setupUniversalKnobs();
+                }, 50);
+            }
+
+            function formatDate(date) {
+                let d = new Date(date),
+                    month = '' + (d.getMonth() + 1),
+                    day = '' + d.getDate(),
+                    year = d.getFullYear();
+
+                if (month.length < 2) month = '0' + month;
+                if (day.length < 2) day = '0' + day;
+
+                return [year, month, day].join('-');
+            }
+
+            initGantt();
+
+            $('#view-mode-trigger .btn').on('click', function () {
+                $('#view-mode-trigger .btn').removeClass('active');
+                $(this).addClass('active');
+                gantt.change_view_mode($(this).data('view'));
+                setupUniversalKnobs();
+            });
+        });
+    </script>
+
+</body>
+</html>
