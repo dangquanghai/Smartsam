@@ -381,7 +381,8 @@ FROM dbo.LN_DeliveryDT dt
 LEFT JOIN dbo.LN_Linnen ln ON ln.ID = dt.LinnenID
 WHERE dt.DeliveryID = @DeliveryID
   AND (@LinenCode = '' OR ISNULL(CASE WHEN ISNULL(dt.LinenCode, '') <> '' THEN dt.LinenCode ELSE ln.LinnenCode END, '') = @LinenCode)
-ORDER BY ISNULL(ln.IsOrder, 999999),
+ORDER BY ISNULL(dt.Location, ''),
+         ISNULL(ln.IsOrder, 999999),
          ISNULL(CASE WHEN ISNULL(dt.LinenCode, '') <> '' THEN dt.LinenCode ELSE ln.LinnenCode END, ''),
          dt.ID;", conn);
         cmd.Parameters.Add("@DeliveryID", SqlDbType.Int).Value = descriptionId.Value;
@@ -475,7 +476,8 @@ LEFT JOIN dbo.PC_Suppliers sp ON sp.SupplierID = mt.SupplierID
 LEFT JOIN dbo.LN_Linnen ln ON ln.ID = dt.LinnenID
 WHERE mt.ReceiveID = @ReceiveID
   AND (@LinenCode = '' OR ISNULL(CASE WHEN ISNULL(dt.LinnenCode, '') <> '' THEN dt.LinnenCode ELSE ln.LinnenCode END, '') = @LinenCode)
-ORDER BY ISNULL(ln.IsOrder, 999999),
+ORDER BY ISNULL(dt.Location, ''),
+         ISNULL(ln.IsOrder, 999999),
          ISNULL(CASE WHEN ISNULL(dt.LinnenCode, '') <> '' THEN dt.LinnenCode ELSE ln.LinnenCode END, ''),
          dt.ID;", conn);
         cmd.Parameters.Add("@ReceiveID", SqlDbType.Int).Value = descriptionId.Value;
