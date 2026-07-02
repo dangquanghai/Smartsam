@@ -42,6 +42,9 @@ builder.Services.AddScoped<SixMonthsStayReviewService>();
 // Service báo cáo tình trạng căn hộ (Apartment Status Report) gửi mail hàng ngày
 builder.Services.AddScoped<ApartmentStatusReportService>();
 
+// Service báo cáo tình trạng căn hộ cho Housekeeping (gửi 16:00 và 07:55 hôm sau)
+builder.Services.AddScoped<HousekeepingStatusReportService>();
+
 
 
 builder.Services.Configure<FormOptions>(options =>
@@ -156,6 +159,28 @@ RecurringJob.AddOrUpdate<ApartmentStatusReportService>(
     "DailyApartmentStatusReport",
     service => service.ProcessApartmentStatusReport(),
     Cron.Daily(1, 0),
+    new RecurringJobOptions
+    {
+        TimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time")
+    }
+);
+
+// Housekeeping report - bản 16:00 (lưu snapshot 3 danh sách Short-term)
+RecurringJob.AddOrUpdate<HousekeepingStatusReportService>(
+    "HousekeepingStatusReport_Afternoon",
+    service => service.ProcessAfternoonReport(),
+    Cron.Daily(16, 0),
+    new RecurringJobOptions
+    {
+        TimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time")
+    }
+);
+
+// Housekeeping report - bản 07:35 sáng hôm sau (đối chiếu snapshot 16:00 hôm trước)
+RecurringJob.AddOrUpdate<HousekeepingStatusReportService>(
+    "HousekeepingStatusReport_Morning",
+    service => service.ProcessMorningReport(),
+    Cron.Daily(7, 35),
     new RecurringJobOptions
     {
         TimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time")
